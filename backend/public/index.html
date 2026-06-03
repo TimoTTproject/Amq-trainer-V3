@@ -50,10 +50,49 @@
       <h1><i class="fas fa-music"></i> Anime Music Quiz</h1>
       <div class="user-section">
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="user-tokens">0</span></span>
-        <span class="user-name" id="user-name"></span>
+        <button id="profile-btn" class="profile-chip" title="Mon profil">
+          <span class="avatar avatar-sm" id="header-avatar"></span>
+          <span class="user-name" id="user-name"></span>
+        </button>
         <button id="logout-btn" class="btn-secondary"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     </header>
+
+    <!-- Modale Profil -->
+    <div id="profile-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <button class="modal-close" id="profile-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <h2><i class="fas fa-user"></i> Mon profil</h2>
+
+        <div class="profile-avatar-edit">
+          <span class="avatar avatar-lg" id="profile-avatar"></span>
+          <div class="avatar-actions">
+            <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
+            <button class="btn-link" id="avatar-remove-btn">Retirer</button>
+            <input type="file" id="avatar-input" accept="image/*" hidden />
+            <p class="hint">JPG/PNG, recadrée et compressée automatiquement.</p>
+          </div>
+        </div>
+
+        <label class="field-label">Pseudo</label>
+        <input type="text" id="profile-name" maxlength="30" placeholder="Ton pseudo" />
+
+        <label class="field-label">Bio</label>
+        <textarea id="profile-bio" maxlength="300" rows="3" placeholder="Quelques mots sur toi… (optionnel)"></textarea>
+
+        <div class="profile-stats">
+          <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
+          <div class="pstat"><span id="profile-played">0</span><label>Jouées</label></div>
+          <div class="pstat"><span id="profile-rate">0%</span><label>Réussite</label></div>
+          <div class="pstat"><span id="profile-since">—</span><label>Membre depuis</label></div>
+        </div>
+
+        <p id="profile-error" class="form-error"></p>
+        <div class="modal-actions">
+          <button class="btn-primary" id="profile-save"><i class="fas fa-check"></i> Enregistrer</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Import + mode -->
     <section class="panel">

@@ -2,6 +2,8 @@
 const API = ''; // même origine que le serveur Express
 
 // ── état ──
+let currentUser = null;
+let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle data URL
 let currentSong = null;
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
@@ -109,16 +111,135 @@ function showAuth() {
   document.getElementById('app').classList.add('hidden');
 }
 function showApp(user) {
+  currentUser = user;
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('user-name').textContent = user.displayName;
-  document.getElementById('user-tokens').textContent = user.tokens;
+  renderHeaderUser();
   if (user.anilistName) document.getElementById('anilist-username').value = user.anilistName;
   chooseInitialMode().then(() => {
     applyModeUI();
     refreshCatalogInfo();
   });
   refreshStats();
+}
+
+// Affiche un avatar : image si dispo, sinon initiale colorée
+function renderAvatar(el, user) {
+  if (user.avatarUrl) {
+    el.style.backgroundImage = `url("${user.avatarUrl}")`;
+    el.textContent = '';
+  } else {
+    el.style.backgroundImage = 'none';
+    el.textContent = (user.displayName || '?').charAt(0).toUpperCase();
+  }
+}
+
+function renderHeaderUser() {
+  document.getElementById('user-name').textContent = currentUser.displayName;
+  document.getElementById('user-tokens').textContent = currentUser.tokens;
+  renderAvatar(document.getElementById('header-avatar'), currentUser);
+}
+
+// ── PROFIL ──
+function setupProfileUI() {
+  document.getElementById('profile-btn').addEventListener('click', openProfile);
+  document.getElementById('profile-close').addEventListener('click', closeProfile);
+  document.getElementById('profile-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'profile-modal') closeProfile();
+  });
+  document.getElementById('avatar-upload-btn').addEventListener('click', () =>
+    document.getElementById('avatar-input').click()
+  );
+  document.getElementById('avatar-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      pendingAvatar = await fileToResizedDataURL(file);
+      renderProfileAvatar();
+    } catch {
+      setProfileError("Impossible de lire cette image.");
+    }
+    e.target.value = '';
+  });
+  document.getElementById('avatar-remove-btn').addEventListener('click', () => {
+    pendingAvatar = null;
+    renderProfileAvatar();
+  });
+  document.getElementById('profile-save').addEventListener('click', saveProfile);
+}
+
+function setProfileError(msg) { document.getElementById('profile-error').textContent = msg || ''; }
+
+function effectiveAvatar() {
+  return pendingAvatar !== undefined ? pendingAvatar : currentUser.avatarUrl;
+}
+function renderProfileAvatar() {
+  renderAvatar(document.getElementById('profile-avatar'), {
+    avatarUrl: effectiveAvatar(),
+    displayName: document.getElementById('profile-name').value || currentUser.displayName,
+  });
+}
+
+async function openProfile() {
+  pendingAvatar = undefined;
+  setProfileError('');
+  document.getElementById('profile-name').value = currentUser.displayName;
+  document.getElementById('profile-bio').value = currentUser.bio || '';
+  document.getElementById('profile-tokens').textContent = currentUser.tokens;
+  document.getElementById('profile-since').textContent = currentUser.createdAt
+    ? new Date(currentUser.createdAt).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+    : '—';
+  renderProfileAvatar();
+  document.getElementById('profile-modal').classList.remove('hidden');
+  try {
+    const s = await api('/api/quiz/stats');
+    document.getElementById('profile-played').textContent = s.played;
+    document.getElementById('profile-rate').textContent = s.rate + '%';
+  } catch {}
+}
+
+function closeProfile() { document.getElementById('profile-modal').classList.add('hidden'); }
+
+async function saveProfile() {
+  setProfileError('');
+  const payload = {
+    displayName: document.getElementById('profile-name').value,
+    bio: document.getElementById('profile-bio').value,
+  };
+  if (pendingAvatar !== undefined) payload.avatar = pendingAvatar;
+  try {
+    const { user } = await api('/api/profile', { method: 'PATCH', body: JSON.stringify(payload) });
+    currentUser = { ...currentUser, ...user };
+    renderHeaderUser();
+    closeProfile();
+  } catch (err) {
+    setProfileError(err.message);
+  }
+}
+
+// Recadre une image en carré et la compresse en data URL JPEG
+function fileToResizedDataURL(file, size = 256, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('read'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('img'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // Si l'utilisateur n'a jamais choisi de mode et que sa liste perso est vide,
@@ -146,6 +267,8 @@ function setupAppUI() {
       refreshCatalogInfo();
     });
   });
+
+  setupProfileUI();
 
   document.getElementById('import-btn').addEventListener('click', startImport);
   document.getElementById('next-btn').addEventListener('click', nextSong);

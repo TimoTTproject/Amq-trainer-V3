@@ -26,7 +26,8 @@ model User {
   anilistToken String? // access token AniList (chiffré idéalement plus tard)
 
   displayName String
-  avatarUrl   String?
+  avatarUrl   String? // URL externe OU data URL (image redimensionnée stockée en base)
+  bio         String?
 
   // Économie (Phase 2)
   tokens Int @default(0)

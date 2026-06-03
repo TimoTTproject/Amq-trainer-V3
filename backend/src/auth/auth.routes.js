@@ -15,8 +15,10 @@ function publicUser(u) {
     email: u.email,
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
+    bio: u.bio,
     anilistName: u.anilistName,
     tokens: u.tokens,
+    createdAt: u.createdAt,
   };
 }
 

@@ -11,6 +11,7 @@ const authRoutes = require('./auth/auth.routes');
 const anilistOAuthRoutes = require('./auth/anilist-oauth.routes');
 const catalogRoutes = require('./catalog/catalog.routes');
 const quizRoutes = require('./quiz/quiz.routes');
+const profileRoutes = require('./profile/profile.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,7 +28,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // marge pour les avatars en base64
 app.use(cookieParser());
 app.use(attachUser);
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRoutes.router);
 app.use('/api/auth', anilistOAuthRoutes.router);
 app.use('/api/catalog', catalogRoutes.router);
 app.use('/api/quiz', quizRoutes.router);
+app.use('/api/profile', profileRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)
