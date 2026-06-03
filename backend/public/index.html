@@ -99,6 +99,40 @@
       </div>
     </div>
 
+    <!-- VUE ACCUEIL -->
+    <div id="view-home">
+      <div class="home-hero">
+        <h2>Bienvenue, <span id="home-name"></span> 👋</h2>
+        <p>Que veux-tu faire ?</p>
+      </div>
+      <div class="home-grid">
+        <button class="home-card" id="card-play">
+          <i class="fas fa-play-circle"></i>
+          <h3>Jouer</h3>
+          <p>Devine l'anime à partir de son opening</p>
+        </button>
+        <button class="home-card" id="card-profile">
+          <i class="fas fa-user"></i>
+          <h3>Mon profil</h3>
+          <p>Photo, bio et statistiques</p>
+        </button>
+        <button class="home-card disabled" disabled>
+          <i class="fas fa-layer-group"></i>
+          <h3>Gacha <span class="soon">Bientôt</span></h3>
+          <p>Dépense tes tokens pour collectionner des cartes</p>
+        </button>
+        <button class="home-card disabled" disabled>
+          <i class="fas fa-users"></i>
+          <h3>Multijoueur <span class="soon">Bientôt</span></h3>
+          <p>Affronte d'autres joueurs en temps réel</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- VUE QUIZ -->
+    <div id="view-quiz" class="hidden">
+      <button class="btn-back" id="back-home"><i class="fas fa-arrow-left"></i> Accueil</button>
+
     <!-- Import + mode -->
     <section class="panel">
       <div class="panel-row">
@@ -177,6 +211,7 @@
         <div class="stat"><span id="stat-rate">0%</span><label>Réussite</label></div>
       </div>
     </section>
+    </div><!-- /view-quiz -->
   </div>
 
   <script src="main.js"></script>

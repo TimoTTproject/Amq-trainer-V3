@@ -110,10 +110,17 @@ function showAuth() {
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
 }
+function showView(name) {
+  document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
+  document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
+}
+
 function showApp(user) {
   currentUser = user;
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  document.getElementById('home-name').textContent = user.displayName;
+  showView('home');
   renderHeaderUser();
   if (user.anilistName) document.getElementById('anilist-username').value = user.anilistName;
   chooseInitialMode().then(() => {
@@ -291,6 +298,11 @@ function setupAppUI() {
   });
 
   setupProfileUI();
+
+  // Navigation accueil ⇄ quiz
+  document.getElementById('card-play').addEventListener('click', () => showView('quiz'));
+  document.getElementById('card-profile').addEventListener('click', openProfile);
+  document.getElementById('back-home').addEventListener('click', () => showView('home'));
 
   document.getElementById('import-btn').addEventListener('click', startImport);
   document.getElementById('next-btn').addEventListener('click', nextSong);

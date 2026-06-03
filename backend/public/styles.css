@@ -118,6 +118,25 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .token-history .date { color: var(--text-2); font-size: .78rem; min-width: 52px; text-align: right; }
 .token-history .muted { color: var(--text-2); justify-content: center; }
 
+/* Accueil */
+.home-hero { margin: 10px 0 24px; }
+.home-hero h2 { font-size: 1.6rem; }
+.home-hero p { color: var(--text-2); margin-top: 4px; }
+.home-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.home-card {
+  text-align: left; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius);
+  padding: 22px; color: var(--text); transition: transform .08s, border-color .15s, filter .15s;
+}
+.home-card:not(.disabled):hover { transform: translateY(-3px); border-color: var(--accent); }
+.home-card i { font-size: 1.8rem; color: var(--accent); }
+.home-card h3 { margin: 12px 0 4px; font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+.home-card p { color: var(--text-2); font-size: .88rem; }
+.home-card.disabled { opacity: .55; cursor: not-allowed; }
+.soon { font-size: .65rem; background: var(--bg-3); color: var(--orange); padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; }
+.btn-back { background: none; border: none; color: var(--text-2); display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: .95rem; }
+.btn-back:hover { color: var(--text); }
+@media (max-width: 560px) { .home-grid { grid-template-columns: 1fr; } }
+
 .panel { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
 .panel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .panel-row:last-child { margin-bottom: 0; }
