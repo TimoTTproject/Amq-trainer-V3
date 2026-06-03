@@ -23,11 +23,16 @@
   "description": "",
   "main": "src/server.js",
   "scripts": {
+    "postinstall": "prisma generate",
+    "prestart": "prisma db push --skip-generate",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
     "studio": "prisma studio",
     "import-top": "node scripts/import-top.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "keywords": [],
   "author": "",

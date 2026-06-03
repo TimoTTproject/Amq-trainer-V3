@@ -15,6 +15,9 @@ const quizRoutes = require('./quiz/quiz.routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Derrière le proxy Cloudflare/Railway : nécessaire pour les cookies "secure"
+app.set('trust proxy', 1);
+
 // Le frontend est servi par Express → même origine, cookies simples.
 // CORS autorisé quand même pour un éventuel front séparé (Live Server, etc.).
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5500';

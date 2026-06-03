@@ -23,8 +23,8 @@ function setAuthCookie(res, userId) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production', // HTTPS en prod
     maxAge: MAX_AGE_MS,
-    // secure: true, // à activer en HTTPS/prod
   });
 }
 
