@@ -38,8 +38,8 @@ app.use('/api/catalog', catalogRoutes.router);
 app.use('/api/quiz', quizRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
-// Frontend statique
-const FRONTEND_DIR = path.join(__dirname, '..', '..', 'frontend');
+// Frontend statique (dans backend/public pour être inclus au déploiement)
+const FRONTEND_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIR));
 
 app.listen(PORT, () => {
