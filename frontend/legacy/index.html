@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime Music Quiz Trainer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="loading-indicator" id="media-loading" style="display: none;">
+        <i class="fas fa-spinner fa-spin"></i> Chargement...
+    </div>
+    <div class="progress-overlay" id="progress-overlay">
+        <div class="progress-container">
+            <div class="progress-header">
+                <h3><i class="fas fa-download"></i> Importation des Openings</h3>
+                <span id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-details">
+                <div class="progress-current" id="progress-current">0/0 anime traités</div>
+                <div class="progress-status" id="progress-status">Connexion au serveur...</div>
+            </div>
+            <div class="progress-stats">
+                <div class="progress-stat">
+                    <h3>Anime trouvés</h3>
+                    <p id="stat-matched">0</p>
+                </div>
+                <div class="progress-stat">
+                    <h3>Openings</h3>
+                    <p id="stat-ops">0</p>
+                </div>
+                <div class="progress-stat">
+                    <h3>Total</h3>
+                    <p id="stat-total">0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="options-popup" id="options-popup">
+        <div class="options-content">
+            <button class="options-close" id="options-close-btn" title="Fermer"><i class="fas fa-times"></i></button>
+            <h2>Options</h2>
+            
+            <div class="options-section">
+                <h3>Affichage vidéo</h3>
+                <div class="options-row">
+                    <input type="checkbox" id="option-video-default">
+                    <label for="option-video-default">Afficher la vidéo par défaut</label>
+                </div>
+                <div class="options-row">
+                    <input type="checkbox" id="option-autoplay">
+                    <label for="option-autoplay">Lecture automatique</label>
+                </div>
+                <div class="options-row">
+                    <label for="option-start-time">Point de départ (secondes):</label>
+                    <input type="number" id="option-start-time" min="0" max="120" value="30">
+                </div>
+            </div>
+
+            <div class="options-section">
+                <h3>Quiz</h3>
+                <div class="options-row">
+                    <label for="option-quiz-delay">Délai avant prochaine chanson (ms):</label>
+                    <input type="number" id="option-quiz-delay" min="500" max="5000" value="1000">
+                </div>
+                <div class="options-row">
+                    <input type="checkbox" id="option-auto-next">
+                    <label for="option-auto-next">Passage automatique à la suivante</label>
+                </div>
+            </div>
+
+            <div class="options-section">
+                <h3>Interface</h3>
+                <div class="options-row">
+                    <label for="option-theme">Thème:</label>
+                    <select id="option-theme">
+                        <option value="dark">Sombre (par défaut)</option>
+                        <option value="light">Clair</option>
+                        <option value="blue">Bleu</option>
+                    </select>
+                </div>
+                <div class="options-row">
+                    <label for="option-items-per-page">Chansons par page:</label>
+                    <select id="option-items-per-page">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="options-section">
+                <h3>Audio</h3>
+                <div class="options-row">
+                    <label for="option-default-volume">Volume par défaut:</label>
+                    <input type="range" id="option-default-volume" min="0" max="100" value="80">
+                    <span id="volume-value">80%</span>
+                </div>
+            </div>
+
+            <div class="options-buttons">
+                <button id="options-save" class="btn-primary"><i class="fas fa-check"></i> Enregistrer</button>
+                <button id="options-reset" class="btn-secondary"><i class="fas fa-undo"></i> Réinitialiser</button>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-music"></i> Anime Music Quiz Trainer</h1>
+            <div class="user-section">
+                <input type="text" id="anilist-username" placeholder="AniList Username">
+                <input type="number" id="import-limit" placeholder="Nombre max (défaut: 50)" min="1" max="1500" value="50">
+                <button id="import-btn"><i class="fas fa-download"></i> Importer les musiques</button>
+                <button id="options-btn"><i class="fas fa-cog"></i> Options</button>
+            </div>
+        </header>
+        <div class="stats-menu-container">
+            <button id="stats-menu-btn">
+                <i class="fas fa-chart-bar"></i> Statistiques
+            </button>
+            <div id="stats-menu-popup">
+                <div class="stats-section">
+                    <h3>Session Actuelle</h3>
+                    <div class="stat-item">
+                        <span>Chansons écoutées:</span>
+                        <span id="stat-session-played">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Réponses correctes:</span>
+                        <span id="stat-session-correct">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Taux de réussite:</span>
+                        <span id="stat-session-rate">0%</span>
+                    </div>
+                </div>
+                <div class="stats-section">
+                    <h3>Global</h3>
+                    <div class="stat-item">
+                        <span>Chansons écoutées:</span>
+                        <span id="stat-total-played">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Réponses correctes:</span>
+                        <span id="stat-total-correct">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Taux de réussite:</span>
+                        <span id="stat-total-rate">0%</span>
+                    </div>
+                </div>
+                <button id="reset-stats-btn">
+                    <i class="fas fa-trash"></i> Réinitialiser stats globales
+                </button>
+            </div>
+        </div>
+        <div class="quiz-container">
+            <div class="video-container">
+                <div class="media-wrapper" id="media-wrapper">
+                    <div class="audio-placeholder" id="audio-placeholder">
+                        <i class="fas fa-music"></i>
+                    </div>
+                </div>
+                <div class="video-controls" id="video-controls">
+                    <button id="reveal-video-btn"><i class="fas fa-eye"></i> Révéler la vidéo</button>
+                    <button id="hide-video-btn"><i class="fas fa-eye-slash"></i> Cacher la vidéo</button>
+                    <button id="play-pause-btn"><i class="fas fa-pause"></i> Pause</button>
+                    <label for="volume-slider">
+                        <i class="fas fa-volume-up"></i>
+                    </label>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
+                </div>
+            </div>
+            <div class="answer-section">
+                <div class="answer-input">
+                    <input type="text" id="answer-input" placeholder="Tapez votre réponse (nom de l'anime)" disabled>
+                    <button id="reveal-btn" disabled>Révéler la réponse</button>
+                </div>
+                <div id="correct-answer" class="revealed-answer hidden">
+                    Bonne réponse: <span id="answer-text"></span>
+                    <div id="song-details">
+                        <div>Titre: <span id="song-title"></span></div>
+                        <div>Artiste: <span id="song-artist"></span></div>
+                    </div>
+                </div>
+                <div class="feedback-buttons">
+                    <button class="btn-easy" id="btn-easy" disabled>Facile</button>
+                    <button class="btn-hard" id="btn-hard" disabled>Difficile</button>
+                    <button class="btn-again" id="btn-again" disabled>À revoir</button>
+                </div>
+                <button id="replay-btn" class="hidden"><i class="fas fa-redo"></i> Réécouter</button>
+            </div>
+        </div>
+        <div class="rating-section">
+            <div>Notez cette opening:</div>
+            <div id="current-rating"></div>
+        </div>
+        <div class="songs-list">
+            <div class="filter-container" style="position: relative; display: flex; align-items: center; margin-bottom: 20px;">
+                <input id="anime-filter" type="text" placeholder="Filtrer par anime, titre ou artiste..." 
+                       oninput="filterSongs()" style="flex: 1; padding-right: 40px;" />
+                <button id="clear-filter-btn" onclick="clearFilter()" 
+                        style="position: absolute; right: 10px; background: none; border: none; color: var(--text-secondary); cursor: pointer; display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="filter-info" id="filter-info">
+                Affichage de <span id="filter-count">0</span> chansons sur <span id="total-count">0</span>
+            </div>
+            <div id="pagination-container-top"></div>
+            <table class="songs-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Titre</th>
+                        <th>Artiste</th>
+                        <th>Réussite</th>
+                        <th>Note</th> <!-- Nouvelle colonne -->
+                        <th>Écouter</th>
+                    </tr>
+                </thead>
+                <tbody id="songs-table-body"></tbody>
+            </table>
+            <div id="pagination-container"></div>
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# Normalise les fins de ligne (évite les avertissements LF/CRLF)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webm binary

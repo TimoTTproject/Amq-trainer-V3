@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anime Music Quiz</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ÉCRAN AUTH (non connecté) -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <h1><i class="fas fa-music"></i> Anime Music Quiz</h1>
+      <p class="auth-sub">Devine l'anime à partir de son opening.</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Connexion</button>
+        <button class="auth-tab" data-tab="register">Inscription</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <input type="email" id="login-email" placeholder="Email" required />
+        <input type="password" id="login-password" placeholder="Mot de passe" required />
+        <button type="submit" class="btn-primary"><i class="fas fa-sign-in-alt"></i> Se connecter</button>
+      </form>
+
+      <form id="register-form" class="auth-form hidden">
+        <input type="text" id="register-name" placeholder="Pseudo (optionnel)" />
+        <input type="email" id="register-email" placeholder="Email" required />
+        <input type="password" id="register-password" placeholder="Mot de passe (min. 6)" required />
+        <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> Créer un compte</button>
+      </form>
+
+      <div class="auth-sep" id="anilist-sep"><span>ou</span></div>
+      <button id="anilist-login-btn" class="btn-anilist hidden">
+        <i class="fas fa-link"></i> Se connecter avec AniList
+      </button>
+      <p id="anilist-disabled" class="auth-hint hidden">
+        Connexion AniList non configurée (voir <code>.env</code>).
+      </p>
+
+      <p id="auth-error" class="auth-error"></p>
+    </div>
+  </div>
+
+  <!-- APPLICATION (connecté) -->
+  <div id="app" class="container hidden">
+    <header>
+      <h1><i class="fas fa-music"></i> Anime Music Quiz</h1>
+      <div class="user-section">
+        <span class="token-badge"><i class="fas fa-coins"></i> <span id="user-tokens">0</span></span>
+        <span class="user-name" id="user-name"></span>
+        <button id="logout-btn" class="btn-secondary"><i class="fas fa-sign-out-alt"></i></button>
+      </div>
+    </header>
+
+    <!-- Import + mode -->
+    <section class="panel">
+      <div class="panel-row">
+        <label>Catalogue :</label>
+        <div class="mode-switch">
+          <button class="mode-btn active" data-mode="mine">Ma liste</button>
+          <button class="mode-btn" data-mode="global">Catalogue global</button>
+        </div>
+        <span class="catalog-info" id="catalog-info"></span>
+      </div>
+      <div class="panel-row">
+        <input type="text" id="anilist-username" placeholder="Pseudo AniList à importer" />
+        <input type="number" id="import-limit" min="1" max="1500" value="50" title="Nombre max d'animes" />
+        <button id="import-btn" class="btn-primary"><i class="fas fa-download"></i> Importer ma liste</button>
+      </div>
+      <div class="import-progress hidden" id="import-progress">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <span id="progress-status">…</span>
+      </div>
+    </section>
+
+    <!-- Quiz -->
+    <section class="quiz-panel">
+      <div class="media-wrapper" id="media-wrapper">
+        <video id="quiz-video" playsinline></video>
+        <!-- couvre la vidéo en mode "audio seul" (la vidéo reste rendue et joue le son) -->
+        <div class="audio-overlay" id="audio-overlay"><i class="fas fa-music"></i></div>
+      </div>
+      <p id="quiz-hint" class="quiz-hint">Clique sur « Nouvelle musique » pour commencer.</p>
+
+      <div class="quiz-controls">
+        <button id="play-btn" class="btn-secondary"><i class="fas fa-play"></i></button>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
+        <button id="replay-btn" class="btn-secondary" title="Réécouter l'extrait"><i class="fas fa-rotate-left"></i></button>
+        <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
+        <button id="next-btn" class="btn-primary"><i class="fas fa-forward"></i> Nouvelle musique</button>
+      </div>
+
+      <div class="quiz-options">
+        <label><input type="checkbox" id="opt-random-start" checked /> Départ aléatoire</label>
+        <label>Durée d'écoute :
+          <select id="opt-clip">
+            <option value="0">Illimitée</option>
+            <option value="5">5 s</option>
+            <option value="10">10 s</option>
+            <option value="15">15 s</option>
+            <option value="20" selected>20 s</option>
+            <option value="30">30 s</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="answer-area">
+        <input type="text" id="answer-input" placeholder="Nom de l'anime…" disabled />
+        <button id="reveal-btn" class="btn-secondary" disabled>Révéler</button>
+      </div>
+
+      <div id="answer-result" class="answer-result hidden">
+        <div class="result-line">Réponse : <strong id="answer-anime"></strong></div>
+        <div class="result-sub"><span id="answer-title"></span> — <span id="answer-artist"></span></div>
+        <div class="feedback-buttons">
+          <button class="btn-easy" data-fb="easy">Facile</button>
+          <button class="btn-hard" data-fb="hard">Difficile</button>
+          <button class="btn-again" data-fb="again">À revoir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="panel stats-panel">
+      <h3><i class="fas fa-chart-bar"></i> Mes statistiques</h3>
+      <div class="stats-grid">
+        <div class="stat"><span id="stat-played">0</span><label>Jouées</label></div>
+        <div class="stat"><span id="stat-correct">0</span><label>Correctes</label></div>
+        <div class="stat"><span id="stat-rate">0%</span><label>Réussite</label></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

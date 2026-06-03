@@ -1,0 +1,148 @@
+// Anime Music Quiz + Gacha — schéma de données
+// SQLite en dev (1 fichier), migrable vers PostgreSQL plus tard.
+// Tables Phase 1 (comptes, catalogue, quiz) + stubs Phase 2-4 (tokens, gacha).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// COMPTES
+// ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  // Auth email/mot de passe (optionnels si compte créé via AniList OAuth)
+  email        String?  @unique
+  passwordHash String?
+  // Auth AniList OAuth (optionnels si compte email)
+  anilistId    Int?     @unique
+  anilistName  String?
+  anilistToken String? // access token AniList (chiffré idéalement plus tard)
+
+  displayName String
+  avatarUrl   String?
+
+  // Économie (Phase 2)
+  tokens Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  songStats     UserSongStat[]
+  catalogEntries UserCatalogEntry[]
+  cards         UserCard[]
+  transactions  TokenTransaction[]
+}
+
+// ─────────────────────────────────────────────
+// CATALOGUE DE MUSIQUES (global, partagé)
+// ─────────────────────────────────────────────
+
+model Song {
+  id          Int    @id @default(autoincrement())
+  anilistId   Int // id AniList de l'anime source
+  animeTitle  String
+  type        String // "OP" | "ED"
+  number      Int // séquence (OP1, OP2…)
+  title       String
+  artist      String?
+  videoUrl    String?
+  audioUrl    String?
+  popularity  Int     @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
+
+  createdAt DateTime @default(now())
+
+  // Un même opening n'existe qu'une fois dans le catalogue global
+  @@unique([anilistId, type, number, title])
+  @@index([anilistId])
+
+  stats          UserSongStat[]
+  catalogEntries UserCatalogEntry[]
+}
+
+// Stats par utilisateur × musique (remplace localStorage)
+model UserSongStat {
+  id           Int     @id @default(autoincrement())
+  userId       String
+  songId       Int
+  easyCount    Int     @default(0)
+  hardCount    Int     @default(0)
+  againCount   Int     @default(0)
+  playCount    Int     @default(0)
+  correctCount Int     @default(0)
+  rating       Int? // note 1-5 donnée par l'utilisateur
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+}
+
+// Mode « ma liste » : songs rattachées à un utilisateur (import AniList)
+model UserCatalogEntry {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  songId    Int
+  addedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+}
+
+// ─────────────────────────────────────────────
+// ÉCONOMIE DE TOKENS (Phase 2) — stub
+// ─────────────────────────────────────────────
+
+model TokenTransaction {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  amount    Int // +gain / -dépense
+  reason    String // "quiz_reward" | "pack_open" | ...
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// GACHA (Phase 4) — stubs
+// ─────────────────────────────────────────────
+
+model Character {
+  id         Int    @id @default(autoincrement())
+  anilistId  Int    @unique
+  name       String
+  imageUrl   String?
+  favourites Int    @default(0) // popularité AniList → détermine la rareté
+  rarity     String @default("common") // common|rare|epic|legendary
+  fromManga  Boolean @default(false)
+
+  cards UserCard[]
+}
+
+model UserCard {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  characterId Int
+  copies      Int      @default(1)
+  obtainedAt  DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, characterId])
+}
+
+model Pack {
+  id        Int    @id @default(autoincrement())
+  name      String
+  costTokens Int
+  cardCount Int    @default(5)
+}

@@ -1,0 +1,28 @@
+# Dépendances
+node_modules/
+
+# Secrets / config locale — NE JAMAIS committer
+.env
+.env.*
+!.env.example
+
+# Base de données locale (SQLite)
+*.db
+*.db-journal
+dev.db
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Données legacy / volumineuses de l'ancien prototype
+backend/sessions.json
+backend/themes_database.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+*.code-workspace

@@ -1,0 +1,35 @@
+{
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "axios": "^1.11.0",
+    "bcryptjs": "^3.0.3",
+    "body-parser": "^2.2.0",
+    "build": "^0.1.4",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "fetch": "^1.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2",
+    "prisma": "^6.19.3",
+    "string-similarity": "^4.0.4",
+    "tech": "^0.1.0",
+    "uuid": "^11.1.0"
+  },
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio",
+    "import-top": "node scripts/import-top.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
