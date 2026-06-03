@@ -116,9 +116,9 @@
           <h3>Mon profil</h3>
           <p>Photo, bio et statistiques</p>
         </button>
-        <button class="home-card disabled" disabled>
+        <button class="home-card" id="card-gacha">
           <i class="fas fa-layer-group"></i>
-          <h3>Gacha <span class="soon">Bientôt</span></h3>
+          <h3>Gacha</h3>
           <p>Dépense tes tokens pour collectionner des cartes</p>
         </button>
         <button class="home-card disabled" disabled>
@@ -212,6 +212,30 @@
       </div>
     </section>
     </div><!-- /view-quiz -->
+
+    <!-- VUE GACHA -->
+    <div id="view-gacha" class="hidden">
+      <button class="btn-back" id="back-home-gacha"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-layer-group"></i> Gacha</h2>
+        <span class="token-badge"><i class="fas fa-coins"></i> <span id="gacha-tokens">0</span></span>
+      </div>
+      <p class="gacha-sub" id="gacha-pool"></p>
+
+      <div class="gacha-actions">
+        <button class="btn-primary" id="pull-single"><i class="fas fa-ticket"></i> Tirage simple — <b id="price-single">25</b> 🪙</button>
+        <button class="btn-primary" id="pull-pack"><i class="fas fa-box-open"></i> Paquet x5 — <b id="price-pack">100</b> 🪙</button>
+      </div>
+      <p id="gacha-msg" class="gacha-msg"></p>
+
+      <div id="pull-result" class="pull-result hidden"></div>
+
+      <div class="collection">
+        <h3><i class="fas fa-images"></i> Ma collection</h3>
+        <div id="collection-progress" class="collection-progress"></div>
+        <div id="collection-grid" class="card-grid"></div>
+      </div>
+    </div>
   </div>
 
   <script src="main.js"></script>

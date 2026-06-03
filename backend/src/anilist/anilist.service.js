@@ -55,6 +55,24 @@ async function getPopularAnime(page = 1, perPage = 50) {
   return data?.Page?.media || [];
 }
 
+// Top personnages par popularité (favourites) — pour le pool gacha.
+async function getTopCharacters(page = 1, perPage = 50) {
+  const query = `
+    query ($page: Int, $perPage: Int) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        characters(sort: FAVOURITES_DESC) {
+          id name { full } image { large } favourites
+        }
+      }
+    }`;
+  const data = await anilistQuery(query, { page, perPage });
+  return {
+    characters: data?.Page?.characters || [],
+    hasNextPage: data?.Page?.pageInfo?.hasNextPage || false,
+  };
+}
+
 // Récupère les titres de plusieurs animes par leurs ids (pour le backfill).
 async function getAnimeTitlesByIds(ids) {
   const query = `
@@ -67,4 +85,4 @@ async function getAnimeTitlesByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds };
+module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters };

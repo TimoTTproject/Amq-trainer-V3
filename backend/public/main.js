@@ -113,6 +113,7 @@ function showAuth() {
 function showView(name) {
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
+  document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
 }
 
 function showApp(user) {
@@ -299,10 +300,14 @@ function setupAppUI() {
 
   setupProfileUI();
 
-  // Navigation accueil ⇄ quiz
+  // Navigation accueil ⇄ quiz ⇄ gacha
   document.getElementById('card-play').addEventListener('click', () => showView('quiz'));
   document.getElementById('card-profile').addEventListener('click', openProfile);
+  document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('back-home').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home-gacha').addEventListener('click', () => showView('home'));
+  document.getElementById('pull-single').addEventListener('click', () => doPull('single'));
+  document.getElementById('pull-pack').addEventListener('click', () => doPull('pack'));
 
   document.getElementById('import-btn').addEventListener('click', startImport);
   document.getElementById('next-btn').addEventListener('click', nextSong);
@@ -511,6 +516,87 @@ async function sendFeedback(type) {
     });
   } catch {}
   nextSong();
+}
+
+// ── GACHA ──
+const RARITY_LABELS = { common: 'Commun', rare: 'Rare', epic: 'Épique', legendary: 'Légendaire', mythic: 'Mythique' };
+const RARITY_ORDER = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+
+function setGachaTokens() {
+  document.getElementById('gacha-tokens').textContent = currentUser.tokens;
+}
+
+async function openGacha() {
+  showView('gacha');
+  setGachaTokens();
+  document.getElementById('gacha-msg').textContent = '';
+  document.getElementById('pull-result').classList.add('hidden');
+  try {
+    const info = await api('/api/gacha/info');
+    document.getElementById('price-single').textContent = info.prices.single.cost;
+    document.getElementById('price-pack').textContent = info.prices.pack.cost;
+    document.getElementById('gacha-pool').textContent = `${info.total} personnages à collectionner`;
+  } catch {}
+  loadCollection();
+}
+
+function cardHTML(c, opts = {}) {
+  const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
+  const badges = [];
+  if (opts.isNew) badges.push('<span class="badge new">NOUVEAU</span>');
+  if (opts.refund) badges.push(`<span class="badge refund">+${opts.refund} 🪙</span>`);
+  if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
+  return `<div class="gcard r-${c.rarity}">
+    <div class="gcard-img" ${img}></div>
+    <div class="gcard-info">
+      <div class="gcard-name">${c.name}</div>
+      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+    </div>
+    ${badges.join('')}
+  </div>`;
+}
+
+async function doPull(type) {
+  const single = document.getElementById('pull-single');
+  const pack = document.getElementById('pull-pack');
+  single.disabled = pack.disabled = true;
+  document.getElementById('gacha-msg').textContent = 'Ouverture…';
+  try {
+    const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+    setGachaTokens();
+    const result = document.getElementById('pull-result');
+    result.innerHTML = r.cards.map((c) => cardHTML(c, { isNew: c.isNew, refund: c.refund })).join('');
+    result.classList.remove('hidden');
+    const refundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙 remboursés (doublons)` : '';
+    document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙${refundMsg}`;
+    loadCollection();
+  } catch (err) {
+    document.getElementById('gacha-msg').textContent = err.message;
+  } finally {
+    single.disabled = pack.disabled = false;
+  }
+}
+
+async function loadCollection() {
+  const grid = document.getElementById('collection-grid');
+  const prog = document.getElementById('collection-progress');
+  try {
+    const { cards, poolByRarity, ownedByRarity } = await api('/api/gacha/collection');
+    prog.innerHTML = RARITY_ORDER.map((r) => {
+      const owned = ownedByRarity[r] || 0;
+      const total = poolByRarity[r] || 0;
+      return `<span class="prog r-${r}">${RARITY_LABELS[r]} ${owned}/${total}</span>`;
+    }).join('');
+    if (!cards.length) {
+      grid.innerHTML = '<p class="muted">Aucune carte pour l\'instant. Tire ton premier personnage !</p>';
+      return;
+    }
+    grid.innerHTML = cards.map((c) => cardHTML(c)).join('');
+  } catch {
+    grid.innerHTML = '';
+  }
 }
 
 // ── lecteur média ──

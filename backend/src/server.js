@@ -13,6 +13,7 @@ const catalogRoutes = require('./catalog/catalog.routes');
 const quizRoutes = require('./quiz/quiz.routes');
 const profileRoutes = require('./profile/profile.routes');
 const economyRoutes = require('./economy/economy.routes');
+const gachaRoutes = require('./gacha/gacha.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +41,7 @@ app.use('/api/catalog', catalogRoutes.router);
 app.use('/api/quiz', quizRoutes.router);
 app.use('/api/profile', profileRoutes.router);
 app.use('/api/economy', economyRoutes.router);
+app.use('/api/gacha', gachaRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)

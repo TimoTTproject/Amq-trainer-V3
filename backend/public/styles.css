@@ -118,6 +118,45 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .token-history .date { color: var(--text-2); font-size: .78rem; min-width: 52px; text-align: right; }
 .token-history .muted { color: var(--text-2); justify-content: center; }
 
+/* ── GACHA ── */
+.gacha-top { display: flex; align-items: center; justify-content: space-between; }
+.gacha-top h2 { font-size: 1.5rem; } .gacha-top h2 i { color: var(--accent); }
+.gacha-sub { color: var(--text-2); font-size: .88rem; margin: 4px 0 18px; }
+.gacha-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.gacha-actions .btn-primary { font-size: 1rem; padding: 14px 20px; }
+.gacha-msg { color: var(--text-2); min-height: 1.2em; margin: 14px 0; font-weight: 600; }
+
+.pull-result { display: flex; gap: 12px; flex-wrap: wrap; padding: 16px; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); margin-bottom: 24px; }
+
+.collection { margin-top: 10px; }
+.collection h3 { margin-bottom: 12px; color: var(--text-2); font-size: 1rem; } .collection h3 i { color: var(--accent); }
+.collection-progress { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.prog { font-size: .78rem; padding: 4px 10px; border-radius: 12px; background: var(--bg-3); font-weight: 600; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.card-grid .muted { grid-column: 1/-1; color: var(--text-2); text-align: center; padding: 30px; }
+
+/* Carte personnage */
+.gcard { position: relative; background: var(--bg-2); border-radius: 10px; overflow: hidden; border: 2px solid #2a2f42; }
+.gcard-img { width: 100%; aspect-ratio: 3/4; background-size: cover; background-position: center top; background-color: var(--bg-3); }
+.gcard-info { padding: 7px 8px; }
+.gcard-name { font-size: .8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gcard-rarity { font-size: .7rem; color: var(--text-2); }
+.gcard .badge { position: absolute; top: 6px; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 8px; }
+.gcard .badge.new { left: 6px; background: var(--green); color: #06281b; }
+.gcard .badge.refund { right: 6px; background: var(--orange); color: #3a2600; }
+.gcard .badge.copies { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
+
+/* Couleurs de rareté */
+.r-common    { border-color: #4a5066; } .prog.r-common    { color: #aab; }
+.r-rare      { border-color: #3aa0ff; } .prog.r-rare      { color: #3aa0ff; box-shadow: inset 0 0 0 1px #3aa0ff55; }
+.r-epic      { border-color: #b06cff; } .prog.r-epic      { color: #b06cff; box-shadow: inset 0 0 0 1px #b06cff55; }
+.r-legendary { border-color: #ffb648; box-shadow: 0 0 12px #ffb64833; } .prog.r-legendary { color: #ffb648; }
+.r-mythic    { border-color: #ff5d8f; box-shadow: 0 0 16px #ff5d8f44; } .prog.r-mythic    { color: #ff5d8f; }
+.gcard.r-legendary .gcard-rarity { color: #ffb648; }
+.gcard.r-mythic .gcard-rarity { color: #ff5d8f; }
+.gcard.r-epic .gcard-rarity { color: #b06cff; }
+.gcard.r-rare .gcard-rarity { color: #3aa0ff; }
+
 /* Accueil */
 .home-hero { margin: 10px 0 24px; }
 .home-hero h2 { font-size: 1.6rem; }
