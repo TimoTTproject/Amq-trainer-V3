@@ -105,6 +105,19 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .pstat label { color: var(--text-2); font-size: .72rem; }
 .form-error { color: var(--red); font-size: .85rem; min-height: 1em; margin-top: 12px; }
 
+/* Historique des tokens */
+.token-history { margin-top: 22px; }
+.token-history h3 { color: var(--text-2); font-size: .9rem; font-weight: 600; margin-bottom: 10px; }
+.token-history h3 i { color: var(--orange); }
+.token-history ul { list-style: none; max-height: 180px; overflow-y: auto; }
+.token-history li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--bg); margin-bottom: 5px; font-size: .85rem; }
+.token-history li span:first-child { flex: 1; color: var(--text); }
+.token-history .amt { font-weight: 700; }
+.token-history .amt.gain { color: var(--green); }
+.token-history .amt.spend { color: var(--red); }
+.token-history .date { color: var(--text-2); font-size: .78rem; min-width: 52px; text-align: right; }
+.token-history .muted { color: var(--text-2); justify-content: center; }
+
 .panel { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
 .panel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .panel-row:last-child { margin-bottom: 0; }
@@ -145,6 +158,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .answer-area input:focus { outline: none; border-color: var(--accent); }
 
 .answer-result { margin-top: 16px; padding: 16px; background: var(--bg); border-radius: 10px; border-left: 3px solid var(--accent); }
+.verdict { font-weight: 700; font-size: 1.05rem; margin-bottom: 8px; }
+.verdict.ok { color: var(--green); }
+.verdict.ko { color: var(--red); }
 .result-line { font-size: 1.05rem; }
 .result-sub { color: var(--text-2); margin: 4px 0 14px; }
 .feedback-buttons { display: flex; gap: 10px; }

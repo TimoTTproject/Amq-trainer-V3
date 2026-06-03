@@ -196,6 +196,28 @@ async function openProfile() {
     document.getElementById('profile-played').textContent = s.played;
     document.getElementById('profile-rate').textContent = s.rate + '%';
   } catch {}
+  loadTokenHistory();
+}
+
+async function loadTokenHistory() {
+  const list = document.getElementById('token-history-list');
+  try {
+    const { transactions } = await api('/api/economy/transactions');
+    if (!transactions.length) {
+      list.innerHTML = '<li class="muted">Aucune transaction pour l\'instant.</li>';
+      return;
+    }
+    list.innerHTML = transactions
+      .map((t) => {
+        const d = new Date(t.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+        const sign = t.amount >= 0 ? '+' : '';
+        const cls = t.amount >= 0 ? 'gain' : 'spend';
+        return `<li><span>${t.reason}</span><span class="amt ${cls}">${sign}${t.amount} 🪙</span><span class="date">${d}</span></li>`;
+      })
+      .join('');
+  } catch {
+    list.innerHTML = '<li class="muted">—</li>';
+  }
 }
 
 function closeProfile() { document.getElementById('profile-modal').classList.add('hidden'); }
@@ -272,7 +294,7 @@ function setupAppUI() {
 
   document.getElementById('import-btn').addEventListener('click', startImport);
   document.getElementById('next-btn').addEventListener('click', nextSong);
-  document.getElementById('reveal-btn').addEventListener('click', revealAnswer);
+  document.getElementById('reveal-btn').addEventListener('click', guessAnswer);
   document.getElementById('play-btn').addEventListener('click', togglePlay);
   document.getElementById('replay-btn').addEventListener('click', replayClip);
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
@@ -292,7 +314,7 @@ function setupAppUI() {
   });
   document.getElementById('volume').addEventListener('input', (e) => { video().volume = +e.target.value; });
   document.getElementById('answer-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') revealAnswer();
+    if (e.key === 'Enter') guessAnswer();
   });
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => {
     b.addEventListener('click', () => sendFeedback(b.dataset.fb));
@@ -426,35 +448,55 @@ function resetQuizUI() {
   showOverlay(true);
 }
 
-function normalize(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-
-function revealAnswer() {
+// Valide la réponse côté serveur, révèle l'anime et attribue les tokens.
+async function guessAnswer() {
   if (!currentSong || answered) return;
   answered = true;
-  clearTimeout(clipTimer); // plus de coupure une fois révélé
+  clearTimeout(clipTimer); // plus de coupure une fois validé
   video().play().catch(() => {});
-  const typed = normalize(document.getElementById('answer-input').value);
-  const target = normalize(currentSong.animeTitle);
-  currentSong._correct = typed.length > 2 && (target.includes(typed) || typed.includes(target));
-
-  document.getElementById('answer-anime').textContent = currentSong.animeTitle;
-  document.getElementById('answer-title').textContent = currentSong.title;
-  document.getElementById('answer-artist').textContent = currentSong.artist || 'Artiste inconnu';
-  document.getElementById('answer-result').classList.remove('hidden');
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
+
+  let r;
+  try {
+    r = await api('/api/quiz/guess', {
+      method: 'POST',
+      body: JSON.stringify({ songId: currentSong.id, guess: document.getElementById('answer-input').value }),
+    });
+  } catch (e) {
+    setHint(e.message);
+    answered = false;
+    document.getElementById('answer-input').disabled = false;
+    document.getElementById('reveal-btn').disabled = false;
+    return;
+  }
+
+  const verdict = document.getElementById('answer-verdict');
+  verdict.textContent = r.correct
+    ? `✅ Bonne réponse !  +${r.reward} 🪙`
+    : '❌ Raté';
+  verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
+
+  document.getElementById('answer-anime').textContent = r.answer.animeTitle;
+  document.getElementById('answer-title').textContent = r.answer.title;
+  document.getElementById('answer-artist').textContent = r.answer.artist || 'Artiste inconnu';
+  document.getElementById('answer-result').classList.remove('hidden');
   showOverlay(false); // révèle la vidéo
+
+  if (typeof r.tokens === 'number' && currentUser) {
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+  }
+  refreshStats();
 }
 
 async function sendFeedback(type) {
-  if (!currentSong) return;
-  if (!answered) revealAnswer();
+  if (!currentSong || !answered) return;
   try {
     await api('/api/quiz/feedback', {
       method: 'POST',
-      body: JSON.stringify({ songId: currentSong.id, feedbackType: type, correct: !!currentSong._correct }),
+      body: JSON.stringify({ songId: currentSong.id, feedbackType: type }),
     });
-    await refreshStats();
   } catch {}
   nextSong();
 }
