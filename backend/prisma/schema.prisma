@@ -66,6 +66,15 @@ model Song {
   catalogEntries UserCatalogEntry[]
 }
 
+// Marqueur « anime déjà exploré sur animethemes » : évite de re-chercher
+// à chaque import, même quand aucun opening n'a été trouvé (songCount = 0).
+model ScannedAnime {
+  anilistId  Int      @id
+  animeTitle String
+  songCount  Int      @default(0)
+  scannedAt  DateTime @default(now())
+}
+
 // Stats par utilisateur × musique (remplace localStorage)
 model UserSongStat {
   id           Int     @id @default(autoincrement())

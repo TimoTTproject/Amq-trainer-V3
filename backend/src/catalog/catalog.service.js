@@ -112,9 +112,15 @@ async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
 
 // Récupère (ou crée) les Song d'un anime dans le catalogue global. Retourne les rows DB.
 async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], popularity = 0) {
+  // 1) Déjà des musiques en catalogue → réutilisation immédiate (aucun appel réseau).
   const existing = await prisma.song.findMany({ where: { anilistId } });
   if (existing.length) return existing;
 
+  // 2) Déjà exploré mais 0 opening trouvé → ne pas re-chercher.
+  const scanned = await prisma.scannedAnime.findUnique({ where: { anilistId } });
+  if (scanned) return [];
+
+  // 3) Jamais exploré → recherche animethemes (une seule fois).
   const themes = await fetchThemesFromAnimeThemes(animeTitle, synonyms);
   const cleanTitle = normalizeAnimeName(animeTitle);
   const rows = [];
@@ -142,6 +148,12 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
     });
     rows.push(row);
   }
+  // Marquer l'anime comme exploré (même si 0 opening) pour ne plus jamais le re-chercher.
+  await prisma.scannedAnime.upsert({
+    where: { anilistId },
+    update: { songCount: rows.length, scannedAt: new Date(), animeTitle: cleanTitle },
+    create: { anilistId, animeTitle: cleanTitle, songCount: rows.length },
+  });
   return rows;
 }
 
