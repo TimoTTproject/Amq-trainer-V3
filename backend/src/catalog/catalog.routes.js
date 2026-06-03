@@ -64,6 +64,33 @@ router.get('/my-list', requireAuth, async (req, res) => {
   res.json({ songs: entries.map((e) => e.song) });
 });
 
+// Liste paginée + recherche du catalogue global (anime, OP n°, titre, artiste)
+router.get('/list', requireAuth, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const perPage = 50;
+  const q = (req.query.search || '').trim();
+  const where = q
+    ? {
+        OR: [
+          { animeTitle: { contains: q, mode: 'insensitive' } },
+          { title: { contains: q, mode: 'insensitive' } },
+          { artist: { contains: q, mode: 'insensitive' } },
+        ],
+      }
+    : {};
+  const [total, songs] = await Promise.all([
+    prisma.song.count({ where }),
+    prisma.song.findMany({
+      where,
+      orderBy: [{ animeTitle: 'asc' }, { type: 'asc' }, { number: 'asc' }],
+      skip: (page - 1) * perPage,
+      take: perPage,
+      select: { animeTitle: true, type: true, number: true, title: true, artist: true },
+    }),
+  ]);
+  res.json({ songs, total, page, perPage, pages: Math.ceil(total / perPage) });
+});
+
 // Stats du catalogue global
 router.get('/stats', async (req, res) => {
   const totalSongs = await prisma.song.count();

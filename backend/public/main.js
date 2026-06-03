@@ -115,6 +115,7 @@ function showView(name) {
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
+  document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
 }
 
 function showApp(user) {
@@ -207,6 +208,25 @@ async function openProfile() {
     document.getElementById('profile-rate').textContent = s.rate + '%';
   } catch {}
   loadTokenHistory();
+  loadProfileCollection();
+}
+
+async function loadProfileCollection() {
+  const best = document.getElementById('profile-best-card');
+  try {
+    const { cards } = await api('/api/gacha/collection');
+    document.getElementById('profile-cards-count').textContent = cards.length;
+    if (cards.length) {
+      best.innerHTML = cardHTML(cards[0]);
+      document.getElementById('profile-best-label').textContent =
+        `Meilleure carte : ${cards[0].name} (${RARITY_LABELS[cards[0].rarity] || cards[0].rarity})`;
+    } else {
+      best.innerHTML = '';
+      document.getElementById('profile-best-label').textContent = 'Joue au gacha pour débloquer des cartes !';
+    }
+  } catch {
+    best.innerHTML = '';
+  }
 }
 
 async function loadTokenHistory() {
@@ -306,8 +326,17 @@ function setupAppUI() {
   document.getElementById('card-play').addEventListener('click', () => showView('quiz'));
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
+  document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('back-home').addEventListener('click', () => showView('home'));
   document.getElementById('back-home-gacha').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home-catalog').addEventListener('click', () => showView('home'));
+  let catSearchTimer;
+  document.getElementById('catalog-search').addEventListener('input', (e) => {
+    clearTimeout(catSearchTimer);
+    catSearchTimer = setTimeout(() => loadCatalogList(1, e.target.value.trim()), 300);
+  });
+  document.getElementById('cat-prev').addEventListener('click', () => loadCatalogList(catalogPage - 1, catalogSearch));
+  document.getElementById('cat-next').addEventListener('click', () => loadCatalogList(catalogPage + 1, catalogSearch));
   document.getElementById('pull-single').addEventListener('click', () => doPull('single'));
   document.getElementById('pull-pack').addEventListener('click', () => doPull('pack'));
 
@@ -615,10 +644,12 @@ function cardHTML(c, opts = {}) {
   if (opts.isNew) badges.push('<span class="badge new">NOUVEAU</span>');
   if (opts.refund) badges.push(`<span class="badge refund">+${opts.refund} 🪙</span>`);
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
-  return `<div class="gcard r-${c.rarity}">
+  const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '');
+  const delay = opts.index != null ? ` style="animation-delay:${(opts.index * 0.45).toFixed(2)}s"` : '';
+  return `<div class="${cls}"${delay}>
     <div class="gcard-img" ${img}></div>
     <div class="gcard-info">
-      <div class="gcard-name">${c.name}</div>
+      <div class="gcard-name">${escapeHtml(c.name)}</div>
       <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
     </div>
     ${badges.join('')}
@@ -636,11 +667,14 @@ async function doPull(type) {
     renderHeaderUser();
     setGachaTokens();
     const result = document.getElementById('pull-result');
-    result.innerHTML = r.cards.map((c) => cardHTML(c, { isNew: c.isNew, refund: c.refund })).join('');
+    result.innerHTML = r.cards
+      .map((c, i) => cardHTML(c, { isNew: c.isNew, refund: c.refund, reveal: true, index: i }))
+      .join('');
     result.classList.remove('hidden');
     const refundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙 remboursés (doublons)` : '';
     document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙${refundMsg}`;
-    loadCollection();
+    // recharge la collection une fois l'animation terminée
+    setTimeout(loadCollection, r.cards.length * 450 + 400);
   } catch (err) {
     document.getElementById('gacha-msg').textContent = err.message;
   } finally {
@@ -666,6 +700,53 @@ async function loadCollection() {
   } catch {
     grid.innerHTML = '';
   }
+}
+
+// ── CATALOGUE ──
+let catalogPage = 1;
+let catalogSearch = '';
+let catalogPages = 1;
+
+function openCatalog() {
+  showView('catalog');
+  document.getElementById('catalog-search').value = '';
+  loadCatalogList(1, '');
+}
+
+async function loadCatalogList(page, search) {
+  if (page < 1 || (catalogPages && page > catalogPages && page !== 1)) return;
+  catalogSearch = search;
+  const tbody = document.getElementById('catalog-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="muted">Chargement…</td></tr>';
+  try {
+    const r = await api(`/api/catalog/list?page=${page}&search=${encodeURIComponent(search)}`);
+    catalogPage = r.page;
+    catalogPages = r.pages || 1;
+    document.getElementById('catalog-total').textContent = `${r.total} openings`;
+    if (!r.songs.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="muted">Aucun résultat.</td></tr>';
+    } else {
+      tbody.innerHTML = r.songs
+        .map(
+          (s) => `<tr>
+            <td>${escapeHtml(s.animeTitle)}</td>
+            <td class="nowrap">${s.type}${s.number}</td>
+            <td>${escapeHtml(s.title)}</td>
+            <td>${escapeHtml(s.artist || '—')}</td>
+          </tr>`
+        )
+        .join('');
+    }
+    document.getElementById('cat-pageinfo').textContent = `Page ${r.page} / ${catalogPages}`;
+    document.getElementById('cat-prev').disabled = r.page <= 1;
+    document.getElementById('cat-next').disabled = r.page >= catalogPages;
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">${e.message}</td></tr>`;
+  }
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // ── lecteur média ──

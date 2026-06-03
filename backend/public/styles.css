@@ -157,6 +157,36 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .gcard.r-epic .gcard-rarity { color: #b06cff; }
 .gcard.r-rare .gcard-rarity { color: #3aa0ff; }
 
+/* Animation de révélation des tirages */
+@keyframes cardReveal {
+  0% { opacity: 0; transform: scale(.4) rotateY(90deg); }
+  55% { opacity: 1; transform: scale(1.1) rotateY(0deg); }
+  100% { transform: scale(1); }
+}
+.gcard.revealing { opacity: 0; animation: cardReveal .55s cubic-bezier(.2,.9,.3,1.2) forwards; }
+.pull-result .gcard { width: 130px; }
+
+/* ── CATALOGUE ── */
+.catalog-search { margin-bottom: 16px; }
+.catalog-search input { width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; font-size: .95rem; }
+.catalog-search input:focus { outline: none; border-color: var(--accent); }
+.catalog-table { width: 100%; border-collapse: collapse; }
+.catalog-table th { text-align: left; color: var(--text-2); font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; padding: 8px 10px; border-bottom: 1px solid #2a2f42; }
+.catalog-table td { padding: 9px 10px; border-bottom: 1px solid #1e2333; font-size: .9rem; }
+.catalog-table tbody tr:hover td { background: var(--bg-2); }
+.catalog-table .nowrap { white-space: nowrap; color: var(--accent); font-weight: 700; }
+.catalog-table .muted { text-align: center; color: var(--text-2); padding: 26px; }
+.catalog-pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 18px; color: var(--text-2); }
+
+/* Collection dans le profil */
+.profile-collection { margin-top: 20px; }
+.profile-collection h3 { color: var(--text-2); font-size: .9rem; font-weight: 600; margin-bottom: 10px; }
+.profile-collection h3 i { color: var(--accent); }
+.profile-collection-row { display: flex; gap: 14px; align-items: center; }
+#profile-best-card { width: 92px; flex-shrink: 0; }
+.profile-coll-info { color: var(--text-2); font-size: .9rem; }
+.profile-coll-info strong { color: var(--accent); font-size: 1.15rem; }
+
 /* Accueil */
 .home-hero { margin: 10px 0 24px; }
 .home-hero h2 { font-size: 1.6rem; }
