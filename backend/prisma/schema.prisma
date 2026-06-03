@@ -55,7 +55,8 @@ model Song {
   artist      String?
   videoUrl    String?
   audioUrl    String?
-  popularity  Int     @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
+  popularity  Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
+  altTitles   String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
 
   createdAt DateTime @default(now())
 

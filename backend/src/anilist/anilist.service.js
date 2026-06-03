@@ -21,7 +21,7 @@ async function getCompletedAnime(username) {
   const query = `
     query ($name: String) {
       MediaListCollection(userName: $name, type: ANIME, status: COMPLETED) {
-        lists { entries { media { id title { romaji english } synonyms popularity } } }
+        lists { entries { media { id title { romaji english native } synonyms popularity } } }
       }
     }`;
   const data = await anilistQuery(query, { name: username });
@@ -47,7 +47,7 @@ async function getPopularAnime(page = 1, perPage = 50) {
     query ($page: Int, $perPage: Int) {
       Page(page: $page, perPage: $perPage) {
         media(type: ANIME, sort: POPULARITY_DESC) {
-          id title { romaji english } synonyms popularity
+          id title { romaji english native } synonyms popularity
         }
       }
     }`;
@@ -55,4 +55,16 @@ async function getPopularAnime(page = 1, perPage = 50) {
   return data?.Page?.media || [];
 }
 
-module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime };
+// Récupère les titres de plusieurs animes par leurs ids (pour le backfill).
+async function getAnimeTitlesByIds(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(id_in: $ids, type: ANIME) { id title { romaji english native } synonyms }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.media || [];
+}
+
+module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds };

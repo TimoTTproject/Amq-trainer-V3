@@ -9,7 +9,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const { prisma } = require('../src/db');
 const { getPopularAnime } = require('../src/anilist/anilist.service');
-const { getOrCreateSongsForAnime } = require('../src/catalog/catalog.service');
+const { getOrCreateSongsForAnime, buildAltTitles } = require('../src/catalog/catalog.service');
 
 const PER_PAGE = 50;
 
@@ -38,7 +38,7 @@ async function main() {
       processed++;
       const title = m.title.romaji || m.title.english || `#${m.id}`;
       try {
-        const songs = await getOrCreateSongsForAnime(m.id, title, m.synonyms || [], m.popularity || 0);
+        const songs = await getOrCreateSongsForAnime(m.id, title, m.synonyms || [], m.popularity || 0, buildAltTitles(m));
         if (songs.length) {
           withSongs++;
           totalSongs += songs.length;

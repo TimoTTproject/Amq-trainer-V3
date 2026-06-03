@@ -1,11 +1,28 @@
 // Routes quiz : tirage, validation de réponse (+ tokens), feedback, notation
 const express = require('express');
+const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 
 const router = express.Router();
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// La réponse est correcte si elle correspond à l'un des titres acceptés
+// (romaji/anglais/natif/synonymes), avec tolérance aux fautes de frappe.
+function isCorrectGuess(guess, song) {
+  const g = norm(guess);
+  if (g.length < 3) return false;
+  const candidates = [song.animeTitle, ...(song.altTitles || [])]
+    .map(norm)
+    .filter((t) => t.length);
+  return candidates.some(
+    (t) =>
+      t === g ||
+      stringSimilarity.compareTwoStrings(t, g) >= 0.82 || // fautes de frappe
+      (g.length >= 5 && (t.includes(g) || g.includes(t))) // sous-titre significatif
+  );
+}
 
 // Récompense en tokens pour une bonne réponse
 function computeReward(song, firstCorrect) {
@@ -53,9 +70,7 @@ router.post('/guess', requireAuth, async (req, res) => {
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
-  const g = norm(guess);
-  const t = norm(song.animeTitle);
-  const correct = g.length > 2 && (t.includes(g) || g.includes(t));
+  const correct = isCorrectGuess(guess, song);
 
   const userId = req.user.id;
   const prev = await prisma.userSongStat.findUnique({

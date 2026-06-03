@@ -10,6 +10,13 @@ const ANIMETHEMES_HEADERS = {
   Accept: 'application/json',
 };
 
+// Construit la liste des titres acceptés en réponse à partir d'un media AniList
+function buildAltTitles(media) {
+  const t = media.title || {};
+  const all = [t.romaji, t.english, t.native, ...(media.synonyms || [])];
+  return [...new Set(all.filter((s) => s && typeof s === 'string' && s.trim()).map((s) => s.trim()))];
+}
+
 function normalizeAnimeName(name) {
   if (!name || name === 'undefined' || name === 'null') return 'Anime inconnu';
   let n = name.toString().trim();
@@ -111,7 +118,7 @@ async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
 }
 
 // Récupère (ou crée) les Song d'un anime dans le catalogue global. Retourne les rows DB.
-async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], popularity = 0) {
+async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], popularity = 0, altTitles = []) {
   // 1) Déjà des musiques en catalogue → réutilisation immédiate (aucun appel réseau).
   const existing = await prisma.song.findMany({ where: { anilistId } });
   if (existing.length) return existing;
@@ -134,7 +141,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
           title: t.title,
         },
       },
-      update: { videoUrl: t.videoUrl, artist: t.artist, popularity },
+      update: { videoUrl: t.videoUrl, artist: t.artist, popularity, altTitles },
       create: {
         anilistId,
         animeTitle: cleanTitle,
@@ -144,6 +151,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
         artist: t.artist,
         videoUrl: t.videoUrl,
         popularity,
+        altTitles,
       },
     });
     rows.push(row);
@@ -181,7 +189,8 @@ async function importUserList(userId, username, onProgress, limit = 1000) {
         media.id,
         title,
         media.synonyms || [],
-        media.popularity || 0
+        media.popularity || 0,
+        buildAltTitles(media)
       );
       if (songs.length) {
         matchedAnime++;
@@ -203,4 +212,4 @@ async function importUserList(userId, username, onProgress, limit = 1000) {
   return { totalAnime: animeList.length, matchedAnime, totalSongs };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName };
+module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles };
