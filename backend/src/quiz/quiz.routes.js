@@ -92,6 +92,7 @@ router.post('/guess', requireAuth, async (req, res) => {
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
+  const ranked = req.body?.ranked !== false; // défaut : classé
   const correct = isCorrectGuess(guess, song);
 
   const userId = req.user.id;
@@ -99,7 +100,8 @@ router.post('/guess', requireAuth, async (req, res) => {
     where: { userId_songId: { userId, songId } },
   });
   const firstCorrect = correct && (!prev || prev.correctCount === 0);
-  const reward = correct ? computeReward(song, firstCorrect) : 0;
+  // Les tokens ne sont gagnés qu'en mode classé
+  const reward = correct && ranked ? computeReward(song, firstCorrect) : 0;
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.userSongStat.upsert({
@@ -128,6 +130,21 @@ router.post('/guess', requireAuth, async (req, res) => {
     correct,
     reward,
     tokens: result.tokens,
+    answer: {
+      animeTitle: song.animeTitle,
+      title: song.title,
+      artist: song.artist,
+      type: song.type,
+      number: song.number,
+    },
+  });
+});
+
+// Révèle la réponse sans scorer (mode entraînement uniquement)
+router.get('/answer/:songId', requireAuth, async (req, res) => {
+  const song = await prisma.song.findUnique({ where: { id: parseInt(req.params.songId) } });
+  if (!song) return res.status(404).json({ error: 'Musique introuvable' });
+  res.json({
     answer: {
       animeTitle: song.animeTitle,
       title: song.title,

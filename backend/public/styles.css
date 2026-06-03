@@ -184,6 +184,13 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .panel-row input[type="number"] { width: 90px; }
 .catalog-info { color: var(--text-2); font-size: .85rem; margin-left: auto; }
 
+/* Sélecteur Classé / Entraînement */
+.gamemode-switch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.gm-btn { background: var(--bg-2); border: 1px solid #2a2f42; color: var(--text-2); padding: 9px 16px; border-radius: 10px; display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+.gm-btn.active[data-gm="ranked"] { background: linear-gradient(135deg, var(--orange), #ff8a48); color: #2a1800; border-color: transparent; }
+.gm-btn.active[data-gm="casual"] { background: var(--bg-3); color: var(--text); border-color: var(--accent); }
+.gm-hint { color: var(--text-2); font-size: .82rem; flex: 1; min-width: 180px; }
+
 .mode-switch { display: flex; background: var(--bg); border-radius: 10px; padding: 4px; }
 .mode-btn { background: none; border: none; color: var(--text-2); padding: 7px 14px; border-radius: 8px; }
 .mode-btn.active { background: var(--bg-3); color: var(--text); }

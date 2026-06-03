@@ -7,6 +7,7 @@ let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle d
 let currentSong = null;
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
+let gameMode = localStorage.getItem('amq_gamemode') || 'ranked'; // 'ranked' | 'casual'
 let clipTimer = null; // coupe l'extrait après la durée choisie
 const video = () => document.getElementById('quiz-video');
 
@@ -122,6 +123,7 @@ function showApp(user) {
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('home-name').textContent = user.displayName;
   showView('home');
+  applyGameModeUI();
   renderHeaderUser();
   if (user.anilistName) document.getElementById('anilist-username').value = user.anilistName;
   chooseInitialMode().then(() => {
@@ -315,6 +317,24 @@ function setupAppUI() {
   document.getElementById('play-btn').addEventListener('click', togglePlay);
   document.getElementById('replay-btn').addEventListener('click', replayClip);
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
+  document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
+
+  // Sélecteur Classé / Entraînement
+  document.querySelectorAll('.gm-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      gameMode = b.dataset.gm;
+      localStorage.setItem('amq_gamemode', gameMode);
+      applyGameModeUI();
+    });
+  });
+
+  // Pause la lecture quand on quitte l'onglet
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      const v = video();
+      if (v && !v.paused) { v.pause(); setPlayIcon(); }
+    }
+  });
 
   // Réglages quiz
   const optRandom = document.getElementById('opt-random-start');
@@ -342,6 +362,24 @@ function applyModeUI() {
   document.querySelectorAll('.mode-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
+}
+
+function applyGameModeUI() {
+  const ranked = gameMode === 'ranked';
+  document.querySelectorAll('.gm-btn').forEach((b) =>
+    b.classList.toggle('active', b.dataset.gm === gameMode)
+  );
+  document.getElementById('gm-hint').textContent = ranked
+    ? '🏆 Gagne des tokens — vidéo et réponse cachées avant validation.'
+    : '🎓 Entraînement libre — vidéo et réponse accessibles, aucun token.';
+  document.getElementById('show-answer-btn').classList.toggle('hidden', ranked);
+  updateVideoButtonVisibility();
+}
+
+// En classé, la vidéo n'est accessible qu'après avoir validé
+function updateVideoButtonVisibility() {
+  const allow = gameMode === 'casual' || answered;
+  document.getElementById('reveal-video-btn').classList.toggle('hidden', !allow);
 }
 
 async function refreshCatalogInfo() {
@@ -417,6 +455,8 @@ async function nextSong() {
   document.getElementById('answer-input').disabled = false;
   document.getElementById('reveal-btn').disabled = false;
   document.getElementById('answer-input').focus();
+  document.getElementById('next-btn').innerHTML = '<i class="fas fa-forward"></i> Manche suivante';
+  updateVideoButtonVisibility(); // cache la vidéo en classé tant qu'on n'a pas répondu
 
   await startClip(); // applique départ aléatoire + coupure, puis lance
 }
@@ -462,6 +502,7 @@ function replayClip() {
 function resetQuizUI() {
   document.getElementById('answer-result').classList.add('hidden');
   document.getElementById('answer-input').value = '';
+  document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = false));
   showOverlay(true);
 }
 
@@ -478,7 +519,11 @@ async function guessAnswer() {
   try {
     r = await api('/api/quiz/guess', {
       method: 'POST',
-      body: JSON.stringify({ songId: currentSong.id, guess: document.getElementById('answer-input').value }),
+      body: JSON.stringify({
+        songId: currentSong.id,
+        guess: document.getElementById('answer-input').value,
+        ranked: gameMode === 'ranked',
+      }),
     });
   } catch (e) {
     setHint(e.message);
@@ -489,22 +534,45 @@ async function guessAnswer() {
   }
 
   const verdict = document.getElementById('answer-verdict');
-  verdict.textContent = r.correct
-    ? `✅ Bonne réponse !  +${r.reward} 🪙`
-    : '❌ Raté';
+  if (r.correct) {
+    verdict.textContent = r.reward ? `✅ Bonne réponse !  +${r.reward} 🪙` : '✅ Bonne réponse !';
+  } else {
+    verdict.textContent = '❌ Raté';
+  }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
 
-  document.getElementById('answer-anime').textContent = r.answer.animeTitle;
-  document.getElementById('answer-title').textContent = r.answer.title;
-  document.getElementById('answer-artist').textContent = r.answer.artist || 'Artiste inconnu';
-  document.getElementById('answer-result').classList.remove('hidden');
-  showOverlay(false); // révèle la vidéo
+  revealAnswerBox(r.answer);
 
   if (typeof r.tokens === 'number' && currentUser) {
     currentUser.tokens = r.tokens;
     renderHeaderUser();
   }
   refreshStats();
+}
+
+// Affiche le bloc réponse + autorise la vidéo
+function revealAnswerBox(answer) {
+  document.getElementById('answer-anime').textContent = answer.animeTitle;
+  document.getElementById('answer-title').textContent = answer.title;
+  document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';
+  document.getElementById('answer-result').classList.remove('hidden');
+  showOverlay(false); // révèle la vidéo
+  updateVideoButtonVisibility();
+}
+
+// Mode entraînement : révèle la réponse sans scorer ni gagner de tokens
+async function showAnswerCasual() {
+  if (!currentSong || answered) return;
+  answered = true;
+  clearTimeout(clipTimer);
+  document.getElementById('answer-input').disabled = true;
+  document.getElementById('reveal-btn').disabled = true;
+  document.getElementById('answer-verdict').textContent = '🎓 Réponse révélée (entraînement)';
+  document.getElementById('answer-verdict').className = 'verdict';
+  try {
+    const { answer } = await api(`/api/quiz/answer/${currentSong.id}`);
+    revealAnswerBox(answer);
+  } catch (e) { setHint(e.message); }
 }
 
 async function sendFeedback(type) {
@@ -515,7 +583,8 @@ async function sendFeedback(type) {
       body: JSON.stringify({ songId: currentSong.id, feedbackType: type }),
     });
   } catch {}
-  nextSong();
+  setHint('Noté ✓ — clique sur « Manche suivante » pour continuer.');
+  document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = true));
 }
 
 // ── GACHA ──

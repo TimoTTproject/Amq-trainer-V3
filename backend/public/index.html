@@ -133,6 +133,12 @@
     <div id="view-quiz" class="hidden">
       <button class="btn-back" id="back-home"><i class="fas fa-arrow-left"></i> Accueil</button>
 
+      <div class="gamemode-switch">
+        <button class="gm-btn" data-gm="ranked"><i class="fas fa-trophy"></i> Classé</button>
+        <button class="gm-btn" data-gm="casual"><i class="fas fa-graduation-cap"></i> Entraînement</button>
+        <span class="gm-hint" id="gm-hint"></span>
+      </div>
+
     <!-- Import + mode -->
     <section class="panel">
       <div class="panel-row">
@@ -161,14 +167,15 @@
         <!-- couvre la vidéo en mode "audio seul" (la vidéo reste rendue et joue le son) -->
         <div class="audio-overlay" id="audio-overlay"><i class="fas fa-music"></i></div>
       </div>
-      <p id="quiz-hint" class="quiz-hint">Clique sur « Nouvelle musique » pour commencer.</p>
+      <p id="quiz-hint" class="quiz-hint">Clique sur « Démarrer » pour lancer une manche.</p>
 
       <div class="quiz-controls">
         <button id="play-btn" class="btn-secondary"><i class="fas fa-play"></i></button>
         <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
         <button id="replay-btn" class="btn-secondary" title="Réécouter l'extrait"><i class="fas fa-rotate-left"></i></button>
         <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
-        <button id="next-btn" class="btn-primary"><i class="fas fa-forward"></i> Nouvelle musique</button>
+        <button id="show-answer-btn" class="btn-secondary"><i class="fas fa-lightbulb"></i> Voir la réponse</button>
+        <button id="next-btn" class="btn-primary"><i class="fas fa-play"></i> Démarrer</button>
       </div>
 
       <div class="quiz-options">
