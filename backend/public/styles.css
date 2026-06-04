@@ -31,6 +31,9 @@ input { font-family: inherit; }
 .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
 .btn-secondary { background: var(--bg-3); color: var(--text); }
 .btn-anilist { background: #02a9ff; color: #fff; width: 100%; justify-content: center; }
+.btn-google { background: #fff; color: #1f1f1f; width: 100%; justify-content: center; border: 1px solid #dadce0; margin-bottom: 10px; font-weight: 600; }
+.btn-google i { color: #ea4335; }
+.btn-google:hover { filter: brightness(0.97); }
 .btn-primary:hover, .btn-secondary:hover, .btn-anilist:hover { filter: brightness(1.12); }
 .btn-primary:active, .btn-secondary:active { transform: translateY(1px); }
 button:disabled { opacity: .5; cursor: not-allowed; }

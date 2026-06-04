@@ -36,7 +36,7 @@ router.get('/anilist', (req, res) => {
 // Étape 2 : AniList redirige ici avec ?code=...
 router.get('/anilist/callback', async (req, res) => {
   const { code } = req.query;
-  if (!code) return res.redirect(`${FRONTEND_URL}/?auth=error`);
+  if (!code) return res.redirect('/?auth=error');
   try {
     // Échange du code contre un access token
     const tokenRes = await fetch('https://anilist.co/api/v2/oauth/token', {
@@ -74,10 +74,10 @@ router.get('/anilist/callback', async (req, res) => {
     });
 
     setAuthCookie(res, user.id);
-    res.redirect(`${FRONTEND_URL}/?auth=success`);
+    res.redirect('/?auth=success');
   } catch (err) {
     console.error('AniList OAuth callback error:', err.message);
-    res.redirect(`${FRONTEND_URL}/?auth=error`);
+    res.redirect('/?auth=error');
   }
 });
 

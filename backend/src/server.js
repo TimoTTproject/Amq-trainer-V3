@@ -10,6 +10,7 @@ const path = require('path');
 const { attachUser } = require('./auth/auth.middleware');
 const authRoutes = require('./auth/auth.routes');
 const anilistOAuthRoutes = require('./auth/anilist-oauth.routes');
+const googleOAuthRoutes = require('./auth/google-oauth.routes');
 const catalogRoutes = require('./catalog/catalog.routes');
 const quizRoutes = require('./quiz/quiz.routes');
 const profileRoutes = require('./profile/profile.routes');
@@ -43,6 +44,7 @@ app.use(attachUser);
 // API
 app.use('/api/auth', authRoutes.router);
 app.use('/api/auth', anilistOAuthRoutes.router);
+app.use('/api/auth', googleOAuthRoutes.router);
 app.use('/api/catalog', catalogRoutes.router);
 app.use('/api/quiz', quizRoutes.router);
 app.use('/api/profile', profileRoutes.router);

@@ -32,12 +32,15 @@
         <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> Créer un compte</button>
       </form>
 
-      <div class="auth-sep" id="anilist-sep"><span>ou</span></div>
+      <div class="auth-sep" id="oauth-sep"><span>ou</span></div>
+      <button id="google-login-btn" class="btn-google hidden">
+        <i class="fab fa-google"></i> Continuer avec Google
+      </button>
       <button id="anilist-login-btn" class="btn-anilist hidden">
         <i class="fas fa-link"></i> Se connecter avec AniList
       </button>
-      <p id="anilist-disabled" class="auth-hint hidden">
-        Connexion AniList non configurée (voir <code>.env</code>).
+      <p id="oauth-disabled" class="auth-hint hidden">
+        Connexion externe non configurée (voir <code>.env</code>).
       </p>
 
       <p id="auth-error" class="auth-error"></p>

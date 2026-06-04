@@ -43,12 +43,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (params.get('auth') === 'error') showAuthError("La connexion AniList a échoué.");
   }
 
-  // Bouton AniList visible seulement si configuré côté serveur
+  // Boutons OAuth visibles seulement si configurés côté serveur
   try {
-    const { configured } = await api('/api/auth/anilist/status');
-    document.getElementById('anilist-login-btn').classList.toggle('hidden', !configured);
-    document.getElementById('anilist-sep').classList.toggle('hidden', !configured);
-    document.getElementById('anilist-disabled').classList.toggle('hidden', configured);
+    const [anilist, google] = await Promise.all([
+      api('/api/auth/anilist/status').catch(() => ({ configured: false })),
+      api('/api/auth/google/status').catch(() => ({ configured: false })),
+    ]);
+    document.getElementById('anilist-login-btn').classList.toggle('hidden', !anilist.configured);
+    document.getElementById('google-login-btn').classList.toggle('hidden', !google.configured);
+    const any = anilist.configured || google.configured;
+    document.getElementById('oauth-sep').classList.toggle('hidden', !any);
+    document.getElementById('oauth-disabled').classList.toggle('hidden', any);
   } catch {}
 
   // Déjà connecté ?
@@ -110,6 +115,9 @@ function setupAuthUI() {
 
   document.getElementById('anilist-login-btn').addEventListener('click', () => {
     location.href = '/api/auth/anilist';
+  });
+  document.getElementById('google-login-btn').addEventListener('click', () => {
+    location.href = '/api/auth/google';
   });
 }
 
