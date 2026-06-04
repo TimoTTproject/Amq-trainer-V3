@@ -388,3 +388,90 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .admin-rarity { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 5px 8px; border-radius: 8px; font-size: .82rem; cursor: pointer; }
 .admin-rarity.r-rare { border-color: #3aa0ff; } .admin-rarity.r-epic { border-color: #b06cff; }
 .admin-rarity.r-legendary { border-color: #ffb648; } .admin-rarity.r-mythic { border-color: #ff5d8f; }
+
+/* ════════════════════════════════════════════
+   REFONTE VISUELLE — Profil & Gacha
+   ════════════════════════════════════════════ */
+
+/* ── Bannières de section (gacha, catalogue, tower, classement…) ── */
+.gacha-top {
+  background: linear-gradient(135deg, rgba(108,140,255,.16), rgba(138,108,255,.16));
+  border: 1px solid #2a2f42; border-radius: 16px; padding: 16px 20px; margin-bottom: 16px;
+}
+.gacha-top h2 { display: flex; align-items: center; gap: 10px; }
+
+/* ── Modale (fermeture en pastille) ── */
+.modal-close {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--bg-3);
+  display: flex; align-items: center; justify-content: center; top: 14px; right: 14px;
+}
+.modal-close:hover { background: var(--red); color: #fff; }
+
+/* ── Profil : en-tête dégradé ── */
+#profile-modal .modal-card { padding-top: 70px; }
+#profile-modal .modal-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 96px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); opacity: .22;
+}
+#profile-modal h2 {
+  position: relative; text-align: center; justify-content: center; display: flex; gap: 8px;
+}
+.profile-avatar-edit { flex-direction: column; text-align: center; gap: 12px; }
+.avatar-actions { align-items: center; }
+#profile-avatar { box-shadow: 0 0 0 4px var(--bg-2), 0 0 0 7px var(--accent); }
+
+#profile-modal .profile-stats { gap: 10px; margin-top: 22px; }
+#profile-modal .pstat {
+  background: linear-gradient(160deg, var(--bg-3), var(--bg));
+  border: 1px solid #2a2f42; padding: 14px 6px; transition: transform .15s, border-color .15s;
+}
+#profile-modal .pstat:hover { transform: translateY(-2px); border-color: var(--accent); }
+#profile-modal .pstat span {
+  font-size: 1.4rem; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+}
+
+#profile-modal .profile-collection, #profile-modal .token-history {
+  background: var(--bg); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px;
+}
+#profile-modal .profile-collection { margin-top: 20px; }
+.profile-collection-row { gap: 16px; }
+#profile-best-card { width: 96px; }
+#profile-best-card .gcard:hover { transform: none; }
+#profile-modal .modal-actions .btn-primary { width: 100%; padding: 13px; }
+
+/* ── Gacha : boutons de tirage en cartes ── */
+.open-chars, #open-chars-btn { margin: 4px 0 8px; }
+.gacha-actions { gap: 14px; margin: 18px 0 8px; }
+.gacha-actions .btn-primary {
+  flex: 1; min-width: 200px; flex-direction: column; gap: 8px; align-items: center;
+  padding: 22px 18px; border-radius: 16px; font-size: 1.05rem; text-align: center;
+  box-shadow: 0 8px 24px rgba(108,140,255,.18);
+}
+.gacha-actions .btn-primary i { font-size: 1.7rem; }
+.gacha-actions .btn-primary b { font-size: 1.25rem; }
+.pull-label { font-weight: 700; }
+.pull-price { opacity: .92; font-size: .95rem; }
+#pull-pack { background: linear-gradient(135deg, var(--orange), #ff5d8f); color: #2a1400; box-shadow: 0 8px 24px rgba(255,93,143,.22); }
+
+/* ── Gacha : progression de collection (pastilles colorées) ── */
+.collection-progress .prog {
+  background: var(--bg-2); border: 1px solid currentColor; display: inline-flex; align-items: center; gap: 6px;
+}
+.collection-progress .prog::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+/* ── Cartes : survol homogène + éclat des hautes raretés ── */
+.gcard { transition: transform .15s, box-shadow .18s; }
+.card-grid .gcard:hover, .pull-result .gcard:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,.4); }
+.gcard.r-legendary:hover { box-shadow: 0 10px 26px #ffb64855; }
+.gcard.r-mythic:hover { box-shadow: 0 10px 26px #ff5d8f66; }
+.gcard-info { padding: 8px 9px; }
+/* dégradé bas d'image pour la lisibilité des badges */
+.gcard-img { position: relative; }
+
+@media (max-width: 560px) {
+  .gacha-actions .btn-primary { min-width: 100%; }
+}
+@media (max-width: 480px) {
+  #profile-modal .profile-stats { grid-template-columns: repeat(2, 1fr); }
+}

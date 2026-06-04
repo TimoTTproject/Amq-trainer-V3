@@ -265,8 +265,16 @@
       <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
 
       <div class="gacha-actions">
-        <button class="btn-primary" id="pull-single"><i class="fas fa-ticket"></i> Tirage simple — <b id="price-single">25</b> 🪙</button>
-        <button class="btn-primary" id="pull-pack"><i class="fas fa-box-open"></i> Paquet x5 — <b id="price-pack">100</b> 🪙</button>
+        <button class="btn-primary" id="pull-single">
+          <i class="fas fa-ticket"></i>
+          <span class="pull-label">Tirage simple</span>
+          <span class="pull-price"><b id="price-single">25</b> 🪙</span>
+        </button>
+        <button class="btn-primary" id="pull-pack">
+          <i class="fas fa-box-open"></i>
+          <span class="pull-label">Paquet ×5</span>
+          <span class="pull-price"><b id="price-pack">100</b> 🪙</span>
+        </button>
       </div>
       <p id="gacha-msg" class="gacha-msg"></p>
 
