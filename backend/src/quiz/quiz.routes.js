@@ -35,6 +35,15 @@ async function buildChoices(song, count) {
   return shuffle([...titles]);
 }
 
+// Répétition espacée : prochaine échéance selon la série de bonnes réponses.
+const SRS_STEPS = [1, 2, 4, 8, 16, 32, 60]; // jours
+function nextSrs(streak, correct) {
+  if (!correct) return { srsStreak: 0, srsInterval: 0, srsDueAt: new Date(Date.now() + 10 * 60 * 1000) }; // revoir vite
+  const s = (streak || 0) + 1;
+  const interval = SRS_STEPS[Math.min(s - 1, SRS_STEPS.length - 1)];
+  return { srsStreak: s, srsInterval: interval, srsDueAt: new Date(Date.now() + interval * 86400000) };
+}
+
 // Liste de révision automatique : sons mal maîtrisés (taux de réussite faible),
 // jamais trouvés, ou marqués « À revoir » manuellement. Liée au compte.
 async function getReviewSongIds(userId) {
@@ -69,11 +78,17 @@ router.get('/random', requireAuth, async (req, res) => {
   const mode = req.query.mode === 'global' ? 'global' : 'mine';
   const ranked = req.query.ranked !== 'false'; // défaut : classé
   // Sources d'entraînement (toujours hors classé)
-  const source = ['review', 'missed', 'liked'].includes(req.query.source) ? req.query.source : null;
+  const source = ['review', 'missed', 'liked', 'due'].includes(req.query.source) ? req.query.source : null;
 
   let songIds;
   if (source === 'review') {
     songIds = await getReviewSongIds(req.user.id);
+  } else if (source === 'due') {
+    const stats = await prisma.userSongStat.findMany({
+      where: { userId: req.user.id, srsDueAt: { not: null, lte: new Date() } },
+      select: { songId: true },
+    });
+    songIds = stats.map((s) => s.songId);
   } else if (source) {
     const where = { userId: req.user.id };
     if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
@@ -140,13 +155,17 @@ router.post('/like', requireAuth, async (req, res) => {
 // Compteurs pour le centre d'entraînement
 router.get('/training-stats', requireAuth, async (req, res) => {
   const userId = req.user.id;
-  const [reviewIds, missed, liked, mine] = await Promise.all([
+  const now = new Date();
+  const [reviewIds, missed, liked, mine, due, scheduled, mastered] = await Promise.all([
     getReviewSongIds(userId),
     prisma.userSongStat.count({ where: { userId, playCount: { gt: 0 }, correctCount: 0 } }),
     prisma.userSongStat.count({ where: { userId, liked: true } }),
     prisma.userCatalogEntry.count({ where: { userId } }),
+    prisma.userSongStat.count({ where: { userId, srsDueAt: { not: null, lte: now } } }),
+    prisma.userSongStat.count({ where: { userId, srsDueAt: { not: null } } }),
+    prisma.userSongStat.count({ where: { userId, srsInterval: { gte: 30 } } }),
   ]);
-  res.json({ review: reviewIds.length, missed, liked, mine });
+  res.json({ review: reviewIds.length, missed, liked, mine, due, scheduled, mastered });
 });
 
 // Playlist perso : les musiques likées
@@ -187,6 +206,7 @@ router.post('/guess', requireAuth, async (req, res) => {
   // Les tokens ne sont gagnés qu'en mode classé, pondérés par le niveau (cash/carré/duo)
   const mult = LEVEL_MULT[round?.level] ?? 1;
   const reward = correct && ranked ? Math.max(1, Math.round(computeReward(song, firstCorrect) * mult)) : 0;
+  const srs = nextSrs(prev?.srsStreak, correct); // planification répétition espacée
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.userSongStat.upsert({
@@ -194,8 +214,12 @@ router.post('/guess', requireAuth, async (req, res) => {
       update: {
         playCount: { increment: 1 },
         ...(correct ? { correctCount: { increment: 1 } } : {}),
+        srsStreak: srs.srsStreak, srsInterval: srs.srsInterval, srsDueAt: srs.srsDueAt,
       },
-      create: { userId, songId, playCount: 1, correctCount: correct ? 1 : 0 },
+      create: {
+        userId, songId, playCount: 1, correctCount: correct ? 1 : 0,
+        srsStreak: srs.srsStreak, srsInterval: srs.srsInterval, srsDueAt: srs.srsDueAt,
+      },
     });
     let tokens = req.user.tokens;
     if (reward > 0) {

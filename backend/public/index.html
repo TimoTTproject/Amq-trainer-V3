@@ -226,6 +226,7 @@
 
       <div id="training-banner" class="training-banner hidden">
         <span id="training-label"></span>
+        <span id="training-session" class="training-session"></span>
         <button class="btn-secondary" id="training-exit"><i class="fas fa-arrow-left"></i> Centre d'entraînement</button>
       </div>
 
@@ -530,7 +531,9 @@
     <!-- VUE CENTRE D'ENTRAÎNEMENT -->
     <div id="view-training" class="hidden">
       <div class="gacha-top"><h2><i class="fas fa-graduation-cap"></i> Centre d'entraînement</h2></div>
-      <p class="hint" style="margin-bottom:18px">Entraîne-toi librement, <b>sans aucun enjeu</b> (pas de tokens, pas de classé). Vidéo et réponse accessibles, et tu peux marquer les sons « À revoir » pour les retravailler.</p>
+      <p class="hint" style="margin-bottom:14px">Entraîne-toi librement, <b>sans aucun enjeu</b> (pas de tokens, pas de classé). Vidéo et réponse accessibles.</p>
+      <div id="srs-overview" class="srs-overview"></div>
+      <label class="chrono-toggle"><input type="checkbox" id="train-chrono" /> ⏱ Mode chrono (révèle automatiquement à la fin du temps)</label>
       <div class="home-grid" id="training-grid"></div>
     </div>
 

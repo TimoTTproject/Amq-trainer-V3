@@ -122,6 +122,10 @@ model UserSongStat {
   correctCount Int     @default(0)
   rating       Int? // note 1-5 donnée par l'utilisateur
   liked        Boolean @default(false) // ajouté à la playlist perso
+  // Répétition espacée (SRS)
+  srsStreak    Int      @default(0) // bonnes réponses consécutives
+  srsInterval  Int      @default(0) // jours jusqu'à la prochaine révision
+  srsDueAt     DateTime? // prochaine échéance de révision
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)

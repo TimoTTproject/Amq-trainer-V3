@@ -10,6 +10,9 @@ let currentLiked = false; // la musique en cours est-elle dans la playlist
 let isTraining = false; // session du centre d'entraînement
 let trainingSource = null; // 'review' | 'missed' | 'liked' | 'mine' | 'global'
 let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
+let trainPlayed = 0, trainCorrect = 0, trainStreak = 0; // suivi de session d'entraînement
+let trainingChrono = false; // mode chrono (auto-révélation)
+let chronoTimer = null;
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
@@ -765,7 +768,12 @@ async function openTraining() {
   grid.innerHTML = '<p class="muted">Chargement…</p>';
   let s = {};
   try { s = await api('/api/quiz/training-stats'); } catch {}
+  document.getElementById('srs-overview').innerHTML = `
+    <div class="srs-stat"><span>${s.due ?? 0}</span><label>À réviser aujourd'hui</label></div>
+    <div class="srs-stat"><span>${s.scheduled ?? 0}</span><label>Programmés</label></div>
+    <div class="srs-stat"><span>${s.mastered ?? 0}</span><label>Maîtrisés 🏆</label></div>`;
   const opts = [
+    { src: 'due', icon: 'fa-brain', title: 'Révision du jour', desc: 'Répétition espacée : les sons à revoir maintenant', count: s.due },
     { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Auto : tes sons mal maîtrisés (réussite < 50 %) + ceux marqués', count: s.review },
     { src: 'missed', icon: 'fa-circle-xmark', title: 'Sons ratés', desc: 'Les sons que tu n\'as jamais trouvés', count: s.missed },
     { src: 'liked', icon: 'fa-heart', title: 'Ma playlist', desc: 'Tes sons likés', count: s.liked },
@@ -788,13 +796,29 @@ async function openTraining() {
 function startTraining(source, label) {
   isTraining = true;
   trainingSource = source;
+  trainingChrono = document.getElementById('train-chrono').checked;
+  trainPlayed = trainCorrect = trainStreak = 0;
   document.getElementById('training-banner').classList.remove('hidden');
-  document.getElementById('training-label').innerHTML = `🎓 <b>${escapeHtml(label || 'Entraînement')}</b>`;
+  document.getElementById('training-label').innerHTML = `🎓 <b>${escapeHtml(label || 'Entraînement')}</b>${trainingChrono ? ' · ⏱' : ''}`;
+  renderTrainSession();
   document.querySelector('.gamemode-switch').classList.add('hidden');
   document.getElementById('quiz-mode-panel').classList.add('hidden');
   applyGameModeUI();
   showView('quiz');
   nextSong();
+}
+
+function renderTrainSession() {
+  const el = document.getElementById('training-session');
+  if (!el) return;
+  const rate = trainPlayed ? Math.round((trainCorrect / trainPlayed) * 100) : 0;
+  el.textContent = trainPlayed ? `🎯 ${trainCorrect}/${trainPlayed} (${rate}%) · série ${trainStreak}` : '';
+}
+function recordTraining(correct) {
+  if (!isTraining) return;
+  trainPlayed++;
+  if (correct) { trainCorrect++; trainStreak++; } else trainStreak = 0;
+  renderTrainSession();
 }
 
 async function refreshCatalogInfo() {
@@ -933,6 +957,15 @@ async function startClip() {
       setPlayIcon();
     }, settings.clipSeconds * 1000);
   }
+
+  // Mode chrono (entraînement) : auto-révélation un peu après la fin de l'extrait
+  clearTimeout(chronoTimer);
+  if (isTraining && trainingChrono) {
+    const limitMs = ((settings.clipSeconds || 20) + 4) * 1000;
+    chronoTimer = setTimeout(() => {
+      if (!answered) { setHint('⏱ Temps écoulé !'); showAnswerCasual(); }
+    }, limitMs);
+  }
 }
 
 function replayClip() {
@@ -980,6 +1013,7 @@ async function guessAnswer(forcedGuess) {
   if (!currentSong || answered) return;
   answered = true;
   clearTimeout(clipTimer); // plus de coupure une fois validé
+  clearTimeout(chronoTimer);
   video().play().catch(() => {});
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
@@ -1016,6 +1050,7 @@ async function guessAnswer(forcedGuess) {
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
 
   revealAnswerBox(r.answer);
+  recordTraining(r.correct);
 
   if (typeof r.tokens === 'number' && currentUser) {
     currentUser.tokens = r.tokens;
@@ -1039,6 +1074,8 @@ async function showAnswerCasual() {
   if (!currentSong || answered) return;
   answered = true;
   clearTimeout(clipTimer);
+  clearTimeout(chronoTimer);
+  recordTraining(false); // abandon = compté comme raté dans la session
   hideAssist();
   document.querySelectorAll('#choice-buttons .choice-opt').forEach((b) => (b.disabled = true));
   document.getElementById('answer-input').disabled = true;
