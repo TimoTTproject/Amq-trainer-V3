@@ -77,41 +77,51 @@
         <button class="modal-close" id="profile-close" title="Fermer"><i class="fas fa-times"></i></button>
         <h2><i class="fas fa-user"></i> Mon profil</h2>
 
-        <div class="profile-avatar-edit">
+        <div class="profile-hero">
           <span class="avatar avatar-lg" id="profile-avatar"></span>
-          <div class="avatar-actions">
-            <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
-            <button class="btn-link" id="avatar-remove-btn">Retirer</button>
-            <input type="file" id="avatar-input" accept="image/*" hidden />
-            <p class="hint">JPG/PNG, recadrée et compressée automatiquement.</p>
-          </div>
+          <div class="profile-hero-name" id="profile-hero-name">—</div>
+          <div class="profile-hero-since hint" id="profile-since">Membre depuis —</div>
         </div>
-
-        <label class="field-label">Pseudo</label>
-        <input type="text" id="profile-name" maxlength="30" placeholder="Ton pseudo" />
-
-        <label class="field-label">Bio</label>
-        <textarea id="profile-bio" maxlength="300" rows="3" placeholder="Quelques mots sur toi… (optionnel)"></textarea>
 
         <div class="profile-stats">
-          <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
           <div class="pstat"><span id="profile-played">0</span><label>Jouées</label></div>
+          <div class="pstat"><span id="profile-correct">0</span><label>Correctes</label></div>
           <div class="pstat"><span id="profile-rate">0%</span><label>Réussite</label></div>
-          <div class="pstat"><span id="profile-since">—</span><label>Membre depuis</label></div>
+          <div class="pstat"><span id="profile-tower">0</span><label>Étage max</label></div>
+          <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
+          <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
         </div>
 
-        <div class="profile-collection">
+        <div class="profile-section">
+          <h3><i class="fas fa-medal"></i> Hauts faits</h3>
+          <div id="profile-badges" class="badges-grid"></div>
+        </div>
+
+        <div class="profile-section profile-collection">
           <h3><i class="fas fa-images"></i> Collection</h3>
-          <div class="profile-collection-row">
-            <div id="profile-best-card"></div>
-            <div class="profile-coll-info">
-              <div><strong id="profile-cards-count">0</strong> cartes possédées</div>
-              <p class="hint" id="profile-best-label">Joue au gacha pour débloquer des cartes !</p>
+          <div id="profile-rarity-breakdown" class="rarity-breakdown"></div>
+          <p class="hint" id="profile-best-label">Joue au gacha pour débloquer des cartes !</p>
+          <div id="profile-showcase" class="profile-showcase"></div>
+          <div id="profile-best-card" class="hidden"></div>
+        </div>
+
+        <details class="profile-edit">
+          <summary><i class="fas fa-pen"></i> Modifier mon profil</summary>
+          <div class="profile-avatar-edit">
+            <div class="avatar-actions">
+              <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
+              <button class="btn-link" id="avatar-remove-btn">Retirer la photo</button>
+              <input type="file" id="avatar-input" accept="image/*" hidden />
+              <p class="hint">JPG/PNG, recadrée et compressée automatiquement.</p>
             </div>
           </div>
-        </div>
+          <label class="field-label">Pseudo</label>
+          <input type="text" id="profile-name" maxlength="30" placeholder="Ton pseudo" />
+          <label class="field-label">Bio</label>
+          <textarea id="profile-bio" maxlength="300" rows="3" placeholder="Quelques mots sur toi… (optionnel)"></textarea>
+        </details>
 
-        <div class="token-history">
+        <div class="profile-section token-history">
           <h3><i class="fas fa-coins"></i> Historique des tokens</h3>
           <ul id="token-history-list"><li class="muted">Aucune transaction pour l'instant.</li></ul>
         </div>

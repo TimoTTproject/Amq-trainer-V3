@@ -207,7 +207,7 @@ function setupProfileUI() {
     renderProfileAvatar();
   });
   document.getElementById('profile-save').addEventListener('click', saveProfile);
-  document.getElementById('profile-best-card').addEventListener('click', (e) => {
+  document.getElementById('profile-showcase').addEventListener('click', (e) => {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
   });
@@ -225,42 +225,93 @@ function renderProfileAvatar() {
   });
 }
 
+let profileStats = null; // {played, correct, rate}
+let profileColl = null; // {cards, ownedByRarity, poolByRarity}
+
 async function openProfile() {
   pendingAvatar = undefined;
   setProfileError('');
   document.getElementById('profile-name').value = currentUser.displayName;
   document.getElementById('profile-bio').value = currentUser.bio || '';
+  document.getElementById('profile-hero-name').textContent = currentUser.displayName;
   document.getElementById('profile-tokens').textContent = currentUser.tokens;
-  document.getElementById('profile-since').textContent = currentUser.createdAt
-    ? new Date(currentUser.createdAt).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+  document.getElementById('profile-tower').textContent = currentUser.towerBestFloor || 0;
+  const since = currentUser.createdAt
+    ? new Date(currentUser.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     : '—';
+  document.getElementById('profile-since').textContent = 'Membre depuis ' + since;
   renderProfileAvatar();
   document.getElementById('profile-modal').classList.remove('hidden');
+
+  profileStats = null;
+  profileColl = null;
+  renderProfileBadges();
   try {
-    const s = await api('/api/quiz/stats');
-    document.getElementById('profile-played').textContent = s.played;
-    document.getElementById('profile-rate').textContent = s.rate + '%';
+    profileStats = await api('/api/quiz/stats');
+    document.getElementById('profile-played').textContent = profileStats.played;
+    document.getElementById('profile-correct').textContent = profileStats.correct;
+    document.getElementById('profile-rate').textContent = profileStats.rate + '%';
   } catch {}
   loadTokenHistory();
-  loadProfileCollection();
+  await loadProfileCollection();
+  renderProfileBadges();
 }
 
 async function loadProfileCollection() {
-  const best = document.getElementById('profile-best-card');
   try {
-    const { cards } = await api('/api/gacha/collection');
+    const data = await api('/api/gacha/collection');
+    profileColl = data;
+    const { cards, ownedByRarity, poolByRarity } = data;
     document.getElementById('profile-cards-count').textContent = cards.length;
+    document.getElementById('profile-rarity-breakdown').innerHTML = RARITY_ORDER.map((r) => {
+      const owned = ownedByRarity[r] || 0;
+      const total = poolByRarity[r] || 0;
+      return `<span class="rb-pill r-${r}">${RARITY_LABELS[r]} <b>${owned}</b><i>/${total}</i></span>`;
+    }).join('');
+    const show = document.getElementById('profile-showcase');
     if (cards.length) {
-      best.innerHTML = cardHTML(cards[0]);
+      show.innerHTML = cards.slice(0, 6).map((c) => cardHTML(c)).join('');
       document.getElementById('profile-best-label').textContent =
         `Meilleure carte : ${cards[0].name} (${RARITY_LABELS[cards[0].rarity] || cards[0].rarity})`;
     } else {
-      best.innerHTML = '';
+      show.innerHTML = '';
       document.getElementById('profile-best-label').textContent = 'Joue au gacha pour débloquer des cartes !';
     }
   } catch {
-    best.innerHTML = '';
+    profileColl = null;
   }
+}
+
+// Hauts faits : badges débloqués selon la progression
+function renderProfileBadges() {
+  const played = profileStats?.played || 0;
+  const rate = profileStats?.rate || 0;
+  const tower = currentUser.towerBestFloor || 0;
+  const cards = profileColl?.cards?.length || 0;
+  const owned = profileColl?.ownedByRarity || {};
+  const tokens = currentUser.tokens || 0;
+  const defs = [
+    { ic: '🌟', nm: 'Premier pas', desc: 'Jouer 1 musique', got: played >= 1 },
+    { ic: '🎵', nm: 'Mélomane', desc: '100 musiques jouées', got: played >= 100 },
+    { ic: '🎯', nm: 'Oreille affûtée', desc: '80% de réussite (20+ parties)', got: rate >= 80 && played >= 20 },
+    { ic: '🏰', nm: 'Grimpeur', desc: 'Atteindre l\'étage 10 au Château', got: tower >= 10 },
+    { ic: '👑', nm: 'Maître du Château', desc: 'Atteindre l\'étage 25', got: tower >= 25 },
+    { ic: '🎴', nm: 'Collectionneur', desc: 'Posséder 50 cartes', got: cards >= 50 },
+    { ic: '✨', nm: 'Chasseur de légendes', desc: 'Obtenir un Légendaire', got: (owned.legendary || 0) > 0 },
+    { ic: '💖', nm: 'Mythique !', desc: 'Obtenir un Mythique', got: (owned.mythic || 0) > 0 },
+    { ic: '💰', nm: 'Fortune', desc: 'Avoir 1000 tokens', got: tokens >= 1000 },
+  ];
+  const earned = defs.filter((b) => b.got).length;
+  document.getElementById('profile-badges').innerHTML =
+    `<div class="badges-count">${earned}/${defs.length} débloqués</div>` +
+    defs
+      .map(
+        (b) => `<div class="badge-item${b.got ? ' got' : ''}" title="${escapeHtml(b.desc)}">
+          <span class="badge-ic">${b.ic}</span>
+          <span class="badge-nm">${escapeHtml(b.nm)}</span>
+        </div>`
+      )
+      .join('');
 }
 
 async function loadTokenHistory() {

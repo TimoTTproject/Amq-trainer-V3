@@ -19,6 +19,7 @@ function publicUser(u) {
     bio: u.bio,
     anilistName: u.anilistName,
     tokens: u.tokens,
+    towerBestFloor: u.towerBestFloor || 0,
     createdAt: u.createdAt,
     isAdmin: isAdmin(u),
   };

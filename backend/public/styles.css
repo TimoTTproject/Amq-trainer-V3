@@ -475,3 +475,48 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 @media (max-width: 480px) {
   #profile-modal .profile-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Profil enrichi ── */
+.profile-hero { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 6px; position: relative; }
+.profile-hero-name { font-size: 1.35rem; font-weight: 700; }
+.profile-hero-since { font-size: .78rem; }
+
+#profile-modal .profile-section { background: var(--bg); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px; margin-top: 16px; }
+#profile-modal .profile-section h3 { color: var(--text-2); font-size: .92rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+#profile-modal .profile-section h3 i { color: var(--accent); }
+
+/* Hauts faits / badges */
+.badges-count { font-size: .78rem; color: var(--text-2); margin-bottom: 12px; }
+.badges-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
+.badge-item { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; padding: 12px 6px; background: var(--bg-3); border: 1px solid #2a2f42; border-radius: 10px; opacity: .45; transition: transform .15s; }
+.badge-item.got { opacity: 1; border-color: var(--accent); background: linear-gradient(160deg, var(--bg-3), rgba(108,140,255,.12)); }
+.badge-item.got:hover { transform: translateY(-2px); }
+.badge-item:not(.got) .badge-ic { filter: grayscale(1); }
+.badge-ic { font-size: 1.6rem; line-height: 1; }
+.badge-nm { font-size: .66rem; color: var(--text-2); line-height: 1.2; }
+.badge-item.got .badge-nm { color: var(--text); }
+
+/* Répartition par rareté */
+.rarity-breakdown { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.rb-pill { display: inline-flex; align-items: baseline; gap: 4px; padding: 5px 11px; border-radius: 999px; background: var(--bg-2); border: 1px solid #2a2f42; font-size: .72rem; color: var(--text-2); }
+.rb-pill b { font-size: .92rem; color: var(--text); }
+.rb-pill i { font-style: normal; opacity: .55; }
+.rb-pill.r-rare { border-color: #3aa0ff; color: #3aa0ff; } .rb-pill.r-rare b { color: #3aa0ff; }
+.rb-pill.r-epic { border-color: #b06cff; color: #b06cff; } .rb-pill.r-epic b { color: #b06cff; }
+.rb-pill.r-legendary { border-color: #ffb648; color: #ffb648; } .rb-pill.r-legendary b { color: #ffb648; }
+.rb-pill.r-mythic { border-color: #ff5d8f; color: #ff5d8f; } .rb-pill.r-mythic b { color: #ff5d8f; }
+
+/* Vitrine de cartes */
+.profile-showcase { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 12px; }
+.profile-showcase .gcard-info { padding: 5px 6px; }
+.profile-showcase .gcard-name { font-size: .7rem; }
+.profile-showcase .gcard-rarity { font-size: .62rem; }
+
+/* Édition repliable */
+.profile-edit { margin-top: 16px; border: 1px solid #2a2f42; border-radius: 12px; padding: 0 16px; }
+.profile-edit[open] { padding-bottom: 16px; }
+.profile-edit summary { padding: 14px 0; cursor: pointer; color: var(--text-2); font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+.profile-edit summary::-webkit-details-marker { display: none; }
+.profile-edit summary i { color: var(--accent); }
+.profile-edit[open] summary { border-bottom: 1px solid #2a2f42; margin-bottom: 14px; }
+.profile-edit .profile-avatar-edit { flex-direction: row; text-align: left; margin-bottom: 14px; }
