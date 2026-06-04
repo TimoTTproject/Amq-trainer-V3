@@ -335,3 +335,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .tower-over { text-align: center; max-width: 480px; margin: 40px auto 0; }
 .tower-over h3 { font-size: 1.4rem; margin-bottom: 20px; }
 @media (max-width: 560px) { .tower-choices { grid-template-columns: 1fr; } }
+
+/* ── Admin / dev ── */
+.admin-badge { background: var(--accent-2); color: #0b1020; font-size: .62rem; font-weight: 800; letter-spacing: 1px; padding: 3px 7px; border-radius: 6px; align-self: center; }
+.dev-btn { font-size: .8rem; padding: 6px 10px; }

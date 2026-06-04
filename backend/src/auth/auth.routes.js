@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { prisma } = require('../db');
 const { setAuthCookie, clearAuthCookie } = require('./jwt');
 const { requireAuth } = require('./auth.middleware');
+const { isAdmin } = require('../admin/admin');
 
 const router = express.Router();
 
@@ -19,6 +20,7 @@ function publicUser(u) {
     anilistName: u.anilistName,
     tokens: u.tokens,
     createdAt: u.createdAt,
+    isAdmin: isAdmin(u),
   };
 }
 

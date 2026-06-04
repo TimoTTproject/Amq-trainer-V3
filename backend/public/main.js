@@ -153,6 +153,17 @@ function renderHeaderUser() {
   document.getElementById('user-name').textContent = currentUser.displayName;
   document.getElementById('user-tokens').textContent = currentUser.tokens;
   renderAvatar(document.getElementById('header-avatar'), currentUser);
+  document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
+  document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
+}
+
+// Dev (admin) : se créditer des tokens
+async function devGrantTokens() {
+  try {
+    const r = await api('/api/admin/tokens', { method: 'POST', body: JSON.stringify({ amount: 1000 }) });
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+  } catch (e) { alert(e.message); }
 }
 
 // ── PROFIL ──
@@ -318,6 +329,7 @@ function setupAppUI() {
     await api('/api/auth/logout', { method: 'POST' });
     location.reload();
   });
+  document.getElementById('dev-tokens-btn').addEventListener('click', devGrantTokens);
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -934,8 +946,10 @@ async function openTower() {
   try {
     const s = await api('/api/tower/status');
     document.getElementById('tower-best').textContent = s.bestFloor;
-    document.getElementById('tower-cost').textContent = s.entryCost;
-    document.getElementById('tower-free').textContent = s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
+    document.getElementById('tower-cost').textContent = s.admin ? '0' : s.entryCost;
+    document.getElementById('tower-free').textContent = s.admin
+      ? 'Admin ∞'
+      : s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
     if (s.activeRun) {
       enterFloor(s.activeRun); // reprise d'une partie interrompue
       return;
