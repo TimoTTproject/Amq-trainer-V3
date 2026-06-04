@@ -43,11 +43,23 @@ router.get('/characters', requireAuth, requireAdmin, async (req, res) => {
       orderBy: [{ favourites: 'desc' }],
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true },
+      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true, featured: true },
     }),
     prisma.character.count({ where: { series: null } }),
   ]);
   res.json({ characters, total, page, pages: Math.ceil(total / perPage), rarities: VALID_RARITIES, missingSeries });
+});
+
+// Active/désactive le statut « vedette » d'un personnage
+router.patch('/characters/:id/featured', requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const featured = !!req.body?.featured;
+  try {
+    const c = await prisma.character.update({ where: { id }, data: { featured } });
+    res.json({ id: c.id, featured: c.featured });
+  } catch {
+    res.status(404).json({ error: 'Personnage introuvable' });
+  }
 });
 
 // Modifie la rareté d'un personnage
@@ -168,7 +180,7 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
     prisma.tokenTransaction.deleteMany({ where: { userId } }),
     prisma.user.update({
       where: { id: userId },
-      data: { tokens: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null },
+      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null },
     }),
   ]);
   res.json({ ok: true });
@@ -186,7 +198,7 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
     prisma.mpResult.deleteMany({}),
     prisma.tokenTransaction.deleteMany({}),
     prisma.user.updateMany({
-      data: { tokens: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },
+      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },
     }),
   ]);
   const users = await prisma.user.count();

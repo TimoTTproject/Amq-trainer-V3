@@ -641,6 +641,10 @@ function setupAppUI() {
     const sel = e.target.closest('select[data-cid]');
     if (sel) setCharacterRarity(sel.dataset.cid, sel.value, sel);
   });
+  document.getElementById('admin-tbody').addEventListener('click', (e) => {
+    const fb = e.target.closest('[data-feat]');
+    if (fb) toggleFeatured(fb);
+  });
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
@@ -1150,8 +1154,23 @@ async function openGacha() {
     document.getElementById('price-single').textContent = info.prices.single.cost;
     document.getElementById('price-pack').textContent = info.prices.pack.cost;
     document.getElementById('gacha-pool').textContent = `${info.total} personnages à collectionner`;
+    renderGachaMeta(info.pityLimit);
+    const feat = document.getElementById('gacha-featured');
+    feat.innerHTML = (info.featured && info.featured.length)
+      ? `<div class="featured-title">⭐ Personnages en vedette (taux boosté)</div><div class="featured-row">${info.featured.map((c) => cardHTML(c)).join('')}</div>`
+      : '';
   } catch {}
   loadCollection();
+}
+
+function renderGachaMeta(pityLimit = 60) {
+  const pity = currentUser.pity || 0;
+  const pct = Math.min(100, Math.round((pity / pityLimit) * 100));
+  document.getElementById('gacha-meta').innerHTML = `
+    <span class="gacha-dust">🌟 <b>${currentUser.dust || 0}</b> poussière</span>
+    <span class="gacha-pity">Pitié <b>${pity}/${pityLimit}</b>
+      <span class="pity-bar"><span class="pity-fill" style="width:${pct}%"></span></span>
+    </span>`;
 }
 
 function cardHTML(c, opts = {}) {
@@ -1161,6 +1180,7 @@ function cardHTML(c, opts = {}) {
   if (opts.refund) badges.push(`<span class="badge refund">+${opts.refund} 🪙</span>`);
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.favorite) badges.push('<span class="badge fav">★</span>');
+  if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
   const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '');
   const delay = opts.index != null ? ` style="animation-delay:${(opts.index * 0.45).toFixed(2)}s"` : '';
   const cid = c.id != null ? ` data-cid="${c.id}"` : '';
@@ -1181,6 +1201,7 @@ function flipCardHTML(c, i) {
   if (c.isNew) badges.push('<span class="badge new">NOUVEAU</span>');
   if (c.refund) badges.push(`<span class="badge refund">+${c.refund} 🪙</span>`);
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
+  if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
   const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
   return `<div class="flip-card r-${c.rarity}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
     <div class="flip-inner">
@@ -1208,9 +1229,12 @@ async function doPull(type) {
   try {
     const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
     currentUser.tokens = r.tokens;
+    if (typeof r.dust === 'number') currentUser.dust = r.dust;
+    if (typeof r.pity === 'number') currentUser.pity = r.pity;
     renderHeaderUser();
     setGachaTokens();
-    pullRefundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙 remboursés (doublons)` : '';
+    renderGachaMeta(r.pityLimit);
+    pullRefundMsg = (r.refundTotal ? ` · ${r.refundTotal} 🪙` : '') + (r.dustTotal ? ` · +${r.dustTotal} 🌟` : '');
     pullCost = r.cost;
     const result = document.getElementById('pull-result');
     result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
@@ -1336,9 +1360,27 @@ async function openCharacter(id) {
       ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}">
         <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Mettre en favori'}
       </button>` : ''}
+      <button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
+        <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
+      </button>
       <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
         <i class="fas fa-external-link-alt"></i> Voir sur AniList
       </a>`;
+    const craftBtn = document.getElementById('char-craft-btn');
+    if (craftBtn) {
+      craftBtn.addEventListener('click', async () => {
+        if (!confirm(`Fabriquer ${c.name} pour ${d.craftCost} 🌟 ?`)) return;
+        craftBtn.disabled = true;
+        try {
+          const r = await api('/api/gacha/craft', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+          currentUser.dust = r.dust;
+          if (typeof sfx !== 'undefined') sfx.reveal(c.rarity);
+          if (typeof burstConfetti === 'function') burstConfetti();
+          openCharacter(c.id); // recharge la fiche (possession + poussière à jour)
+          loadCollection();
+        } catch (e) { alert(e.message); craftBtn.disabled = false; }
+      });
+    }
     const favBtn = document.getElementById('char-fav-btn');
     if (favBtn) {
       let fav = d.favorite;
@@ -1809,7 +1851,7 @@ async function loadAdminChars(page, search) {
   if (page < 1) return;
   adminSearch = search;
   const tbody = document.getElementById('admin-tbody');
-  tbody.innerHTML = '<tr><td colspan="5" class="muted">Chargement…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
   try {
     const rq = adminRarity !== 'all' ? `&rarity=${adminRarity}` : '';
     const r = await api(`/api/admin/characters?page=${page}&search=${encodeURIComponent(search)}${rq}`);
@@ -1826,7 +1868,7 @@ async function loadAdminChars(page, search) {
         r.missingSeries ? `${r.missingSeries} séries manquantes` : 'Toutes les séries sont remplies ✅';
     }
     if (!r.characters.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun personnage.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="muted">Aucun personnage.</td></tr>';
     } else {
       tbody.innerHTML = r.characters
         .map((c) => {
@@ -1838,6 +1880,7 @@ async function loadAdminChars(page, search) {
             <td class="muted">${escapeHtml(c.series && c.series !== '—' ? c.series : '—')}</td>
             <td class="nowrap">${(c.favourites || 0).toLocaleString('fr-FR')}</td>
             <td><select class="admin-rarity r-${c.rarity}" data-cid="${c.id}">${opts}</select></td>
+            <td><button class="admin-feat${c.featured ? ' on' : ''}" data-feat data-cid="${c.id}" title="Vedette">${c.featured ? '⭐' : '☆'}</button></td>
           </tr>`;
         })
         .join('');
@@ -1846,8 +1889,20 @@ async function loadAdminChars(page, search) {
     document.getElementById('admin-prev').disabled = adminPage <= 1;
     document.getElementById('admin-next').disabled = adminPage >= adminPages;
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeHtml(e.message)}</td></tr>`;
   }
+}
+
+async function toggleFeatured(btn) {
+  const id = btn.dataset.cid;
+  const on = !btn.classList.contains('on');
+  btn.disabled = true;
+  try {
+    const r = await api(`/api/admin/characters/${id}/featured`, { method: 'PATCH', body: JSON.stringify({ featured: on }) });
+    btn.classList.toggle('on', r.featured);
+    btn.textContent = r.featured ? '⭐' : '☆';
+  } catch (e) { alert(e.message); }
+  finally { btn.disabled = false; }
 }
 
 async function runImportCharacters() {

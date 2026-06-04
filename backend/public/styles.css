@@ -165,6 +165,22 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .gcard .badge.refund { right: 6px; background: var(--orange); color: #3a2600; }
 .gcard .badge.copies { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard .badge.fav { left: 6px; top: auto; bottom: 6px; background: #ffd34d; color: #3a2600; }
+.gcard .badge.feat-badge { left: 6px; top: 6px; background: linear-gradient(135deg,#ff5d8f,#ffb648); color: #2a1400; font-size: .56rem; }
+
+/* Gacha enrichi : poussière, pitié, vedettes, craft */
+.gacha-meta { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 4px 0 12px; font-size: .9rem; }
+.gacha-dust b { color: #ffd34d; }
+.gacha-pity { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); }
+.gacha-pity b { color: var(--text); }
+.pity-bar { width: 90px; height: 7px; background: var(--bg-3); border-radius: 6px; overflow: hidden; display: inline-block; }
+.pity-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--orange), #ff5d8f); }
+.gacha-featured { margin-bottom: 14px; }
+.featured-title { font-size: .85rem; color: var(--text-2); margin-bottom: 8px; }
+.featured-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.featured-row .gcard { width: 110px; }
+.char-craft { display: inline-flex; align-items: center; gap: 8px; }
+.admin-feat { background: none; border: none; font-size: 1.2rem; cursor: pointer; filter: grayscale(1); opacity: .6; }
+.admin-feat.on { filter: none; opacity: 1; }
 
 /* Couleurs de rareté */
 .r-common    { border-color: #4a5066; } .prog.r-common    { color: #aab; }

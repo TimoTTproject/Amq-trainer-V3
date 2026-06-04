@@ -28,6 +28,8 @@ function publicUser(u) {
     anilistName: u.anilistName,
     anilistListName: u.anilistListName,
     tokens: u.tokens,
+    dust: u.dust || 0,
+    pity: u.pity || 0,
     towerBestFloor: u.towerBestFloor || 0,
     mmr: u.mmr,
     rankTier: (u.rankedGames || 0) > 0 ? tierFromMmr(u.mmr) : null,

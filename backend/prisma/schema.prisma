@@ -50,6 +50,10 @@ model User {
   rankedGames Int @default(0)
   rankedWins  Int @default(0)
 
+  // Gacha enrichi
+  pity Int @default(0) // tirages depuis le dernier Légendaire+ (garantie)
+  dust Int @default(0) // poussière obtenue avec les doublons (pour fabriquer)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -214,6 +218,7 @@ model Character {
   fromManga  Boolean @default(false)
   series     String? // anime principal du personnage (pour filtrer « par série »)
   seriesId   Int? // id AniList de cet anime
+  featured   Boolean @default(false) // personnage en vedette (taux boosté)
 
   cards UserCard[]
 

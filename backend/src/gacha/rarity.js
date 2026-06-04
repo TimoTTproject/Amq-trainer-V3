@@ -47,6 +47,13 @@ function rollRarity() {
 // Remboursement en tokens d'un doublon, par rareté
 const DUPLICATE_REFUND = { common: 2, rare: 5, epic: 15, legendary: 40, mythic: 100 };
 
+// Poussière gagnée par doublon + coût de fabrication, par rareté
+const DUST_GAIN = { common: 2, rare: 6, epic: 20, legendary: 60, mythic: 150 };
+const CRAFT_COST = { common: 20, rare: 60, epic: 200, legendary: 600, mythic: 1500 };
+
+// Pitié : nombre de tirages sans Légendaire+ avant garantie
+const PITY_LIMIT = 60;
+
 // Prix et contenu des achats
 const PRICES = {
   single: { cost: 25, count: 1, guaranteeRarePlus: false },
@@ -60,5 +67,8 @@ module.exports = {
   rarityForRank,
   rollRarity,
   DUPLICATE_REFUND,
+  DUST_GAIN,
+  CRAFT_COST,
+  PITY_LIMIT,
   PRICES,
 };

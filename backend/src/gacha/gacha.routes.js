@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { rollRarity, DUPLICATE_REFUND, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, DUST_GAIN, CRAFT_COST, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
@@ -14,11 +14,19 @@ router.get('/info', async (req, res) => {
   const groups = await prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } });
   const byRarity = {};
   groups.forEach((g) => (byRarity[g.rarity] = g._count._all));
-  res.json({ prices: PRICES, total, byRarity, labels: RARITY_LABELS });
+  const featured = await prisma.character.findMany({
+    where: { featured: true },
+    select: { id: true, name: true, imageUrl: true, rarity: true },
+    take: 12,
+  });
+  res.json({ prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, craftCost: CRAFT_COST, pityLimit: PITY_LIMIT });
 });
 
-// Choisit un personnage aléatoire d'une rareté donnée (fallback : n'importe lequel)
+// Choisit un personnage aléatoire d'une rareté donnée (fallback : n'importe lequel).
+// Si un personnage « vedette » existe pour cette rareté, 50% de chance de l'obtenir.
 async function pickRandomCharacter(tx, rarity) {
+  const feat = await tx.character.findFirst({ where: { rarity, featured: true } });
+  if (feat && Math.random() < 0.5) return feat;
   let count = await tx.character.count({ where: { rarity } });
   let where = { rarity };
   if (count === 0) {
@@ -44,8 +52,17 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
     return res.status(400).json({ error: 'Pas assez de tokens' });
   }
 
-  // Tirage des raretés (avec garantie rare+ pour les paquets)
-  const rarities = Array.from({ length: cfg.count }, () => rollRarity());
+  // Tirage des raretés avec PITIÉ : garantie d'un Légendaire+ au bout de PITY_LIMIT
+  // tirages sans en obtenir. Le compteur est suivi sur le compte.
+  let pity = req.user.pity || 0;
+  const rarities = [];
+  for (let i = 0; i < cfg.count; i++) {
+    let r = rollRarity();
+    pity++;
+    if (pity >= PITY_LIMIT && r !== 'legendary' && r !== 'mythic') r = 'legendary';
+    if (r === 'legendary' || r === 'mythic') pity = 0;
+    rarities.push(r);
+  }
   if (cfg.guaranteeRarePlus && !rarities.some((r) => r !== 'common')) {
     rarities[Math.floor(Math.random() * rarities.length)] = 'rare';
   }
@@ -57,6 +74,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
 
     const cards = [];
     let refundTotal = 0;
+    let dustTotal = 0;
     for (const rarity of rarities) {
       const character = await pickRandomCharacter(tx, rarity);
       if (!character) continue;
@@ -65,6 +83,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
       });
       const isNew = !existing;
       let refund = 0;
+      let dust = 0;
       if (isNew) {
         await tx.userCard.create({ data: { userId, characterId: character.id, copies: 1 } });
       } else {
@@ -73,34 +92,54 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
           data: { copies: { increment: 1 } },
         });
         refund = DUPLICATE_REFUND[character.rarity] || 0;
+        dust = DUST_GAIN[character.rarity] || 0;
         refundTotal += refund;
+        dustTotal += dust;
       }
       cards.push({
-        id: character.id,
-        name: character.name,
-        imageUrl: character.imageUrl,
-        rarity: character.rarity,
-        isNew,
-        refund,
+        id: character.id, name: character.name, imageUrl: character.imageUrl,
+        rarity: character.rarity, featured: character.featured, isNew, refund, dust,
       });
     }
 
-    let tokens;
+    const u = await tx.user.update({
+      where: { id: userId },
+      data: {
+        pity,
+        ...(refundTotal > 0 ? { tokens: { increment: refundTotal } } : {}),
+        ...(dustTotal > 0 ? { dust: { increment: dustTotal } } : {}),
+      },
+    });
     if (refundTotal > 0) {
-      const u = await tx.user.update({
-        where: { id: userId },
-        data: { tokens: { increment: refundTotal } },
-      });
       await tx.tokenTransaction.create({ data: { userId, amount: refundTotal, reason: 'duplicate_refund' } });
-      tokens = u.tokens;
-    } else {
-      tokens = (await tx.user.findUnique({ where: { id: userId } })).tokens;
     }
-    return { cards, refundTotal, tokens };
+    return { cards, refundTotal, dustTotal, tokens: u.tokens, dust: u.dust, pity: u.pity };
   });
 
   progressQuests(userId, 'pull', cfg.count);
-  res.json({ type, cost: cfg.cost, ...result });
+  res.json({ type, cost: cfg.cost, pityLimit: PITY_LIMIT, ...result });
+});
+
+// Fabrication : dépense de la poussière pour obtenir un personnage choisi
+router.post('/craft', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  const character = await prisma.character.findUnique({ where: { id: characterId } });
+  if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
+  const cost = CRAFT_COST[character.rarity] || 0;
+  if ((req.user.dust || 0) < cost) return res.status(400).json({ error: `Pas assez de poussière (${cost} requis)` });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { decrement: cost } } });
+    const existing = await tx.userCard.findUnique({ where: { userId_characterId: { userId: req.user.id, characterId } } });
+    if (existing) {
+      await tx.userCard.update({ where: { userId_characterId: { userId: req.user.id, characterId } }, data: { copies: { increment: 1 } } });
+    } else {
+      await tx.userCard.create({ data: { userId: req.user.id, characterId, copies: 1 } });
+    }
+    return { dust: u.dust, isNew: !existing };
+  });
+  res.json({ ...result, cost });
 });
 
 // Catalogue (pokédex) des personnages : filtre rareté/recherche (nom ou série),
@@ -206,6 +245,8 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     totalInRarity,
     owned: card ? card.copies : 0,
     favorite: card ? card.favorite : false,
+    featured: character.featured,
+    craftCost: CRAFT_COST[character.rarity] || 0,
     anilistUrl: `https://anilist.co/character/${character.anilistId}`,
   });
 });
