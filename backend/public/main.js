@@ -7,6 +7,8 @@ let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle d
 let currentSong = null;
 let currentRoundToken = null; // jeton de manche émis par le serveur au tirage
 let currentLiked = false; // la musique en cours est-elle dans la playlist
+let isTraining = false; // session du centre d'entraînement
+let trainingSource = null; // 'review' | 'missed' | 'liked' | 'mine' | 'global'
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = localStorage.getItem('amq_gamemode') || 'ranked'; // 'ranked' | 'casual'
@@ -132,6 +134,7 @@ function showView(name) {
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
+  if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } }
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
@@ -143,6 +146,7 @@ function showView(name) {
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
+  document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
 }
 
@@ -156,6 +160,8 @@ function navTo(name) {
   if (name === 'profile') return openProfile();
   if (name === 'mp') return openMultiplayer();
   if (name === 'playlist') return openPlaylist();
+  if (name === 'quiz') return openQuiz();
+  if (name === 'training') return openTraining();
   showView(name); // home, quiz
 }
 
@@ -541,12 +547,18 @@ function setupAppUI() {
   setupProfileUI();
 
   // Navigation accueil ⇄ quiz ⇄ gacha
-  document.getElementById('card-play').addEventListener('click', () => showView('quiz'));
+  document.getElementById('card-play').addEventListener('click', openQuiz);
+  document.getElementById('card-training').addEventListener('click', openTraining);
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('card-mp').addEventListener('click', openMultiplayer);
+  document.getElementById('training-exit').addEventListener('click', openTraining);
+  document.getElementById('training-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-src]');
+    if (card && !card.classList.contains('disabled')) startTraining(card.dataset.src, card.dataset.label);
+  });
   document.querySelectorAll('.nav-item').forEach((b) =>
     b.addEventListener('click', () => navTo(b.dataset.nav))
   );
@@ -723,7 +735,7 @@ function applyModeUI() {
 }
 
 function applyGameModeUI() {
-  const ranked = gameMode === 'ranked';
+  const ranked = gameMode === 'ranked' && !isTraining; // l'entraînement est toujours casual
   document.querySelectorAll('.gm-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.gm === gameMode)
   );
@@ -736,8 +748,58 @@ function applyGameModeUI() {
 
 // En classé, la vidéo n'est accessible qu'après avoir validé
 function updateVideoButtonVisibility() {
-  const allow = gameMode === 'casual' || answered;
+  const allow = gameMode === 'casual' || isTraining || answered;
   document.getElementById('reveal-video-btn').classList.toggle('hidden', !allow);
+}
+
+// ── QUIZ CLASSIQUE vs CENTRE D'ENTRAÎNEMENT ──
+function openQuiz() {
+  isTraining = false;
+  trainingSource = null;
+  document.getElementById('training-banner').classList.add('hidden');
+  document.querySelector('.gamemode-switch').classList.remove('hidden');
+  document.getElementById('quiz-mode-panel').classList.remove('hidden');
+  applyGameModeUI();
+  refreshCatalogInfo();
+  showView('quiz');
+}
+
+async function openTraining() {
+  showView('training');
+  const grid = document.getElementById('training-grid');
+  grid.innerHTML = '<p class="muted">Chargement…</p>';
+  let s = {};
+  try { s = await api('/api/quiz/training-stats'); } catch {}
+  const opts = [
+    { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Les sons que tu as marqués « À revoir »', count: s.review },
+    { src: 'missed', icon: 'fa-circle-xmark', title: 'Sons ratés', desc: 'Les sons que tu n\'as jamais trouvés', count: s.missed },
+    { src: 'liked', icon: 'fa-heart', title: 'Ma playlist', desc: 'Tes sons likés', count: s.liked },
+    { src: 'mine', icon: 'fa-list', title: 'Ma liste', desc: 'Ton import AniList', count: s.mine },
+    { src: 'global', icon: 'fa-globe', title: 'Catalogue global', desc: 'Tout le catalogue partagé', count: null },
+  ];
+  grid.innerHTML = opts
+    .map((o) => {
+      const empty = o.count === 0;
+      const badge = o.count != null ? `<span class="train-count">${o.count}</span>` : '';
+      return `<button class="home-card train-card${empty ? ' disabled' : ''}"${empty ? ' disabled' : ''} data-src="${o.src}" data-label="${escapeHtml(o.title)}">
+        <i class="fas ${o.icon}"></i>
+        <h3>${o.title} ${badge}</h3>
+        <p>${o.desc}${empty ? ' — vide pour l\'instant' : ''}</p>
+      </button>`;
+    })
+    .join('');
+}
+
+function startTraining(source, label) {
+  isTraining = true;
+  trainingSource = source;
+  document.getElementById('training-banner').classList.remove('hidden');
+  document.getElementById('training-label').innerHTML = `🎓 <b>${escapeHtml(label || 'Entraînement')}</b>`;
+  document.querySelector('.gamemode-switch').classList.add('hidden');
+  document.getElementById('quiz-mode-panel').classList.add('hidden');
+  applyGameModeUI();
+  showView('quiz');
+  nextSong();
 }
 
 async function refreshCatalogInfo() {
@@ -814,10 +876,13 @@ async function nextSong() {
   resetQuizUI();
   setHint('Chargement…');
   let song, roundToken, liked;
+  const qs = trainingSource
+    ? (['review', 'missed', 'liked'].includes(trainingSource) ? `source=${trainingSource}&ranked=false` : `mode=${trainingSource}&ranked=false`)
+    : `mode=${mode}&ranked=${gameMode === 'ranked'}`;
   try {
-    ({ song, roundToken, liked } = await api(`/api/quiz/random?mode=${mode}&ranked=${gameMode === 'ranked'}`));
+    ({ song, roundToken, liked } = await api(`/api/quiz/random?${qs}`));
   } catch (err) {
-    setHint(err.message + (mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
+    setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
     return;
   }
   currentSong = song;

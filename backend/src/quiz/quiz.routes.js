@@ -23,9 +23,18 @@ function computeReward(song, firstCorrect) {
 router.get('/random', requireAuth, async (req, res) => {
   const mode = req.query.mode === 'global' ? 'global' : 'mine';
   const ranked = req.query.ranked !== 'false'; // défaut : classé
+  // Sources d'entraînement (toujours hors classé)
+  const source = ['review', 'missed', 'liked'].includes(req.query.source) ? req.query.source : null;
 
   let songIds;
-  if (mode === 'mine') {
+  if (source) {
+    const where = { userId: req.user.id };
+    if (source === 'review') where.againCount = { gt: 0 };
+    else if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
+    else where.liked = true;
+    const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
+    songIds = stats.map((s) => s.songId);
+  } else if (mode === 'mine') {
     const entries = await prisma.userCatalogEntry.findMany({
       where: { userId: req.user.id },
       select: { songId: true },
@@ -37,7 +46,7 @@ router.get('/random', requireAuth, async (req, res) => {
   }
 
   if (!songIds.length) {
-    return res.status(404).json({ error: 'Aucune musique disponible pour ce mode' });
+    return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
   }
   const randomId = songIds[Math.floor(Math.random() * songIds.length)];
   const song = await prisma.song.findUnique({
@@ -63,6 +72,18 @@ router.post('/like', requireAuth, async (req, res) => {
     create: { userId: req.user.id, songId, liked: !!liked },
   });
   res.json({ liked: stat.liked });
+});
+
+// Compteurs pour le centre d'entraînement
+router.get('/training-stats', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const [review, missed, liked, mine] = await Promise.all([
+    prisma.userSongStat.count({ where: { userId, againCount: { gt: 0 } } }),
+    prisma.userSongStat.count({ where: { userId, playCount: { gt: 0 }, correctCount: 0 } }),
+    prisma.userSongStat.count({ where: { userId, liked: true } }),
+    prisma.userCatalogEntry.count({ where: { userId } }),
+  ]);
+  res.json({ review, missed, liked, mine });
 });
 
 // Playlist perso : les musiques likées

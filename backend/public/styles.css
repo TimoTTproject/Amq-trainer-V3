@@ -756,3 +756,12 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 #like-btn.liked i { animation: likePop .35s ease; }
 @keyframes likePop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
 .pl-remove:hover { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* Centre d'entraînement */
+.training-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(62,201,138,.16), rgba(108,140,255,.14));
+  border: 1px solid #2a2f42; border-radius: 14px; padding: 12px 16px; margin-bottom: 16px; }
+.training-banner b { color: var(--text); }
+.train-card h3 { display: flex; align-items: center; gap: 8px; }
+.train-count { background: var(--accent); color: #0b1020; font-size: .8rem; font-weight: 700; padding: 1px 9px; border-radius: 999px; }
+.train-card.disabled .train-count { background: var(--bg-3); color: var(--text-2); }

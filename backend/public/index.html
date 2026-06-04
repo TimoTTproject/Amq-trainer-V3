@@ -75,6 +75,7 @@
       <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
       <button class="nav-item" data-nav="profile"><i class="fas fa-user"></i><span>Profil</span></button>
       <button class="nav-item" data-nav="quiz"><i class="fas fa-play"></i><span>Jouer</span></button>
+      <button class="nav-item" data-nav="training"><i class="fas fa-graduation-cap"></i><span>Entraînement</span></button>
       <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
       <button class="nav-item" data-nav="mp"><i class="fas fa-users"></i><span>Multi</span></button>
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
@@ -186,6 +187,11 @@
           <h3>Jouer</h3>
           <p>Devine l'anime à partir de son opening</p>
         </button>
+        <button class="home-card" id="card-training">
+          <i class="fas fa-graduation-cap"></i>
+          <h3>Entraînement</h3>
+          <p>Révise tes sons ratés, à revoir, ta playlist… sans enjeu</p>
+        </button>
         <button class="home-card" id="card-profile">
           <i class="fas fa-user"></i>
           <h3>Mon profil</h3>
@@ -218,6 +224,11 @@
     <div id="view-quiz" class="hidden">
       <button class="btn-back" id="back-home"><i class="fas fa-arrow-left"></i> Accueil</button>
 
+      <div id="training-banner" class="training-banner hidden">
+        <span id="training-label"></span>
+        <button class="btn-secondary" id="training-exit"><i class="fas fa-arrow-left"></i> Centre d'entraînement</button>
+      </div>
+
       <div class="gamemode-switch">
         <button class="gm-btn" data-gm="ranked"><i class="fas fa-trophy"></i> Classé</button>
         <button class="gm-btn" data-gm="casual"><i class="fas fa-graduation-cap"></i> Entraînement</button>
@@ -225,7 +236,7 @@
       </div>
 
     <!-- Import + mode -->
-    <section class="panel">
+    <section class="panel" id="quiz-mode-panel">
       <div class="panel-row">
         <label>Catalogue :</label>
         <div class="mode-switch">
@@ -508,6 +519,13 @@
         <span id="admin-pageinfo">—</span>
         <button class="btn-secondary" id="admin-next"><i class="fas fa-chevron-right"></i></button>
       </div>
+    </div>
+
+    <!-- VUE CENTRE D'ENTRAÎNEMENT -->
+    <div id="view-training" class="hidden">
+      <div class="gacha-top"><h2><i class="fas fa-graduation-cap"></i> Centre d'entraînement</h2></div>
+      <p class="hint" style="margin-bottom:18px">Entraîne-toi librement, <b>sans aucun enjeu</b> (pas de tokens, pas de classé). Vidéo et réponse accessibles, et tu peux marquer les sons « À revoir » pour les retravailler.</p>
+      <div class="home-grid" id="training-grid"></div>
     </div>
 
     <!-- VUE PLAYLIST -->
