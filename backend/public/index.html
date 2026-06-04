@@ -66,6 +66,7 @@
       <button class="nav-item" data-nav="profile"><i class="fas fa-user"></i><span>Profil</span></button>
       <button class="nav-item" data-nav="quiz"><i class="fas fa-play"></i><span>Jouer</span></button>
       <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
+      <button class="nav-item" data-nav="mp"><i class="fas fa-users"></i><span>Multi</span></button>
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
       <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
       <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
@@ -188,9 +189,9 @@
           <h3>Catalogue</h3>
           <p>Parcours tous les openings (anime, titre, artiste)</p>
         </button>
-        <button class="home-card disabled" disabled>
+        <button class="home-card" id="card-mp">
           <i class="fas fa-users"></i>
-          <h3>Multijoueur <span class="soon">Bientôt</span></h3>
+          <h3>Multijoueur</h3>
           <p>Affronte d'autres joueurs en temps réel</p>
         </button>
       </div>
@@ -486,6 +487,54 @@
       </div>
     </div>
 
+    <!-- VUE MULTIJOUEUR -->
+    <div id="view-mp" class="hidden">
+      <div class="gacha-top"><h2><i class="fas fa-users"></i> Multijoueur</h2></div>
+
+      <!-- Lobby / matchmaking -->
+      <div id="mp-lobby" class="tower-intro">
+        <p class="tower-rules">
+          ⚡ <b>Partie rapide</b> : 10 manches, devine l'anime au plus vite (texte libre).
+          Score à la vitesse, classement final. Il faut <b>au moins 2 joueurs</b>.
+        </p>
+        <button class="btn-primary btn-lg" id="mp-find"><i class="fas fa-bolt"></i> Partie rapide</button>
+        <div id="mp-queue" class="mp-queue hidden">
+          <div class="mp-spinner"></div>
+          <p id="mp-queue-status">En attente de joueurs…</p>
+          <div id="mp-queue-players" class="mp-players"></div>
+          <button class="btn-secondary" id="mp-cancel">Annuler</button>
+        </div>
+        <p id="mp-lobby-msg" class="gacha-msg"></p>
+      </div>
+
+      <!-- Partie en cours -->
+      <div id="mp-game" class="mp-game hidden">
+        <div class="tower-hud">
+          <span>Manche <b id="mp-round">1</b>/<b id="mp-total">10</b></span>
+          <span id="mp-progress"></span>
+        </div>
+        <div class="tower-timebar"><div class="tower-timefill" id="mp-timefill"></div></div>
+        <div class="media-wrapper tower-media">
+          <video id="mp-video" playsinline></video>
+          <div class="audio-overlay" id="mp-overlay"><i class="fas fa-music"></i></div>
+        </div>
+        <div class="answer-area">
+          <input type="text" id="mp-input" placeholder="Nom de l'anime…" />
+          <button class="btn-primary" id="mp-submit">Valider</button>
+        </div>
+        <p id="mp-feedback" class="gacha-msg"></p>
+        <div id="mp-result" class="mp-result hidden"></div>
+        <div id="mp-scores" class="mp-scores"></div>
+      </div>
+
+      <!-- Fin de partie -->
+      <div id="mp-over" class="tower-over hidden">
+        <h3>🏆 Classement final</h3>
+        <ol id="mp-ranking" class="lb-list"></ol>
+        <button class="btn-primary" id="mp-again"><i class="fas fa-rotate-right"></i> Rejouer</button>
+      </div>
+    </div>
+
     <!-- Modale profil joueur (depuis le classement) -->
     <div id="player-modal" class="modal-overlay hidden">
       <div class="modal-card">
@@ -495,6 +544,8 @@
     </div>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="main.js"></script>
+  <script src="mp-client.js"></script>
 </body>
 </html>

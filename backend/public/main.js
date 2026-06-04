@@ -121,6 +121,7 @@ function showAuth() {
 function showView(name) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
+  if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
@@ -130,6 +131,7 @@ function showView(name) {
   document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
+  document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
 }
 
@@ -141,6 +143,7 @@ function navTo(name) {
   if (name === 'leaderboard') return openLeaderboard();
   if (name === 'admin') return openAdmin();
   if (name === 'profile') return openProfile();
+  if (name === 'mp') return openMultiplayer();
   showView(name); // home, quiz
 }
 
@@ -492,6 +495,7 @@ function setupAppUI() {
   document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
+  document.getElementById('card-mp').addEventListener('click', openMultiplayer);
   document.querySelectorAll('.nav-item').forEach((b) =>
     b.addEventListener('click', () => navTo(b.dataset.nav))
   );

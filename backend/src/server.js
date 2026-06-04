@@ -2,6 +2,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
@@ -17,6 +18,8 @@ const gachaRoutes = require('./gacha/gacha.routes');
 const towerRoutes = require('./tower/tower.routes');
 const adminRoutes = require('./admin/admin.routes');
 const leaderboardRoutes = require('./leaderboard/leaderboard.routes');
+const mpRoutes = require('./mp/mp.routes');
+const { initMp } = require('./mp/mp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,13 +51,18 @@ app.use('/api/gacha', gachaRoutes.router);
 app.use('/api/tower', towerRoutes.router);
 app.use('/api/admin', adminRoutes.router);
 app.use('/api/leaderboard', leaderboardRoutes.router);
+app.use('/api/mp', mpRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)
 const FRONTEND_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIR));
 
-app.listen(PORT, () => {
+// Serveur HTTP + Socket.io (multijoueur temps réel)
+const server = http.createServer(app);
+initMp(server);
+
+server.listen(PORT, () => {
   console.log(`\n  Anime Music Quiz`);
   console.log(`  → App        : http://localhost:${PORT}`);
   console.log(`  → API health : http://localhost:${PORT}/api/health\n`);
