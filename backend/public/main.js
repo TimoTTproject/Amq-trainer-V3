@@ -11,7 +11,7 @@ let isTraining = false; // session du centre d'entraînement
 let trainingSource = null; // 'review' | 'missed' | 'liked' | 'mine' | 'global'
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
-let gameMode = localStorage.getItem('amq_gamemode') || 'ranked'; // 'ranked' | 'casual'
+let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
 let clipTimer = null; // coupe l'extrait après la durée choisie
 const video = () => document.getElementById('quiz-video');
 
@@ -687,15 +687,6 @@ function setupAppUI() {
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
 
-  // Sélecteur Classé / Entraînement
-  document.querySelectorAll('.gm-btn').forEach((b) => {
-    b.addEventListener('click', () => {
-      gameMode = b.dataset.gm;
-      localStorage.setItem('amq_gamemode', gameMode);
-      applyGameModeUI();
-    });
-  });
-
   // Pause la lecture quand on quitte l'onglet
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -736,11 +727,8 @@ function applyModeUI() {
 
 function applyGameModeUI() {
   const ranked = gameMode === 'ranked' && !isTraining; // l'entraînement est toujours casual
-  document.querySelectorAll('.gm-btn').forEach((b) =>
-    b.classList.toggle('active', b.dataset.gm === gameMode)
-  );
   document.getElementById('gm-hint').textContent = ranked
-    ? '🏆 Gagne des tokens — vidéo et réponse cachées avant validation.'
+    ? 'Gagne des tokens — vidéo et réponse cachées avant validation.'
     : '🎓 Entraînement libre — vidéo et réponse accessibles, aucun token.';
   document.getElementById('show-answer-btn').classList.toggle('hidden', ranked);
   updateVideoButtonVisibility();

@@ -765,3 +765,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .train-card h3 { display: flex; align-items: center; gap: 8px; }
 .train-count { background: var(--accent); color: #0b1020; font-size: .8rem; font-weight: 700; padding: 1px 9px; border-radius: 999px; }
 .train-card.disabled .train-count { background: var(--bg-3); color: var(--text-2); }
+
+/* Libellé du mode classique (Jouer) */
+.gm-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-3); color: var(--text); font-weight: 600; padding: 8px 14px; border-radius: 10px; }
+.gm-tag i { color: var(--orange); }
