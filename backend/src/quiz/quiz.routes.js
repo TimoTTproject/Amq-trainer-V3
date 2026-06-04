@@ -6,7 +6,7 @@ const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-tok
 const { isCorrectGuess } = require('./matching');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
-const { progressQuests } = require('../quests/quests');
+const { progressQuests, todayStr } = require('../quests/quests');
 
 const router = express.Router();
 
@@ -81,42 +81,46 @@ router.get('/random', requireAuth, async (req, res) => {
   const mode = req.query.mode === 'global' ? 'global' : 'mine';
   const ranked = req.query.ranked !== 'false'; // défaut : classé
   // Sources d'entraînement (toujours hors classé)
-  const source = ['review', 'missed', 'liked', 'due'].includes(req.query.source) ? req.query.source : null;
+  const source = ['review', 'missed', 'liked', 'due', 'series'].includes(req.query.source) ? req.query.source : null;
 
-  let songIds;
-  if (source === 'review') {
-    songIds = await getReviewSongIds(req.user.id);
-  } else if (source === 'due') {
-    const stats = await prisma.userSongStat.findMany({
-      where: { userId: req.user.id, srsDueAt: { not: null, lte: new Date() } },
-      select: { songId: true },
-    });
-    songIds = stats.map((s) => s.songId);
-  } else if (source) {
-    const where = { userId: req.user.id };
-    if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
-    else where.liked = true;
-    const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
-    songIds = stats.map((s) => s.songId);
-  } else if (mode === 'mine') {
-    const entries = await prisma.userCatalogEntry.findMany({
-      where: { userId: req.user.id },
-      select: { songId: true },
-    });
-    songIds = entries.map((e) => e.songId);
+  let song = null;
+  if (!source && mode === 'global') {
+    // Perf : on évite de charger tous les ids → count + skip aléatoire
+    const where = { videoUrl: { not: null } };
+    const total = await prisma.song.count({ where });
+    if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
+    song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true } });
   } else {
-    const all = await prisma.song.findMany({ select: { id: true } });
-    songIds = all.map((s) => s.id);
+    let songIds;
+    if (source === 'review') {
+      songIds = await getReviewSongIds(req.user.id);
+    } else if (source === 'due') {
+      const stats = await prisma.userSongStat.findMany({
+        where: { userId: req.user.id, srsDueAt: { not: null, lte: new Date() } },
+        select: { songId: true },
+      });
+      songIds = stats.map((s) => s.songId);
+    } else if (source === 'series') {
+      const series = (req.query.series || '').trim();
+      const rows = await prisma.song.findMany({ where: { animeTitle: series, videoUrl: { not: null } }, select: { id: true } });
+      songIds = rows.map((r) => r.id);
+    } else if (source) {
+      const where = { userId: req.user.id };
+      if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
+      else where.liked = true;
+      const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
+      songIds = stats.map((s) => s.songId);
+    } else {
+      const entries = await prisma.userCatalogEntry.findMany({ where: { userId: req.user.id }, select: { songId: true } });
+      songIds = entries.map((e) => e.songId);
+    }
+    if (!songIds.length) {
+      return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
+    }
+    const randomId = songIds[Math.floor(Math.random() * songIds.length)];
+    song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true } });
   }
-
-  if (!songIds.length) {
-    return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
-  }
-  const randomId = songIds[Math.floor(Math.random() * songIds.length)];
-  const song = await prisma.song.findUnique({
-    where: { id: randomId },
-    select: { id: true, videoUrl: true },
-  });
+  if (!song) return res.status(404).json({ error: 'Aucune musique disponible' });
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
   const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash' });
   const stat = await prisma.userSongStat.findUnique({
@@ -184,6 +188,20 @@ router.get('/training-stats', requireAuth, async (req, res) => {
   res.json({ review: reviewIds.length, missed, liked, mine, due, scheduled, mastered });
 });
 
+// Recherche de séries (animes) pour l'entraînement ciblé
+router.get('/series', requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json({ series: [] });
+  const rows = await prisma.song.findMany({
+    where: { animeTitle: { contains: q, mode: 'insensitive' }, videoUrl: { not: null } },
+    distinct: ['animeTitle'],
+    select: { animeTitle: true },
+    take: 20,
+    orderBy: { animeTitle: 'asc' },
+  });
+  res.json({ series: rows.map((r) => r.animeTitle) });
+});
+
 // Playlist perso : les musiques likées
 router.get('/playlist', requireAuth, async (req, res) => {
   const stats = await prisma.userSongStat.findMany({
@@ -236,6 +254,13 @@ router.post('/guess', requireAuth, rateLimit({ max: 120 }), async (req, res) => 
         userId, songId, playCount: 1, correctCount: correct ? 1 : 0,
         srsStreak: srs.srsStreak, srsInterval: srs.srsInterval, srsDueAt: srs.srsDueAt,
       },
+    });
+    // Stat quotidienne (graphe de progression)
+    const day = todayStr();
+    await tx.dailyStat.upsert({
+      where: { userId_day: { userId, day } },
+      update: { played: { increment: 1 }, ...(correct ? { correct: { increment: 1 } } : {}) },
+      create: { userId, day, played: 1, correct: correct ? 1 : 0 },
     });
     let tokens = req.user.tokens;
     if (reward > 0) {

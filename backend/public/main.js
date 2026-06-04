@@ -8,7 +8,8 @@ let currentSong = null;
 let currentRoundToken = null; // jeton de manche émis par le serveur au tirage
 let currentLiked = false; // la musique en cours est-elle dans la playlist
 let isTraining = false; // session du centre d'entraînement
-let trainingSource = null; // 'review' | 'missed' | 'liked' | 'mine' | 'global'
+let trainingSource = null; // review | missed | liked | due | series | mine | global
+let trainingSeries = null; // série choisie quand trainingSource === 'series'
 let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
 let trainPlayed = 0, trainCorrect = 0, trainStreak = 0; // suivi de session d'entraînement
 let trainingChrono = false; // mode chrono (auto-révélation)
@@ -365,10 +366,31 @@ function renderProfile(d) {
     document.getElementById('profile-best-label').textContent = 'Aucune carte pour l\'instant.';
   }
 
+  renderProgression(d.progression || []);
   renderProfileRanked(d.ranked, d.mpRecent || []);
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
   renderProfileBadges(d);
+}
+
+// Graphe SVG de la réussite par jour (14 derniers jours)
+function renderProgression(data) {
+  const box = document.getElementById('profile-progression');
+  if (!box) return;
+  if (data.length < 2) { box.innerHTML = '<p class="muted">Joue sur plusieurs jours pour voir ta courbe de progression.</p>'; return; }
+  const W = 300, H = 90, pad = 6;
+  const n = data.length;
+  const x = (i) => pad + (i * (W - 2 * pad)) / (n - 1);
+  const y = (v) => H - pad - (v / 100) * (H - 2 * pad);
+  const pts = data.map((d, i) => `${x(i).toFixed(1)},${y(d.rate).toFixed(1)}`).join(' ');
+  const dots = data.map((d, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(d.rate).toFixed(1)}" r="2.5" fill="#6c8cff"><title>${d.day} : ${d.rate}% (${d.played} jouées)</title></circle>`).join('');
+  box.innerHTML = `<svg class="prog-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <line x1="${pad}" y1="${y(50)}" x2="${W - pad}" y2="${y(50)}" stroke="#2a2f42" stroke-dasharray="3 3"/>
+      <polyline points="${pts}" fill="none" stroke="url(#pg)" stroke-width="2.5" stroke-linejoin="round"/>
+      ${dots}
+      <defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6c8cff"/><stop offset="1" stop-color="#8a6cff"/></linearGradient></defs>
+    </svg>
+    <div class="prog-legend"><span>${data[0].day.slice(5)}</span><span>Réussite % · ${data.length} j</span><span>${data[n - 1].day.slice(5)}</span></div>`;
 }
 
 function renderProfileRanked(r, recent) {
@@ -590,7 +612,18 @@ function setupAppUI() {
   document.getElementById('training-exit').addEventListener('click', openTraining);
   document.getElementById('training-grid').addEventListener('click', (e) => {
     const card = e.target.closest('[data-src]');
-    if (card && !card.classList.contains('disabled')) startTraining(card.dataset.src, card.dataset.label);
+    if (!card || card.classList.contains('disabled')) return;
+    if (card.dataset.src === 'series') return openSeriesPicker();
+    startTraining(card.dataset.src, card.dataset.label);
+  });
+  let seriesTimer;
+  document.getElementById('series-search').addEventListener('input', (e) => {
+    clearTimeout(seriesTimer);
+    seriesTimer = setTimeout(() => searchSeries(e.target.value), 300);
+  });
+  document.getElementById('series-results').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-series]');
+    if (b) { trainingSeries = b.dataset.series; startTraining('series', `Série : ${b.dataset.series}`); }
   });
   document.querySelectorAll('.nav-item').forEach((b) =>
     b.addEventListener('click', () => navTo(b.dataset.nav))
@@ -800,6 +833,7 @@ function openQuiz() {
 
 async function openTraining() {
   showView('training');
+  document.getElementById('series-picker').classList.add('hidden');
   const grid = document.getElementById('training-grid');
   grid.innerHTML = '<p class="muted">Chargement…</p>';
   let s = {};
@@ -812,6 +846,7 @@ async function openTraining() {
     { src: 'due', icon: 'fa-brain', title: 'Révision du jour', desc: 'Répétition espacée : les sons à revoir maintenant', count: s.due },
     { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Auto : tes sons mal maîtrisés (réussite < 50 %) + ceux marqués', count: s.review },
     { src: 'missed', icon: 'fa-circle-xmark', title: 'Sons ratés', desc: 'Les sons que tu n\'as jamais trouvés', count: s.missed },
+    { src: 'series', icon: 'fa-tags', title: 'Par série', desc: 'Choisis un anime et entraîne-toi uniquement dessus', count: null },
     { src: 'mine', icon: 'fa-list', title: 'Ma liste', desc: 'Ton import AniList', count: s.mine },
     { src: 'global', icon: 'fa-globe', title: 'Catalogue global', desc: 'Tout le catalogue partagé', count: null },
   ];
@@ -826,6 +861,24 @@ async function openTraining() {
       </button>`;
     })
     .join('');
+}
+
+function openSeriesPicker() {
+  const p = document.getElementById('series-picker');
+  p.classList.remove('hidden');
+  document.getElementById('series-search').value = '';
+  document.getElementById('series-results').innerHTML = '<p class="hint">Tape le nom d\'un anime…</p>';
+  document.getElementById('series-search').focus();
+}
+async function searchSeries(q) {
+  const box = document.getElementById('series-results');
+  if (q.trim().length < 2) { box.innerHTML = ''; return; }
+  try {
+    const { series } = await api(`/api/quiz/series?q=${encodeURIComponent(q.trim())}`);
+    box.innerHTML = series.length
+      ? series.map((s) => `<button class="series-opt" data-series="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')
+      : '<p class="muted">Aucune série trouvée.</p>';
+  } catch {}
 }
 
 function startTraining(source, label) {
@@ -931,9 +984,16 @@ async function nextSong() {
   resetQuizUI();
   setHint('Chargement…');
   let song, roundToken, liked;
-  const qs = trainingSource
-    ? (['review', 'missed', 'liked'].includes(trainingSource) ? `source=${trainingSource}&ranked=false` : `mode=${trainingSource}&ranked=false`)
-    : `mode=${mode}&ranked=${gameMode === 'ranked'}`;
+  const SOURCES = ['review', 'missed', 'liked', 'due', 'series'];
+  let qs;
+  if (trainingSource && SOURCES.includes(trainingSource)) {
+    qs = `source=${trainingSource}&ranked=false`;
+    if (trainingSource === 'series') qs += `&series=${encodeURIComponent(trainingSeries || '')}`;
+  } else if (trainingSource) {
+    qs = `mode=${trainingSource}&ranked=false`; // 'mine' | 'global'
+  } else {
+    qs = `mode=${mode}&ranked=${gameMode === 'ranked'}`;
+  }
   try {
     ({ song, roundToken, liked } = await api(`/api/quiz/random?${qs}`));
   } catch (err) {

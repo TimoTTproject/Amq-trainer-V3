@@ -144,6 +144,11 @@
 
         <div class="profile-col">
           <div class="profile-section">
+            <h3><i class="fas fa-chart-line"></i> Progression (réussite)</h3>
+            <div id="profile-progression"></div>
+          </div>
+
+          <div class="profile-section">
             <h3><i class="fas fa-ranking-star"></i> Multijoueur classé</h3>
             <div id="profile-ranked" class="profile-ranked"></div>
             <ul id="profile-mp-history" class="tower-history-list"></ul>
@@ -554,6 +559,10 @@
       <p class="hint" style="margin-bottom:14px">Entraîne-toi librement, <b>sans aucun enjeu</b> (pas de tokens, pas de classé). Vidéo et réponse accessibles.</p>
       <div id="srs-overview" class="srs-overview"></div>
       <label class="chrono-toggle"><input type="checkbox" id="train-chrono" /> ⏱ Mode chrono (révèle automatiquement à la fin du temps)</label>
+      <div id="series-picker" class="series-picker hidden">
+        <input type="text" id="series-search" placeholder="Rechercher un anime à réviser…" />
+        <div id="series-results" class="series-results"></div>
+      </div>
       <div class="home-grid" id="training-grid"></div>
     </div>
 

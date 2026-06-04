@@ -162,6 +162,15 @@ router.get('/:userId', requireAuth, async (req, res) => {
     rarity: c.character.rarity, copies: c.copies, favorite: c.favorite,
   }));
 
+  // Graphe de progression : 14 derniers jours d'activité
+  const daily = await prisma.dailyStat.findMany({
+    where: { userId: user.id }, orderBy: { day: 'desc' }, take: 14,
+    select: { day: true, played: true, correct: true },
+  });
+  const progression = daily.reverse().map((d) => ({
+    day: d.day, played: d.played, rate: d.played ? Math.round((d.correct / d.played) * 100) : 0,
+  }));
+
   // Historique Château (parties terminées récentes)
   const towerHistory = await prisma.towerRun.findMany({
     where: { userId: user.id, status: 'over' },
@@ -202,6 +211,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
     showcase,
     topSeries,
     towerHistory,
+    progression,
   });
 });
 

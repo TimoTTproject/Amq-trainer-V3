@@ -64,8 +64,22 @@ model User {
   towerRuns     TowerRun[]
   mpResults     MpResult[]
   quests        Quest[]
+  dailyStats    DailyStat[]
   friendsSent     Friendship[] @relation("FriendReq")
   friendsReceived Friendship[] @relation("FriendAdr")
+}
+
+// Stats quotidiennes (pour le graphe de progression)
+model DailyStat {
+  id      Int    @id @default(autoincrement())
+  userId  String
+  day     String // AAAA-MM-JJ
+  played  Int    @default(0)
+  correct Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
 }
 
 // Amitié (demande puis acceptation)
