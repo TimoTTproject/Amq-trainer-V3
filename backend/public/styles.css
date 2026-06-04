@@ -783,6 +783,10 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .admin-danger { border: 1px solid var(--red); color: var(--red); }
 .admin-danger:hover { background: var(--red); color: #fff; }
 
+/* Bonus quotidien + badge de rang (en-tête) */
+.daily-btn { font-size: .82rem; padding: 7px 12px; animation: claimPulse 1.8s ease-in-out infinite; }
+.header-rank { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text); font-size: .78rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
+
 /* Duo / Carré / Cash */
 .assist-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 10px; }
 .assist-label { color: var(--text-2); font-size: .85rem; }

@@ -58,6 +58,8 @@
     <header>
       <h1><i class="fas fa-music"></i> Anime Music Quiz</h1>
       <div class="user-section">
+        <button id="daily-btn" class="btn-primary daily-btn hidden" title="Bonus quotidien"><i class="fas fa-gift"></i> Bonus</button>
+        <span id="header-rank" class="header-rank hidden"></span>
         <button id="dev-tokens-btn" class="btn-secondary dev-btn hidden" title="Dev : +1000 tokens"><i class="fas fa-bolt"></i> +1000</button>
         <span id="admin-badge" class="admin-badge hidden">ADMIN</span>
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="user-tokens">0</span></span>
@@ -513,6 +515,10 @@
       <div class="admin-backfill">
         <button class="btn-secondary admin-danger" id="admin-reset-btn"><i class="fas fa-triangle-exclamation"></i> Réinitialiser MON compte (stats + gacha + tokens)</button>
         <span id="admin-reset-status" class="hint"></span>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary admin-danger" id="admin-reset-all-btn"><i class="fas fa-skull-crossbones"></i> Reset GLOBAL (tous les comptes)</button>
+        <span id="admin-reset-all-status" class="hint"></span>
       </div>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">

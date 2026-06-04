@@ -5,12 +5,44 @@ const { requireAuth } = require('../auth/auth.middleware');
 
 const router = express.Router();
 
+const DAILY_BONUS = 50;
+
 // Libellés lisibles pour l'historique
 const REASON_LABELS = {
   quiz_first_correct: 'Bonne réponse (découverte)',
   quiz_correct: 'Bonne réponse',
   pack_open: 'Ouverture de paquet',
+  duplicate_refund: 'Doublon remboursé',
+  tower_entry: 'Entrée au Château',
+  tower_reward: 'Récompense du Château',
+  level_reward: 'Récompense de niveau',
+  admin_grant: 'Bonus admin',
+  daily_bonus: 'Bonus quotidien',
 };
+
+// Bonus de connexion déjà disponible aujourd'hui ?
+function dailyAvailable(last) {
+  if (!last) return true;
+  const a = new Date(last);
+  const b = new Date();
+  return a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate();
+}
+
+// Réclame le bonus quotidien
+router.post('/daily', requireAuth, async (req, res) => {
+  if (!dailyAvailable(req.user.lastDailyAt)) {
+    return res.status(400).json({ error: 'Bonus déjà réclamé aujourd\'hui' });
+  }
+  const user = await prisma.$transaction(async (tx) => {
+    const u = await tx.user.update({
+      where: { id: req.user.id },
+      data: { tokens: { increment: DAILY_BONUS }, lastDailyAt: new Date() },
+    });
+    await tx.tokenTransaction.create({ data: { userId: req.user.id, amount: DAILY_BONUS, reason: 'daily_bonus' } });
+    return u;
+  });
+  res.json({ granted: DAILY_BONUS, tokens: user.tokens });
+});
 
 router.get('/transactions', requireAuth, async (req, res) => {
   const tx = await prisma.tokenTransaction.findMany({

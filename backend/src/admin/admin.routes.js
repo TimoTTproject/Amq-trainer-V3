@@ -174,4 +174,23 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Reset GLOBAL : remet à zéro la progression de TOUS les comptes (avant un lancement).
+// Garde les comptes, profils, « Ma liste », et le pool de personnages/musiques.
+// Protégé : nécessite body.confirm === 'RESET'.
+router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'RESET') return res.status(400).json({ error: 'Confirmation requise (RESET)' });
+  await prisma.$transaction([
+    prisma.userSongStat.deleteMany({}),
+    prisma.userCard.deleteMany({}),
+    prisma.towerRun.deleteMany({}),
+    prisma.mpResult.deleteMany({}),
+    prisma.tokenTransaction.deleteMany({}),
+    prisma.user.updateMany({
+      data: { tokens: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },
+    }),
+  ]);
+  const users = await prisma.user.count();
+  res.json({ ok: true, users });
+});
+
 module.exports = { router };

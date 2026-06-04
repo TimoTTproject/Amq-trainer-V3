@@ -42,6 +42,8 @@ model User {
 
   // Niveau : dernier niveau dont la récompense a été réclamée
   claimedLevel    Int       @default(1)
+  // Bonus de connexion quotidien
+  lastDailyAt     DateTime?
 
   // Multijoueur classé
   mmr         Int @default(1000)

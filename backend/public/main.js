@@ -213,6 +213,29 @@ function renderHeaderUser() {
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
+  const rk = document.getElementById('header-rank');
+  if (currentUser.rankTier) {
+    rk.innerHTML = `${currentUser.rankTier.icon} ${escapeHtml(currentUser.rankTier.name)}`;
+    rk.classList.remove('hidden');
+  } else rk.classList.add('hidden');
+  document.getElementById('daily-btn').classList.toggle('hidden', !currentUser.dailyAvailable);
+}
+
+async function claimDaily() {
+  const btn = document.getElementById('daily-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/economy/daily', { method: 'POST', body: JSON.stringify({}) });
+    currentUser.tokens = r.tokens;
+    currentUser.dailyAvailable = false;
+    renderHeaderUser();
+    if (typeof sfx !== 'undefined') sfx.levelup();
+    if (typeof burstConfetti === 'function') burstConfetti();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // Dev (admin) : se créditer des tokens
@@ -539,6 +562,7 @@ function setupAppUI() {
   };
   updateMuteIcon();
   muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
+  document.getElementById('daily-btn').addEventListener('click', claimDaily);
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -617,6 +641,7 @@ function setupAppUI() {
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
+  document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
@@ -1875,6 +1900,23 @@ async function runResetMe() {
     currentUser.towerBestFloor = 0;
     renderHeaderUser();
     status.textContent = '✅ Compte réinitialisé. Recharge la page.';
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runResetAll() {
+  const ans = prompt('⚠️ RESET GLOBAL de TOUS les comptes (stats, gacha, tokens, classé, Château). Profils et listes conservés.\n\nTape RESET pour confirmer :');
+  if (ans !== 'RESET') return;
+  const btn = document.getElementById('admin-reset-all-btn');
+  const status = document.getElementById('admin-reset-all-status');
+  btn.disabled = true;
+  status.textContent = 'Réinitialisation globale…';
+  try {
+    const r = await api('/api/admin/reset-all', { method: 'POST', body: JSON.stringify({ confirm: 'RESET' }) });
+    status.textContent = `✅ ${r.users} comptes réinitialisés. Recharge la page.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {

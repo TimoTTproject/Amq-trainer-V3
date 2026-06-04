@@ -5,8 +5,16 @@ const { prisma } = require('../db');
 const { setAuthCookie, clearAuthCookie } = require('./jwt');
 const { requireAuth } = require('./auth.middleware');
 const { isAdmin } = require('../admin/admin');
+const { tierFromMmr } = require('../mp/rank');
 
 const router = express.Router();
+
+function dailyAvailable(last) {
+  if (!last) return true;
+  const a = new Date(last);
+  const b = new Date();
+  return a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate();
+}
 
 // Renvoie une version sûre de l'utilisateur (sans secrets)
 function publicUser(u) {
@@ -21,6 +29,9 @@ function publicUser(u) {
     anilistListName: u.anilistListName,
     tokens: u.tokens,
     towerBestFloor: u.towerBestFloor || 0,
+    mmr: u.mmr,
+    rankTier: (u.rankedGames || 0) > 0 ? tierFromMmr(u.mmr) : null,
+    dailyAvailable: dailyAvailable(u.lastDailyAt),
     createdAt: u.createdAt,
     isAdmin: isAdmin(u),
   };
