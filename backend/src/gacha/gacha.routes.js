@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { rollRarity, DUPLICATE_REFUND, PRICES, RARITY_LABELS, RARITY_ORDER } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
 
 const router = express.Router();
 
@@ -98,6 +98,44 @@ router.post('/pull', requireAuth, async (req, res) => {
   });
 
   res.json({ type, cost: cfg.cost, ...result });
+});
+
+// Fiche détaillée d'un personnage (+ possession de l'utilisateur)
+router.get('/character/:id', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'id invalide' });
+  const character = await prisma.character.findUnique({ where: { id } });
+  if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
+
+  const card = await prisma.userCard.findUnique({
+    where: { userId_characterId: { userId: req.user.id, characterId: id } },
+  });
+  // Rang de popularité au sein de sa rareté (1 = le plus populaire)
+  const rankInRarity =
+    1 +
+    (await prisma.character.count({
+      where: { rarity: character.rarity, favourites: { gt: character.favourites } },
+    }));
+  const totalInRarity = await prisma.character.count({ where: { rarity: character.rarity } });
+
+  res.json({
+    character: {
+      id: character.id,
+      anilistId: character.anilistId,
+      name: character.name,
+      imageUrl: character.imageUrl,
+      rarity: character.rarity,
+      favourites: character.favourites,
+      fromManga: character.fromManga,
+    },
+    rarityLabel: RARITY_LABELS[character.rarity] || character.rarity,
+    pullRate: RARITY_RATES[character.rarity] ?? null,
+    dupRefund: DUPLICATE_REFUND[character.rarity] ?? 0,
+    rankInRarity,
+    totalInRarity,
+    owned: card ? card.copies : 0,
+    anilistUrl: `https://anilist.co/character/${character.anilistId}`,
+  });
 });
 
 // Collection de l'utilisateur

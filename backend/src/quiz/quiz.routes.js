@@ -3,6 +3,7 @@ const express = require('express');
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-token');
 
 const router = express.Router();
 
@@ -58,8 +59,10 @@ function computeReward(song, firstCorrect) {
 
 // Tire une musique au hasard. La réponse n'est PAS renvoyée (anti-triche).
 // ?mode=mine (catalogue perso, défaut) | global (catalogue partagé)
+// ?ranked=true|false : fige le mode classé côté serveur (jeton de manche).
 router.get('/random', requireAuth, async (req, res) => {
   const mode = req.query.mode === 'global' ? 'global' : 'mine';
+  const ranked = req.query.ranked !== 'false'; // défaut : classé
 
   let songIds;
   if (mode === 'mine') {
@@ -81,7 +84,9 @@ router.get('/random', requireAuth, async (req, res) => {
     where: { id: randomId },
     select: { id: true, videoUrl: true },
   });
-  res.json({ song });
+  // Jeton lié à cette manche : c'est lui qui décidera du classé à la validation.
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked });
+  res.json({ song, roundToken });
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.
@@ -92,10 +97,14 @@ router.post('/guess', requireAuth, async (req, res) => {
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
-  const ranked = req.body?.ranked !== false; // défaut : classé
+  const userId = req.user.id;
   const correct = isCorrectGuess(guess, song);
 
-  const userId = req.user.id;
+  // Le mode classé est décidé par le jeton de manche émis au tirage, pas par le
+  // client. Sans jeton valide et non rejoué pour CETTE manche → aucun token.
+  const round = verifyRoundToken(req.body?.roundToken, { userId, songId });
+  const ranked = !!(round && round.ranked && consumeRound(round));
+
   const prev = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId, songId } },
   });
@@ -140,9 +149,15 @@ router.post('/guess', requireAuth, async (req, res) => {
   });
 });
 
-// Révèle la réponse sans scorer (mode entraînement uniquement)
+// Révèle la réponse sans scorer (mode entraînement uniquement).
+// Exige un jeton de manche d'entraînement : impossible de révéler une manche classée.
 router.get('/answer/:songId', requireAuth, async (req, res) => {
-  const song = await prisma.song.findUnique({ where: { id: parseInt(req.params.songId) } });
+  const songId = parseInt(req.params.songId);
+  const round = verifyRoundToken(req.query.roundToken, { userId: req.user.id, songId });
+  if (!round || round.ranked) {
+    return res.status(403).json({ error: 'Révélation indisponible en mode classé' });
+  }
+  const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
   res.json({
     answer: {

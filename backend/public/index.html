@@ -256,7 +256,25 @@
       <div class="collection">
         <h3><i class="fas fa-images"></i> Ma collection</h3>
         <div id="collection-progress" class="collection-progress"></div>
+        <div class="collection-toolbar">
+          <div class="coll-filters" id="coll-filters"></div>
+          <label class="coll-sort">Trier :
+            <select id="coll-sort">
+              <option value="rarity">Rareté</option>
+              <option value="name">Nom (A→Z)</option>
+              <option value="copies">Exemplaires</option>
+            </select>
+          </label>
+        </div>
         <div id="collection-grid" class="card-grid"></div>
+      </div>
+    </div>
+
+    <!-- Modale détail personnage -->
+    <div id="character-modal" class="modal-overlay hidden">
+      <div class="modal-card char-card">
+        <button class="modal-close" id="character-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <div id="character-body" class="char-body"></div>
       </div>
     </div>
 
@@ -272,10 +290,11 @@
       </div>
       <table class="catalog-table">
         <thead>
-          <tr><th>Anime</th><th>Type</th><th>Opening</th><th>Artiste</th></tr>
+          <tr><th></th><th>Anime</th><th>Type</th><th>Opening</th><th>Artiste</th></tr>
         </thead>
         <tbody id="catalog-tbody"></tbody>
       </table>
+      <audio id="catalog-audio" preload="none"></audio>
       <div class="catalog-pager">
         <button class="btn-secondary" id="cat-prev"><i class="fas fa-chevron-left"></i></button>
         <span id="cat-pageinfo">—</span>

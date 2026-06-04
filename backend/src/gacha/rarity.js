@@ -33,6 +33,8 @@ const PULL_WEIGHTS = [
   ['mythic', 0.5],
 ];
 const TOTAL_WEIGHT = PULL_WEIGHTS.reduce((s, [, w]) => s + w, 0);
+// Probabilité de tirage (en %) par rareté, pour l'affichage
+const RARITY_RATES = Object.fromEntries(PULL_WEIGHTS.map(([r, w]) => [r, (w / TOTAL_WEIGHT) * 100]));
 function rollRarity() {
   let r = Math.random() * TOTAL_WEIGHT;
   for (const [rarity, w] of PULL_WEIGHTS) {
@@ -54,6 +56,7 @@ const PRICES = {
 module.exports = {
   RARITY_LABELS,
   RARITY_ORDER,
+  RARITY_RATES,
   rarityForRank,
   rollRarity,
   DUPLICATE_REFUND,

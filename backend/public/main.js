@@ -5,6 +5,7 @@ const API = ''; // même origine que le serveur Express
 let currentUser = null;
 let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle data URL
 let currentSong = null;
+let currentRoundToken = null; // jeton de manche émis par le serveur au tirage
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = localStorage.getItem('amq_gamemode') || 'ranked'; // 'ranked' | 'casual'
@@ -112,6 +113,7 @@ function showAuth() {
   document.getElementById('app').classList.add('hidden');
 }
 function showView(name) {
+  if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
@@ -177,6 +179,10 @@ function setupProfileUI() {
     renderProfileAvatar();
   });
   document.getElementById('profile-save').addEventListener('click', saveProfile);
+  document.getElementById('profile-best-card').addEventListener('click', (e) => {
+    const card = e.target.closest('.gcard[data-cid]');
+    if (card) openCharacter(card.dataset.cid);
+  });
 }
 
 function setProfileError(msg) { document.getElementById('profile-error').textContent = msg || ''; }
@@ -340,6 +346,37 @@ function setupAppUI() {
   document.getElementById('pull-single').addEventListener('click', () => doPull('single'));
   document.getElementById('pull-pack').addEventListener('click', () => doPull('pack'));
 
+  // Collection : filtre par rareté, tri, et clic sur une carte → fiche perso
+  document.getElementById('coll-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+    collFilter = btn.dataset.filter;
+    document.querySelectorAll('#coll-filters .coll-chip').forEach((c) =>
+      c.classList.toggle('active', c.dataset.filter === collFilter)
+    );
+    renderCollection();
+  });
+  document.getElementById('coll-sort').addEventListener('change', (e) => {
+    collSort = e.target.value;
+    renderCollection();
+  });
+  const openCardFromEvent = (e) => {
+    const card = e.target.closest('.gcard[data-cid]');
+    if (card) openCharacter(card.dataset.cid);
+  };
+  document.getElementById('collection-grid').addEventListener('click', openCardFromEvent);
+  document.getElementById('pull-result').addEventListener('click', openCardFromEvent);
+  document.getElementById('character-close').addEventListener('click', closeCharacter);
+  document.getElementById('character-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'character-modal') closeCharacter();
+  });
+
+  // Catalogue : lecteur audio (clic sur le bouton lecture d'une ligne)
+  document.getElementById('catalog-tbody').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-play]');
+    if (btn) toggleCatalogAudio(btn);
+  });
+
   document.getElementById('import-btn').addEventListener('click', startImport);
   document.getElementById('next-btn').addEventListener('click', nextSong);
   document.getElementById('reveal-btn').addEventListener('click', guessAnswer);
@@ -467,14 +504,15 @@ function showOverlay(show) { document.getElementById('audio-overlay').classList.
 async function nextSong() {
   resetQuizUI();
   setHint('Chargement…');
-  let song;
+  let song, roundToken;
   try {
-    ({ song } = await api(`/api/quiz/random?mode=${mode}`));
+    ({ song, roundToken } = await api(`/api/quiz/random?mode=${mode}&ranked=${gameMode === 'ranked'}`));
   } catch (err) {
     setHint(err.message + (mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
     return;
   }
   currentSong = song;
+  currentRoundToken = roundToken;
   answered = false;
   const v = video();
   v.src = song.videoUrl;
@@ -551,7 +589,7 @@ async function guessAnswer() {
       body: JSON.stringify({
         songId: currentSong.id,
         guess: document.getElementById('answer-input').value,
-        ranked: gameMode === 'ranked',
+        roundToken: currentRoundToken,
       }),
     });
   } catch (e) {
@@ -599,7 +637,7 @@ async function showAnswerCasual() {
   document.getElementById('answer-verdict').textContent = '🎓 Réponse révélée (entraînement)';
   document.getElementById('answer-verdict').className = 'verdict';
   try {
-    const { answer } = await api(`/api/quiz/answer/${currentSong.id}`);
+    const { answer } = await api(`/api/quiz/answer/${currentSong.id}?roundToken=${encodeURIComponent(currentRoundToken || '')}`);
     revealAnswerBox(answer);
   } catch (e) { setHint(e.message); }
 }
@@ -646,7 +684,8 @@ function cardHTML(c, opts = {}) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '');
   const delay = opts.index != null ? ` style="animation-delay:${(opts.index * 0.45).toFixed(2)}s"` : '';
-  return `<div class="${cls}"${delay}>
+  const cid = c.id != null ? ` data-cid="${c.id}"` : '';
+  return `<div class="${cls}"${delay}${cid}>
     <div class="gcard-img" ${img}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -682,25 +721,89 @@ async function doPull(type) {
   }
 }
 
+// État de la collection (pour filtrer/trier sans recharger)
+let collectionCards = [];
+let collFilter = 'all'; // 'all' | rareté
+let collSort = 'rarity'; // 'rarity' | 'name' | 'copies'
+
 async function loadCollection() {
   const grid = document.getElementById('collection-grid');
   const prog = document.getElementById('collection-progress');
   try {
     const { cards, poolByRarity, ownedByRarity } = await api('/api/gacha/collection');
+    collectionCards = cards;
     prog.innerHTML = RARITY_ORDER.map((r) => {
       const owned = ownedByRarity[r] || 0;
       const total = poolByRarity[r] || 0;
       return `<span class="prog r-${r}">${RARITY_LABELS[r]} ${owned}/${total}</span>`;
     }).join('');
-    if (!cards.length) {
-      grid.innerHTML = '<p class="muted">Aucune carte pour l\'instant. Tire ton premier personnage !</p>';
-      return;
-    }
-    grid.innerHTML = cards.map((c) => cardHTML(c)).join('');
+    renderCollFilters(ownedByRarity);
+    renderCollection();
   } catch {
     grid.innerHTML = '';
   }
 }
+
+// Boutons de filtre par rareté (n'affiche que les raretés possédées)
+function renderCollFilters(ownedByRarity) {
+  const total = collectionCards.length;
+  const chips = [`<button class="coll-chip${collFilter === 'all' ? ' active' : ''}" data-filter="all">Toutes (${total})</button>`];
+  RARITY_ORDER.forEach((r) => {
+    const n = ownedByRarity[r] || 0;
+    if (!n) return;
+    chips.push(`<button class="coll-chip r-${r}${collFilter === r ? ' active' : ''}" data-filter="${r}">${RARITY_LABELS[r]} (${n})</button>`);
+  });
+  document.getElementById('coll-filters').innerHTML = chips.join('');
+}
+
+function renderCollection() {
+  const grid = document.getElementById('collection-grid');
+  if (!collectionCards.length) {
+    grid.innerHTML = '<p class="muted">Aucune carte pour l\'instant. Tire ton premier personnage !</p>';
+    return;
+  }
+  let list = collectionCards.filter((c) => collFilter === 'all' || c.rarity === collFilter);
+  const rank = (r) => RARITY_ORDER.indexOf(r); // 0 = mythic … (du plus rare au plus commun)
+  if (collSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  else if (collSort === 'copies') list = [...list].sort((a, b) => b.copies - a.copies || rank(a.rarity) - rank(b.rarity));
+  else list = [...list].sort((a, b) => rank(a.rarity) - rank(b.rarity) || a.name.localeCompare(b.name));
+  grid.innerHTML = list.length
+    ? list.map((c) => cardHTML(c)).join('')
+    : '<p class="muted">Aucune carte dans ce filtre.</p>';
+}
+
+// ── Détail personnage (modale) ──
+async function openCharacter(id) {
+  const modal = document.getElementById('character-modal');
+  const body = document.getElementById('character-body');
+  body.innerHTML = '<p class="muted">Chargement…</p>';
+  modal.classList.remove('hidden');
+  try {
+    const d = await api(`/api/gacha/character/${id}`);
+    const c = d.character;
+    const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
+    const rate = d.pullRate != null ? `${d.pullRate.toFixed(d.pullRate < 1 ? 2 : 1)} %` : '—';
+    body.innerHTML = `
+      <div class="char-hero r-${c.rarity}">
+        <div class="char-img" ${img}></div>
+        ${d.owned ? `<span class="badge copies">×${d.owned}</span>` : '<span class="badge new">Non possédé</span>'}
+      </div>
+      <h2 class="char-name">${escapeHtml(c.name)}</h2>
+      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}</div>
+      <div class="char-stats">
+        <div class="cstat"><span>${rate}</span><label>Taux de tirage</label></div>
+        <div class="cstat"><span>#${d.rankInRarity}/${d.totalInRarity}</span><label>Rang en ${d.rarityLabel}</label></div>
+        <div class="cstat"><span>${(c.favourites || 0).toLocaleString('fr-FR')}</span><label>❤ AniList</label></div>
+        <div class="cstat"><span>+${d.dupRefund} 🪙</span><label>Doublon</label></div>
+      </div>
+      <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
+        <i class="fas fa-external-link-alt"></i> Voir sur AniList
+      </a>`;
+  } catch (e) {
+    body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+function closeCharacter() { document.getElementById('character-modal').classList.add('hidden'); }
 
 // ── CATALOGUE ──
 let catalogPage = 1;
@@ -717,32 +820,65 @@ async function loadCatalogList(page, search) {
   if (page < 1 || (catalogPages && page > catalogPages && page !== 1)) return;
   catalogSearch = search;
   const tbody = document.getElementById('catalog-tbody');
-  tbody.innerHTML = '<tr><td colspan="4" class="muted">Chargement…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" class="muted">Chargement…</td></tr>';
   try {
     const r = await api(`/api/catalog/list?page=${page}&search=${encodeURIComponent(search)}`);
     catalogPage = r.page;
     catalogPages = r.pages || 1;
+    stopCatalogAudio();
     document.getElementById('catalog-total').textContent = `${r.total} openings`;
     if (!r.songs.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="muted">Aucun résultat.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun résultat.</td></tr>';
     } else {
       tbody.innerHTML = r.songs
-        .map(
-          (s) => `<tr>
+        .map((s) => {
+          const playBtn = s.videoUrl
+            ? `<button class="btn-play-row" data-play data-src="${escapeHtml(s.videoUrl)}" title="Écouter"><i class="fas fa-play"></i></button>`
+            : '';
+          return `<tr>
+            <td class="cat-play-cell">${playBtn}</td>
             <td>${escapeHtml(s.animeTitle)}</td>
             <td class="nowrap">${s.type}${s.number}</td>
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.artist || '—')}</td>
-          </tr>`
-        )
+          </tr>`;
+        })
         .join('');
     }
     document.getElementById('cat-pageinfo').textContent = `Page ${r.page} / ${catalogPages}`;
     document.getElementById('cat-prev').disabled = r.page <= 1;
     document.getElementById('cat-next').disabled = r.page >= catalogPages;
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="4" class="muted">${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">${e.message}</td></tr>`;
   }
+}
+
+// Lecteur audio du catalogue : un seul extrait à la fois (réutilise l'élément <audio>)
+let catalogPlayingBtn = null;
+function setRowPlayIcon(btn, playing) {
+  const i = btn.querySelector('i');
+  if (i) i.className = playing ? 'fas fa-pause' : 'fas fa-play';
+}
+function stopCatalogAudio() {
+  const audio = document.getElementById('catalog-audio');
+  audio.pause();
+  if (catalogPlayingBtn) { setRowPlayIcon(catalogPlayingBtn, false); catalogPlayingBtn = null; }
+}
+function toggleCatalogAudio(btn) {
+  const audio = document.getElementById('catalog-audio');
+  // Reclic sur la ligne en cours → pause/reprise
+  if (catalogPlayingBtn === btn) {
+    if (audio.paused) { audio.play().catch(() => {}); setRowPlayIcon(btn, true); }
+    else { audio.pause(); setRowPlayIcon(btn, false); }
+    return;
+  }
+  if (catalogPlayingBtn) setRowPlayIcon(catalogPlayingBtn, false);
+  catalogPlayingBtn = btn;
+  audio.src = btn.dataset.src;
+  audio.volume = +(document.getElementById('volume')?.value ?? 0.8);
+  audio.play().catch(() => {});
+  setRowPlayIcon(btn, true);
+  audio.onended = () => stopCatalogAudio();
 }
 
 function escapeHtml(s) {
