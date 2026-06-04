@@ -63,6 +63,7 @@ async function getTopCharacters(page = 1, perPage = 50) {
         pageInfo { hasNextPage }
         characters(sort: FAVOURITES_DESC) {
           id name { full } image { large } favourites
+          media(sort: POPULARITY_DESC, perPage: 1) { nodes { id title { romaji english } } }
         }
       }
     }`;
@@ -71,6 +72,29 @@ async function getTopCharacters(page = 1, perPage = 50) {
     characters: data?.Page?.characters || [],
     hasNextPage: data?.Page?.pageInfo?.hasNextPage || false,
   };
+}
+
+// Média (anime) principal de plusieurs personnages — pour remplir « series ».
+async function getCharacterMedia(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        characters(id_in: $ids) {
+          id
+          media(sort: POPULARITY_DESC, perPage: 1) { nodes { id title { romaji english } } }
+        }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.characters || [];
+}
+
+// Extrait { series, seriesId } du média principal d'un personnage AniList
+function seriesOfCharacter(c) {
+  const node = c?.media?.nodes?.[0];
+  if (!node) return { series: null, seriesId: null };
+  const t = node.title || {};
+  return { series: t.romaji || t.english || null, seriesId: node.id || null };
 }
 
 // Récupère les titres de plusieurs animes par leurs ids (pour le backfill).
@@ -85,4 +109,4 @@ async function getAnimeTitlesByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters };
+module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };

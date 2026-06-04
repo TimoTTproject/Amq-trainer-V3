@@ -100,6 +100,57 @@ router.post('/pull', requireAuth, async (req, res) => {
   res.json({ type, cost: cfg.cost, ...result });
 });
 
+// Catalogue (pokédex) des personnages : filtre rareté/recherche (nom ou série),
+// pagination, et indicateur de possession pour l'utilisateur.
+const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+router.get('/characters', requireAuth, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const perPage = 60;
+  const q = (req.query.search || '').trim();
+  const rarity = VALID_RARITIES.includes(req.query.rarity) ? req.query.rarity : null;
+  const sort = req.query.sort === 'name' ? 'name' : 'favourites';
+
+  const where = {};
+  if (rarity) where.rarity = rarity;
+  if (q) {
+    where.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { series: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+  const orderBy = sort === 'name' ? [{ name: 'asc' }] : [{ favourites: 'desc' }];
+
+  const [total, chars, pool] = await Promise.all([
+    prisma.character.count({ where }),
+    prisma.character.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * perPage,
+      take: perPage,
+      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true },
+    }),
+    prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } }),
+  ]);
+
+  // Possession (copies) pour les personnages de la page
+  const owned = await prisma.userCard.findMany({
+    where: { userId: req.user.id, characterId: { in: chars.map((c) => c.id) } },
+    select: { characterId: true, copies: true },
+  });
+  const ownedById = Object.fromEntries(owned.map((o) => [o.characterId, o.copies]));
+  const byRarity = {};
+  pool.forEach((g) => (byRarity[g.rarity] = g._count._all));
+
+  res.json({
+    characters: chars.map((c) => ({ ...c, owned: ownedById[c.id] || 0 })),
+    total,
+    page,
+    pages: Math.ceil(total / perPage),
+    byRarity,
+    labels: RARITY_LABELS,
+  });
+});
+
 // Fiche détaillée d'un personnage (+ possession de l'utilisateur)
 router.get('/character/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
@@ -127,6 +178,7 @@ router.get('/character/:id', requireAuth, async (req, res) => {
       rarity: character.rarity,
       favourites: character.favourites,
       fromManga: character.fromManga,
+      series: character.series,
     },
     rarityLabel: RARITY_LABELS[character.rarity] || character.rarity,
     pullRate: RARITY_RATES[character.rarity] ?? null,

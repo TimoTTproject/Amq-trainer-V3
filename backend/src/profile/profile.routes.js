@@ -57,4 +57,41 @@ router.patch('/', requireAuth, async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+const RARITY_RANK = { mythic: 4, legendary: 3, epic: 2, rare: 1, common: 0 };
+
+// Profil public d'un joueur (consultable depuis le classement)
+router.get('/:userId', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.userId },
+    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  const stats = await prisma.userSongStat.findMany({
+    where: { userId: user.id },
+    select: { playCount: true, correctCount: true },
+  });
+  const played = stats.reduce((s, x) => s + x.playCount, 0);
+  const correct = stats.reduce((s, x) => s + x.correctCount, 0);
+
+  const cardsCount = await prisma.userCard.count({ where: { userId: user.id } });
+  const cards = await prisma.userCard.findMany({
+    where: { userId: user.id },
+    include: { character: true },
+  });
+  cards.sort(
+    (a, b) =>
+      RARITY_RANK[b.character.rarity] - RARITY_RANK[a.character.rarity] ||
+      (b.character.favourites || 0) - (a.character.favourites || 0)
+  );
+  const best = cards[0]?.character || null;
+
+  res.json({
+    user,
+    stats: { played, correct, rate: played ? Math.round((correct / played) * 100) : 0 },
+    cardsCount,
+    bestCard: best ? { id: best.id, name: best.name, imageUrl: best.imageUrl, rarity: best.rarity } : null,
+  });
+});
+
 module.exports = { router };

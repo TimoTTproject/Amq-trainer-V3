@@ -68,6 +68,7 @@
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
       <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
       <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
+      <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
 
     <!-- Modale Profil -->
@@ -261,6 +262,7 @@
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="gacha-tokens">0</span></span>
       </div>
       <p class="gacha-sub" id="gacha-pool"></p>
+      <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
 
       <div class="gacha-actions">
         <button class="btn-primary" id="pull-single"><i class="fas fa-ticket"></i> Tirage simple — <b id="price-single">25</b> 🪙</button>
@@ -390,6 +392,60 @@
       </div>
       <div id="lb-me" class="lb-me"></div>
       <ol id="lb-list" class="lb-list"></ol>
+    </div>
+
+    <!-- VUE PERSONNAGES (pokédex) -->
+    <div id="view-characters" class="hidden">
+      <button class="btn-back" id="back-gacha-chars"><i class="fas fa-arrow-left"></i> Gacha</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-book-open"></i> Personnages</h2>
+        <span class="catalog-info" id="chars-total"></span>
+      </div>
+      <div class="coll-filters" id="chars-filters"></div>
+      <div class="catalog-search">
+        <input type="text" id="chars-search" placeholder="Rechercher un personnage ou une série…" />
+      </div>
+      <div id="chars-grid" class="card-grid"></div>
+      <div class="catalog-pager">
+        <button class="btn-secondary" id="chars-prev"><i class="fas fa-chevron-left"></i></button>
+        <span id="chars-pageinfo">—</span>
+        <button class="btn-secondary" id="chars-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <!-- VUE ADMIN (gestion des raretés) -->
+    <div id="view-admin" class="hidden">
+      <button class="btn-back" id="back-home-admin"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-screwdriver-wrench"></i> Admin — Personnages</h2>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary" id="admin-backfill-btn"><i class="fas fa-download"></i> Remplir les séries manquantes</button>
+        <span id="admin-backfill-status" class="hint"></span>
+      </div>
+      <div class="coll-filters" id="admin-filters"></div>
+      <div class="catalog-search">
+        <input type="text" id="admin-search" placeholder="Rechercher un personnage ou une série…" />
+      </div>
+      <table class="catalog-table admin-table">
+        <thead>
+          <tr><th></th><th>Nom</th><th>Série</th><th>❤</th><th>Rareté</th></tr>
+        </thead>
+        <tbody id="admin-tbody"></tbody>
+      </table>
+      <div class="catalog-pager">
+        <button class="btn-secondary" id="admin-prev"><i class="fas fa-chevron-left"></i></button>
+        <span id="admin-pageinfo">—</span>
+        <button class="btn-secondary" id="admin-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <!-- Modale profil joueur (depuis le classement) -->
+    <div id="player-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <button class="modal-close" id="player-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <div id="player-body"></div>
+      </div>
     </div>
   </div>
 

@@ -16,6 +16,7 @@ async function towerBoard(meId) {
   });
   const top = users.map((u, i) => ({
     rank: i + 1,
+    userId: u.id,
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
     value: u.towerBestFloor,
@@ -40,6 +41,7 @@ async function tokensBoard(meId) {
   });
   const top = users.map((u, i) => ({
     rank: i + 1,
+    userId: u.id,
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
     value: u.tokens,
@@ -63,6 +65,7 @@ async function collectionBoard(meId) {
   const byId = Object.fromEntries(users.map((u) => [u.id, u]));
   const top = topGroups.map((g, i) => ({
     rank: i + 1,
+    userId: g.userId,
     displayName: byId[g.userId]?.displayName || '—',
     avatarUrl: byId[g.userId]?.avatarUrl || null,
     value: g._count._all,

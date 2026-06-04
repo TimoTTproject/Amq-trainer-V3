@@ -137,10 +137,15 @@ model Character {
   name       String
   imageUrl   String?
   favourites Int    @default(0) // popularité AniList → détermine la rareté
-  rarity     String @default("common") // common|rare|epic|legendary
+  rarity     String @default("common") // common|rare|epic|legendary|mythic
   fromManga  Boolean @default(false)
+  series     String? // anime principal du personnage (pour filtrer « par série »)
+  seriesId   Int? // id AniList de cet anime
 
   cards UserCard[]
+
+  @@index([rarity])
+  @@index([series])
 }
 
 model UserCard {

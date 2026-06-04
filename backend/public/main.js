@@ -121,6 +121,8 @@ function showView(name) {
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
   document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
+  document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
+  document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
 }
 
@@ -130,6 +132,7 @@ function navTo(name) {
   if (name === 'catalog') return openCatalog();
   if (name === 'tower') return openTower();
   if (name === 'leaderboard') return openLeaderboard();
+  if (name === 'admin') return openAdmin();
   showView(name); // home, quiz
 }
 
@@ -166,6 +169,7 @@ function renderHeaderUser() {
   renderAvatar(document.getElementById('header-avatar'), currentUser);
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
+  document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
 }
 
 // Dev (admin) : se créditer des tokens
@@ -363,6 +367,52 @@ function setupAppUI() {
     b.addEventListener('click', () => navTo(b.dataset.nav))
   );
   document.getElementById('back-home-lb').addEventListener('click', () => showView('home'));
+  document.getElementById('lb-list').addEventListener('click', (e) => {
+    const row = e.target.closest('.lb-row[data-userid]');
+    if (row) openPlayer(row.dataset.userid);
+  });
+  document.getElementById('player-close').addEventListener('click', () =>
+    document.getElementById('player-modal').classList.add('hidden')
+  );
+  document.getElementById('player-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'player-modal') document.getElementById('player-modal').classList.add('hidden');
+  });
+  // Pokédex personnages
+  document.getElementById('open-chars-btn').addEventListener('click', openCharacters);
+  document.getElementById('back-gacha-chars').addEventListener('click', () => showView('gacha'));
+  let charsSearchTimer;
+  document.getElementById('chars-search').addEventListener('input', (e) => {
+    clearTimeout(charsSearchTimer);
+    charsSearchTimer = setTimeout(() => loadCharacters(1, e.target.value.trim()), 300);
+  });
+  document.getElementById('chars-prev').addEventListener('click', () => loadCharacters(charsPage - 1, charsSearch));
+  document.getElementById('chars-next').addEventListener('click', () => loadCharacters(charsPage + 1, charsSearch));
+  document.getElementById('chars-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (btn) { charsRarity = btn.dataset.filter; loadCharacters(1, charsSearch); }
+  });
+  document.getElementById('chars-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.gcard[data-cid]');
+    if (card) openCharacter(card.dataset.cid);
+  });
+  // Admin personnages
+  document.getElementById('back-home-admin').addEventListener('click', () => showView('home'));
+  let adminSearchTimer;
+  document.getElementById('admin-search').addEventListener('input', (e) => {
+    clearTimeout(adminSearchTimer);
+    adminSearchTimer = setTimeout(() => loadAdminChars(1, e.target.value.trim()), 300);
+  });
+  document.getElementById('admin-prev').addEventListener('click', () => loadAdminChars(adminPage - 1, adminSearch));
+  document.getElementById('admin-next').addEventListener('click', () => loadAdminChars(adminPage + 1, adminSearch));
+  document.getElementById('admin-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (btn) { adminRarity = btn.dataset.filter; loadAdminChars(1, adminSearch); }
+  });
+  document.getElementById('admin-tbody').addEventListener('change', (e) => {
+    const sel = e.target.closest('select[data-cid]');
+    if (sel) setCharacterRarity(sel.dataset.cid, sel.value, sel);
+  });
+  document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
@@ -837,6 +887,7 @@ async function openCharacter(id) {
         ${d.owned ? `<span class="badge copies">×${d.owned}</span>` : '<span class="badge new">Non possédé</span>'}
       </div>
       <h2 class="char-name">${escapeHtml(c.name)}</h2>
+      ${c.series && c.series !== '—' ? `<div class="char-series">${escapeHtml(c.series)}</div>` : ''}
       <div class="char-rarity r-${c.rarity}">${d.rarityLabel}</div>
       <div class="char-stats">
         <div class="cstat"><span>${rate}</span><label>Taux de tirage</label></div>
@@ -1169,7 +1220,7 @@ async function loadLeaderboard(type) {
     const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
     list.innerHTML = top
       .map(
-        (e) => `<li class="lb-row${e.isMe ? ' me' : ''}">
+        (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
           <span class="lb-rank">${medal(e.rank)}</span>
           ${lbAvatar(e)}
           <span class="lb-name">${escapeHtml(e.displayName)}</span>
@@ -1179,5 +1230,186 @@ async function loadLeaderboard(type) {
       .join('');
   } catch (e) {
     list.innerHTML = `<li class="muted">${escapeHtml(e.message)}</li>`;
+  }
+}
+
+// ── PROFIL JOUEUR (public, depuis le classement) ──
+async function openPlayer(userId) {
+  const modal = document.getElementById('player-modal');
+  const body = document.getElementById('player-body');
+  body.innerHTML = '<p class="muted">Chargement…</p>';
+  modal.classList.remove('hidden');
+  try {
+    const d = await api(`/api/profile/${userId}`);
+    const u = d.user;
+    const avatar = u.avatarUrl
+      ? `<span class="avatar avatar-lg" style="background-image:url('${u.avatarUrl}')"></span>`
+      : `<span class="avatar avatar-lg">${escapeHtml((u.displayName || '?').charAt(0).toUpperCase())}</span>`;
+    const since = u.createdAt
+      ? new Date(u.createdAt).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
+      : '—';
+    const best = d.bestCard
+      ? `<div class="player-best">${cardHTML({ ...d.bestCard, copies: 1 })}<p class="hint">Meilleure carte</p></div>`
+      : '';
+    body.innerHTML = `
+      <div class="player-head">${avatar}<h2>${escapeHtml(u.displayName)}</h2></div>
+      ${u.bio ? `<p class="player-bio">${escapeHtml(u.bio)}</p>` : ''}
+      <div class="char-stats">
+        <div class="cstat"><span>${d.stats.played}</span><label>Jouées</label></div>
+        <div class="cstat"><span>${d.stats.rate}%</span><label>Réussite</label></div>
+        <div class="cstat"><span>${u.towerBestFloor || 0}</span><label>Étage max</label></div>
+        <div class="cstat"><span>${d.cardsCount}</span><label>Cartes</label></div>
+      </div>
+      ${best}
+      <p class="hint">Membre depuis ${since}</p>`;
+  } catch (e) {
+    body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ── POKÉDEX PERSONNAGES (côté joueur) ──
+let charsPage = 1, charsSearch = '', charsRarity = 'all', charsPages = 1;
+
+function openCharacters() {
+  showView('characters');
+  document.getElementById('chars-search').value = '';
+  charsSearch = ''; charsRarity = 'all';
+  loadCharacters(1, '');
+}
+
+function rarityFilterChips(byRarity, current) {
+  const total = Object.values(byRarity).reduce((s, n) => s + n, 0);
+  const chips = [`<button class="coll-chip${current === 'all' ? ' active' : ''}" data-filter="all">Tous (${total})</button>`];
+  RARITY_ORDER.forEach((r) => {
+    if (!byRarity[r]) return;
+    chips.push(`<button class="coll-chip r-${r}${current === r ? ' active' : ''}" data-filter="${r}">${RARITY_LABELS[r]} (${byRarity[r]})</button>`);
+  });
+  return chips.join('');
+}
+
+async function loadCharacters(page, search) {
+  if (page < 1) return;
+  charsSearch = search;
+  const grid = document.getElementById('chars-grid');
+  grid.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const rq = charsRarity !== 'all' ? `&rarity=${charsRarity}` : '';
+    const r = await api(`/api/gacha/characters?page=${page}&search=${encodeURIComponent(search)}${rq}`);
+    charsPage = r.page; charsPages = r.pages || 1;
+    document.getElementById('chars-total').textContent = `${r.total} personnages`;
+    document.getElementById('chars-filters').innerHTML = rarityFilterChips(r.byRarity, charsRarity);
+    if (!r.characters.length) {
+      grid.innerHTML = '<p class="muted">Aucun personnage.</p>';
+    } else {
+      grid.innerHTML = r.characters
+        .map((c) => {
+          const owned = c.owned > 0;
+          const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
+          return `<div class="gcard r-${c.rarity}${owned ? '' : ' locked'}" data-cid="${c.id}">
+            <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
+            <div class="gcard-info">
+              <div class="gcard-name">${escapeHtml(c.name)}</div>
+              <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+              ${sub}
+            </div>
+            ${owned ? `<span class="badge copies">×${c.owned}</span>` : '<span class="badge locked-badge"><i class="fas fa-lock"></i></span>'}
+          </div>`;
+        })
+        .join('');
+    }
+    document.getElementById('chars-pageinfo').textContent = `Page ${charsPage} / ${charsPages}`;
+    document.getElementById('chars-prev').disabled = charsPage <= 1;
+    document.getElementById('chars-next').disabled = charsPage >= charsPages;
+  } catch (e) {
+    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ── ADMIN : gestion des raretés ──
+let adminPage = 1, adminSearch = '', adminRarity = 'all', adminPages = 1;
+
+function openAdmin() {
+  showView('admin');
+  document.getElementById('admin-search').value = '';
+  adminSearch = ''; adminRarity = 'all';
+  document.getElementById('admin-backfill-status').textContent = '';
+  loadAdminChars(1, '');
+}
+
+async function loadAdminChars(page, search) {
+  if (page < 1) return;
+  adminSearch = search;
+  const tbody = document.getElementById('admin-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="muted">Chargement…</td></tr>';
+  try {
+    const rq = adminRarity !== 'all' ? `&rarity=${adminRarity}` : '';
+    const r = await api(`/api/admin/characters?page=${page}&search=${encodeURIComponent(search)}${rq}`);
+    adminPage = r.page; adminPages = r.pages || 1;
+    document.getElementById('admin-filters').innerHTML = (() => {
+      const chips = [`<button class="coll-chip${adminRarity === 'all' ? ' active' : ''}" data-filter="all">Tous</button>`];
+      RARITY_ORDER.forEach((rr) =>
+        chips.push(`<button class="coll-chip r-${rr}${adminRarity === rr ? ' active' : ''}" data-filter="${rr}">${RARITY_LABELS[rr]}</button>`)
+      );
+      return chips.join('');
+    })();
+    if (r.missingSeries != null) {
+      document.getElementById('admin-backfill-status').textContent =
+        r.missingSeries ? `${r.missingSeries} séries manquantes` : 'Toutes les séries sont remplies ✅';
+    }
+    if (!r.characters.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun personnage.</td></tr>';
+    } else {
+      tbody.innerHTML = r.characters
+        .map((c) => {
+          const opts = RARITY_ORDER.map((rr) => `<option value="${rr}"${rr === c.rarity ? ' selected' : ''}>${RARITY_LABELS[rr]}</option>`).join('');
+          const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
+          return `<tr>
+            <td><span class="admin-thumb" ${img}></span></td>
+            <td>${escapeHtml(c.name)}</td>
+            <td class="muted">${escapeHtml(c.series && c.series !== '—' ? c.series : '—')}</td>
+            <td class="nowrap">${(c.favourites || 0).toLocaleString('fr-FR')}</td>
+            <td><select class="admin-rarity r-${c.rarity}" data-cid="${c.id}">${opts}</select></td>
+          </tr>`;
+        })
+        .join('');
+    }
+    document.getElementById('admin-pageinfo').textContent = `Page ${adminPage} / ${adminPages}`;
+    document.getElementById('admin-prev').disabled = adminPage <= 1;
+    document.getElementById('admin-next').disabled = adminPage >= adminPages;
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function setCharacterRarity(id, rarity, sel) {
+  sel.disabled = true;
+  try {
+    await api(`/api/admin/characters/${id}`, { method: 'PATCH', body: JSON.stringify({ rarity }) });
+    sel.className = `admin-rarity r-${rarity}`;
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    sel.disabled = false;
+  }
+}
+
+async function runBackfillSeries() {
+  const btn = document.getElementById('admin-backfill-btn');
+  const status = document.getElementById('admin-backfill-status');
+  btn.disabled = true;
+  let total = 0;
+  try {
+    while (true) {
+      const r = await api('/api/admin/backfill-series', { method: 'POST', body: JSON.stringify({}) });
+      total += r.processed;
+      status.textContent = `${total} traités · ${r.remaining} restants…`;
+      if (r.remaining === 0 || r.processed === 0) break;
+    }
+    status.textContent = `Terminé ✅ (${total} personnages mis à jour)`;
+    loadAdminChars(adminPage, adminSearch);
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }

@@ -4,7 +4,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { prisma } = require('../src/db');
-const { getTopCharacters } = require('../src/anilist/anilist.service');
+const { getTopCharacters, seriesOfCharacter } = require('../src/anilist/anilist.service');
 const { rarityForRank, RARITY_LABELS } = require('../src/gacha/rarity');
 
 const PER_PAGE = 50;
@@ -41,10 +41,11 @@ async function main() {
     const c = pool[i];
     const rarity = rarityForRank(i, pool.length);
     counts[rarity] = (counts[rarity] || 0) + 1;
+    const { series, seriesId } = seriesOfCharacter(c);
     await prisma.character.upsert({
       where: { anilistId: c.id },
-      update: { name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity },
-      create: { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity },
+      update: { name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity, series, seriesId },
+      create: { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity, series, seriesId },
     });
   }
 
