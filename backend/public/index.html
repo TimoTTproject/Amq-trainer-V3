@@ -491,23 +491,63 @@
     <div id="view-mp" class="hidden">
       <div class="gacha-top"><h2><i class="fas fa-users"></i> Multijoueur</h2></div>
 
-      <!-- Lobby / matchmaking -->
-      <div id="mp-lobby" class="tower-intro">
+      <!-- 1. Menu -->
+      <div id="mp-menu" class="tower-intro">
         <p class="tower-rules">
-          ⚡ <b>Partie rapide</b> : 10 manches, devine l'anime au plus vite (texte libre).
-          Score à la vitesse, classement final. Il faut <b>au moins 2 joueurs</b>.
+          Devine l'anime au plus vite (texte libre). Score à la vitesse, classement final.
+          <b>Partie rapide</b> pour jouer avec des inconnus, ou crée une <b>salle privée</b> entre amis.
         </p>
-        <button class="btn-primary btn-lg" id="mp-find"><i class="fas fa-bolt"></i> Partie rapide</button>
-        <div id="mp-queue" class="mp-queue hidden">
-          <div class="mp-spinner"></div>
-          <p id="mp-queue-status">En attente de joueurs…</p>
-          <div id="mp-queue-players" class="mp-players"></div>
-          <button class="btn-secondary" id="mp-cancel">Annuler</button>
+        <div class="mp-menu-btns">
+          <button class="btn-primary btn-lg" id="mp-quick"><i class="fas fa-bolt"></i> Partie rapide</button>
+          <button class="btn-secondary btn-lg" id="mp-create"><i class="fas fa-plus"></i> Créer une salle</button>
         </div>
-        <p id="mp-lobby-msg" class="gacha-msg"></p>
+        <div class="mp-join-row">
+          <input type="text" id="mp-code-input" placeholder="CODE" maxlength="4" />
+          <button class="btn-secondary" id="mp-join">Rejoindre</button>
+        </div>
+        <p id="mp-menu-msg" class="gacha-msg"></p>
       </div>
 
-      <!-- Partie en cours -->
+      <!-- 2. Salon -->
+      <div id="mp-room" class="mp-room hidden">
+        <div class="mp-room-head">
+          <span id="mp-room-code" class="mp-room-code"></span>
+          <button class="btn-link" id="mp-leave">Quitter</button>
+        </div>
+        <div class="mp-room-grid">
+          <div class="profile-section">
+            <h3><i class="fas fa-users"></i> Joueurs (<span id="mp-pcount">0</span>)</h3>
+            <div id="mp-room-players" class="mp-players"></div>
+            <div class="mp-settings">
+              <label>Manches
+                <select id="mp-set-rounds">
+                  <option value="5">5</option><option value="10" selected>10</option>
+                  <option value="15">15</option><option value="20">20</option>
+                </select>
+              </label>
+              <label>Temps / manche
+                <select id="mp-set-speed">
+                  <option value="15000">Rapide (15s)</option>
+                  <option value="25000" selected>Normal (25s)</option>
+                  <option value="40000">Lent (40s)</option>
+                </select>
+              </label>
+            </div>
+            <p id="mp-room-status" class="hint"></p>
+            <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Démarrer</button>
+          </div>
+          <div class="profile-section">
+            <h3><i class="fas fa-comments"></i> Chat</h3>
+            <div id="mp-chat" class="mp-chat"></div>
+            <div class="mp-chat-input">
+              <input type="text" id="mp-chat-text" placeholder="Message…" maxlength="200" />
+              <button class="btn-secondary" id="mp-chat-send"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Partie -->
       <div id="mp-game" class="mp-game hidden">
         <div class="tower-hud">
           <span>Manche <b id="mp-round">1</b>/<b id="mp-total">10</b></span>
@@ -517,21 +557,23 @@
         <div class="media-wrapper tower-media">
           <video id="mp-video" playsinline></video>
           <div class="audio-overlay" id="mp-overlay"><i class="fas fa-music"></i></div>
+          <div id="mp-reactions" class="mp-reactions"></div>
         </div>
         <div class="answer-area">
           <input type="text" id="mp-input" placeholder="Nom de l'anime…" />
           <button class="btn-primary" id="mp-submit">Valider</button>
         </div>
+        <div class="mp-emotes" id="mp-emotes"></div>
         <p id="mp-feedback" class="gacha-msg"></p>
         <div id="mp-result" class="mp-result hidden"></div>
         <div id="mp-scores" class="mp-scores"></div>
       </div>
 
-      <!-- Fin de partie -->
+      <!-- 4. Fin -->
       <div id="mp-over" class="tower-over hidden">
         <h3>🏆 Classement final</h3>
         <ol id="mp-ranking" class="lb-list"></ol>
-        <button class="btn-primary" id="mp-again"><i class="fas fa-rotate-right"></i> Rejouer</button>
+        <button class="btn-primary" id="mp-again"><i class="fas fa-rotate-right"></i> Continuer</button>
       </div>
     </div>
 

@@ -1,50 +1,47 @@
 // ════════════════════════════════════════════
-// MULTIJOUEUR (Socket.io) — utilise les globals de main.js
+// MULTIJOUEUR (Socket.io) — salles, chat, emotes, manches synchronisées
+// Utilise les globals de main.js (escapeHtml, showView, currentUser).
 // ════════════════════════════════════════════
 let mpSocket = null;
 let mpTimer = null;
+let mpRoom = null; // dernier snapshot de salon
+const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
 
 function mpShow(panel) {
-  document.getElementById('mp-lobby').classList.toggle('hidden', panel !== 'lobby');
-  document.getElementById('mp-game').classList.toggle('hidden', panel !== 'game');
-  document.getElementById('mp-over').classList.toggle('hidden', panel !== 'over');
+  ['menu', 'room', 'game', 'over'].forEach((p) =>
+    document.getElementById('mp-' + p).classList.toggle('hidden', p !== panel)
+  );
 }
 
 function openMultiplayer() {
   showView('mp');
   connectMp();
-  mpShow('lobby');
-  document.getElementById('mp-queue').classList.add('hidden');
-  document.getElementById('mp-lobby-msg').textContent = '';
+  if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; }
 }
+
+function mpIsHost() { return mpRoom && mpSocket && mpRoom.hostId === mpSocket.id; }
 
 function connectMp() {
   if (mpSocket) return;
   if (typeof io === 'undefined') {
-    document.getElementById('mp-lobby-msg').textContent = 'Connexion temps réel indisponible.';
+    document.getElementById('mp-menu-msg').textContent = 'Connexion temps réel indisponible.';
     return;
   }
   mpSocket = io({ path: '/socket.io' });
-
   mpSocket.on('connect_error', () => {
-    document.getElementById('mp-lobby-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
+    document.getElementById('mp-menu-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
+  });
+  mpSocket.on('mp:error', (d) => { document.getElementById('mp-menu-msg').textContent = d.msg || 'Erreur'; });
+
+  mpSocket.on('mp:room', (d) => {
+    mpRoom = d;
+    if (d.status === 'lobby') { mpShow('room'); renderRoom(d); }
   });
 
-  mpSocket.on('mp:queue:update', (d) => {
-    const q = document.getElementById('mp-queue');
-    q.classList.remove('hidden');
-    let status = `${d.count} joueur(s) en attente…`;
-    if (d.count < d.min) status += ` (min ${d.min})`;
-    if (d.countdownEndsAt) {
-      const sec = Math.max(0, Math.round((d.countdownEndsAt - Date.now()) / 1000));
-      status = `Lancement dans ${sec}s — ${d.count} joueur(s)`;
-    }
-    document.getElementById('mp-queue-status').textContent = status;
-    document.getElementById('mp-queue-players').innerHTML = (d.players || [])
-      .map((p) => `<span class="mp-chip">${escapeHtml(p.name)}</span>`)
-      .join('');
-  });
+  mpSocket.on('mp:chat', (m) => appendChat(m));
+
+  mpSocket.on('mp:emote', (d) => floatEmote(d.emote, d.name));
 
   mpSocket.on('mp:game:start', (d) => {
     mpShow('game');
@@ -52,7 +49,9 @@ function connectMp() {
     document.getElementById('mp-round').textContent = '—';
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-scores').innerHTML = '';
-    document.getElementById('mp-feedback').textContent = `C'est parti ! ${d.players.length} joueurs 🎮`;
+    document.getElementById('mp-progress').textContent = '';
+    document.getElementById('mp-feedback').textContent = `C'est parti ! ${d.players.length} joueur(s) 🎮`;
+    renderEmotesBar();
   });
 
   mpSocket.on('mp:round:start', (d) => {
@@ -61,9 +60,7 @@ function connectMp() {
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
-    input.value = '';
-    input.disabled = false;
-    input.focus();
+    input.value = ''; input.disabled = false; input.focus();
     document.getElementById('mp-submit').disabled = false;
     document.getElementById('mp-feedback').textContent = '';
     mpStartClip(d.clipUrl, d.startAt, d.duration);
@@ -85,7 +82,8 @@ function connectMp() {
   });
 
   mpSocket.on('mp:round:result', (d) => {
-    mpStopClip();
+    clearTimeout(mpTimer);
+    document.getElementById('mp-overlay').classList.add('hidden'); // révèle la vidéo
     const res = document.getElementById('mp-result');
     res.classList.remove('hidden');
     res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>
@@ -93,10 +91,6 @@ function connectMp() {
     renderMpScores(d.results, true);
     document.getElementById('mp-input').disabled = true;
     document.getElementById('mp-submit').disabled = true;
-  });
-
-  mpSocket.on('mp:player:left', (d) => {
-    document.getElementById('mp-feedback').textContent = `${d.name || 'Un joueur'} a quitté la partie.`;
   });
 
   mpSocket.on('mp:game:over', (d) => {
@@ -115,7 +109,71 @@ function connectMp() {
   });
 }
 
-// Tableau des scores
+// ── Salon (lobby) ──
+function renderRoom(d) {
+  const isHost = mpIsHost();
+  document.getElementById('mp-room-code').innerHTML = d.code
+    ? `Salle privée · <b>${d.code}</b>`
+    : '⚡ Partie rapide';
+  document.getElementById('mp-pcount').textContent = d.players.length;
+  document.getElementById('mp-room-players').innerHTML = d.players
+    .map((p) => `<span class="mp-chip${p.isHost ? ' host' : ''}">${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`)
+    .join('');
+
+  document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
+  document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
+  document.getElementById('mp-set-rounds').disabled = !isHost;
+  document.getElementById('mp-set-speed').disabled = !isHost;
+
+  const startBtn = document.getElementById('mp-start');
+  const status = document.getElementById('mp-room-status');
+  if (d.isPublic) {
+    startBtn.classList.add('hidden');
+    if (d.countdownEndsAt) {
+      const sec = Math.max(0, Math.round((d.countdownEndsAt - Date.now()) / 1000));
+      status.textContent = `Lancement automatique dans ${sec}s…`;
+    } else {
+      status.textContent = `En attente de joueurs (min 2)…`;
+    }
+  } else {
+    status.textContent = isHost ? 'Lance la partie quand tout le monde est prêt.' : "En attente que l'hôte lance la partie…";
+    startBtn.classList.toggle('hidden', !isHost);
+  }
+  renderChat(d.chat || []);
+}
+
+function renderChat(list) {
+  const box = document.getElementById('mp-chat');
+  box.innerHTML = list.map(chatLine).join('');
+  box.scrollTop = box.scrollHeight;
+}
+function chatLine(m) {
+  if (m.system) return `<div class="mp-chat-sys">— ${escapeHtml(m.text)} —</div>`;
+  return `<div class="mp-chat-msg"><b>${escapeHtml(m.name)}:</b> ${escapeHtml(m.text)}</div>`;
+}
+function appendChat(m) {
+  const box = document.getElementById('mp-chat');
+  box.insertAdjacentHTML('beforeend', chatLine(m));
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Emotes ──
+function renderEmotesBar() {
+  document.getElementById('mp-emotes').innerHTML = MP_EMOTES
+    .map((e) => `<button class="mp-emote-btn" data-emote="${e}">${e}</button>`)
+    .join('');
+}
+function floatEmote(emote, name) {
+  const layer = document.getElementById('mp-reactions');
+  const el = document.createElement('div');
+  el.className = 'mp-reaction';
+  el.textContent = emote;
+  el.style.left = (10 + Math.random() * 80) + '%';
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+
+// ── Scores ──
 function renderMpScores(results, withPoints) {
   document.getElementById('mp-scores').innerHTML = results
     .map(
@@ -128,27 +186,19 @@ function renderMpScores(results, withPoints) {
     .join('');
 }
 
-// Lecture synchronisée du clip (proxifié)
+// ── Clip synchronisé ──
 function mpStartClip(url, startAt, duration) {
   const v = mpVideo();
-  v.src = url;
-  v.load();
-  v.volume = 0.8;
-  document.getElementById('mp-overlay').classList.remove('hidden');
+  v.src = url; v.load(); v.volume = 0.8;
+  document.getElementById('mp-overlay').classList.remove('hidden'); // audio seul
   const delay = Math.max(0, startAt - Date.now());
-  setTimeout(() => {
-    v.play().catch(() => {});
-    mpRunTimer(duration);
-  }, delay);
+  setTimeout(() => { v.play().catch(() => {}); mpRunTimer(duration); }, delay);
 }
 function mpRunTimer(duration) {
   const fill = document.getElementById('mp-timefill');
-  fill.style.transition = 'none';
-  fill.style.width = '100%';
-  fill.classList.remove('low');
+  fill.style.transition = 'none'; fill.style.width = '100%'; fill.classList.remove('low');
   void fill.offsetWidth;
-  fill.style.transition = `width ${duration}ms linear`;
-  fill.style.width = '0%';
+  fill.style.transition = `width ${duration}ms linear`; fill.style.width = '0%';
   clearTimeout(mpTimer);
   mpTimer = setTimeout(() => fill.classList.add('low'), Math.max(0, duration - 5000));
 }
@@ -169,19 +219,51 @@ function mpSubmitGuess() {
   if (!text || input.disabled || !mpSocket) return;
   mpSocket.emit('mp:guess', text);
 }
+function mpSettingsPayload() {
+  return {
+    rounds: parseInt(document.getElementById('mp-set-rounds').value),
+    roundMs: parseInt(document.getElementById('mp-set-speed').value),
+  };
+}
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('mp-find').addEventListener('click', () => {
-    connectMp();
-    document.getElementById('mp-queue').classList.remove('hidden');
-    document.getElementById('mp-queue-status').textContent = 'Recherche…';
-    mpSocket && mpSocket.emit('mp:queue:join');
+  document.getElementById('mp-quick').addEventListener('click', () => {
+    connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche…'; mpSocket && mpSocket.emit('mp:quick');
   });
-  document.getElementById('mp-cancel').addEventListener('click', () => {
-    mpSocket && mpSocket.emit('mp:queue:leave');
-    document.getElementById('mp-queue').classList.add('hidden');
+  document.getElementById('mp-create').addEventListener('click', () => {
+    connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());
   });
-  document.getElementById('mp-again').addEventListener('click', openMultiplayer);
+  document.getElementById('mp-join').addEventListener('click', () => {
+    const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
+    if (!code) return;
+    connectMp(); mpSocket && mpSocket.emit('mp:join', code);
+  });
+  document.getElementById('mp-leave').addEventListener('click', () => {
+    mpSocket && mpSocket.emit('mp:leave'); mpRoom = null; mpShow('menu');
+    document.getElementById('mp-menu-msg').textContent = '';
+  });
+  document.getElementById('mp-start').addEventListener('click', () => mpSocket && mpSocket.emit('mp:start'));
+  document.getElementById('mp-set-rounds').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-speed').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
+  document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
+  document.getElementById('mp-emotes').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-emote]');
+    if (b && mpSocket) mpSocket.emit('mp:emote', b.dataset.emote);
+  });
   document.getElementById('mp-submit').addEventListener('click', mpSubmitGuess);
   document.getElementById('mp-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSubmitGuess(); });
+  document.getElementById('mp-again').addEventListener('click', () => {
+    // retour au salon (privé) ou au menu (rapide)
+    if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }
+    else { mpRoom = null; mpShow('menu'); }
+  });
 });
+
+function mpSendChat() {
+  const inp = document.getElementById('mp-chat-text');
+  const t = inp.value.trim();
+  if (!t || !mpSocket) return;
+  mpSocket.emit('mp:chat', t);
+  inp.value = '';
+}

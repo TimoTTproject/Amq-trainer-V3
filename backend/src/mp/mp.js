@@ -1,21 +1,19 @@
-// Multijoueur temps réel : file de matchmaking + manches synchronisées (Socket.io).
-// Sans tokens (fun only) : score à la vitesse, classement de fin de partie.
+// Multijoueur temps réel : salles (rapide + privées), lobby/chat, manches synchronisées.
 const { prisma } = require('../db');
 const { verifyToken, COOKIE_NAME } = require('../auth/jwt');
 const { isCorrectGuess } = require('../quiz/matching');
 
-const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 8;
-const COUNTDOWN_MS = 20000; // attente avant lancement une fois MIN atteint
-const TOTAL_ROUNDS = 10;
-const PREP_MS = 1500; // délai avant le début d'une manche (sync chargement)
-const ROUND_MS = 25000; // fenêtre de réponse
-const RESULT_MS = 6000; // affichage des résultats entre 2 manches
+const PUBLIC_MIN = 2; // lancement auto en partie rapide
+const COUNTDOWN_MS = 20000;
+const PREP_MS = 1500; // délai avant le début d'une manche
+const RESULT_MS = 6500; // affichage résultats (vidéo révélée)
+const VALID_ROUNDS = [5, 10, 15, 20];
+const VALID_ROUNDMS = [15000, 25000, 40000];
+const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 
-const games = new Map(); // gameId -> game
-let queue = new Map(); // socketId -> socket
-let countdownTimer = null;
-let countdownEndsAt = 0;
+const rooms = new Map(); // roomId -> room
+let publicRoomId = null; // salle rapide ouverte du moment
 let io = null;
 
 function parseCookies(str) {
@@ -26,203 +24,302 @@ function parseCookies(str) {
   });
   return out;
 }
-
-// ── Matchmaking ──
-function queuePlayers() {
-  return [...queue.values()].map((s) => ({ name: s.data.user.displayName, avatarUrl: s.data.user.avatarUrl }));
-}
-function broadcastQueue() {
-  const payload = { count: queue.size, min: MIN_PLAYERS, players: queuePlayers(), countdownEndsAt: countdownEndsAt || null };
-  for (const s of queue.values()) s.emit('mp:queue:update', payload);
-}
-function cancelCountdown() {
-  if (countdownTimer) clearTimeout(countdownTimer);
-  countdownTimer = null;
-  countdownEndsAt = 0;
-}
-function maybeCountdown() {
-  if (queue.size >= MIN_PLAYERS && !countdownTimer) {
-    countdownEndsAt = Date.now() + COUNTDOWN_MS;
-    countdownTimer = setTimeout(startGameFromQueue, COUNTDOWN_MS);
-  } else if (queue.size < MIN_PLAYERS && countdownTimer) {
-    cancelCountdown();
-  }
-}
-function joinQueue(socket) {
-  if (socket.data.gameId) return; // déjà en partie
-  queue.set(socket.id, socket);
-  maybeCountdown();
-  broadcastQueue();
-}
-function leaveQueue(socket) {
-  if (queue.delete(socket.id)) {
-    maybeCountdown();
-    broadcastQueue();
-  }
+function genCode() {
+  let code;
+  do {
+    code = Math.random().toString(36).slice(2, 6).toUpperCase();
+  } while ([...rooms.values()].some((r) => r.code === code));
+  return code;
 }
 
-function startGameFromQueue() {
-  cancelCountdown();
-  const sockets = [...queue.values()].slice(0, MAX_PLAYERS);
-  if (sockets.length < MIN_PLAYERS) { broadcastQueue(); return; }
-  for (const s of sockets) queue.delete(s.id);
-  broadcastQueue(); // met à jour ceux qui restent en file
+// ── Snapshot du salon ──
+function roomSnapshot(room) {
+  return {
+    roomId: room.id,
+    code: room.isPublic ? null : room.code,
+    isPublic: room.isPublic,
+    status: room.status,
+    hostId: room.hostId,
+    settings: room.settings,
+    countdownEndsAt: room.countdownEndsAt || null,
+    chat: room.chat.slice(-30),
+    players: [...room.players.values()].map((p) => ({
+      name: p.name, avatarUrl: p.avatarUrl, isHost: p.socketId === room.hostId,
+    })),
+  };
+}
+function broadcastRoom(room) {
+  io.to(room.id).emit('mp:room', roomSnapshot(room));
+}
+function sysChat(room, text) {
+  room.chat.push({ system: true, text });
+}
 
-  const gameId = 'g_' + Math.random().toString(36).slice(2, 9);
-  const players = new Map();
-  const userIds = new Set();
-  for (const s of sockets) {
-    s.data.gameId = gameId;
-    s.join(gameId);
-    players.set(s.id, {
-      socketId: s.id, userId: s.data.user.id,
-      name: s.data.user.displayName, avatarUrl: s.data.user.avatarUrl, score: 0,
-    });
-    userIds.add(s.data.user.id);
-  }
-  const game = { id: gameId, players, userIds, round: 0, totalRounds: TOTAL_ROUNDS, current: null, usedSongIds: new Set(), status: 'playing', timer: null };
-  games.set(gameId, game);
-
-  io.to(gameId).emit('mp:game:start', {
-    gameId, totalRounds: TOTAL_ROUNDS,
-    players: [...players.values()].map((p) => ({ name: p.name, avatarUrl: p.avatarUrl })),
+// ── Gestion des salles ──
+function newRoom(isPublic) {
+  const id = 'r_' + Math.random().toString(36).slice(2, 9);
+  const room = {
+    id, isPublic, code: isPublic ? null : genCode(),
+    hostId: null, players: new Map(), userIds: new Set(),
+    settings: { rounds: 10, roundMs: 25000 },
+    status: 'lobby', chat: [],
+    round: 0, current: null, usedSongIds: new Set(), timer: null,
+    countdownTimer: null, countdownEndsAt: 0,
+  };
+  rooms.set(id, room);
+  return room;
+}
+function addPlayer(room, socket) {
+  socket.data.roomId = room.id;
+  socket.join(room.id);
+  if (!room.hostId) room.hostId = socket.id;
+  room.players.set(socket.id, {
+    socketId: socket.id, userId: socket.data.user.id,
+    name: socket.data.user.displayName, avatarUrl: socket.data.user.avatarUrl, score: 0,
   });
-  setTimeout(() => startRound(game), 2500);
+  room.userIds.add(socket.data.user.id);
+}
+
+function joinQuick(socket) {
+  if (socket.data.roomId) return;
+  let room = publicRoomId ? rooms.get(publicRoomId) : null;
+  if (!room || room.status !== 'lobby' || room.players.size >= MAX_PLAYERS) {
+    room = newRoom(true);
+    publicRoomId = room.id;
+  }
+  addPlayer(room, socket);
+  sysChat(room, `${socket.data.user.displayName} a rejoint`);
+  maybeCountdown(room);
+  broadcastRoom(room);
+}
+
+function createRoom(socket, settings) {
+  if (socket.data.roomId) return;
+  const room = newRoom(false);
+  applySettings(room, settings);
+  addPlayer(room, socket);
+  socket.emit('mp:joined', { roomId: room.id });
+  broadcastRoom(room);
+}
+
+function joinByCode(socket, code) {
+  if (socket.data.roomId) return;
+  const room = [...rooms.values()].find((r) => r.code === String(code || '').toUpperCase() && !r.isPublic);
+  if (!room) return socket.emit('mp:error', { msg: 'Salle introuvable' });
+  if (room.status !== 'lobby') return socket.emit('mp:error', { msg: 'Partie déjà commencée' });
+  if (room.players.size >= MAX_PLAYERS) return socket.emit('mp:error', { msg: 'Salle pleine' });
+  addPlayer(room, socket);
+  sysChat(room, `${socket.data.user.displayName} a rejoint`);
+  socket.emit('mp:joined', { roomId: room.id });
+  broadcastRoom(room);
+}
+
+function applySettings(room, s) {
+  if (!s) return;
+  if (VALID_ROUNDS.includes(s.rounds)) room.settings.rounds = s.rounds;
+  if (VALID_ROUNDMS.includes(s.roundMs)) room.settings.roundMs = s.roundMs;
+}
+function setSettings(socket, s) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || room.hostId !== socket.id || room.status !== 'lobby') return;
+  applySettings(room, s);
+  broadcastRoom(room);
+}
+
+function maybeCountdown(room) {
+  if (!room.isPublic) return;
+  if (room.players.size >= PUBLIC_MIN && !room.countdownTimer) {
+    room.countdownEndsAt = Date.now() + COUNTDOWN_MS;
+    room.countdownTimer = setTimeout(() => startGame(room), COUNTDOWN_MS);
+  } else if (room.players.size < PUBLIC_MIN && room.countdownTimer) {
+    clearTimeout(room.countdownTimer);
+    room.countdownTimer = null;
+    room.countdownEndsAt = 0;
+  }
+}
+function hostStart(socket) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || room.hostId !== socket.id || room.status !== 'lobby') return;
+  if (room.players.size < 1) return;
+  startGame(room);
 }
 
 // ── Boucle de jeu ──
-async function pickSong(game) {
+function startGame(room) {
+  if (room.status !== 'lobby') return;
+  if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
+  room.countdownEndsAt = 0;
+  if (room.isPublic && publicRoomId === room.id) publicRoomId = null; // les prochains auront une nouvelle salle
+  room.status = 'playing';
+  room.round = 0;
+  for (const p of room.players.values()) p.score = 0;
+  io.to(room.id).emit('mp:game:start', {
+    totalRounds: room.settings.rounds,
+    players: [...room.players.values()].map((p) => ({ name: p.name, avatarUrl: p.avatarUrl })),
+  });
+  setTimeout(() => startRound(room), 2500);
+}
+
+async function pickSong(room) {
   const where = { videoUrl: { not: null } };
   const total = await prisma.song.count({ where });
   if (!total) return null;
-  for (let tries = 0; tries < 8; tries++) {
+  for (let t = 0; t < 8; t++) {
     const song = await prisma.song.findFirst({
       where, skip: Math.floor(Math.random() * total),
       select: { id: true, animeTitle: true, altTitles: true, title: true, artist: true, type: true, number: true, videoUrl: true },
     });
-    if (song && !game.usedSongIds.has(song.id)) { game.usedSongIds.add(song.id); return song; }
+    if (song && !room.usedSongIds.has(song.id)) { room.usedSongIds.add(song.id); return song; }
   }
   return null;
 }
 
-async function startRound(game) {
-  if (game.status !== 'playing' || !games.has(game.id)) return;
-  game.round++;
-  const song = await pickSong(game);
-  if (!song) return endGame(game);
-
+async function startRound(room) {
+  if (room.status !== 'playing' || !rooms.has(room.id)) return;
+  room.round++;
+  const song = await pickSong(room);
+  if (!song) return endGame(room);
   const startAt = Date.now() + PREP_MS;
-  const endsAt = startAt + ROUND_MS;
-  game.current = { song, startAt, endsAt, answers: new Map() };
-
-  io.to(game.id).emit('mp:round:start', {
-    round: game.round, total: game.totalRounds,
-    clipUrl: `/api/mp/clip/${game.id}?r=${game.round}`,
-    startAt, duration: ROUND_MS,
+  const endsAt = startAt + room.settings.roundMs;
+  room.current = { song, startAt, endsAt, answers: new Map() };
+  io.to(room.id).emit('mp:round:start', {
+    round: room.round, total: room.settings.rounds,
+    clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`,
+    startAt, duration: room.settings.roundMs,
   });
-  game.timer = setTimeout(() => endRound(game), PREP_MS + ROUND_MS);
+  room.timer = setTimeout(() => endRound(room), PREP_MS + room.settings.roundMs);
 }
 
 function onGuess(socket, text) {
-  const game = games.get(socket.data.gameId);
-  if (!game || !game.current) return;
-  const player = game.players.get(socket.id);
+  const room = rooms.get(socket.data.roomId);
+  if (!room || !room.current) return;
+  const player = room.players.get(socket.id);
   if (!player) return;
-  const cur = game.current;
-  if (cur.answers.get(socket.id)?.correct) return; // déjà trouvé
-  if (Date.now() > cur.endsAt) return;
-
+  const cur = room.current;
+  if (cur.answers.get(socket.id)?.correct || Date.now() > cur.endsAt) return;
   const correct = isCorrectGuess(text, cur.song);
   socket.emit('mp:guess:ack', { correct });
   if (!correct) return;
-
-  const timeMs = Math.max(0, Date.now() - cur.startAt);
   const timeLeft = Math.max(0, cur.endsAt - Date.now());
-  const points = 300 + Math.round((timeLeft / ROUND_MS) * 700);
-  cur.answers.set(socket.id, { correct: true, timeMs, points });
+  const points = 300 + Math.round((timeLeft / room.settings.roundMs) * 700);
+  cur.answers.set(socket.id, { correct: true, points });
   player.score += points;
-
-  io.to(game.id).emit('mp:round:progress', {
+  io.to(room.id).emit('mp:round:progress', {
     answered: [...cur.answers.values()].filter((a) => a.correct).length,
-    total: game.players.size,
+    total: room.players.size,
   });
-  // Tout le monde a trouvé → on clôt la manche en avance
-  if ([...game.players.keys()].every((sid) => cur.answers.get(sid)?.correct)) {
-    clearTimeout(game.timer);
-    endRound(game);
+  if ([...room.players.keys()].every((sid) => cur.answers.get(sid)?.correct)) {
+    clearTimeout(room.timer);
+    endRound(room);
   }
 }
 
-function endRound(game) {
-  if (!game.current || !games.has(game.id)) return;
-  const cur = game.current;
-  game.current = null;
+function endRound(room) {
+  if (!room.current || !rooms.has(room.id)) return;
+  const cur = room.current;
+  room.current = null;
   const s = cur.song;
-  const results = [...game.players.values()]
+  const results = [...room.players.values()]
     .map((p) => {
       const a = cur.answers.get(p.socketId);
       return { name: p.name, avatarUrl: p.avatarUrl, correct: !!a?.correct, points: a?.points || 0, score: p.score };
     })
     .sort((a, b) => b.score - a.score);
-
-  io.to(game.id).emit('mp:round:result', {
-    round: game.round, total: game.totalRounds,
+  io.to(room.id).emit('mp:round:result', {
+    round: room.round, total: room.settings.rounds,
     answer: { animeTitle: s.animeTitle, title: s.title, artist: s.artist, type: s.type, number: s.number },
     results,
   });
-
-  game.timer = setTimeout(() => {
-    if (game.round >= game.totalRounds) endGame(game);
-    else startRound(game);
+  // garde la vidéo dispo (révélée) pendant l'affichage des résultats
+  room.revealUntil = Date.now() + RESULT_MS;
+  room.revealSong = s;
+  room.timer = setTimeout(() => {
+    room.revealSong = null;
+    if (room.round >= room.settings.rounds) endGame(room);
+    else startRound(room);
   }, RESULT_MS);
 }
 
-function endGame(game) {
-  game.status = 'over';
-  clearTimeout(game.timer);
-  const ranking = [...game.players.values()]
+function endGame(room) {
+  room.status = 'over';
+  clearTimeout(room.timer);
+  const ranking = [...room.players.values()]
     .map((p) => ({ name: p.name, avatarUrl: p.avatarUrl, score: p.score }))
     .sort((a, b) => b.score - a.score);
-  io.to(game.id).emit('mp:game:over', { ranking });
-
-  for (const p of game.players.values()) {
-    const s = io.sockets.sockets.get(p.socketId);
-    if (s) { s.leave(game.id); s.data.gameId = null; }
+  io.to(room.id).emit('mp:game:over', { ranking });
+  // Retour au lobby : on réinitialise pour pouvoir rejouer (salles privées)
+  if (room.isPublic) {
+    setTimeout(() => closeRoom(room), 30000);
+  } else {
+    room.status = 'lobby';
+    room.round = 0;
+    room.current = null;
+    room.usedSongIds = new Set();
+    sysChat(room, 'Partie terminée — prêts pour une autre ?');
+    setTimeout(() => { if (rooms.has(room.id)) broadcastRoom(room); }, 8000);
   }
-  setTimeout(() => games.delete(game.id), 60000);
+}
+
+function closeRoom(room) {
+  for (const sid of room.players.keys()) {
+    const s = io.sockets.sockets.get(sid);
+    if (s) { s.leave(room.id); s.data.roomId = null; }
+  }
+  if (room.timer) clearTimeout(room.timer);
+  if (room.countdownTimer) clearTimeout(room.countdownTimer);
+  rooms.delete(room.id);
+  if (publicRoomId === room.id) publicRoomId = null;
+}
+
+function leaveRoom(socket) {
+  const room = rooms.get(socket.data.roomId);
+  socket.data.roomId = null;
+  if (!room) return;
+  const player = room.players.get(socket.id);
+  room.players.delete(socket.id);
+  if (player) room.userIds.delete(player.userId);
+  socket.leave(room.id);
+  if (room.players.size === 0) { closeRoom(room); return; }
+  if (room.hostId === socket.id) room.hostId = room.players.keys().next().value; // nouvel hôte
+  if (player) sysChat(room, `${player.name} est parti`);
+  if (room.isPublic) maybeCountdown(room);
+  if (room.current && [...room.players.keys()].every((sid) => room.current.answers.get(sid)?.correct)) {
+    clearTimeout(room.timer);
+    endRound(room);
+  }
+  broadcastRoom(room);
+}
+
+function chat(socket, text) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room) return;
+  const t = String(text || '').trim().slice(0, 200);
+  if (!t) return;
+  room.chat.push({ name: socket.data.user.displayName, text: t });
+  if (room.chat.length > 60) room.chat = room.chat.slice(-40);
+  io.to(room.id).emit('mp:chat', { name: socket.data.user.displayName, text: t });
+}
+function emote(socket, e) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || !EMOTES.includes(e)) return;
+  io.to(room.id).emit('mp:emote', { name: socket.data.user.displayName, emote: e });
 }
 
 function onDisconnect(socket) {
-  leaveQueue(socket);
-  const game = games.get(socket.data.gameId);
-  if (!game) return;
-  const player = game.players.get(socket.id);
-  game.players.delete(socket.id);
-  if (player) game.userIds.delete(player.userId);
-  if (game.players.size === 0) {
-    clearTimeout(game.timer);
-    games.delete(game.id);
-  } else {
-    io.to(game.id).emit('mp:player:left', { name: player?.name });
-    // si la manche en cours et tous les restants ont répondu → clore
-    if (game.current && [...game.players.keys()].every((sid) => game.current.answers.get(sid)?.correct)) {
-      clearTimeout(game.timer);
-      endRound(game);
-    }
-  }
+  leaveRoom(socket);
 }
 
-// Vidéo de la manche en cours (pour le proxy), si l'utilisateur est dans la partie
-function getCurrentVideo(gameId, userId) {
-  const game = games.get(gameId);
-  if (!game || !game.current || !game.userIds.has(userId)) return null;
-  return game.current.song.videoUrl;
+function getCurrentVideo(roomId, userId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.userIds.has(userId)) return null;
+  if (room.current) return room.current.song.videoUrl; // manche en cours
+  if (room.revealSong && Date.now() < (room.revealUntil || 0)) return room.revealSong.videoUrl; // révélation
+  return null;
 }
 
 function initMp(server) {
   const { Server } = require('socket.io');
   io = new Server(server, { path: '/socket.io' });
-
   io.use(async (socket, next) => {
     try {
       const cookies = parseCookies(socket.handshake.headers.cookie);
@@ -238,14 +335,18 @@ function initMp(server) {
       next(new Error('auth'));
     }
   });
-
   io.on('connection', (socket) => {
-    socket.on('mp:queue:join', () => joinQueue(socket));
-    socket.on('mp:queue:leave', () => leaveQueue(socket));
-    socket.on('mp:guess', (text) => onGuess(socket, String(text || '').slice(0, 120)));
+    socket.on('mp:quick', () => joinQuick(socket));
+    socket.on('mp:create', (s) => createRoom(socket, s));
+    socket.on('mp:join', (code) => joinByCode(socket, code));
+    socket.on('mp:settings', (s) => setSettings(socket, s));
+    socket.on('mp:start', () => hostStart(socket));
+    socket.on('mp:leave', () => { leaveRoom(socket); });
+    socket.on('mp:chat', (t) => chat(socket, t));
+    socket.on('mp:emote', (e) => emote(socket, e));
+    socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
     socket.on('disconnect', () => onDisconnect(socket));
   });
-
   return io;
 }
 

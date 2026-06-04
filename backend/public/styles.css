@@ -509,6 +509,45 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-pts { color: var(--green); font-weight: 700; }
 .mp-total { color: var(--accent); font-weight: 700; text-align: right; }
 
+/* Menu multi */
+.mp-menu-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+.mp-join-row { display: flex; gap: 8px; justify-content: center; }
+.mp-join-row input { width: 130px; text-align: center; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 10px; border-radius: 10px; }
+
+/* Salon */
+.mp-room { max-width: 760px; margin: 0 auto; }
+.mp-room-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.mp-room-code { font-size: 1.05rem; }
+.mp-room-code b { color: var(--accent); letter-spacing: 3px; font-size: 1.3rem; }
+.mp-room-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.mp-chip.host { border: 1px solid var(--orange); }
+.mp-settings { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+.mp-settings label { color: var(--text-2); font-size: .8rem; display: flex; flex-direction: column; gap: 4px; }
+.mp-settings select { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 7px 10px; border-radius: 8px; }
+.mp-settings select:disabled { opacity: .6; }
+#mp-start { width: 100%; }
+
+/* Chat */
+.mp-chat { height: 200px; overflow-y: auto; background: var(--bg); border: 1px solid #2a2f42; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 5px; font-size: .85rem; }
+.mp-chat-msg b { color: var(--accent); }
+.mp-chat-sys { color: var(--text-2); font-size: .78rem; text-align: center; font-style: italic; }
+.mp-chat-input { display: flex; gap: 8px; margin-top: 8px; }
+.mp-chat-input input { flex: 1; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 9px 12px; border-radius: 10px; }
+
+/* Emotes en jeu */
+.mp-emotes { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+.mp-emote-btn { font-size: 1.3rem; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 10px; padding: 4px 10px; cursor: pointer; transition: transform .1s; }
+.mp-emote-btn:hover { transform: scale(1.2); border-color: var(--accent); }
+.mp-reactions { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.mp-reaction { position: absolute; bottom: 10px; font-size: 2rem; animation: floatUp 2.2s ease-out forwards; }
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(.6); opacity: 0; }
+  20% { opacity: 1; transform: translateY(-20px) scale(1.1); }
+  100% { transform: translateY(-180px) scale(1); opacity: 0; }
+}
+
+@media (max-width: 620px) { .mp-room-grid { grid-template-columns: 1fr; } }
+
 #view-profile .profile-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
 #view-profile .pstat {
   background: linear-gradient(160deg, var(--bg-3), var(--bg));
