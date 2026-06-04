@@ -60,6 +60,16 @@
       </div>
     </header>
 
+    <!-- Barre de navigation -->
+    <nav class="navbar" id="navbar">
+      <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
+      <button class="nav-item" data-nav="quiz"><i class="fas fa-play"></i><span>Jouer</span></button>
+      <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
+      <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
+      <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
+      <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
+    </nav>
+
     <!-- Modale Profil -->
     <div id="profile-modal" class="modal-overlay hidden">
       <div class="modal-card">
@@ -365,6 +375,21 @@
         </div>
         <button class="btn-primary" id="tower-again"><i class="fas fa-rotate-right"></i> Rejouer</button>
       </div>
+    </div>
+
+    <!-- VUE CLASSEMENT -->
+    <div id="view-leaderboard" class="hidden">
+      <button class="btn-back" id="back-home-lb"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-trophy"></i> Classement</h2>
+      </div>
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-lb="tower"><i class="fas fa-chess-rook"></i> Château</button>
+        <button class="lb-tab" data-lb="tokens"><i class="fas fa-coins"></i> Tokens</button>
+        <button class="lb-tab" data-lb="collection"><i class="fas fa-images"></i> Collection</button>
+      </div>
+      <div id="lb-me" class="lb-me"></div>
+      <ol id="lb-list" class="lb-list"></ol>
     </div>
   </div>
 

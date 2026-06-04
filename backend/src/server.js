@@ -16,6 +16,7 @@ const economyRoutes = require('./economy/economy.routes');
 const gachaRoutes = require('./gacha/gacha.routes');
 const towerRoutes = require('./tower/tower.routes');
 const adminRoutes = require('./admin/admin.routes');
+const leaderboardRoutes = require('./leaderboard/leaderboard.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +47,7 @@ app.use('/api/economy', economyRoutes.router);
 app.use('/api/gacha', gachaRoutes.router);
 app.use('/api/tower', towerRoutes.router);
 app.use('/api/admin', adminRoutes.router);
+app.use('/api/leaderboard', leaderboardRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)

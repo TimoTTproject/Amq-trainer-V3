@@ -120,6 +120,17 @@ function showView(name) {
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
+  document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
+}
+
+// Navigation depuis la navbar
+function navTo(name) {
+  if (name === 'gacha') return openGacha();
+  if (name === 'catalog') return openCatalog();
+  if (name === 'tower') return openTower();
+  if (name === 'leaderboard') return openLeaderboard();
+  showView(name); // home, quiz
 }
 
 function showApp(user) {
@@ -348,6 +359,17 @@ function setupAppUI() {
   document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
+  document.querySelectorAll('.nav-item').forEach((b) =>
+    b.addEventListener('click', () => navTo(b.dataset.nav))
+  );
+  document.getElementById('back-home-lb').addEventListener('click', () => showView('home'));
+  document.querySelectorAll('.lb-tab').forEach((b) =>
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
+      b.classList.add('active');
+      loadLeaderboard(b.dataset.lb);
+    })
+  );
   document.getElementById('back-home').addEventListener('click', () => showView('home'));
   document.getElementById('back-home-gacha').addEventListener('click', () => showView('home'));
   document.getElementById('back-home-catalog').addEventListener('click', () => showView('home'));
@@ -1103,4 +1125,59 @@ function replayTower() {
   v.currentTime = 0;
   v.play().catch(() => {});
   setTowerPlayIcon();
+}
+
+// ── CLASSEMENT ──
+const LB_UNITS = {
+  tower: (v) => `Étage ${v}`,
+  tokens: (v) => `${v} 🪙`,
+  collection: (v) => `${v} cartes`,
+};
+
+function openLeaderboard() {
+  showView('leaderboard');
+  document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'tower'));
+  loadLeaderboard('tower');
+}
+
+// Petit avatar (image ou initiale colorée) en HTML
+function lbAvatar(entry) {
+  if (entry.avatarUrl) return `<span class="avatar avatar-sm" style="background-image:url('${entry.avatarUrl}')"></span>`;
+  const initial = (entry.displayName || '?').charAt(0).toUpperCase();
+  return `<span class="avatar avatar-sm">${escapeHtml(initial)}</span>`;
+}
+
+async function loadLeaderboard(type) {
+  const list = document.getElementById('lb-list');
+  const meBox = document.getElementById('lb-me');
+  list.innerHTML = '<li class="muted">Chargement…</li>';
+  meBox.innerHTML = '';
+  const unit = LB_UNITS[type] || ((v) => v);
+  try {
+    const { top, me } = await api(`/api/leaderboard?type=${type}`);
+    if (me) {
+      meBox.innerHTML = `<span class="lb-rank">#${me.rank}</span>
+        <span class="lb-me-label">Ton rang</span>
+        <span class="lb-value">${unit(me.value)}</span>`;
+    } else {
+      meBox.innerHTML = '<span class="muted">Pas encore classé sur ce tableau.</span>';
+    }
+    if (!top.length) {
+      list.innerHTML = '<li class="muted">Personne n\'est encore classé.</li>';
+      return;
+    }
+    const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+    list.innerHTML = top
+      .map(
+        (e) => `<li class="lb-row${e.isMe ? ' me' : ''}">
+          <span class="lb-rank">${medal(e.rank)}</span>
+          ${lbAvatar(e)}
+          <span class="lb-name">${escapeHtml(e.displayName)}</span>
+          <span class="lb-value">${unit(e.value)}</span>
+        </li>`
+      )
+      .join('');
+  } catch (e) {
+    list.innerHTML = `<li class="muted">${escapeHtml(e.message)}</li>`;
+  }
 }
