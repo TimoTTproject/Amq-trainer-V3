@@ -424,6 +424,13 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .level-bar { width: 160px; max-width: 40vw; height: 8px; background: var(--bg); border-radius: 6px; overflow: hidden; }
 .level-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; transition: width .5s; }
 .level-xp { font-size: .72rem; white-space: nowrap; }
+.level-next { font-size: .74rem; margin-top: 2px; }
+.profile-banner-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.level-claim { animation: claimPulse 1.6s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(108,140,255,.5); }
+@keyframes claimPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108,140,255,.5); }
+  50% { box-shadow: 0 0 0 8px rgba(108,140,255,0); }
+}
 
 #view-profile .profile-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
 #view-profile .pstat {

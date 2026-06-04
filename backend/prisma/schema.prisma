@@ -36,6 +36,9 @@ model User {
   towerLastFreeAt DateTime? // dernière entrée gratuite (1/jour)
   towerBestFloor  Int       @default(0) // meilleur étage atteint (record)
 
+  // Niveau : dernier niveau dont la récompense a été réclamée
+  claimedLevel    Int       @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

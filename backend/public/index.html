@@ -85,9 +85,13 @@
               <div class="level-bar"><div class="level-fill" id="profile-level-fill"></div></div>
               <span class="level-xp hint" id="profile-level-xp">0 / 0 XP</span>
             </div>
+            <div class="level-next hint" id="profile-next-reward"></div>
           </div>
         </div>
-        <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
+        <div class="profile-banner-actions">
+          <button class="btn-primary level-claim hidden" id="profile-claim"><i class="fas fa-gift"></i> Réclamer</button>
+          <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
+        </div>
       </div>
 
       <div class="profile-stats">
@@ -459,6 +463,10 @@
       <div class="admin-backfill">
         <button class="btn-secondary" id="admin-backfill-btn"><i class="fas fa-download"></i> Remplir les séries manquantes</button>
         <span id="admin-backfill-status" class="hint"></span>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary" id="admin-import-btn"><i class="fas fa-user-plus"></i> Importer plus de personnages (+50)</button>
+        <span id="admin-import-status" class="hint"></span>
       </div>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">

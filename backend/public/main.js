@@ -193,6 +193,7 @@ async function devGrantTokens() {
 function setupProfileUI() {
   document.getElementById('profile-btn').addEventListener('click', openProfile);
   document.getElementById('profile-share').addEventListener('click', shareProfile);
+  document.getElementById('profile-claim').addEventListener('click', claimLevels);
   document.getElementById('avatar-upload-btn').addEventListener('click', () =>
     document.getElementById('avatar-input').click()
   );
@@ -272,6 +273,19 @@ function renderProfile(d) {
   document.getElementById('profile-level-fill').style.width = Math.round(lv.progress * 100) + '%';
   document.getElementById('profile-level-xp').textContent = `${lv.intoLevel} / ${lv.forNext} XP`;
 
+  // Paliers de récompense
+  const lr = d.levelReward || { pending: 0, nextLevel: lv.level + 1, nextReward: 0 };
+  const claimBtn = document.getElementById('profile-claim');
+  const nextEl = document.getElementById('profile-next-reward');
+  if (lr.pending > 0) {
+    claimBtn.innerHTML = `<i class="fas fa-gift"></i> Réclamer ${lr.pending} 🪙`;
+    claimBtn.disabled = false;
+    claimBtn.classList.remove('hidden');
+  } else {
+    claimBtn.classList.add('hidden');
+  }
+  nextEl.textContent = `🎁 Niveau ${lr.nextLevel} = +${lr.nextReward} 🪙`;
+
   // Répartition + vitrine
   const owned = d.ownedByRarity || {};
   const pool = d.poolByRarity || {};
@@ -313,6 +327,23 @@ function renderTopSeries(series) {
       <span class="ts-bar"><span class="ts-fill" style="width:${Math.round((s.plays / max) * 100)}%"></span></span>
       <span class="ts-plays">${s.plays}</span>
     </li>`).join('');
+}
+
+// Réclame les récompenses de niveau
+async function claimLevels() {
+  const btn = document.getElementById('profile-claim');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/profile/claim-levels', { method: 'POST', body: JSON.stringify({}) });
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+    btn.innerHTML = `<i class="fas fa-check"></i> +${r.granted} 🪙 !`;
+    profileData = await api(`/api/profile/${currentUser.id}`);
+    setTimeout(() => renderProfile(profileData), 1200);
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false;
+  }
 }
 
 // Lien de profil partageable
@@ -511,6 +542,7 @@ function setupAppUI() {
     if (sel) setCharacterRarity(sel.dataset.cid, sel.value, sel);
   });
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
+  document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
@@ -1485,6 +1517,23 @@ async function loadAdminChars(page, search) {
     document.getElementById('admin-next').disabled = adminPage >= adminPages;
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function runImportCharacters() {
+  const btn = document.getElementById('admin-import-btn');
+  const status = document.getElementById('admin-import-status');
+  btn.disabled = true;
+  status.textContent = 'Import depuis AniList…';
+  try {
+    const r = await api('/api/admin/import-characters', { method: 'POST', body: JSON.stringify({}) });
+    status.textContent = `+${r.added} nouveaux · ${r.updated} mis à jour · ${r.total} au total`
+      + (r.hasMore ? ' — reclique pour en importer plus' : ' — fin du catalogue AniList');
+    loadAdminChars(1, adminSearch);
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 

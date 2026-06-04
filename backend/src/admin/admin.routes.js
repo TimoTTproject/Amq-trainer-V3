@@ -3,7 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
-const { getCharacterMedia, seriesOfCharacter } = require('../anilist/anilist.service');
+const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -90,6 +90,50 @@ router.post('/backfill-series', requireAuth, requireAdmin, async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: 'AniList indisponible : ' + e.message });
   }
+});
+
+// Importe davantage de personnages AniList (par popularité) dans le pool.
+// Ajoute les nouveaux en « common » (l'admin ajuste la rareté ensuite) ; met à
+// jour nom/image/favoris/série des existants sans toucher à leur rareté.
+router.post('/import-characters', requireAuth, requireAdmin, async (req, res) => {
+  const count = await prisma.character.count();
+  const startPage = Math.floor(count / 50) + 1;
+
+  let page;
+  try {
+    page = await getTopCharacters(startPage, 50);
+  } catch (e) {
+    return res.status(502).json({ error: 'AniList indisponible : ' + e.message });
+  }
+  const chars = page.characters || [];
+  if (!chars.length) return res.json({ added: 0, updated: 0, total: count, hasMore: false });
+
+  const ids = chars.map((c) => c.id);
+  const existing = await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } });
+  const existingSet = new Set(existing.map((e) => e.anilistId));
+
+  let added = 0;
+  let updated = 0;
+  for (const c of chars) {
+    const { series, seriesId } = seriesOfCharacter(c);
+    if (existingSet.has(c.id)) {
+      await prisma.character.update({
+        where: { anilistId: c.id },
+        data: { name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, series, seriesId },
+      });
+      updated++;
+    } else {
+      await prisma.character.create({
+        data: {
+          anilistId: c.id, name: c.name.full, imageUrl: c.image?.large,
+          favourites: c.favourites || 0, rarity: 'common', series, seriesId,
+        },
+      });
+      added++;
+    }
+  }
+  const total = await prisma.character.count();
+  res.json({ added, updated, total, hasMore: !!page.hasNextPage });
 });
 
 module.exports = { router };

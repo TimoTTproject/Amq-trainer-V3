@@ -73,11 +73,55 @@ function computeLevel(xp) {
   };
 }
 
+// Récompense en tokens pour avoir atteint un niveau (niveau 1 = départ, 0 token)
+function levelReward(level) {
+  return level <= 1 ? 0 : level * 20;
+}
+// Total des récompenses entre deux niveaux (exclus → inclus)
+function rewardBetween(fromLevel, toLevel) {
+  let sum = 0;
+  for (let l = fromLevel + 1; l <= toLevel; l++) sum += levelReward(l);
+  return sum;
+}
+
+// XP d'un utilisateur (même formule que le GET, réutilisée pour la réclamation)
+async function getUserXp(userId) {
+  const stats = await prisma.userSongStat.findMany({
+    where: { userId },
+    select: { playCount: true, correctCount: true },
+  });
+  const played = stats.reduce((s, x) => s + x.playCount, 0);
+  const correct = stats.reduce((s, x) => s + x.correctCount, 0);
+  const cardsCount = await prisma.userCard.count({ where: { userId } });
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { towerBestFloor: true } });
+  return played * 5 + correct * 10 + cardsCount * 8 + (u?.towerBestFloor || 0) * 15;
+}
+
+// Réclame les récompenses des niveaux franchis depuis la dernière réclamation
+router.post('/claim-levels', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  const xp = await getUserXp(userId);
+  const current = computeLevel(xp).level;
+  const claimed = req.user.claimedLevel || 1;
+  if (current <= claimed) return res.json({ granted: 0, tokens: req.user.tokens, claimedLevel: claimed, level: current });
+
+  const reward = rewardBetween(claimed, current);
+  const u = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { tokens: { increment: reward }, claimedLevel: current },
+    });
+    if (reward > 0) await tx.tokenTransaction.create({ data: { userId, amount: reward, reason: 'level_reward' } });
+    return user;
+  });
+  res.json({ granted: reward, tokens: u.tokens, claimedLevel: current, level: current });
+});
+
 // Profil riche d'un joueur (sert le profil perso ET la fiche publique)
 router.get('/:userId', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.userId },
-    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true },
+    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true, claimedLevel: true },
   });
   if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
 
@@ -123,11 +167,19 @@ router.get('/:userId', requireAuth, async (req, res) => {
   });
 
   const xp = played * 5 + correct * 10 + cards.length * 8 + (user.towerBestFloor || 0) * 15;
+  const lvl = computeLevel(xp);
+  const claimed = user.claimedLevel || 1;
 
   res.json({
     user,
     stats: { played, correct, rate: played ? Math.round((correct / played) * 100) : 0 },
-    level: computeLevel(xp),
+    level: lvl,
+    levelReward: {
+      claimed,
+      pending: rewardBetween(claimed, lvl.level),
+      nextLevel: lvl.level + 1,
+      nextReward: levelReward(lvl.level + 1),
+    },
     cardsCount: cards.length,
     ownedByRarity,
     poolByRarity,
