@@ -776,6 +776,8 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 /* Libellé du mode classique (Jouer) */
 .gm-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-3); color: var(--text); font-weight: 600; padding: 8px 14px; border-radius: 10px; }
 .gm-tag i { color: var(--orange); }
+.admin-danger { border: 1px solid var(--red); color: var(--red); }
+.admin-danger:hover { background: var(--red); color: #fff; }
 
 /* Duo / Carré / Cash */
 .assist-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 10px; }

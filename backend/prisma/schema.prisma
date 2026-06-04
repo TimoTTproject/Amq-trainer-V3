@@ -26,6 +26,8 @@ model User {
   anilistToken String? // access token AniList (chiffré idéalement plus tard)
   // Auth Google OAuth
   googleId     String?  @unique
+  // Pseudo AniList dont la liste est chargée dans « Ma liste »
+  anilistListName String?
 
   displayName String
   avatarUrl   String? // URL externe OU data URL (image redimensionnée stockée en base)

@@ -155,4 +155,23 @@ router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) =
   res.json({ total, counts });
 });
 
+// Réinitialise la progression du compte courant (pour repartir propre avant une sortie).
+// Garde le profil et « Ma liste » ; efface stats/SRS/likes, cartes gacha, tokens,
+// Château, classé et historiques.
+router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
+  const userId = req.user.id;
+  await prisma.$transaction([
+    prisma.userSongStat.deleteMany({ where: { userId } }),
+    prisma.userCard.deleteMany({ where: { userId } }),
+    prisma.towerRun.deleteMany({ where: { userId } }),
+    prisma.mpResult.deleteMany({ where: { userId } }),
+    prisma.tokenTransaction.deleteMany({ where: { userId } }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { tokens: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null },
+    }),
+  ]);
+  res.json({ ok: true });
+});
+
 module.exports = { router };

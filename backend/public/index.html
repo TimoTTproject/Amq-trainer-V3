@@ -246,11 +246,10 @@
         <span class="catalog-info" id="catalog-info"></span>
       </div>
       <div class="panel-row" id="import-row">
-        <input type="text" id="anilist-username" placeholder="Pseudo AniList à importer" />
-        <input type="number" id="import-limit" min="1" max="1500" value="50" title="Nombre max d'animes" />
-        <button id="import-btn" class="btn-primary"><i class="fas fa-download"></i> Importer ma liste</button>
+        <input type="text" id="anilist-username" placeholder="Pseudo AniList" />
+        <button id="import-btn" class="btn-primary"><i class="fas fa-rotate"></i> Charger / synchroniser ma liste</button>
       </div>
-      <p class="hint" id="import-hint">⚠️ Importer <b>remplace</b> ta liste actuelle par celle de ce pseudo.</p>
+      <p class="hint" id="import-hint">⚠️ Importe <b>toute</b> ta liste AniList et <b>remplace</b> la liste actuelle. Une fois chargée, elle reste liée à ton compte (pas besoin de réimporter).</p>
       <div class="import-progress hidden" id="import-progress">
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         <span id="progress-status">…</span>
@@ -511,6 +510,10 @@
       <div class="admin-backfill">
         <button class="btn-secondary" id="admin-recompute-btn"><i class="fas fa-scale-balanced"></i> Recalculer les raretés (équilibrage)</button>
         <span id="admin-recompute-status" class="hint"></span>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary admin-danger" id="admin-reset-btn"><i class="fas fa-triangle-exclamation"></i> Réinitialiser MON compte (stats + gacha + tokens)</button>
+        <span id="admin-reset-status" class="hint"></span>
       </div>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">

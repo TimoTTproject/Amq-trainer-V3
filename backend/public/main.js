@@ -177,7 +177,8 @@ function showApp(user) {
   showView('home');
   applyGameModeUI();
   renderHeaderUser();
-  if (user.anilistName) document.getElementById('anilist-username').value = user.anilistName;
+  const linked = user.anilistListName || user.anilistName;
+  if (linked) document.getElementById('anilist-username').value = linked;
   chooseInitialMode().then(() => {
     applyModeUI();
     refreshCatalogInfo();
@@ -615,6 +616,7 @@ function setupAppUI() {
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
+  document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
@@ -777,7 +779,6 @@ async function openTraining() {
     { src: 'due', icon: 'fa-brain', title: 'Révision du jour', desc: 'Répétition espacée : les sons à revoir maintenant', count: s.due },
     { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Auto : tes sons mal maîtrisés (réussite < 50 %) + ceux marqués', count: s.review },
     { src: 'missed', icon: 'fa-circle-xmark', title: 'Sons ratés', desc: 'Les sons que tu n\'as jamais trouvés', count: s.missed },
-    { src: 'liked', icon: 'fa-heart', title: 'Ma playlist', desc: 'Tes sons likés', count: s.liked },
     { src: 'mine', icon: 'fa-list', title: 'Ma liste', desc: 'Ton import AniList', count: s.mine },
     { src: 'global', icon: 'fa-globe', title: 'Catalogue global', desc: 'Tout le catalogue partagé', count: null },
   ];
@@ -829,7 +830,8 @@ async function refreshCatalogInfo() {
       document.getElementById('catalog-info').textContent = `${s.totalSongs} musiques · ${s.totalAnimes} animes`;
     } else {
       const { songs } = await api('/api/catalog/my-list');
-      document.getElementById('catalog-info').textContent = `${songs.length} musiques dans ma liste`;
+      const name = currentUser && currentUser.anilistListName ? ` (${currentUser.anilistListName})` : '';
+      document.getElementById('catalog-info').textContent = `${songs.length} musiques dans ma liste${name}`;
     }
   } catch (e) { document.getElementById('catalog-info').textContent = ''; }
 }
@@ -846,7 +848,6 @@ async function refreshStats() {
 // ── Import (SSE) ──
 function startImport() {
   const username = document.getElementById('anilist-username').value.trim();
-  const limit = document.getElementById('import-limit').value || 50;
   if (!username) return alert('Renseigne un pseudo AniList.');
 
   const prog = document.getElementById('import-progress');
@@ -855,7 +856,7 @@ function startImport() {
   prog.classList.remove('hidden');
   status.textContent = 'Connexion…';
 
-  const es = new EventSource(`/api/catalog/import?username=${encodeURIComponent(username)}&limit=${limit}`);
+  const es = new EventSource(`/api/catalog/import?username=${encodeURIComponent(username)}`);
   es.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
     if (d.error) { status.textContent = 'Erreur : ' + d.error; es.close(); return; }
@@ -864,6 +865,7 @@ function startImport() {
     if (d.completed) {
       status.textContent = `Terminé : ${d.totalSongs} musiques (${d.matchedAnime} animes).`;
       es.close();
+      if (currentUser) currentUser.anilistListName = username; // liste liée au compte
       refreshCatalogInfo();
       setTimeout(() => prog.classList.add('hidden'), 4000);
     }
@@ -1835,6 +1837,25 @@ async function runImportCharacters() {
     }
     status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique, puis « Recalculer les raretés ».`;
     loadAdminChars(1, adminSearch);
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runResetMe() {
+  if (!confirm('Réinitialiser TON compte ? (stats, SRS, cartes gacha, tokens, Château, classé seront effacés. Profil et « Ma liste » conservés.)')) return;
+  const btn = document.getElementById('admin-reset-btn');
+  const status = document.getElementById('admin-reset-status');
+  btn.disabled = true;
+  status.textContent = 'Réinitialisation…';
+  try {
+    await api('/api/admin/reset-me', { method: 'POST', body: JSON.stringify({}) });
+    currentUser.tokens = 0;
+    currentUser.towerBestFloor = 0;
+    renderHeaderUser();
+    status.textContent = '✅ Compte réinitialisé. Recharge la page.';
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {

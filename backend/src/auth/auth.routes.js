@@ -18,6 +18,7 @@ function publicUser(u) {
     avatarUrl: u.avatarUrl,
     bio: u.bio,
     anilistName: u.anilistName,
+    anilistListName: u.anilistListName,
     tokens: u.tokens,
     towerBestFloor: u.towerBestFloor || 0,
     createdAt: u.createdAt,

@@ -13,8 +13,8 @@ function sseSend(res, data) {
 // Import de la liste AniList de l'utilisateur (SSE, avec progression).
 // Pseudo : ?username=... ou, à défaut, le pseudo AniList lié au compte.
 router.get('/import', requireAuth, async (req, res) => {
-  const username = req.query.username || req.user.anilistName;
-  const limit = parseInt(req.query.limit) || 1000;
+  const username = req.query.username || req.user.anilistListName || req.user.anilistName;
+  const limit = parseInt(req.query.limit) || 100000; // pas de limite : on importe toute la liste
   if (!username) {
     return res.status(400).json({ error: 'Pseudo AniList requis (?username=)' });
   }
@@ -41,6 +41,8 @@ router.get('/import', requireAuth, async (req, res) => {
       },
       limit
     );
+    // Mémorise le pseudo lié au compte (liste préchargée aux sessions suivantes)
+    await prisma.user.update({ where: { id: req.user.id }, data: { anilistListName: username } });
     if (!closed) {
       sseSend(res, { completed: true, ...result });
       res.end();
