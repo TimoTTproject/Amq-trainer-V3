@@ -407,38 +407,70 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 }
 .modal-close:hover { background: var(--red); color: #fff; }
 
-/* ── Profil : en-tête dégradé ── */
-#profile-modal .modal-card { padding-top: 70px; }
-#profile-modal .modal-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 96px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); opacity: .22;
-}
-#profile-modal h2 {
-  position: relative; text-align: center; justify-content: center; display: flex; gap: 8px;
-}
-.profile-avatar-edit { flex-direction: column; text-align: center; gap: 12px; }
-.avatar-actions { align-items: center; }
+/* ── Profil (page large) : bannière ── */
+.avatar-xl { width: 110px; height: 110px; font-size: 2.8rem; }
 #profile-avatar { box-shadow: 0 0 0 4px var(--bg-2), 0 0 0 7px var(--accent); }
-
-#profile-modal .profile-stats { gap: 10px; margin-top: 22px; }
-#profile-modal .pstat {
-  background: linear-gradient(160deg, var(--bg-3), var(--bg));
-  border: 1px solid #2a2f42; padding: 14px 6px; transition: transform .15s, border-color .15s;
+.profile-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(108,140,255,.22), rgba(138,108,255,.18));
+  border: 1px solid #2a2f42; border-radius: 18px; padding: 22px 24px; margin-bottom: 16px;
 }
-#profile-modal .pstat:hover { transform: translateY(-2px); border-color: var(--accent); }
-#profile-modal .pstat span {
-  font-size: 1.4rem; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+.profile-banner-main { display: flex; align-items: center; gap: 18px; }
+.profile-id { display: flex; flex-direction: column; gap: 6px; }
+.profile-hero-name { font-size: 1.6rem; font-weight: 700; }
+.profile-hero-since { font-size: .8rem; }
+.level-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.level-badge { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-weight: 700; font-size: .78rem; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.level-bar { width: 160px; max-width: 40vw; height: 8px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+.level-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; transition: width .5s; }
+.level-xp { font-size: .72rem; white-space: nowrap; }
+
+#view-profile .profile-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
+#view-profile .pstat {
+  background: linear-gradient(160deg, var(--bg-3), var(--bg));
+  border: 1px solid #2a2f42; padding: 16px 6px; border-radius: 12px; text-align: center; transition: transform .15s, border-color .15s;
+}
+#view-profile .pstat:hover { transform: translateY(-2px); border-color: var(--accent); }
+#view-profile .pstat span {
+  display: block; font-size: 1.5rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
 }
+#view-profile .pstat label { color: var(--text-2); font-size: .72rem; }
 
-#profile-modal .profile-collection, #profile-modal .token-history {
-  background: var(--bg); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px;
+/* Disposition 2 colonnes */
+.profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.profile-col { display: flex; flex-direction: column; gap: 16px; }
+#view-profile .profile-section { background: var(--bg); border: 1px solid #2a2f42; border-radius: 14px; padding: 18px; }
+#view-profile .profile-section h3 { color: var(--text-2); font-size: .95rem; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+#view-profile .profile-section h3 i { color: var(--accent); }
+.profile-avatar-edit { display: flex; gap: 16px; }
+.avatar-actions { align-items: flex-start; }
+#profile-best-card { display: none; }
+
+/* Historique Château */
+.tower-history-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.tower-history-list li { display: flex; justify-content: space-between; align-items: center; background: var(--bg-2); border-radius: 8px; padding: 9px 12px; font-size: .88rem; }
+.th-floor { font-weight: 600; }
+.tower-history-list .date { color: var(--text-2); font-size: .78rem; }
+
+/* Top séries */
+.top-series-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ts-row { display: grid; grid-template-columns: 1fr 90px auto; align-items: center; gap: 10px; font-size: .85rem; }
+.ts-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-bar { height: 8px; background: var(--bg-2); border-radius: 6px; overflow: hidden; }
+.ts-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; }
+.ts-plays { color: var(--accent); font-weight: 700; min-width: 24px; text-align: right; }
+
+/* Fiche publique : séries */
+.player-series { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.player-series .hint { width: 100%; text-align: center; margin-bottom: 4px; }
+.player-head .level-badge { margin-top: 4px; }
+
+@media (max-width: 720px) {
+  .profile-grid { grid-template-columns: 1fr; }
+  #view-profile .profile-stats { grid-template-columns: repeat(3, 1fr); }
 }
-#profile-modal .profile-collection { margin-top: 20px; }
-.profile-collection-row { gap: 16px; }
-#profile-best-card { width: 96px; }
-#profile-best-card .gcard:hover { transform: none; }
-#profile-modal .modal-actions .btn-primary { width: 100%; padding: 13px; }
 
 /* ── Gacha : boutons de tirage en cartes ── */
 .open-chars, #open-chars-btn { margin: 4px 0 8px; }
@@ -473,17 +505,8 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
   .gacha-actions .btn-primary { min-width: 100%; }
 }
 @media (max-width: 480px) {
-  #profile-modal .profile-stats { grid-template-columns: repeat(2, 1fr); }
+  #view-profile .profile-stats { grid-template-columns: repeat(2, 1fr); }
 }
-
-/* ── Profil enrichi ── */
-.profile-hero { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 6px; position: relative; }
-.profile-hero-name { font-size: 1.35rem; font-weight: 700; }
-.profile-hero-since { font-size: .78rem; }
-
-#profile-modal .profile-section { background: var(--bg); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px; margin-top: 16px; }
-#profile-modal .profile-section h3 { color: var(--text-2); font-size: .92rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-#profile-modal .profile-section h3 i { color: var(--accent); }
 
 /* Hauts faits / badges */
 .badges-count { font-size: .78rem; color: var(--text-2); margin-bottom: 12px; }

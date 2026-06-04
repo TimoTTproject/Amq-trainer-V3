@@ -59,7 +59,21 @@ router.patch('/', requireAuth, async (req, res) => {
 
 const RARITY_RANK = { mythic: 4, legendary: 3, epic: 2, rare: 1, common: 0 };
 
-// Profil public d'un joueur (consultable depuis le classement)
+// Niveau / XP dérivés de l'activité (paliers quadratiques : xp = 50·(niv-1)²)
+function computeLevel(xp) {
+  const level = Math.floor(Math.sqrt(xp / 50)) + 1;
+  const curStart = 50 * (level - 1) ** 2;
+  const nextStart = 50 * level ** 2;
+  return {
+    xp,
+    level,
+    intoLevel: xp - curStart,
+    forNext: nextStart - curStart,
+    progress: Math.min(1, (xp - curStart) / (nextStart - curStart)),
+  };
+}
+
+// Profil riche d'un joueur (sert le profil perso ET la fiche publique)
 router.get('/:userId', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.userId },
@@ -67,30 +81,60 @@ router.get('/:userId', requireAuth, async (req, res) => {
   });
   if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
 
-  const stats = await prisma.userSongStat.findMany({
+  // Stats quiz + top séries jouées
+  const songStats = await prisma.userSongStat.findMany({
     where: { userId: user.id },
-    select: { playCount: true, correctCount: true },
+    select: { playCount: true, correctCount: true, song: { select: { animeTitle: true } } },
   });
-  const played = stats.reduce((s, x) => s + x.playCount, 0);
-  const correct = stats.reduce((s, x) => s + x.correctCount, 0);
+  const played = songStats.reduce((s, x) => s + x.playCount, 0);
+  const correct = songStats.reduce((s, x) => s + x.correctCount, 0);
+  const seriesMap = {};
+  for (const s of songStats) {
+    if (!s.playCount) continue;
+    const t = s.song?.animeTitle || '—';
+    (seriesMap[t] ||= { title: t, plays: 0, correct: 0 }).plays += s.playCount;
+    seriesMap[t].correct += s.correctCount;
+  }
+  const topSeries = Object.values(seriesMap).sort((a, b) => b.plays - a.plays).slice(0, 6);
 
-  const cardsCount = await prisma.userCard.count({ where: { userId: user.id } });
-  const cards = await prisma.userCard.findMany({
-    where: { userId: user.id },
-    include: { character: true },
-  });
+  // Collection : cartes triées, répartition par rareté
+  const cards = await prisma.userCard.findMany({ where: { userId: user.id }, include: { character: true } });
   cards.sort(
     (a, b) =>
       RARITY_RANK[b.character.rarity] - RARITY_RANK[a.character.rarity] ||
       (b.character.favourites || 0) - (a.character.favourites || 0)
   );
-  const best = cards[0]?.character || null;
+  const ownedByRarity = {};
+  cards.forEach((c) => (ownedByRarity[c.character.rarity] = (ownedByRarity[c.character.rarity] || 0) + 1));
+  const pool = await prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } });
+  const poolByRarity = {};
+  pool.forEach((g) => (poolByRarity[g.rarity] = g._count._all));
+  const showcase = cards.slice(0, 6).map((c) => ({
+    id: c.character.id, name: c.character.name, imageUrl: c.character.imageUrl,
+    rarity: c.character.rarity, copies: c.copies,
+  }));
+
+  // Historique Château (parties terminées récentes)
+  const towerHistory = await prisma.towerRun.findMany({
+    where: { userId: user.id, status: 'over' },
+    orderBy: { finishedAt: 'desc' },
+    take: 8,
+    select: { floor: true, finishedAt: true },
+  });
+
+  const xp = played * 5 + correct * 10 + cards.length * 8 + (user.towerBestFloor || 0) * 15;
 
   res.json({
     user,
     stats: { played, correct, rate: played ? Math.round((correct / played) * 100) : 0 },
-    cardsCount,
-    bestCard: best ? { id: best.id, name: best.name, imageUrl: best.imageUrl, rarity: best.rarity } : null,
+    level: computeLevel(xp),
+    cardsCount: cards.length,
+    ownedByRarity,
+    poolByRarity,
+    bestCard: showcase[0] || null,
+    showcase,
+    topSeries,
+    towerHistory,
   });
 });
 

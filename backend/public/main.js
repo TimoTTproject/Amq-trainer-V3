@@ -55,6 +55,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { user } = await api('/api/auth/me');
     showApp(user);
+    // Lien de profil partagé (?u=<id>) → ouvre la fiche du joueur
+    const shared = params.get('u');
+    if (shared) {
+      history.replaceState({}, '', location.pathname);
+      openPlayer(shared);
+    }
   } catch {
     showAuth();
   }
@@ -123,6 +129,7 @@ function showView(name) {
   document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
   document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
+  document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
 }
 
@@ -133,6 +140,7 @@ function navTo(name) {
   if (name === 'tower') return openTower();
   if (name === 'leaderboard') return openLeaderboard();
   if (name === 'admin') return openAdmin();
+  if (name === 'profile') return openProfile();
   showView(name); // home, quiz
 }
 
@@ -184,10 +192,7 @@ async function devGrantTokens() {
 // ── PROFIL ──
 function setupProfileUI() {
   document.getElementById('profile-btn').addEventListener('click', openProfile);
-  document.getElementById('profile-close').addEventListener('click', closeProfile);
-  document.getElementById('profile-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'profile-modal') closeProfile();
-  });
+  document.getElementById('profile-share').addEventListener('click', shareProfile);
   document.getElementById('avatar-upload-btn').addEventListener('click', () =>
     document.getElementById('avatar-input').click()
   );
@@ -225,71 +230,109 @@ function renderProfileAvatar() {
   });
 }
 
-let profileStats = null; // {played, correct, rate}
-let profileColl = null; // {cards, ownedByRarity, poolByRarity}
+let profileData = null; // réponse riche de /api/profile/:id
 
 async function openProfile() {
+  showView('profile');
   pendingAvatar = undefined;
   setProfileError('');
   document.getElementById('profile-name').value = currentUser.displayName;
   document.getElementById('profile-bio').value = currentUser.bio || '';
   document.getElementById('profile-hero-name').textContent = currentUser.displayName;
   document.getElementById('profile-tokens').textContent = currentUser.tokens;
-  document.getElementById('profile-tower').textContent = currentUser.towerBestFloor || 0;
-  const since = currentUser.createdAt
-    ? new Date(currentUser.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-    : '—';
-  document.getElementById('profile-since').textContent = 'Membre depuis ' + since;
   renderProfileAvatar();
-  document.getElementById('profile-modal').classList.remove('hidden');
-
-  profileStats = null;
-  profileColl = null;
-  renderProfileBadges();
-  try {
-    profileStats = await api('/api/quiz/stats');
-    document.getElementById('profile-played').textContent = profileStats.played;
-    document.getElementById('profile-correct').textContent = profileStats.correct;
-    document.getElementById('profile-rate').textContent = profileStats.rate + '%';
-  } catch {}
   loadTokenHistory();
-  await loadProfileCollection();
-  renderProfileBadges();
+
+  try {
+    profileData = await api(`/api/profile/${currentUser.id}`);
+  } catch {
+    profileData = null;
+    return;
+  }
+  renderProfile(profileData);
 }
 
-async function loadProfileCollection() {
-  try {
-    const data = await api('/api/gacha/collection');
-    profileColl = data;
-    const { cards, ownedByRarity, poolByRarity } = data;
-    document.getElementById('profile-cards-count').textContent = cards.length;
-    document.getElementById('profile-rarity-breakdown').innerHTML = RARITY_ORDER.map((r) => {
-      const owned = ownedByRarity[r] || 0;
-      const total = poolByRarity[r] || 0;
-      return `<span class="rb-pill r-${r}">${RARITY_LABELS[r]} <b>${owned}</b><i>/${total}</i></span>`;
-    }).join('');
-    const show = document.getElementById('profile-showcase');
-    if (cards.length) {
-      show.innerHTML = cards.slice(0, 6).map((c) => cardHTML(c)).join('');
-      document.getElementById('profile-best-label').textContent =
-        `Meilleure carte : ${cards[0].name} (${RARITY_LABELS[cards[0].rarity] || cards[0].rarity})`;
-    } else {
-      show.innerHTML = '';
-      document.getElementById('profile-best-label').textContent = 'Joue au gacha pour débloquer des cartes !';
-    }
-  } catch {
-    profileColl = null;
+// Rendu commun (utilisé pour le profil perso et la fiche publique)
+function renderProfile(d) {
+  const s = d.stats || { played: 0, correct: 0, rate: 0 };
+  document.getElementById('profile-played').textContent = s.played;
+  document.getElementById('profile-correct').textContent = s.correct;
+  document.getElementById('profile-rate').textContent = s.rate + '%';
+  document.getElementById('profile-tower').textContent = d.user.towerBestFloor || 0;
+  document.getElementById('profile-cards-count').textContent = d.cardsCount || 0;
+  document.getElementById('profile-tokens').textContent = d.user.tokens;
+  const since = d.user.createdAt
+    ? new Date(d.user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+    : '—';
+  document.getElementById('profile-since').textContent = 'Membre depuis ' + since;
+
+  // Niveau / XP
+  const lv = d.level || { level: 1, intoLevel: 0, forNext: 1, progress: 0 };
+  document.getElementById('profile-level').textContent = 'Niv. ' + lv.level;
+  document.getElementById('profile-level-fill').style.width = Math.round(lv.progress * 100) + '%';
+  document.getElementById('profile-level-xp').textContent = `${lv.intoLevel} / ${lv.forNext} XP`;
+
+  // Répartition + vitrine
+  const owned = d.ownedByRarity || {};
+  const pool = d.poolByRarity || {};
+  document.getElementById('profile-rarity-breakdown').innerHTML = RARITY_ORDER.map((r) =>
+    `<span class="rb-pill r-${r}">${RARITY_LABELS[r]} <b>${owned[r] || 0}</b><i>/${pool[r] || 0}</i></span>`
+  ).join('');
+  const show = document.getElementById('profile-showcase');
+  const cards = d.showcase || [];
+  if (cards.length) {
+    show.innerHTML = cards.map((c) => cardHTML(c)).join('');
+    document.getElementById('profile-best-label').textContent =
+      `Meilleure carte : ${cards[0].name} (${RARITY_LABELS[cards[0].rarity] || cards[0].rarity})`;
+  } else {
+    show.innerHTML = '';
+    document.getElementById('profile-best-label').textContent = 'Aucune carte pour l\'instant.';
   }
+
+  renderTowerHistory(d.towerHistory || []);
+  renderTopSeries(d.topSeries || []);
+  renderProfileBadges(d);
+}
+
+function renderTowerHistory(runs) {
+  const el = document.getElementById('profile-tower-history');
+  if (!runs.length) { el.innerHTML = '<li class="muted">Aucune partie pour l\'instant.</li>'; return; }
+  el.innerHTML = runs.map((r) => {
+    const d = r.finishedAt ? new Date(r.finishedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '';
+    return `<li><span class="th-floor">🏰 Étage ${r.floor}</span><span class="date">${d}</span></li>`;
+  }).join('');
+}
+
+function renderTopSeries(series) {
+  const el = document.getElementById('profile-top-series');
+  if (!series.length) { el.innerHTML = '<li class="muted">Joue des musiques pour remplir ce classement.</li>'; return; }
+  const max = series[0].plays || 1;
+  el.innerHTML = series.map((s) => `
+    <li class="ts-row">
+      <span class="ts-name">${escapeHtml(s.title)}</span>
+      <span class="ts-bar"><span class="ts-fill" style="width:${Math.round((s.plays / max) * 100)}%"></span></span>
+      <span class="ts-plays">${s.plays}</span>
+    </li>`).join('');
+}
+
+// Lien de profil partageable
+function shareProfile() {
+  const url = `${location.origin}/?u=${currentUser.id}`;
+  const btn = document.getElementById('profile-share');
+  navigator.clipboard?.writeText(url).then(
+    () => { btn.innerHTML = '<i class="fas fa-check"></i> Lien copié !'; setTimeout(() => (btn.innerHTML = '<i class="fas fa-share-nodes"></i> Partager mon profil'), 2000); },
+    () => prompt('Copie ce lien :', url)
+  );
 }
 
 // Hauts faits : badges débloqués selon la progression
-function renderProfileBadges() {
-  const played = profileStats?.played || 0;
-  const rate = profileStats?.rate || 0;
-  const tower = currentUser.towerBestFloor || 0;
-  const cards = profileColl?.cards?.length || 0;
-  const owned = profileColl?.ownedByRarity || {};
-  const tokens = currentUser.tokens || 0;
+function renderProfileBadges(d) {
+  const played = d?.stats?.played || 0;
+  const rate = d?.stats?.rate || 0;
+  const tower = d?.user?.towerBestFloor || 0;
+  const cards = d?.cardsCount || 0;
+  const owned = d?.ownedByRarity || {};
+  const tokens = d?.user?.tokens || 0;
   const defs = [
     { ic: '🌟', nm: 'Premier pas', desc: 'Jouer 1 musique', got: played >= 1 },
     { ic: '🎵', nm: 'Mélomane', desc: '100 musiques jouées', got: played >= 100 },
@@ -335,8 +378,6 @@ async function loadTokenHistory() {
   }
 }
 
-function closeProfile() { document.getElementById('profile-modal').classList.add('hidden'); }
-
 async function saveProfile() {
   setProfileError('');
   const payload = {
@@ -344,11 +385,17 @@ async function saveProfile() {
     bio: document.getElementById('profile-bio').value,
   };
   if (pendingAvatar !== undefined) payload.avatar = pendingAvatar;
+  const btn = document.getElementById('profile-save');
+  const original = btn.innerHTML;
   try {
     const { user } = await api('/api/profile', { method: 'PATCH', body: JSON.stringify(payload) });
     currentUser = { ...currentUser, ...user };
+    pendingAvatar = undefined;
     renderHeaderUser();
-    closeProfile();
+    document.getElementById('profile-hero-name').textContent = currentUser.displayName;
+    renderProfileAvatar();
+    btn.innerHTML = '<i class="fas fa-check"></i> Enregistré !';
+    setTimeout(() => (btn.innerHTML = original), 1800);
   } catch (err) {
     setProfileError(err.message);
   }
@@ -1302,8 +1349,16 @@ async function openPlayer(userId) {
     const best = d.bestCard
       ? `<div class="player-best">${cardHTML({ ...d.bestCard, copies: 1 })}<p class="hint">Meilleure carte</p></div>`
       : '';
+    const lv = d.level || { level: 1 };
+    const series = (d.topSeries || []).slice(0, 4);
+    const seriesHtml = series.length
+      ? `<div class="player-series"><p class="hint">Séries les plus jouées</p>${series
+          .map((s) => `<span class="rb-pill">${escapeHtml(s.title)} <b>${s.plays}</b></span>`)
+          .join('')}</div>`
+      : '';
     body.innerHTML = `
-      <div class="player-head">${avatar}<h2>${escapeHtml(u.displayName)}</h2></div>
+      <div class="player-head">${avatar}<h2>${escapeHtml(u.displayName)}</h2>
+        <span class="level-badge">Niv. ${lv.level}</span></div>
       ${u.bio ? `<p class="player-bio">${escapeHtml(u.bio)}</p>` : ''}
       <div class="char-stats">
         <div class="cstat"><span>${d.stats.played}</span><label>Jouées</label></div>
@@ -1312,6 +1367,7 @@ async function openPlayer(userId) {
         <div class="cstat"><span>${d.cardsCount}</span><label>Cartes</label></div>
       </div>
       ${best}
+      ${seriesHtml}
       <p class="hint">Membre depuis ${since}</p>`;
   } catch (e) {
     body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;

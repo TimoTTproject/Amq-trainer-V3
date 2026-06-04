@@ -63,6 +63,7 @@
     <!-- Barre de navigation -->
     <nav class="navbar" id="navbar">
       <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
+      <button class="nav-item" data-nav="profile"><i class="fas fa-user"></i><span>Profil</span></button>
       <button class="nav-item" data-nav="quiz"><i class="fas fa-play"></i><span>Jouer</span></button>
       <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
@@ -71,66 +72,84 @@
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
 
-    <!-- Modale Profil -->
-    <div id="profile-modal" class="modal-overlay hidden">
-      <div class="modal-card">
-        <button class="modal-close" id="profile-close" title="Fermer"><i class="fas fa-times"></i></button>
-        <h2><i class="fas fa-user"></i> Mon profil</h2>
-
-        <div class="profile-hero">
-          <span class="avatar avatar-lg" id="profile-avatar"></span>
-          <div class="profile-hero-name" id="profile-hero-name">—</div>
-          <div class="profile-hero-since hint" id="profile-since">Membre depuis —</div>
-        </div>
-
-        <div class="profile-stats">
-          <div class="pstat"><span id="profile-played">0</span><label>Jouées</label></div>
-          <div class="pstat"><span id="profile-correct">0</span><label>Correctes</label></div>
-          <div class="pstat"><span id="profile-rate">0%</span><label>Réussite</label></div>
-          <div class="pstat"><span id="profile-tower">0</span><label>Étage max</label></div>
-          <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
-          <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
-        </div>
-
-        <div class="profile-section">
-          <h3><i class="fas fa-medal"></i> Hauts faits</h3>
-          <div id="profile-badges" class="badges-grid"></div>
-        </div>
-
-        <div class="profile-section profile-collection">
-          <h3><i class="fas fa-images"></i> Collection</h3>
-          <div id="profile-rarity-breakdown" class="rarity-breakdown"></div>
-          <p class="hint" id="profile-best-label">Joue au gacha pour débloquer des cartes !</p>
-          <div id="profile-showcase" class="profile-showcase"></div>
-          <div id="profile-best-card" class="hidden"></div>
-        </div>
-
-        <details class="profile-edit">
-          <summary><i class="fas fa-pen"></i> Modifier mon profil</summary>
-          <div class="profile-avatar-edit">
-            <div class="avatar-actions">
-              <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
-              <button class="btn-link" id="avatar-remove-btn">Retirer la photo</button>
-              <input type="file" id="avatar-input" accept="image/*" hidden />
-              <p class="hint">JPG/PNG, recadrée et compressée automatiquement.</p>
+    <!-- VUE PROFIL (page pleine largeur) -->
+    <div id="view-profile" class="hidden">
+      <div class="profile-banner">
+        <div class="profile-banner-main">
+          <span class="avatar avatar-xl" id="profile-avatar"></span>
+          <div class="profile-id">
+            <div class="profile-hero-name" id="profile-hero-name">—</div>
+            <div class="profile-hero-since hint" id="profile-since">Membre depuis —</div>
+            <div class="level-row">
+              <span class="level-badge" id="profile-level">Niv. 1</span>
+              <div class="level-bar"><div class="level-fill" id="profile-level-fill"></div></div>
+              <span class="level-xp hint" id="profile-level-xp">0 / 0 XP</span>
             </div>
           </div>
-          <label class="field-label">Pseudo</label>
-          <input type="text" id="profile-name" maxlength="30" placeholder="Ton pseudo" />
-          <label class="field-label">Bio</label>
-          <textarea id="profile-bio" maxlength="300" rows="3" placeholder="Quelques mots sur toi… (optionnel)"></textarea>
-        </details>
+        </div>
+        <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
+      </div>
 
-        <div class="profile-section token-history">
-          <h3><i class="fas fa-coins"></i> Historique des tokens</h3>
-          <ul id="token-history-list"><li class="muted">Aucune transaction pour l'instant.</li></ul>
+      <div class="profile-stats">
+        <div class="pstat"><span id="profile-played">0</span><label>Jouées</label></div>
+        <div class="pstat"><span id="profile-correct">0</span><label>Correctes</label></div>
+        <div class="pstat"><span id="profile-rate">0%</span><label>Réussite</label></div>
+        <div class="pstat"><span id="profile-tower">0</span><label>Étage max</label></div>
+        <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
+        <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
+      </div>
+
+      <div class="profile-grid">
+        <div class="profile-col">
+          <div class="profile-section">
+            <h3><i class="fas fa-medal"></i> Hauts faits</h3>
+            <div id="profile-badges" class="badges-grid"></div>
+          </div>
+
+          <div class="profile-section profile-collection">
+            <h3><i class="fas fa-images"></i> Collection</h3>
+            <div id="profile-rarity-breakdown" class="rarity-breakdown"></div>
+            <p class="hint" id="profile-best-label">Joue au gacha pour débloquer des cartes !</p>
+            <div id="profile-showcase" class="profile-showcase"></div>
+            <div id="profile-best-card" class="hidden"></div>
+          </div>
         </div>
 
-        <p id="profile-error" class="form-error"></p>
-        <div class="modal-actions">
-          <button class="btn-primary" id="profile-save"><i class="fas fa-check"></i> Enregistrer</button>
+        <div class="profile-col">
+          <div class="profile-section">
+            <h3><i class="fas fa-chess-rook"></i> Historique Château</h3>
+            <ul id="profile-tower-history" class="tower-history-list"><li class="muted">Aucune partie pour l'instant.</li></ul>
+          </div>
+
+          <div class="profile-section">
+            <h3><i class="fas fa-fire"></i> Séries les plus jouées</h3>
+            <ul id="profile-top-series" class="top-series-list"><li class="muted">Joue des musiques pour remplir ce classement.</li></ul>
+          </div>
+
+          <div class="profile-section token-history">
+            <h3><i class="fas fa-coins"></i> Historique des tokens</h3>
+            <ul id="token-history-list"><li class="muted">Aucune transaction pour l'instant.</li></ul>
+          </div>
         </div>
       </div>
+
+      <details class="profile-edit">
+        <summary><i class="fas fa-pen"></i> Modifier mon profil</summary>
+        <div class="profile-avatar-edit">
+          <div class="avatar-actions">
+            <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
+            <button class="btn-link" id="avatar-remove-btn">Retirer la photo</button>
+            <input type="file" id="avatar-input" accept="image/*" hidden />
+            <p class="hint">JPG/PNG, recadrée et compressée automatiquement.</p>
+          </div>
+        </div>
+        <label class="field-label">Pseudo</label>
+        <input type="text" id="profile-name" maxlength="30" placeholder="Ton pseudo" />
+        <label class="field-label">Bio</label>
+        <textarea id="profile-bio" maxlength="300" rows="3" placeholder="Quelques mots sur toi… (optionnel)"></textarea>
+        <p id="profile-error" class="form-error"></p>
+        <button class="btn-primary" id="profile-save"><i class="fas fa-check"></i> Enregistrer</button>
+      </details>
     </div>
 
     <!-- VUE ACCUEIL -->
