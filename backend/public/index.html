@@ -79,6 +79,7 @@
       <button class="nav-item" data-nav="mp"><i class="fas fa-users"></i><span>Multi</span></button>
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
       <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
+      <button class="nav-item" data-nav="playlist"><i class="fas fa-heart"></i><span>Playlist</span></button>
       <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
@@ -233,7 +234,7 @@
         </div>
         <span class="catalog-info" id="catalog-info"></span>
       </div>
-      <div class="panel-row">
+      <div class="panel-row" id="import-row">
         <input type="text" id="anilist-username" placeholder="Pseudo AniList à importer" />
         <input type="number" id="import-limit" min="1" max="1500" value="50" title="Nombre max d'animes" />
         <button id="import-btn" class="btn-primary"><i class="fas fa-download"></i> Importer ma liste</button>
@@ -257,6 +258,7 @@
         <button id="play-btn" class="btn-secondary"><i class="fas fa-play"></i></button>
         <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
         <button id="replay-btn" class="btn-secondary" title="Réécouter l'extrait"><i class="fas fa-rotate-left"></i></button>
+        <button id="like-btn" class="btn-secondary" title="Ajouter à ma playlist" disabled><i class="far fa-heart"></i></button>
         <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
         <button id="show-answer-btn" class="btn-secondary"><i class="fas fa-lightbulb"></i> Voir la réponse</button>
         <button id="next-btn" class="btn-primary"><i class="fas fa-play"></i> Démarrer</button>
@@ -506,6 +508,22 @@
         <span id="admin-pageinfo">—</span>
         <button class="btn-secondary" id="admin-next"><i class="fas fa-chevron-right"></i></button>
       </div>
+    </div>
+
+    <!-- VUE PLAYLIST -->
+    <div id="view-playlist" class="hidden">
+      <div class="gacha-top">
+        <h2><i class="fas fa-heart"></i> Ma playlist</h2>
+        <span class="catalog-info" id="playlist-total"></span>
+      </div>
+      <p class="hint" style="margin-bottom:14px">Like un son pendant le quiz (bouton ❤) pour l'ajouter ici.</p>
+      <table class="catalog-table">
+        <thead>
+          <tr><th></th><th>Anime</th><th>Type</th><th>Opening</th><th>Artiste</th><th></th></tr>
+        </thead>
+        <tbody id="playlist-tbody"></tbody>
+      </table>
+      <audio id="playlist-audio" preload="none"></audio>
     </div>
 
     <!-- VUE MULTIJOUEUR -->

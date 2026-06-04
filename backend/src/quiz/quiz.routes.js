@@ -46,7 +46,38 @@ router.get('/random', requireAuth, async (req, res) => {
   });
   // Jeton lié à cette manche : c'est lui qui décidera du classé à la validation.
   const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked });
-  res.json({ song, roundToken });
+  const stat = await prisma.userSongStat.findUnique({
+    where: { userId_songId: { userId: req.user.id, songId: song.id } },
+    select: { liked: true },
+  });
+  res.json({ song, roundToken, liked: !!stat?.liked });
+});
+
+// Like / unlike d'une musique (playlist perso)
+router.post('/like', requireAuth, async (req, res) => {
+  const { songId, liked } = req.body || {};
+  if (!songId) return res.status(400).json({ error: 'songId requis' });
+  const stat = await prisma.userSongStat.upsert({
+    where: { userId_songId: { userId: req.user.id, songId } },
+    update: { liked: !!liked },
+    create: { userId: req.user.id, songId, liked: !!liked },
+  });
+  res.json({ liked: stat.liked });
+});
+
+// Playlist perso : les musiques likées
+router.get('/playlist', requireAuth, async (req, res) => {
+  const stats = await prisma.userSongStat.findMany({
+    where: { userId: req.user.id, liked: true },
+    include: { song: true },
+    orderBy: { id: 'desc' },
+  });
+  res.json({
+    songs: stats.map((s) => ({
+      id: s.song.id, animeTitle: s.song.animeTitle, type: s.song.type, number: s.song.number,
+      title: s.song.title, artist: s.song.artist, videoUrl: s.song.videoUrl,
+    })),
+  });
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.

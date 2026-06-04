@@ -750,3 +750,9 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 ::-webkit-scrollbar-thumb { background: #3a3f55; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #4a5070; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Bouton like (quiz) + playlist */
+#like-btn.liked { color: var(--red); border-color: var(--red); }
+#like-btn.liked i { animation: likePop .35s ease; }
+@keyframes likePop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.pl-remove:hover { background: var(--red); color: #fff; border-color: var(--red); }

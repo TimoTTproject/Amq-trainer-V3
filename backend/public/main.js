@@ -6,6 +6,7 @@ let currentUser = null;
 let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle data URL
 let currentSong = null;
 let currentRoundToken = null; // jeton de manche émis par le serveur au tirage
+let currentLiked = false; // la musique en cours est-elle dans la playlist
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = localStorage.getItem('amq_gamemode') || 'ranked'; // 'ranked' | 'casual'
@@ -130,6 +131,7 @@ function showView(name) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
+  if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
@@ -140,6 +142,7 @@ function showView(name) {
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
+  document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
 }
 
@@ -152,6 +155,7 @@ function navTo(name) {
   if (name === 'admin') return openAdmin();
   if (name === 'profile') return openProfile();
   if (name === 'mp') return openMultiplayer();
+  if (name === 'playlist') return openPlaylist();
   showView(name); // home, quiz
 }
 
@@ -667,6 +671,7 @@ function setupAppUI() {
   document.getElementById('reveal-btn').addEventListener('click', guessAnswer);
   document.getElementById('play-btn').addEventListener('click', togglePlay);
   document.getElementById('replay-btn').addEventListener('click', replayClip);
+  document.getElementById('like-btn').addEventListener('click', toggleLike);
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
 
@@ -713,6 +718,8 @@ function applyModeUI() {
   document.querySelectorAll('.mode-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
+  // L'import AniList ne concerne que « Ma liste »
+  document.getElementById('import-row').classList.toggle('hidden', mode === 'global');
 }
 
 function applyGameModeUI() {
@@ -786,18 +793,37 @@ function startImport() {
 function setHint(msg) { document.getElementById('quiz-hint').textContent = msg || ''; }
 function showOverlay(show) { document.getElementById('audio-overlay').classList.toggle('hidden', !show); }
 
+// Bouton ❤ playlist (quiz)
+function setLikeButton() {
+  const btn = document.getElementById('like-btn');
+  btn.disabled = !currentSong;
+  btn.querySelector('i').className = currentLiked ? 'fas fa-heart' : 'far fa-heart';
+  btn.classList.toggle('liked', currentLiked);
+}
+async function toggleLike() {
+  if (!currentSong) return;
+  try {
+    const r = await api('/api/quiz/like', { method: 'POST', body: JSON.stringify({ songId: currentSong.id, liked: !currentLiked }) });
+    currentLiked = r.liked;
+    setLikeButton();
+    if (currentLiked && typeof sfx !== 'undefined') sfx.correct();
+  } catch (e) { setHint(e.message); }
+}
+
 async function nextSong() {
   resetQuizUI();
   setHint('Chargement…');
-  let song, roundToken;
+  let song, roundToken, liked;
   try {
-    ({ song, roundToken } = await api(`/api/quiz/random?mode=${mode}&ranked=${gameMode === 'ranked'}`));
+    ({ song, roundToken, liked } = await api(`/api/quiz/random?mode=${mode}&ranked=${gameMode === 'ranked'}`));
   } catch (err) {
     setHint(err.message + (mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
     return;
   }
   currentSong = song;
   currentRoundToken = roundToken;
+  currentLiked = !!liked;
+  setLikeButton();
   answered = false;
   const v = video();
   v.src = song.videoUrl;
@@ -1744,3 +1770,85 @@ async function runBackfillSeries() {
     btn.disabled = false;
   }
 }
+
+// ── PLAYLIST ──
+function openPlaylist() {
+  showView('playlist');
+  loadPlaylist();
+}
+
+async function loadPlaylist() {
+  const tbody = document.getElementById('playlist-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
+  stopPlaylistAudio();
+  try {
+    const { songs } = await api('/api/quiz/playlist');
+    document.getElementById('playlist-total').textContent = `${songs.length} musique${songs.length > 1 ? 's' : ''}`;
+    if (!songs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="muted">Ta playlist est vide. Like des sons pendant le quiz ❤</td></tr>';
+      return;
+    }
+    tbody.innerHTML = songs
+      .map((s) => {
+        const playBtn = s.videoUrl
+          ? `<button class="btn-play-row" data-play data-src="${escapeHtml(s.videoUrl)}" title="Écouter"><i class="fas fa-play"></i></button>`
+          : '';
+        return `<tr data-sid="${s.id}">
+          <td class="cat-play-cell">${playBtn}</td>
+          <td>${escapeHtml(s.animeTitle)}</td>
+          <td class="nowrap">${s.type}${s.number}</td>
+          <td>${escapeHtml(s.title)}</td>
+          <td>${escapeHtml(s.artist || '—')}</td>
+          <td class="cat-play-cell"><button class="btn-play-row pl-remove" data-remove title="Retirer"><i class="fas fa-heart-crack"></i></button></td>
+        </tr>`;
+      })
+      .join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+// Lecteur audio playlist (un extrait à la fois)
+let playlistPlayingBtn = null;
+function stopPlaylistAudio() {
+  const audio = document.getElementById('playlist-audio');
+  if (!audio) return;
+  audio.pause();
+  if (playlistPlayingBtn) { const i = playlistPlayingBtn.querySelector('i'); if (i) i.className = 'fas fa-play'; playlistPlayingBtn = null; }
+}
+function togglePlaylistAudio(btn) {
+  const audio = document.getElementById('playlist-audio');
+  if (playlistPlayingBtn === btn) {
+    if (audio.paused) { audio.play().catch(() => {}); btn.querySelector('i').className = 'fas fa-pause'; }
+    else { audio.pause(); btn.querySelector('i').className = 'fas fa-play'; }
+    return;
+  }
+  if (playlistPlayingBtn) playlistPlayingBtn.querySelector('i').className = 'fas fa-play';
+  playlistPlayingBtn = btn;
+  audio.src = btn.dataset.src;
+  audio.volume = 0.8;
+  audio.play().catch(() => {});
+  btn.querySelector('i').className = 'fas fa-pause';
+  audio.onended = () => stopPlaylistAudio();
+}
+
+async function removeFromPlaylist(tr) {
+  const sid = parseInt(tr.dataset.sid);
+  try {
+    await api('/api/quiz/like', { method: 'POST', body: JSON.stringify({ songId: sid, liked: false }) });
+    if (currentSong && currentSong.id === sid) { currentLiked = false; setLikeButton(); }
+    tr.remove();
+    const left = document.querySelectorAll('#playlist-tbody tr[data-sid]').length;
+    document.getElementById('playlist-total').textContent = `${left} musique${left > 1 ? 's' : ''}`;
+    if (!left) document.getElementById('playlist-tbody').innerHTML = '<tr><td colspan="6" class="muted">Ta playlist est vide. Like des sons pendant le quiz ❤</td></tr>';
+  } catch (e) { alert(e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('playlist-tbody').addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-remove]');
+    if (rm) return removeFromPlaylist(rm.closest('tr'));
+    const play = e.target.closest('[data-play]');
+    if (play) togglePlaylistAudio(play);
+  });
+});
