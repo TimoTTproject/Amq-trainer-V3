@@ -161,6 +161,7 @@ function showApp(user) {
     refreshCatalogInfo();
   });
   refreshStats();
+  if (typeof connectMp === 'function') connectMp(); // socket prêt → reconnexion auto si partie en cours
 }
 
 // Affiche un avatar : image si dispo, sinon initiale colorée
@@ -306,9 +307,32 @@ function renderProfile(d) {
     document.getElementById('profile-best-label').textContent = 'Aucune carte pour l\'instant.';
   }
 
+  renderProfileRanked(d.ranked, d.mpRecent || []);
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
   renderProfileBadges(d);
+}
+
+function renderProfileRanked(r, recent) {
+  const box = document.getElementById('profile-ranked');
+  if (!r || !r.games) {
+    box.innerHTML = '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>';
+  } else {
+    box.innerHTML = `<div class="ranked-card">
+      <span class="ranked-tier">${r.tier.icon} ${escapeHtml(r.tier.name)}</span>
+      <span class="ranked-mmr">${r.mmr} MMR</span>
+      <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
+    </div>`;
+  }
+  const hist = document.getElementById('profile-mp-history');
+  hist.innerHTML = (recent || []).length
+    ? recent.map((m) => {
+        const d = new Date(m.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+        const delta = m.ranked && m.mmrAfter != null ? m.mmrAfter - m.mmrBefore : null;
+        const deltaTxt = delta != null ? ` <span class="${delta >= 0 ? 'gain' : 'spend'}">${delta >= 0 ? '+' : ''}${delta}</span>` : '';
+        return `<li><span class="th-floor">${m.ranked ? '🏅' : '🎮'} ${m.placement}ᵉ/${m.players}${deltaTxt}</span><span class="date">${d}</span></li>`;
+      }).join('')
+    : '';
 }
 
 function renderTowerHistory(runs) {
@@ -1373,12 +1397,13 @@ const LB_UNITS = {
   tower: (v) => `Étage ${v}`,
   tokens: (v) => `${v} 🪙`,
   collection: (v) => `${v} cartes`,
+  ranked: (v) => `${v} MMR`,
 };
 
 function openLeaderboard() {
   showView('leaderboard');
-  document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'tower'));
-  loadLeaderboard('tower');
+  document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'ranked'));
+  loadLeaderboard('ranked');
 }
 
 // Petit avatar (image ou initiale colorée) en HTML
@@ -1413,7 +1438,7 @@ async function loadLeaderboard(type) {
         (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
           <span class="lb-rank">${medal(e.rank)}</span>
           ${lbAvatar(e)}
-          <span class="lb-name">${escapeHtml(e.displayName)}</span>
+          <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ` <span class="lb-tier">${e.tier.icon} ${escapeHtml(e.tier.name)}</span>` : ''}</span>
           <span class="lb-value">${unit(e.value)}</span>
         </li>`
       )

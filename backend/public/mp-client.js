@@ -18,6 +18,17 @@ function openMultiplayer() {
   showView('mp');
   connectMp();
   if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; }
+  // Affiche mon rang classé dans le menu
+  api(`/api/profile/${currentUser.id}`).then((d) => {
+    const el = document.getElementById('mp-myrank');
+    if (d.ranked && d.ranked.games) {
+      el.innerHTML = `Ton rang : <b>${d.ranked.tier.icon} ${escapeHtml(d.ranked.tier.name)}</b> · ${d.ranked.mmr} MMR`;
+      el.classList.remove('hidden');
+    } else {
+      el.innerHTML = 'Pas encore classé — joue une partie classée !';
+      el.classList.remove('hidden');
+    }
+  }).catch(() => {});
 }
 
 function mpIsHost() { return mpRoom && mpSocket && mpRoom.hostId === mpSocket.id; }
@@ -36,7 +47,7 @@ function connectMp() {
 
   mpSocket.on('mp:room', (d) => {
     mpRoom = d;
-    if (d.status === 'lobby') { mpShow('room'); renderRoom(d); }
+    if (d.status === 'lobby') { showView('mp'); mpShow('room'); renderRoom(d); }
   });
 
   mpSocket.on('mp:chat', (m) => appendChat(m));
@@ -44,13 +55,14 @@ function connectMp() {
   mpSocket.on('mp:emote', (d) => floatEmote(d.emote, d.name));
 
   mpSocket.on('mp:game:start', (d) => {
+    showView('mp');
     mpShow('game');
     document.getElementById('mp-total').textContent = d.totalRounds;
     document.getElementById('mp-round').textContent = '—';
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-scores').innerHTML = '';
     document.getElementById('mp-progress').textContent = '';
-    document.getElementById('mp-feedback').textContent = `C'est parti ! ${d.players.length} joueur(s) 🎮`;
+    document.getElementById('mp-feedback').textContent = (d.ranked ? '🏅 Partie classée — ' : '') + `c'est parti ! ${d.players.length} joueur(s) 🎮`;
     renderEmotesBar();
   });
 
@@ -60,9 +72,11 @@ function connectMp() {
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
-    input.value = ''; input.disabled = false; input.focus();
-    document.getElementById('mp-submit').disabled = false;
-    document.getElementById('mp-feedback').textContent = '';
+    const answered = !!d.alreadyAnswered;
+    input.value = ''; input.disabled = answered;
+    if (!answered) input.focus();
+    document.getElementById('mp-submit').disabled = answered;
+    document.getElementById('mp-feedback').textContent = answered ? '✅ Déjà répondu' : (d.resumed ? '↩️ Reconnecté' : '');
     mpStartClip(d.clipUrl, d.startAt, d.duration);
   });
 
@@ -95,16 +109,21 @@ function connectMp() {
 
   mpSocket.on('mp:game:over', (d) => {
     mpStopClip();
+    showView('mp');
     mpShow('over');
+    document.querySelector('#mp-over h3').textContent = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
     const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
     document.getElementById('mp-ranking').innerHTML = d.ranking
-      .map(
-        (p, i) => `<li class="lb-row${p.name === currentUser.displayName ? ' me' : ''}">
-        <span class="lb-rank">${medal(i + 1)}</span>
-        <span class="lb-name">${escapeHtml(p.name)}</span>
-        <span class="lb-value">${p.score} pts</span>
-      </li>`
-      )
+      .map((p, i) => {
+        const delta = p.mmrDelta != null
+          ? ` <span class="mp-mmr ${p.mmrDelta >= 0 ? 'gain' : 'spend'}">${p.mmrDelta >= 0 ? '+' : ''}${p.mmrDelta} MMR</span>`
+          : '';
+        return `<li class="lb-row${p.name === currentUser.displayName ? ' me' : ''}">
+          <span class="lb-rank">${medal(i + 1)}</span>
+          <span class="lb-name">${escapeHtml(p.name)}${delta}</span>
+          <span class="lb-value">${p.score} pts</span>
+        </li>`;
+      })
       .join('');
   });
 }
@@ -229,6 +248,9 @@ function mpSettingsPayload() {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-quick').addEventListener('click', () => {
     connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche…'; mpSocket && mpSocket.emit('mp:quick');
+  });
+  document.getElementById('mp-ranked').addEventListener('click', () => {
+    connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche d\'une partie classée…'; mpSocket && mpSocket.emit('mp:ranked');
   });
   document.getElementById('mp-create').addEventListener('click', () => {
     connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());

@@ -2,9 +2,31 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { tierFromMmr } = require('../mp/rank');
 
 const router = express.Router();
 const TOP_N = 50;
+
+// Classé (MMR) : classement par MMR parmi les joueurs ayant joué en classé
+async function rankedBoard(meId) {
+  const users = await prisma.user.findMany({
+    where: { rankedGames: { gt: 0 } },
+    orderBy: { mmr: 'desc' },
+    take: TOP_N,
+    select: { id: true, displayName: true, avatarUrl: true, mmr: true },
+  });
+  const top = users.map((u, i) => ({
+    rank: i + 1, userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl,
+    value: u.mmr, tier: tierFromMmr(u.mmr), isMe: u.id === meId,
+  }));
+  const me = await prisma.user.findUnique({ where: { id: meId }, select: { mmr: true, rankedGames: true } });
+  let myRank = null;
+  if (me?.rankedGames > 0) {
+    const better = await prisma.user.count({ where: { rankedGames: { gt: 0 }, mmr: { gt: me.mmr } } });
+    myRank = { rank: better + 1, value: me.mmr, tier: tierFromMmr(me.mmr) };
+  }
+  return { top, me: myRank };
+}
 
 // Château : classement par meilleur étage atteint
 async function towerBoard(meId) {
@@ -82,12 +104,14 @@ async function collectionBoard(meId) {
 }
 
 router.get('/', requireAuth, async (req, res) => {
-  const type = ['tokens', 'collection'].includes(req.query.type) ? req.query.type : 'tower';
+  const type = ['tokens', 'collection', 'ranked'].includes(req.query.type) ? req.query.type : 'tower';
   const board =
     type === 'tokens'
       ? await tokensBoard(req.user.id)
       : type === 'collection'
       ? await collectionBoard(req.user.id)
+      : type === 'ranked'
+      ? await rankedBoard(req.user.id)
       : await towerBoard(req.user.id);
   res.json({ type, ...board });
 });

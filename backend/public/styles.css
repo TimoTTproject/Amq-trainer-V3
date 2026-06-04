@@ -548,6 +548,18 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 
 @media (max-width: 620px) { .mp-room-grid { grid-template-columns: 1fr; } }
 
+/* Classé */
+.mp-ranked-btn { background: linear-gradient(135deg, var(--orange), #ff5d8f); color: #2a1400; }
+.mp-myrank { text-align: center; color: var(--text-2); margin-bottom: 14px; }
+.mp-myrank b { color: var(--text); }
+.mp-mmr { font-size: .8rem; font-weight: 700; }
+.mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
+.lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
+.ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.ranked-tier { font-size: 1.2rem; font-weight: 700; }
+.ranked-mmr { color: var(--accent); font-weight: 700; }
+.tower-history-list .gain { color: var(--green); } .tower-history-list .spend { color: var(--red); }
+
 #view-profile .profile-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
 #view-profile .pstat {
   background: linear-gradient(160deg, var(--bg-3), var(--bg));

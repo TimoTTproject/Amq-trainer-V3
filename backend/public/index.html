@@ -122,6 +122,12 @@
 
         <div class="profile-col">
           <div class="profile-section">
+            <h3><i class="fas fa-ranking-star"></i> Multijoueur classé</h3>
+            <div id="profile-ranked" class="profile-ranked"></div>
+            <ul id="profile-mp-history" class="tower-history-list"></ul>
+          </div>
+
+          <div class="profile-section">
             <h3><i class="fas fa-chess-rook"></i> Historique Château</h3>
             <ul id="profile-tower-history" class="tower-history-list"><li class="muted">Aucune partie pour l'instant.</li></ul>
           </div>
@@ -429,7 +435,8 @@
         <h2><i class="fas fa-trophy"></i> Classement</h2>
       </div>
       <div class="lb-tabs">
-        <button class="lb-tab active" data-lb="tower"><i class="fas fa-chess-rook"></i> Château</button>
+        <button class="lb-tab active" data-lb="ranked"><i class="fas fa-ranking-star"></i> Classé</button>
+        <button class="lb-tab" data-lb="tower"><i class="fas fa-chess-rook"></i> Château</button>
         <button class="lb-tab" data-lb="tokens"><i class="fas fa-coins"></i> Tokens</button>
         <button class="lb-tab" data-lb="collection"><i class="fas fa-images"></i> Collection</button>
       </div>
@@ -497,8 +504,10 @@
           Devine l'anime au plus vite (texte libre). Score à la vitesse, classement final.
           <b>Partie rapide</b> pour jouer avec des inconnus, ou crée une <b>salle privée</b> entre amis.
         </p>
+        <div id="mp-myrank" class="mp-myrank hidden"></div>
         <div class="mp-menu-btns">
           <button class="btn-primary btn-lg" id="mp-quick"><i class="fas fa-bolt"></i> Partie rapide</button>
+          <button class="btn-lg mp-ranked-btn" id="mp-ranked"><i class="fas fa-ranking-star"></i> Partie classée</button>
           <button class="btn-secondary btn-lg" id="mp-create"><i class="fas fa-plus"></i> Créer une salle</button>
         </div>
         <div class="mp-join-row">
