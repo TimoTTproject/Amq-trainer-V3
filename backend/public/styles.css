@@ -308,3 +308,30 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .cat-play-cell { width: 44px; }
 .btn-play-row { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #2a2f42; background: var(--bg); color: var(--accent); cursor: pointer; transition: all .15s; }
 .btn-play-row:hover { background: var(--accent); color: #0b1020; border-color: var(--accent); }
+
+/* ── Château de l'Infini ── */
+.tower-intro { text-align: center; max-width: 560px; margin: 0 auto; }
+.tower-rules { color: var(--text-2); line-height: 1.6; margin-bottom: 20px; }
+.tower-rules b { color: var(--text); }
+.tower-intro-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+.btn-lg { font-size: 1.05rem; padding: 14px 28px; }
+.tower-game { max-width: 720px; margin: 0 auto; }
+.tower-hud { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 1.1rem; }
+.tower-floor b { color: var(--accent); font-size: 1.3rem; }
+.tower-lives { letter-spacing: 2px; }
+.tower-timebar { height: 8px; background: var(--bg-3); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
+.tower-timefill { height: 100%; width: 100%; background: var(--green); border-radius: 6px; }
+.tower-timefill.low { background: var(--red); }
+.tower-media { margin-bottom: 12px; }
+.tower-media-controls { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 16px; }
+.tower-media-controls input[type=range] { flex: 1; max-width: 220px; }
+.tower-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+.tower-choice { background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: center; }
+.tower-choice:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+.tower-choice:disabled { cursor: default; }
+.tower-choice.correct { border-color: var(--green); background: #143226; color: #b9f4d6; }
+.tower-choice.wrong { border-color: var(--red); background: #3a1620; color: #ffc4ce; }
+.tower-choice.chosen { box-shadow: 0 0 0 2px var(--accent) inset; }
+.tower-over { text-align: center; max-width: 480px; margin: 40px auto 0; }
+.tower-over h3 { font-size: 1.4rem; margin-bottom: 20px; }
+@media (max-width: 560px) { .tower-choices { grid-template-columns: 1fr; } }

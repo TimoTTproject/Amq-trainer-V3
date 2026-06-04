@@ -114,10 +114,12 @@ function showAuth() {
 }
 function showView(name) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
+  if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
+  document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
 }
 
 function showApp(user) {
@@ -333,9 +335,21 @@ function setupAppUI() {
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
+  document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('back-home').addEventListener('click', () => showView('home'));
   document.getElementById('back-home-gacha').addEventListener('click', () => showView('home'));
   document.getElementById('back-home-catalog').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home-tower').addEventListener('click', () => showView('home'));
+  document.getElementById('tower-start').addEventListener('click', startTower);
+  document.getElementById('tower-again').addEventListener('click', openTower);
+  document.getElementById('tower-abandon').addEventListener('click', abandonTower);
+  document.getElementById('tower-play').addEventListener('click', toggleTowerPlay);
+  document.getElementById('tower-replay').addEventListener('click', replayTower);
+  document.getElementById('tower-volume').addEventListener('input', (e) => { towerVideo().volume = +e.target.value; });
+  document.getElementById('tower-choices').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-choice]');
+    if (btn) answerTower(parseInt(btn.dataset.choice));
+  });
   let catSearchTimer;
   document.getElementById('catalog-search').addEventListener('input', (e) => {
     clearTimeout(catSearchTimer);
@@ -899,4 +913,178 @@ function setPlayIcon() {
 function toggleVideo() {
   const overlay = document.getElementById('audio-overlay');
   overlay.classList.toggle('hidden'); // affiche/masque la vidéo
+}
+
+// ── CHÂTEAU DE L'INFINI ──
+let towerRun = null; // payload de l'étage en cours
+let towerAnswering = false;
+let towerTimer = null; // setTimeout d'expiration du chrono
+const towerVideo = () => document.getElementById('tower-video');
+
+function towerShowPanel(which) {
+  document.getElementById('tower-intro').classList.toggle('hidden', which !== 'intro');
+  document.getElementById('tower-game').classList.toggle('hidden', which !== 'game');
+  document.getElementById('tower-over').classList.toggle('hidden', which !== 'over');
+}
+
+async function openTower() {
+  showView('tower');
+  document.getElementById('tower-tokens').textContent = currentUser.tokens;
+  document.getElementById('tower-intro-msg').textContent = '';
+  try {
+    const s = await api('/api/tower/status');
+    document.getElementById('tower-best').textContent = s.bestFloor;
+    document.getElementById('tower-cost').textContent = s.entryCost;
+    document.getElementById('tower-free').textContent = s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
+    if (s.activeRun) {
+      enterFloor(s.activeRun); // reprise d'une partie interrompue
+      return;
+    }
+  } catch {}
+  towerShowPanel('intro');
+}
+
+async function startTower() {
+  const btn = document.getElementById('tower-start');
+  btn.disabled = true;
+  document.getElementById('tower-intro-msg').textContent = 'Ouverture des portes…';
+  try {
+    const r = await api('/api/tower/start', { method: 'POST', body: JSON.stringify({}) });
+    if (typeof r.tokens === 'number') { currentUser.tokens = r.tokens; renderHeaderUser(); }
+    enterFloor(r);
+  } catch (e) {
+    document.getElementById('tower-intro-msg').textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderTowerLives(lives) {
+  const el = document.getElementById('tower-lives');
+  el.innerHTML = Array.from({ length: Math.max(lives, 0) }, () => '❤️').join('') || '💀';
+}
+
+function enterFloor(floor) {
+  towerRun = floor;
+  towerAnswering = false;
+  towerShowPanel('game');
+  document.getElementById('tower-tokens').textContent = currentUser.tokens;
+  document.getElementById('tower-floor').textContent = floor.floor;
+  renderTowerLives(floor.lives);
+  document.getElementById('tower-msg').textContent = '';
+
+  // 4 propositions
+  document.getElementById('tower-choices').innerHTML = floor.options
+    .map((o, i) => `<button class="tower-choice" data-choice="${i}">${escapeHtml(o)}</button>`)
+    .join('');
+
+  // Vidéo proxifiée (le titre ne fuite pas via l'URL)
+  const v = towerVideo();
+  v.src = floor.clipUrl;
+  v.volume = +document.getElementById('tower-volume').value;
+  document.getElementById('tower-overlay').classList.remove('hidden'); // audio seul
+  v.play().catch(() => {});
+  setTowerPlayIcon();
+
+  startTowerTimer(floor.timeLimit);
+}
+
+function startTowerTimer(seconds) {
+  clearTimeout(towerTimer);
+  const fill = document.getElementById('tower-timefill');
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
+  fill.classList.remove('low');
+  // force reflow puis lance l'animation linéaire
+  void fill.offsetWidth;
+  fill.style.transition = `width ${seconds}s linear`;
+  fill.style.width = '0%';
+  setTimeout(() => fill.classList.add('low'), Math.max(0, (seconds - 4) * 1000));
+  towerTimer = setTimeout(() => answerTower(null, true), seconds * 1000);
+}
+
+async function answerTower(choice, timeout = false) {
+  if (!towerRun || towerAnswering) return;
+  towerAnswering = true;
+  clearTimeout(towerTimer);
+  document.getElementById('tower-timefill').style.width = '0%';
+  const buttons = [...document.querySelectorAll('#tower-choices .tower-choice')];
+  buttons.forEach((b) => (b.disabled = true));
+  if (choice != null && buttons[choice]) buttons[choice].classList.add('chosen');
+
+  let r;
+  try {
+    r = await api('/api/tower/answer', {
+      method: 'POST',
+      body: JSON.stringify({ runId: towerRun.runId, choice, timeout }),
+    });
+  } catch (e) {
+    document.getElementById('tower-msg').textContent = e.message;
+    towerAnswering = false;
+    return;
+  }
+
+  // Révèle la bonne réponse
+  if (buttons[r.correctIndex]) buttons[r.correctIndex].classList.add('correct');
+  if (!r.correct && choice != null && buttons[choice]) buttons[choice].classList.add('wrong');
+
+  if (typeof r.tokens === 'number') { currentUser.tokens = r.tokens; renderHeaderUser(); }
+
+  const msg = document.getElementById('tower-msg');
+  if (r.correct) {
+    msg.textContent = r.lifeGained ? '✅ Bien vu ! ❤️ +1 vie !' : '✅ Bien vu !';
+  } else {
+    msg.textContent = r.timedOut ? '⏱️ Temps écoulé !' : '❌ Raté !';
+  }
+
+  if (r.status === 'over') {
+    setTimeout(() => showTowerOver(r), 1400);
+  } else {
+    setTimeout(() => enterFloor(r.next), 1400);
+  }
+}
+
+function showTowerOver(result) {
+  stopTowerMedia();
+  towerShowPanel('over');
+  document.getElementById('tower-over-floor').textContent = result.bestFloor ?? '—';
+  document.getElementById('tower-over-cleared').textContent = result.cleared ?? 0;
+  document.getElementById('tower-over-reward').textContent = result.reward ?? 0;
+  document.getElementById('tower-tokens').textContent = currentUser.tokens;
+}
+
+async function abandonTower() {
+  if (!towerRun) return;
+  if (!confirm('Abandonner la partie ? Tu gardes les tokens des étages déjà franchis.')) return;
+  clearTimeout(towerTimer);
+  try {
+    const r = await api('/api/tower/abandon', { method: 'POST', body: JSON.stringify({ runId: towerRun.runId }) });
+    if (typeof r.tokens === 'number') { currentUser.tokens = r.tokens; renderHeaderUser(); }
+    showTowerOver(r);
+  } catch (e) {
+    document.getElementById('tower-msg').textContent = e.message;
+  }
+}
+
+function stopTowerMedia() {
+  clearTimeout(towerTimer);
+  const v = towerVideo();
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+}
+function setTowerPlayIcon() {
+  const i = document.querySelector('#tower-play i');
+  if (i) i.className = towerVideo().paused ? 'fas fa-play' : 'fas fa-pause';
+}
+function toggleTowerPlay() {
+  const v = towerVideo();
+  if (!v.src) return;
+  if (v.paused) v.play().catch(() => {}); else v.pause();
+  setTowerPlayIcon();
+}
+function replayTower() {
+  const v = towerVideo();
+  if (!v.src) return;
+  v.currentTime = 0;
+  v.play().catch(() => {});
+  setTowerPlayIcon();
 }

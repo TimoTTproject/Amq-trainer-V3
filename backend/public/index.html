@@ -132,6 +132,11 @@
           <h3>Gacha</h3>
           <p>Dépense tes tokens pour collectionner des cartes</p>
         </button>
+        <button class="home-card" id="card-tower">
+          <i class="fas fa-chess-rook"></i>
+          <h3>Château de l'Infini</h3>
+          <p>QCM en survie : 3 vies, monte le plus haut possible</p>
+        </button>
         <button class="home-card" id="card-catalog">
           <i class="fas fa-list"></i>
           <h3>Catalogue</h3>
@@ -299,6 +304,64 @@
         <button class="btn-secondary" id="cat-prev"><i class="fas fa-chevron-left"></i></button>
         <span id="cat-pageinfo">—</span>
         <button class="btn-secondary" id="cat-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+    <!-- VUE CHÂTEAU DE L'INFINI -->
+    <div id="view-tower" class="hidden">
+      <button class="btn-back" id="back-home-tower"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-chess-rook"></i> Château de l'Infini</h2>
+        <span class="token-badge"><i class="fas fa-coins"></i> <span id="tower-tokens">0</span></span>
+      </div>
+
+      <!-- Écran d'accueil du mode -->
+      <div id="tower-intro" class="tower-intro">
+        <p class="tower-rules">
+          🏰 Devine l'anime parmi 4 propositions. <b>3 vies</b>, le chrono se resserre à
+          chaque étage. Monte le plus haut possible : <b>+1 vie tous les 5 étages</b> et des
+          tokens à l'arrivée selon l'étage atteint.
+        </p>
+        <div class="tower-intro-stats">
+          <div class="pstat"><span id="tower-best">0</span><label>Meilleur étage</label></div>
+          <div class="pstat"><span id="tower-cost">50</span><label>Entrée 🪙</label></div>
+          <div class="pstat"><span id="tower-free">—</span><label>Entrée gratuite</label></div>
+        </div>
+        <button class="btn-primary btn-lg" id="tower-start"><i class="fas fa-play"></i> Entrer dans le château</button>
+        <p id="tower-intro-msg" class="gacha-msg"></p>
+      </div>
+
+      <!-- Partie en cours -->
+      <div id="tower-game" class="tower-game hidden">
+        <div class="tower-hud">
+          <span class="tower-floor">Étage <b id="tower-floor">1</b></span>
+          <span class="tower-lives" id="tower-lives"></span>
+        </div>
+        <div class="tower-timebar"><div class="tower-timefill" id="tower-timefill"></div></div>
+
+        <div class="media-wrapper tower-media">
+          <video id="tower-video" playsinline></video>
+          <div class="audio-overlay" id="tower-overlay"><i class="fas fa-music"></i></div>
+        </div>
+        <div class="tower-media-controls">
+          <button id="tower-play" class="btn-secondary"><i class="fas fa-play"></i></button>
+          <input type="range" id="tower-volume" min="0" max="1" step="0.01" value="0.8" />
+          <button id="tower-replay" class="btn-secondary" title="Réécouter"><i class="fas fa-rotate-left"></i></button>
+        </div>
+
+        <div id="tower-choices" class="tower-choices"></div>
+        <p id="tower-msg" class="gacha-msg"></p>
+        <button class="btn-link" id="tower-abandon">Abandonner la partie</button>
+      </div>
+
+      <!-- Fin de partie -->
+      <div id="tower-over" class="tower-over hidden">
+        <h3 id="tower-over-title">🏁 Partie terminée</h3>
+        <div class="tower-intro-stats">
+          <div class="pstat"><span id="tower-over-floor">0</span><label>Étage atteint</label></div>
+          <div class="pstat"><span id="tower-over-cleared">0</span><label>Étages franchis</label></div>
+          <div class="pstat"><span id="tower-over-reward">0</span><label>Tokens gagnés 🪙</label></div>
+        </div>
+        <button class="btn-primary" id="tower-again"><i class="fas fa-rotate-right"></i> Rejouer</button>
       </div>
     </div>
   </div>

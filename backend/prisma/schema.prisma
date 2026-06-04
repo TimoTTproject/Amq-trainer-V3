@@ -32,6 +32,10 @@ model User {
   // Économie (Phase 2)
   tokens Int @default(0)
 
+  // Château de l'Infini
+  towerLastFreeAt DateTime? // dernière entrée gratuite (1/jour)
+  towerBestFloor  Int       @default(0) // meilleur étage atteint (record)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -39,6 +43,7 @@ model User {
   catalogEntries UserCatalogEntry[]
   cards         UserCard[]
   transactions  TokenTransaction[]
+  towerRuns     TowerRun[]
 }
 
 // ─────────────────────────────────────────────
@@ -156,4 +161,28 @@ model Pack {
   name      String
   costTokens Int
   cardCount Int    @default(5)
+}
+
+// ─────────────────────────────────────────────
+// CHÂTEAU DE L'INFINI (mode survie QCM)
+// ─────────────────────────────────────────────
+
+// Une partie. L'étage, les vies, les options et la bonne réponse vivent ici
+// (autorité serveur) : le client ne reçoit jamais la réponse avant de jouer.
+model TowerRun {
+  id             String    @id @default(cuid())
+  userId         String
+  floor          Int       @default(1) // étage en cours (1 = première question)
+  lives          Int       @default(3)
+  status         String    @default("active") // active | over
+  currentSongId  Int? // musique de l'étage en cours
+  currentOptions String[]  @default([]) // 4 titres d'anime proposés
+  currentAnswer  Int? // index (0-3) de la bonne réponse
+  floorStartedAt DateTime? // pour vérifier le chrono côté serveur
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
 }
