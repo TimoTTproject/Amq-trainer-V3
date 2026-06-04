@@ -151,6 +151,22 @@ router.get('/characters', requireAuth, async (req, res) => {
   });
 });
 
+// Marque/retire un personnage des favoris (vitrine du profil). Doit être possédé.
+router.post('/favorite', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  const favorite = !!req.body?.favorite;
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  const card = await prisma.userCard.findUnique({
+    where: { userId_characterId: { userId: req.user.id, characterId } },
+  });
+  if (!card) return res.status(400).json({ error: 'Tu ne possèdes pas ce personnage' });
+  await prisma.userCard.update({
+    where: { userId_characterId: { userId: req.user.id, characterId } },
+    data: { favorite },
+  });
+  res.json({ favorite });
+});
+
 // Fiche détaillée d'un personnage (+ possession de l'utilisateur)
 router.get('/character/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
@@ -186,6 +202,7 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     rankInRarity,
     totalInRarity,
     owned: card ? card.copies : 0,
+    favorite: card ? card.favorite : false,
     anilistUrl: `https://anilist.co/character/${character.anilistId}`,
   });
 });

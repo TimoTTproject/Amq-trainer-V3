@@ -188,6 +188,7 @@ model UserCard {
   userId      String
   characterId Int
   copies      Int      @default(1)
+  favorite    Boolean  @default(false) // mis en vitrine du profil
   obtainedAt  DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

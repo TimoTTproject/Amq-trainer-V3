@@ -1131,6 +1131,7 @@ function cardHTML(c, opts = {}) {
   if (opts.isNew) badges.push('<span class="badge new">NOUVEAU</span>');
   if (opts.refund) badges.push(`<span class="badge refund">+${opts.refund} 🪙</span>`);
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
+  if (c.favorite) badges.push('<span class="badge fav">★</span>');
   const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '');
   const delay = opts.index != null ? ` style="animation-delay:${(opts.index * 0.45).toFixed(2)}s"` : '';
   const cid = c.id != null ? ` data-cid="${c.id}"` : '';
@@ -1303,9 +1304,27 @@ async function openCharacter(id) {
         <div class="cstat"><span>${(c.favourites || 0).toLocaleString('fr-FR')}</span><label>❤ AniList</label></div>
         <div class="cstat"><span>+${d.dupRefund} 🪙</span><label>Doublon</label></div>
       </div>
+      ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}">
+        <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Mettre en favori'}
+      </button>` : ''}
       <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
         <i class="fas fa-external-link-alt"></i> Voir sur AniList
       </a>`;
+    const favBtn = document.getElementById('char-fav-btn');
+    if (favBtn) {
+      let fav = d.favorite;
+      favBtn.addEventListener('click', async () => {
+        favBtn.disabled = true;
+        try {
+          const r = await api('/api/gacha/favorite', { method: 'POST', body: JSON.stringify({ characterId: c.id, favorite: !fav }) });
+          fav = r.favorite;
+          favBtn.classList.toggle('on', fav);
+          favBtn.innerHTML = `<i class="fa-star ${fav ? 'fas' : 'far'}"></i> ${fav ? 'Favori ★' : 'Mettre en favori'}`;
+          if (fav) sfx.correct();
+        } catch (e) { alert(e.message); }
+        finally { favBtn.disabled = false; }
+      });
+    }
   } catch (e) {
     body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }

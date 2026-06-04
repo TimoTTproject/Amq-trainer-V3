@@ -164,6 +164,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .gcard .badge.new { left: 6px; background: var(--green); color: #06281b; }
 .gcard .badge.refund { right: 6px; background: var(--orange); color: #3a2600; }
 .gcard .badge.copies { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
+.gcard .badge.fav { left: 6px; top: auto; bottom: 6px; background: #ffd34d; color: #3a2600; }
 
 /* Couleurs de rareté */
 .r-common    { border-color: #4a5066; } .prog.r-common    { color: #aab; }
@@ -322,6 +323,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .cstat span { display: block; font-size: 1.05rem; font-weight: 700; color: var(--text); }
 .cstat label { color: var(--text-2); font-size: .72rem; }
 .char-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.char-fav { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.char-fav.on { border: 1px solid #ffd34d; color: #ffd34d; }
+.char-fav i { color: #ffd34d; }
 
 /* ── Catalogue : lecteur audio par ligne ── */
 .cat-play-cell { width: 44px; }

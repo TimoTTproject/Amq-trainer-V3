@@ -154,9 +154,12 @@ router.get('/:userId', requireAuth, async (req, res) => {
   const pool = await prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } });
   const poolByRarity = {};
   pool.forEach((g) => (poolByRarity[g.rarity] = g._count._all));
-  const showcase = cards.slice(0, 6).map((c) => ({
+  // Vitrine : les favoris en priorité, sinon les meilleures cartes
+  const favs = cards.filter((c) => c.favorite);
+  const showcaseCards = (favs.length ? favs : cards).slice(0, 6);
+  const showcase = showcaseCards.map((c) => ({
     id: c.character.id, name: c.character.name, imageUrl: c.character.imageUrl,
-    rarity: c.character.rarity, copies: c.copies,
+    rarity: c.character.rarity, copies: c.copies, favorite: c.favorite,
   }));
 
   // Historique Château (parties terminées récentes)
