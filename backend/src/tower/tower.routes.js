@@ -5,6 +5,7 @@ const { Readable } = require('stream');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { isAdmin } = require('../admin/admin');
+const { progressQuests } = require('../quests/quests');
 const {
   ENTRY_COST,
   START_LIVES,
@@ -176,6 +177,7 @@ router.post('/answer', requireAuth, async (req, res) => {
   const correct = !timedOut && Number(choice) === correctIndex;
 
   if (correct) {
+    progressQuests(req.user.id, 'tower', 1); // étage franchi → quête
     // Étage franchi → bonus de vie éventuel, étage suivant
     const cleared = run.floor; // on vient de franchir cet étage
     let lives = run.lives;

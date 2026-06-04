@@ -59,6 +59,25 @@ model User {
   transactions  TokenTransaction[]
   towerRuns     TowerRun[]
   mpResults     MpResult[]
+  quests        Quest[]
+}
+
+// Quêtes quotidiennes (3 par jour, progression auto, récompense en tokens)
+model Quest {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  day       String // AAAA-MM-JJ (jour local)
+  type      String // correct | pull | tower | mp | like
+  label     String
+  target    Int
+  progress  Int      @default(0)
+  reward    Int
+  claimed   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, day])
 }
 
 // Historique des parties multijoueur (persistance des résultats)

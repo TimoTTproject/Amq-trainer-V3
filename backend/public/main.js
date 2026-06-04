@@ -152,6 +152,7 @@ function showView(name) {
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
+  if (name === 'home' && typeof loadQuests === 'function') loadQuests();
 }
 
 // Navigation depuis la navbar
@@ -2067,6 +2068,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rm) return removeFromPlaylist(rm.closest('tr'));
     const play = e.target.closest('[data-play]');
     if (play) togglePlaylistAudio(play);
+  });
+});
+
+// ── QUÊTES QUOTIDIENNES ──
+async function loadQuests() {
+  const box = document.getElementById('home-quests');
+  if (!box) return;
+  try {
+    const { quests } = await api('/api/quests');
+    box.innerHTML =
+      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour</h3><div class="quests-list">` +
+      quests.map((q) => {
+        const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
+        const right = q.claimed
+          ? '<span class="quest-claimed">✓ Réclamé</span>'
+          : q.done
+          ? `<button class="btn-primary quest-claim" data-qid="${q.id}">Réclamer +${q.reward} 🪙</button>`
+          : `<span class="quest-reward">+${q.reward} 🪙</span>`;
+        return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
+          <div class="quest-top"><span>${escapeHtml(q.label)}</span>${right}</div>
+          <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
+          <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
+        </div>`;
+      }).join('') + '</div>';
+  } catch { box.innerHTML = ''; }
+}
+
+async function claimQuest(id, btn) {
+  btn.disabled = true;
+  try {
+    const r = await api(`/api/quests/claim/${id}`, { method: 'POST', body: JSON.stringify({}) });
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+    if (typeof sfx !== 'undefined') sfx.levelup();
+    if (typeof burstConfetti === 'function') burstConfetti();
+    loadQuests();
+  } catch (e) { alert(e.message); btn.disabled = false; }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('home-quests').addEventListener('click', (e) => {
+    const b = e.target.closest('.quest-claim');
+    if (b) claimQuest(b.dataset.qid, b);
   });
 });
 

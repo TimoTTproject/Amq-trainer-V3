@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { rollRarity, DUPLICATE_REFUND, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
+const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
 
@@ -98,6 +99,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
     return { cards, refundTotal, tokens };
   });
 
+  progressQuests(userId, 'pull', cfg.count);
   res.json({ type, cost: cfg.cost, ...result });
 });
 

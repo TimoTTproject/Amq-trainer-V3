@@ -19,6 +19,7 @@ const gachaRoutes = require('./gacha/gacha.routes');
 const towerRoutes = require('./tower/tower.routes');
 const adminRoutes = require('./admin/admin.routes');
 const leaderboardRoutes = require('./leaderboard/leaderboard.routes');
+const questsRoutes = require('./quests/quests.routes');
 const mpRoutes = require('./mp/mp.routes');
 const { initMp } = require('./mp/mp');
 
@@ -53,6 +54,7 @@ app.use('/api/gacha', gachaRoutes.router);
 app.use('/api/tower', towerRoutes.router);
 app.use('/api/admin', adminRoutes.router);
 app.use('/api/leaderboard', leaderboardRoutes.router);
+app.use('/api/quests', questsRoutes.router);
 app.use('/api/mp', mpRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 

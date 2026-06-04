@@ -18,6 +18,7 @@ const REASON_LABELS = {
   level_reward: 'Récompense de niveau',
   admin_grant: 'Bonus admin',
   daily_bonus: 'Bonus quotidien',
+  quest_reward: 'Récompense de quête',
 };
 
 // Bonus de connexion déjà disponible aujourd'hui ?

@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { verifyToken, COOKIE_NAME } = require('../auth/jwt');
 const { isCorrectGuess } = require('../quiz/matching');
 const { computeMmrDeltas } = require('./rank');
+const { progressQuests } = require('../quests/quests');
 
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
@@ -284,6 +285,7 @@ async function endGame(room) {
   let deltaById = {};
   try { deltaById = await persistResults(room, ordered); }
   catch (e) { console.error('mp persist error:', e.message); }
+  for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
 
   const ranking = ordered.map((p, i) => ({
     name: p.name, avatarUrl: p.avatarUrl, score: p.score,

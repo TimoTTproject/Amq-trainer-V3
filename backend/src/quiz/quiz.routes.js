@@ -6,6 +6,7 @@ const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-tok
 const { isCorrectGuess } = require('./matching');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
+const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
 
@@ -163,6 +164,7 @@ router.post('/like', requireAuth, async (req, res) => {
     update: { liked: !!liked },
     create: { userId: req.user.id, songId, liked: !!liked },
   });
+  if (stat.liked) progressQuests(req.user.id, 'like', 1);
   res.json({ liked: stat.liked });
 });
 
@@ -248,6 +250,8 @@ router.post('/guess', requireAuth, rateLimit({ max: 120 }), async (req, res) => 
     }
     return { tokens };
   });
+
+  if (correct) progressQuests(userId, 'correct', 1);
 
   res.json({
     correct,
