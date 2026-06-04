@@ -288,10 +288,17 @@
         </label>
       </div>
 
-      <div class="answer-area">
-        <input type="text" id="answer-input" placeholder="Nom de l'anime…" disabled />
+      <div class="assist-row" id="assist-row">
+        <span class="assist-label"><i class="fas fa-life-ring"></i> Besoin d'aide ?</span>
+        <button class="btn-secondary assist-btn" id="assist-carre" disabled>Carré · 4 choix <b>×0.5</b></button>
+        <button class="btn-secondary assist-btn" id="assist-duo" disabled>Duo · 2 choix <b>×0.3</b></button>
+      </div>
+
+      <div class="answer-area" id="answer-area">
+        <input type="text" id="answer-input" placeholder="Nom de l'anime… (Cash ×1)" disabled />
         <button id="reveal-btn" class="btn-primary" disabled>Valider</button>
       </div>
+      <div id="choice-buttons" class="choice-buttons hidden"></div>
 
       <div id="answer-result" class="answer-result hidden">
         <div id="answer-verdict" class="verdict"></div>

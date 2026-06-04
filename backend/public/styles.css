@@ -769,3 +769,15 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 /* Libellé du mode classique (Jouer) */
 .gm-tag { display: inline-flex; align-items: center; gap: 8px; background: var(--bg-3); color: var(--text); font-weight: 600; padding: 8px 14px; border-radius: 10px; }
 .gm-tag i { color: var(--orange); }
+
+/* Duo / Carré / Cash */
+.assist-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 10px; }
+.assist-label { color: var(--text-2); font-size: .85rem; }
+.assist-label i { color: var(--accent); }
+.assist-btn { font-size: .85rem; }
+.assist-btn b { color: var(--orange); }
+.choice-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 6px; }
+.choice-opt { background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: center; }
+.choice-opt:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+.choice-opt:disabled { opacity: .6; cursor: default; }
+@media (max-width: 480px) { .choice-buttons { grid-template-columns: 1fr; } }

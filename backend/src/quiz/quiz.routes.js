@@ -7,6 +7,34 @@ const { isCorrectGuess } = require('./matching');
 
 const router = express.Router();
 
+// Multiplicateur de récompense selon le niveau d'aide (Duo/Carré/Cash)
+const LEVEL_MULT = { cash: 1, carre: 0.5, duo: 0.3 };
+const LEVEL_COUNT = { carre: 4, duo: 2 };
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Propositions pour Carré/Duo : bonne réponse + distracteurs (animes distincts)
+async function buildChoices(song, count) {
+  const titles = new Set([song.animeTitle]);
+  const total = await prisma.song.count();
+  let guard = 0;
+  while (titles.size < count && guard++ < 40) {
+    const s = await prisma.song.findFirst({
+      skip: Math.floor(Math.random() * total),
+      select: { animeTitle: true },
+    });
+    if (s) titles.add(s.animeTitle);
+  }
+  return shuffle([...titles]);
+}
+
 // Récompense en tokens pour une bonne réponse
 function computeReward(song, firstCorrect) {
   if (!firstCorrect) return 2; // rejeu : petite récompense (anti-farm)
@@ -53,13 +81,30 @@ router.get('/random', requireAuth, async (req, res) => {
     where: { id: randomId },
     select: { id: true, videoUrl: true },
   });
-  // Jeton lié à cette manche : c'est lui qui décidera du classé à la validation.
-  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked });
+  // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash' });
   const stat = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId: req.user.id, songId: song.id } },
     select: { liked: true },
   });
   res.json({ song, roundToken, liked: !!stat?.liked });
+});
+
+// Passe en Carré (4) ou Duo (2) : verrouille le niveau (gain réduit) dans un
+// nouveau jeton et renvoie les propositions. L'ancien jeton est consommé pour
+// empêcher de revenir au gain « cash » après avoir vu les propositions.
+router.post('/choices', requireAuth, async (req, res) => {
+  const level = req.body?.level === 'duo' ? 'duo' : 'carre';
+  const round = verifyRoundToken(req.body?.roundToken, { userId: req.user.id });
+  if (!round) return res.status(400).json({ error: 'Manche invalide' });
+  if (!consumeRound(round)) return res.status(409).json({ error: 'Manche déjà jouée' });
+
+  const song = await prisma.song.findUnique({ where: { id: round.sid } });
+  if (!song) return res.status(404).json({ error: 'Musique introuvable' });
+
+  const options = await buildChoices(song, LEVEL_COUNT[level]);
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: round.sid, ranked: round.ranked, level });
+  res.json({ options, roundToken, level });
 });
 
 // Like / unlike d'une musique (playlist perso)
@@ -121,8 +166,9 @@ router.post('/guess', requireAuth, async (req, res) => {
     where: { userId_songId: { userId, songId } },
   });
   const firstCorrect = correct && (!prev || prev.correctCount === 0);
-  // Les tokens ne sont gagnés qu'en mode classé
-  const reward = correct && ranked ? computeReward(song, firstCorrect) : 0;
+  // Les tokens ne sont gagnés qu'en mode classé, pondérés par le niveau (cash/carré/duo)
+  const mult = LEVEL_MULT[round?.level] ?? 1;
+  const reward = correct && ranked ? Math.max(1, Math.round(computeReward(song, firstCorrect) * mult)) : 0;
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.userSongStat.upsert({

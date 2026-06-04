@@ -16,10 +16,11 @@ function sweep() {
 }
 setInterval(sweep, 5 * 60 * 1000).unref?.();
 
-// Émet un jeton liant la manche à l'utilisateur, à la musique et au mode classé.
-function issueRoundToken({ userId, songId, ranked }) {
+// Émet un jeton liant la manche à l'utilisateur, à la musique, au mode classé
+// et au niveau d'aide (cash | carre | duo, qui détermine le multiplicateur de gain).
+function issueRoundToken({ userId, songId, ranked, level = 'cash' }) {
   return jwt.sign(
-    { rt: true, uid: userId, sid: songId, ranked: !!ranked, jti: crypto.randomUUID() },
+    { rt: true, uid: userId, sid: songId, ranked: !!ranked, level, jti: crypto.randomUUID() },
     JWT_SECRET,
     { expiresIn: ROUND_TTL }
   );

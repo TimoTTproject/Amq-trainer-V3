@@ -9,6 +9,7 @@ let currentRoundToken = null; // jeton de manche émis par le serveur au tirage
 let currentLiked = false; // la musique en cours est-elle dans la playlist
 let isTraining = false; // session du centre d'entraînement
 let trainingSource = null; // 'review' | 'missed' | 'liked' | 'mine' | 'global'
+let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
@@ -684,6 +685,12 @@ function setupAppUI() {
   document.getElementById('play-btn').addEventListener('click', togglePlay);
   document.getElementById('replay-btn').addEventListener('click', replayClip);
   document.getElementById('like-btn').addEventListener('click', toggleLike);
+  document.getElementById('assist-carre').addEventListener('click', () => requestChoices('carre'));
+  document.getElementById('assist-duo').addEventListener('click', () => requestChoices('duo'));
+  document.getElementById('choice-buttons').addEventListener('click', (e) => {
+    const b = e.target.closest('.choice-opt');
+    if (b && !b.disabled) guessAnswer(b.textContent);
+  });
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
 
@@ -876,7 +883,9 @@ async function nextSong() {
   currentSong = song;
   currentRoundToken = roundToken;
   currentLiked = !!liked;
+  currentLevel = 'cash';
   setLikeButton();
+  resetAssist();
   answered = false;
   const v = video();
   v.src = song.videoUrl;
@@ -937,22 +946,54 @@ function resetQuizUI() {
   showOverlay(true);
 }
 
+// Duo / Carré / Cash : état des aides
+function resetAssist() {
+  document.getElementById('answer-area').classList.remove('hidden');
+  document.getElementById('choice-buttons').classList.add('hidden');
+  document.getElementById('choice-buttons').innerHTML = '';
+  const row = document.getElementById('assist-row');
+  row.classList.toggle('hidden', isTraining); // aides (gain réduit) réservées au mode classique
+  document.getElementById('assist-carre').disabled = false;
+  document.getElementById('assist-duo').disabled = false;
+}
+function hideAssist() {
+  document.getElementById('assist-row').classList.add('hidden');
+}
+
+// Passe en Carré (4) ou Duo (2) : récupère les propositions
+async function requestChoices(level) {
+  if (!currentSong || answered) return;
+  try {
+    const r = await api('/api/quiz/choices', { method: 'POST', body: JSON.stringify({ roundToken: currentRoundToken, level }) });
+    currentRoundToken = r.roundToken;
+    currentLevel = level;
+    hideAssist();
+    document.getElementById('answer-area').classList.add('hidden');
+    const box = document.getElementById('choice-buttons');
+    box.innerHTML = r.options.map((o) => `<button class="choice-opt">${escapeHtml(o)}</button>`).join('');
+    box.classList.remove('hidden');
+  } catch (e) { setHint(e.message); }
+}
+
 // Valide la réponse côté serveur, révèle l'anime et attribue les tokens.
-async function guessAnswer() {
+async function guessAnswer(forcedGuess) {
   if (!currentSong || answered) return;
   answered = true;
   clearTimeout(clipTimer); // plus de coupure une fois validé
   video().play().catch(() => {});
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
+  hideAssist();
+  document.querySelectorAll('#choice-buttons .choice-opt').forEach((b) => (b.disabled = true));
 
+  const guess = typeof forcedGuess === 'string' ? forcedGuess : document.getElementById('answer-input').value;
   let r;
   try {
     r = await api('/api/quiz/guess', {
       method: 'POST',
       body: JSON.stringify({
         songId: currentSong.id,
-        guess: document.getElementById('answer-input').value,
+        guess,
         roundToken: currentRoundToken,
       }),
     });
@@ -998,6 +1039,8 @@ async function showAnswerCasual() {
   if (!currentSong || answered) return;
   answered = true;
   clearTimeout(clipTimer);
+  hideAssist();
+  document.querySelectorAll('#choice-buttons .choice-opt').forEach((b) => (b.disabled = true));
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
   document.getElementById('answer-verdict').textContent = '🎓 Réponse révélée (entraînement)';
