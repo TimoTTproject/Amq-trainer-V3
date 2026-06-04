@@ -432,6 +432,49 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
   50% { box-shadow: 0 0 0 8px rgba(108,140,255,0); }
 }
 
+/* ════════════════════════════════════════════
+   OUVERTURE DE BOOSTER — cartes à retourner
+   ════════════════════════════════════════════ */
+.pull-result { justify-content: center; perspective: 1200px; }
+.reveal-all { display: block; margin: 0 auto 24px; }
+
+.flip-card {
+  width: 150px; height: 210px; cursor: pointer; flex: 0 0 auto;
+  opacity: 0; transform: translateY(18px); animation: dealIn .45s ease forwards;
+}
+@keyframes dealIn { to { opacity: 1; transform: translateY(0); } }
+.flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.2,.8,.3,1.15); }
+.flip-card.flipped .flip-inner { transform: rotateY(180deg); }
+.flip-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; overflow: hidden; }
+
+/* Dos de carte */
+.flip-back { background: linear-gradient(135deg, #1b2350, #3a2a6a 60%, #5a3a7a); border: 3px solid #3a3f6a; display: flex; align-items: center; justify-content: center; }
+.flip-back::before { content: ''; position: absolute; inset: 7px; border: 2px solid rgba(255,255,255,.14); border-radius: 9px; }
+.flip-back::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 35%, rgba(255,255,255,.12), transparent 60%); }
+.flip-back-inner { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: rgba(255,255,255,.9); border: 2px solid rgba(255,255,255,.3); background: rgba(0,0,0,.15); }
+
+/* Face avant : carte personnage en grand */
+.flip-front { transform: rotateY(180deg); }
+.flip-front .gcard { width: 100%; height: 100%; display: flex; flex-direction: column; border-width: 3px; }
+.flip-front .gcard-img { aspect-ratio: auto; flex: 1; }
+.flip-front .gcard-info { padding: 7px 9px; }
+.flip-card.flipped.r-epic .flip-front { box-shadow: 0 0 18px #b06cff77; }
+.flip-card.flipped.r-legendary .flip-front { box-shadow: 0 0 22px #ffb648aa; }
+.flip-card.flipped.r-mythic .flip-front { box-shadow: 0 0 26px #ff5d8fcc; }
+
+/* Effet holographique (épique+) */
+.holo { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: .8;
+  background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,.55) 45%, rgba(255,255,255,.1) 55%, transparent 75%);
+  background-size: 250% 250%; animation: holoShift 3.5s linear infinite; }
+.r-legendary .holo, .r-mythic .holo {
+  background: linear-gradient(115deg, rgba(255,0,140,.4), rgba(120,90,255,.35), rgba(0,220,255,.4), rgba(255,220,0,.4));
+  background-size: 300% 300%; animation: holoShift 4s linear infinite; }
+@keyframes holoShift { 0% { background-position: 0% 0%; } 100% { background-position: 250% 250%; } }
+
+/* Reflet brillant en haut de l'image (toutes les cartes) */
+.gcard-img::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 35%); }
+
 #view-profile .profile-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 16px; }
 #view-profile .pstat {
   background: linear-gradient(160deg, var(--bg-3), var(--bg));

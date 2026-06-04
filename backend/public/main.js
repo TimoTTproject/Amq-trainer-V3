@@ -593,7 +593,12 @@ function setupAppUI() {
     if (card) openCharacter(card.dataset.cid);
   };
   document.getElementById('collection-grid').addEventListener('click', openCardFromEvent);
-  document.getElementById('pull-result').addEventListener('click', openCardFromEvent);
+  // Tirage : clic = retourner la carte (puis ouvrir la fiche une fois révélée)
+  document.getElementById('pull-result').addEventListener('click', (e) => {
+    const card = e.target.closest('.flip-card[data-cid]');
+    if (card) flipPullCard(card);
+  });
+  document.getElementById('reveal-all-btn').addEventListener('click', revealAllPull);
   document.getElementById('character-close').addEventListener('click', closeCharacter);
   document.getElementById('character-modal').addEventListener('click', (e) => {
     if (e.target.id === 'character-modal') closeCharacter();
@@ -923,30 +928,81 @@ function cardHTML(c, opts = {}) {
   </div>`;
 }
 
+// Carte à retourner (face cachée → face révélée), style « booster »
+function flipCardHTML(c, i) {
+  const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
+  const badges = [];
+  if (c.isNew) badges.push('<span class="badge new">NOUVEAU</span>');
+  if (c.refund) badges.push(`<span class="badge refund">+${c.refund} 🪙</span>`);
+  if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
+  const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
+  return `<div class="flip-card r-${c.rarity}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
+    <div class="flip-inner">
+      <div class="flip-face flip-back"><div class="flip-back-inner"><i class="fas fa-music"></i></div></div>
+      <div class="flip-face flip-front">
+        <div class="gcard r-${c.rarity}">
+          <div class="gcard-img" ${img}>${holo}</div>
+          <div class="gcard-info">
+            <div class="gcard-name">${escapeHtml(c.name)}</div>
+            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+          </div>
+          ${badges.join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 async function doPull(type) {
   const single = document.getElementById('pull-single');
   const pack = document.getElementById('pull-pack');
   single.disabled = pack.disabled = true;
   document.getElementById('gacha-msg').textContent = 'Ouverture…';
+  document.getElementById('reveal-all-btn').classList.add('hidden');
   try {
     const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
     currentUser.tokens = r.tokens;
     renderHeaderUser();
     setGachaTokens();
+    pullRefundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙 remboursés (doublons)` : '';
+    pullCost = r.cost;
     const result = document.getElementById('pull-result');
-    result.innerHTML = r.cards
-      .map((c, i) => cardHTML(c, { isNew: c.isNew, refund: c.refund, reveal: true, index: i }))
-      .join('');
+    result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
     result.classList.remove('hidden');
-    const refundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙 remboursés (doublons)` : '';
-    document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙${refundMsg}`;
-    // recharge la collection une fois l'animation terminée
-    setTimeout(loadCollection, r.cards.length * 450 + 400);
+    if (r.cards.length > 1) document.getElementById('reveal-all-btn').classList.remove('hidden');
+    document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙 — clique sur les cartes pour les retourner ! 🎴`;
   } catch (err) {
     document.getElementById('gacha-msg').textContent = err.message;
   } finally {
     single.disabled = pack.disabled = false;
   }
+}
+
+let pullRefundMsg = '';
+let pullCost = 0;
+
+function flipPullCard(card) {
+  if (card.classList.contains('flipped')) { openCharacter(card.dataset.cid); return; }
+  card.classList.add('flipped');
+  if ([...document.querySelectorAll('#pull-result .flip-card')].every((c) => c.classList.contains('flipped'))) {
+    onAllRevealed();
+  }
+}
+
+function revealAllPull() {
+  const cards = [...document.querySelectorAll('#pull-result .flip-card:not(.flipped)')];
+  cards.forEach((c, i) =>
+    setTimeout(() => {
+      c.classList.add('flipped');
+      if (i === cards.length - 1) onAllRevealed();
+    }, i * 160)
+  );
+}
+
+function onAllRevealed() {
+  document.getElementById('reveal-all-btn').classList.add('hidden');
+  document.getElementById('gacha-msg').textContent = `−${pullCost} 🪙${pullRefundMsg}`;
+  loadCollection();
 }
 
 // État de la collection (pour filtrer/trier sans recharger)
