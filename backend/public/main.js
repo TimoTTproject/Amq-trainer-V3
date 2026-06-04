@@ -766,7 +766,7 @@ async function openTraining() {
   let s = {};
   try { s = await api('/api/quiz/training-stats'); } catch {}
   const opts = [
-    { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Les sons que tu as marqués « À revoir »', count: s.review },
+    { src: 'review', icon: 'fa-rotate-left', title: 'À revoir', desc: 'Auto : tes sons mal maîtrisés (réussite < 50 %) + ceux marqués', count: s.review },
     { src: 'missed', icon: 'fa-circle-xmark', title: 'Sons ratés', desc: 'Les sons que tu n\'as jamais trouvés', count: s.missed },
     { src: 'liked', icon: 'fa-heart', title: 'Ma playlist', desc: 'Tes sons likés', count: s.liked },
     { src: 'mine', icon: 'fa-list', title: 'Ma liste', desc: 'Ton import AniList', count: s.mine },

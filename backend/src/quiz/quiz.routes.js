@@ -35,6 +35,23 @@ async function buildChoices(song, count) {
   return shuffle([...titles]);
 }
 
+// Liste de révision automatique : sons mal maîtrisés (taux de réussite faible),
+// jamais trouvés, ou marqués « À revoir » manuellement. Liée au compte.
+async function getReviewSongIds(userId) {
+  const stats = await prisma.userSongStat.findMany({
+    where: { userId, OR: [{ playCount: { gt: 0 } }, { againCount: { gt: 0 } }] },
+    select: { songId: true, playCount: true, correctCount: true, againCount: true },
+  });
+  return stats
+    .filter(
+      (s) =>
+        s.againCount > 0 || // marqué manuellement
+        (s.playCount > 0 && s.correctCount === 0) || // jamais trouvé
+        (s.playCount >= 2 && s.correctCount * 2 < s.playCount) // < 50% de réussite
+    )
+    .map((s) => s.songId);
+}
+
 // Récompense en tokens pour une bonne réponse
 function computeReward(song, firstCorrect) {
   if (!firstCorrect) return 2; // rejeu : petite récompense (anti-farm)
@@ -55,10 +72,11 @@ router.get('/random', requireAuth, async (req, res) => {
   const source = ['review', 'missed', 'liked'].includes(req.query.source) ? req.query.source : null;
 
   let songIds;
-  if (source) {
+  if (source === 'review') {
+    songIds = await getReviewSongIds(req.user.id);
+  } else if (source) {
     const where = { userId: req.user.id };
-    if (source === 'review') where.againCount = { gt: 0 };
-    else if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
+    if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
     else where.liked = true;
     const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
     songIds = stats.map((s) => s.songId);
@@ -122,13 +140,13 @@ router.post('/like', requireAuth, async (req, res) => {
 // Compteurs pour le centre d'entraînement
 router.get('/training-stats', requireAuth, async (req, res) => {
   const userId = req.user.id;
-  const [review, missed, liked, mine] = await Promise.all([
-    prisma.userSongStat.count({ where: { userId, againCount: { gt: 0 } } }),
+  const [reviewIds, missed, liked, mine] = await Promise.all([
+    getReviewSongIds(userId),
     prisma.userSongStat.count({ where: { userId, playCount: { gt: 0 }, correctCount: 0 } }),
     prisma.userSongStat.count({ where: { userId, liked: true } }),
     prisma.userCatalogEntry.count({ where: { userId } }),
   ]);
-  res.json({ review, missed, liked, mine });
+  res.json({ review: reviewIds.length, missed, liked, mine });
 });
 
 // Playlist perso : les musiques likées
