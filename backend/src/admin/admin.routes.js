@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
+const { rarityForRank } = require('../gacha/rarity');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -104,7 +105,8 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
   try {
     page = await getTopCharacters(pageNum, 50);
   } catch (e) {
-    return res.status(502).json({ error: 'AniList indisponible : ' + e.message });
+    // AniList plafonne la pagination (~5000) → on arrête proprement au lieu d'un 502
+    return res.json({ added: 0, total: count, hasMore: false, page: pageNum, capped: true });
   }
   const chars = page.characters || [];
   if (!chars.length) return res.json({ added: 0, total: count, hasMore: false, page: pageNum });
@@ -123,6 +125,34 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
 
   const total = await prisma.character.count();
   res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
+});
+
+// Recalcule la rareté de TOUS les personnages par rang de popularité (favourites).
+// Restaure la pyramide quel que soit le total (écrase les raretés manuelles).
+router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) => {
+  const all = await prisma.character.findMany({ select: { id: true, favourites: true } });
+  all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
+  const total = all.length;
+  if (!total) return res.json({ total: 0, counts: {} });
+
+  const byRarity = {};
+  all.forEach((c, i) => {
+    const r = rarityForRank(i, total);
+    (byRarity[r] ||= []).push(c.id);
+  });
+
+  // updateMany par rareté, en lots de 500 ids (limite de taille de requête)
+  const counts = {};
+  const ops = [];
+  for (const [rarity, ids] of Object.entries(byRarity)) {
+    counts[rarity] = ids.length;
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      ops.push(prisma.character.updateMany({ where: { id: { in: chunk } }, data: { rarity } }));
+    }
+  }
+  await prisma.$transaction(ops);
+  res.json({ total, counts });
 });
 
 module.exports = { router };

@@ -594,6 +594,7 @@ function setupAppUI() {
   });
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
+  document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));
@@ -1663,11 +1664,35 @@ async function runImportCharacters() {
       lastTotal = r.total;
       nextPage = (r.page || 1) + 1; // on avance page par page, même si la page était déjà connue
       status.textContent = `+${totalAdded} ajoutés · ${r.total} au total (page ${r.page})…`;
-      if (!r.hasMore) { status.textContent = `✅ Terminé : ${r.total} personnages (fin du catalogue AniList).`; loadAdminChars(1, adminSearch); return; }
+      if (!r.hasMore) {
+        status.textContent = r.capped
+          ? `✅ Plafond AniList atteint (${r.total} personnages). Pense à « Recalculer les raretés ».`
+          : `✅ Terminé : ${r.total} personnages. Pense à « Recalculer les raretés ».`;
+        loadAdminChars(1, adminSearch);
+        return;
+      }
       await sleep(1100); // throttle AniList
     }
-    status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique pour en importer plus.`;
+    status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique, puis « Recalculer les raretés ».`;
     loadAdminChars(1, adminSearch);
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runRecomputeRarities() {
+  const btn = document.getElementById('admin-recompute-btn');
+  const status = document.getElementById('admin-recompute-status');
+  btn.disabled = true;
+  status.textContent = 'Recalcul en cours…';
+  try {
+    const r = await api('/api/admin/recompute-rarities', { method: 'POST', body: JSON.stringify({}) });
+    const order = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+    const summary = order.filter((k) => r.counts[k]).map((k) => `${RARITY_LABELS[k]} ${r.counts[k]}`).join(' · ');
+    status.textContent = `✅ ${r.total} personnages rééquilibrés — ${summary}`;
+    loadAdminChars(adminPage, adminSearch);
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
