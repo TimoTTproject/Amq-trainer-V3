@@ -8,6 +8,34 @@ let mpRoom = null; // dernier snapshot de salon
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
 
+// Toast (notifications multi : invitations, infos)
+function mpToast(html, actionLabel, onAction) {
+  let layer = document.getElementById('mp-toasts');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'mp-toasts';
+    layer.className = 'mp-toasts';
+    document.body.appendChild(layer);
+  }
+  const t = document.createElement('div');
+  t.className = 'mp-toast';
+  t.innerHTML = `<span>${html}</span>`;
+  if (actionLabel && onAction) {
+    const b = document.createElement('button');
+    b.className = 'btn-primary';
+    b.textContent = actionLabel;
+    b.addEventListener('click', () => { onAction(); t.remove(); });
+    t.appendChild(b);
+  }
+  const close = document.createElement('button');
+  close.className = 'mp-toast-x';
+  close.innerHTML = '✕';
+  close.addEventListener('click', () => t.remove());
+  t.appendChild(close);
+  layer.appendChild(t);
+  setTimeout(() => t.remove(), 15000);
+}
+
 function mpShow(panel) {
   ['menu', 'room', 'game', 'over'].forEach((p) =>
     document.getElementById('mp-' + p).classList.toggle('hidden', p !== panel)
@@ -44,6 +72,13 @@ function connectMp() {
     document.getElementById('mp-menu-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
   });
   mpSocket.on('mp:error', (d) => { document.getElementById('mp-menu-msg').textContent = d.msg || 'Erreur'; });
+  mpSocket.on('mp:info', (d) => mpToast(d.msg));
+  mpSocket.on('mp:invited', (d) => {
+    mpToast(`🎮 <b>${escapeHtml(d.from)}</b> t'invite à jouer !`, 'Rejoindre', () => {
+      openMultiplayer();
+      mpSocket.emit('mp:join', d.code);
+    });
+  });
 
   mpSocket.on('mp:room', (d) => {
     mpRoom = d;

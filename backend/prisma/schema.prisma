@@ -60,6 +60,23 @@ model User {
   towerRuns     TowerRun[]
   mpResults     MpResult[]
   quests        Quest[]
+  friendsSent     Friendship[] @relation("FriendReq")
+  friendsReceived Friendship[] @relation("FriendAdr")
+}
+
+// Amitié (demande puis acceptation)
+model Friendship {
+  id          Int      @id @default(autoincrement())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending") // pending | accepted
+  createdAt   DateTime @default(now())
+
+  requester User @relation("FriendReq", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendAdr", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
 }
 
 // Quêtes quotidiennes (3 par jour, progression auto, récompense en tokens)

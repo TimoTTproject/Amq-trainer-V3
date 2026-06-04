@@ -87,6 +87,7 @@
       <button class="nav-item" data-nav="training"><i class="fas fa-graduation-cap"></i><span>Entraînement</span></button>
       <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
       <button class="nav-item" data-nav="mp"><i class="fas fa-users"></i><span>Multi</span></button>
+      <button class="nav-item" data-nav="friends"><i class="fas fa-user-group"></i><span>Amis</span></button>
       <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
       <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
       <button class="nav-item" data-nav="playlist"><i class="fas fa-heart"></i><span>Playlist</span></button>
@@ -552,6 +553,21 @@
       <div id="srs-overview" class="srs-overview"></div>
       <label class="chrono-toggle"><input type="checkbox" id="train-chrono" /> ⏱ Mode chrono (révèle automatiquement à la fin du temps)</label>
       <div class="home-grid" id="training-grid"></div>
+    </div>
+
+    <!-- VUE AMIS -->
+    <div id="view-friends" class="hidden">
+      <div class="gacha-top"><h2><i class="fas fa-user-group"></i> Amis</h2></div>
+      <div class="friends-search">
+        <input type="text" id="friends-search-input" placeholder="Rechercher un joueur par pseudo…" />
+        <div id="friends-search-results" class="friends-results"></div>
+      </div>
+      <div id="friends-incoming" class="friends-section"></div>
+      <div class="friends-section">
+        <h3><i class="fas fa-user-group"></i> Mes amis (<span id="friends-count">0</span>)</h3>
+        <div id="friends-list" class="friends-list"></div>
+      </div>
+      <p class="hint">💡 Pour inviter un ami dans une partie : crée une <b>salle privée</b> (Multi → Créer une salle), puis reviens ici et clique « Inviter ».</p>
     </div>
 
     <!-- VUE PLAYLIST -->

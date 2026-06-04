@@ -151,6 +151,7 @@ function showView(name) {
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
+  document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
 }
@@ -167,6 +168,7 @@ function navTo(name) {
   if (name === 'playlist') return openPlaylist();
   if (name === 'quiz') return openQuiz();
   if (name === 'training') return openTraining();
+  if (name === 'friends') return openFriends();
   showView(name); // home, quiz
 }
 
@@ -2112,6 +2114,93 @@ document.addEventListener('DOMContentLoaded', () => {
     const b = e.target.closest('.quest-claim');
     if (b) claimQuest(b.dataset.qid, b);
   });
+});
+
+// ── AMIS ──
+function openFriends() {
+  showView('friends');
+  document.getElementById('friends-search-input').value = '';
+  document.getElementById('friends-search-results').innerHTML = '';
+  loadFriends();
+}
+
+function friendAvatar(u) {
+  if (u.avatarUrl) return `<span class="avatar avatar-sm" style="background-image:url('${u.avatarUrl}')"></span>`;
+  return `<span class="avatar avatar-sm">${escapeHtml((u.displayName || '?').charAt(0).toUpperCase())}</span>`;
+}
+
+async function loadFriends() {
+  try {
+    const d = await api('/api/friends');
+    document.getElementById('friends-count').textContent = d.friends.length;
+    const inc = document.getElementById('friends-incoming');
+    inc.innerHTML = d.incoming.length
+      ? `<h3><i class="fas fa-user-clock"></i> Demandes reçues</h3>` + d.incoming.map((u) => `
+          <div class="friend-row" data-uid="${u.id}">
+            ${friendAvatar(u)}<span class="friend-name">${escapeHtml(u.displayName)}</span>
+            <button class="btn-primary fr-accept" data-uid="${u.id}">Accepter</button>
+            <button class="btn-secondary fr-remove" data-uid="${u.id}">✕</button>
+          </div>`).join('')
+      : '';
+    const list = document.getElementById('friends-list');
+    list.innerHTML = d.friends.length
+      ? d.friends.map((u) => `
+          <div class="friend-row" data-uid="${u.id}">
+            ${friendAvatar(u)}
+            <span class="friend-name">${escapeHtml(u.displayName)} <span class="friend-dot ${u.online ? 'on' : 'off'}" title="${u.online ? 'En ligne' : 'Hors ligne'}"></span></span>
+            <button class="btn-secondary fr-profile" data-uid="${u.id}">Profil</button>
+            <button class="btn-secondary fr-invite" data-uid="${u.id}" ${u.online ? '' : 'disabled'}>Inviter</button>
+            <button class="btn-secondary fr-remove" data-uid="${u.id}">✕</button>
+          </div>`).join('')
+      : '<p class="muted">Aucun ami pour l\'instant. Cherche un joueur ci-dessus !</p>';
+  } catch (e) { document.getElementById('friends-list').innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; }
+}
+
+let friendsSearchTimer;
+async function searchFriends(q) {
+  const box = document.getElementById('friends-search-results');
+  if (q.trim().length < 2) { box.innerHTML = ''; return; }
+  try {
+    const { results } = await api(`/api/friends/search?q=${encodeURIComponent(q.trim())}`);
+    box.innerHTML = results.length
+      ? results.map((u) => `<div class="friend-row" data-uid="${u.id}">
+          ${friendAvatar(u)}<span class="friend-name">${escapeHtml(u.displayName)}</span>
+          <button class="btn-primary fr-add" data-uid="${u.id}">+ Ajouter</button>
+        </div>`).join('')
+      : '<p class="muted">Aucun joueur trouvé.</p>';
+  } catch {}
+}
+
+async function friendAction(path, userId) {
+  await api(`/api/friends/${path}`, { method: 'POST', body: JSON.stringify({ userId }) });
+}
+function inviteFriend(userId) {
+  if (typeof connectMp === 'function') connectMp();
+  if (!window.mpRoom || mpRoom.isPublic || !mpRoom.code) {
+    alert('Crée d\'abord une salle privée (Multi → Créer une salle), puis invite ton ami.');
+    return;
+  }
+  if (mpSocket) mpSocket.emit('mp:invite', userId);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('friends-search-input').addEventListener('input', (e) => {
+    clearTimeout(friendsSearchTimer);
+    friendsSearchTimer = setTimeout(() => searchFriends(e.target.value), 300);
+  });
+  document.getElementById('friends-search-results').addEventListener('click', async (e) => {
+    const b = e.target.closest('.fr-add');
+    if (b) { await friendAction('request', b.dataset.uid); b.textContent = '✓ Demandé'; b.disabled = true; loadFriends(); }
+  });
+  const onFriendsClick = async (e) => {
+    const uid = (e.target.closest('[data-uid]') || {}).dataset?.uid;
+    if (e.target.closest('.fr-accept')) { await friendAction('accept', uid); loadFriends(); }
+    else if (e.target.closest('.fr-remove')) { await friendAction('remove', uid); loadFriends(); }
+    else if (e.target.closest('.fr-profile')) { openPlayer(uid); }
+    else if (e.target.closest('.fr-invite')) { inviteFriend(uid); }
+  };
+  document.getElementById('friends-incoming').addEventListener('click', onFriendsClick);
+  document.getElementById('friends-list').addEventListener('click', onFriendsClick);
 });
 
 // PWA : enregistre le service worker (installable + repli hors-ligne)

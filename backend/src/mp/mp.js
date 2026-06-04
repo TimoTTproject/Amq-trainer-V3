@@ -20,9 +20,38 @@ const RANKED_SETTINGS = { rounds: 10, roundMs: 25000 };
 
 const rooms = new Map(); // roomId -> room
 const userRoom = new Map(); // userId -> roomId (pour la reconnexion)
+const online = new Map(); // userId -> Set<socketId> (présence)
 let publicRoomId = null;
 let rankedRoomId = null;
 let io = null;
+
+function addOnline(socket) {
+  const uid = socket.data.user.id;
+  if (!online.has(uid)) online.set(uid, new Set());
+  online.get(uid).add(socket.id);
+}
+function removeOnline(socket) {
+  const uid = socket.data.user.id;
+  const set = online.get(uid);
+  if (set) { set.delete(socket.id); if (!set.size) online.delete(uid); }
+}
+function isOnline(userId) {
+  return online.has(userId);
+}
+
+// Invitation en salle privée : prévient tous les sockets de l'ami
+function invite(socket, toUserId) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || room.isPublic || !room.code) {
+    return socket.emit('mp:error', { msg: 'Crée une salle privée pour inviter.' });
+  }
+  const set = online.get(toUserId);
+  if (!set || !set.size) return socket.emit('mp:error', { msg: 'Ce joueur est hors ligne.' });
+  for (const sid of set) {
+    io.sockets.sockets.get(sid)?.emit('mp:invited', { code: room.code, from: socket.data.user.displayName });
+  }
+  socket.emit('mp:info', { msg: 'Invitation envoyée ✓' });
+}
 
 function parseCookies(str) {
   const out = {};
@@ -431,7 +460,9 @@ function initMp(server) {
     } catch { next(new Error('auth')); }
   });
   io.on('connection', (socket) => {
+    addOnline(socket);
     reattach(socket); // restaure une partie en cours si l'utilisateur en avait une
+    socket.on('mp:invite', (toUserId) => invite(socket, String(toUserId || '')));
     socket.on('mp:quick', () => joinPublic(socket, false));
     socket.on('mp:ranked', () => joinPublic(socket, true));
     socket.on('mp:create', (s) => createRoom(socket, s));
@@ -442,9 +473,9 @@ function initMp(server) {
     socket.on('mp:chat', (t) => chat(socket, t));
     socket.on('mp:emote', (e) => emote(socket, e));
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
-    socket.on('disconnect', () => onDisconnect(socket));
+    socket.on('disconnect', () => { removeOnline(socket); onDisconnect(socket); });
   });
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo };
+module.exports = { initMp, getCurrentVideo, isOnline };
