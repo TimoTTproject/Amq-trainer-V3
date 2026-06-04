@@ -15,8 +15,18 @@ const DC_GRACE_LOBBY = 25000; // délai avant retrait après déconnexion (lobby
 const DC_GRACE_GAME = 120000; // ... en partie (reconnexion possible)
 const VALID_ROUNDS = [5, 10, 15, 20];
 const VALID_ROUNDMS = [15000, 25000, 40000];
+const VALID_MODES = ['classic', 'teams', 'elim'];
+const ELIM_LIVES = 3;
+const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
+const TEAM_NAMES = ['Rouge', 'Bleu'];
 const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
-const RANKED_SETTINGS = { rounds: 10, roundMs: 25000 };
+const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic' };
+
+function shuffle(a) {
+  a = [...a];
+  for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
 
 const rooms = new Map(); // roomId -> room
 const userRoom = new Map(); // userId -> roomId (pour la reconnexion)
@@ -93,7 +103,7 @@ function newRoom({ isPublic, ranked }) {
   const room = {
     id, isPublic, ranked: !!ranked, code: isPublic ? null : genCode(),
     hostId: null, players: new Map(),
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000 },
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic' },
     status: 'lobby', chat: [], round: 0, current: null, usedSongIds: new Set(),
     timer: null, countdownTimer: null, countdownEndsAt: 0, revealSong: null, revealUntil: 0,
   };
@@ -146,6 +156,7 @@ function applySettings(room, s) {
   if (!s || room.ranked) return;
   if (VALID_ROUNDS.includes(s.rounds)) room.settings.rounds = s.rounds;
   if (VALID_ROUNDMS.includes(s.roundMs)) room.settings.roundMs = s.roundMs;
+  if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
 }
 function setSettings(socket, s) {
   const room = rooms.get(socket.data.roomId);
@@ -182,8 +193,17 @@ function startGame(room) {
   room.status = 'playing';
   room.round = 0;
   room.usedSongIds = new Set();
-  for (const p of room.players.values()) p.score = 0;
-  io.to(room.id).emit('mp:game:start', { totalRounds: room.settings.rounds, ranked: room.ranked, players: playersPublic(room) });
+  room.mode = room.settings.mode || 'classic';
+
+  const arr = [...room.players.values()];
+  arr.forEach((p) => { p.score = 0; p.team = null; p.lives = ELIM_LIVES; p.eliminated = false; });
+  if (room.mode === 'teams') shuffle(arr).forEach((p, i) => { p.team = i % 2; });
+
+  io.to(room.id).emit('mp:game:start', {
+    totalRounds: room.settings.rounds, ranked: room.ranked, mode: room.mode, elimLives: ELIM_LIVES,
+    teamNames: TEAM_NAMES,
+    players: arr.map((p) => ({ name: p.name, avatarUrl: p.avatarUrl, team: p.team })),
+  });
   setTimeout(() => startRound(room), 2500);
 }
 
@@ -221,7 +241,7 @@ function onGuess(socket, text) {
   if (!room || !room.current) return;
   const uid = socket.data.user.id;
   const player = room.players.get(uid);
-  if (!player) return;
+  if (!player || player.eliminated) return; // les éliminés sont spectateurs
   const cur = room.current;
   if (cur.answers.get(uid)?.correct || Date.now() > cur.endsAt) return;
   const correct = isCorrectGuess(text, cur.song);
@@ -235,11 +255,20 @@ function onGuess(socket, text) {
     answered: [...cur.answers.values()].filter((a) => a.correct).length,
     total: connectedPlayers(room).length,
   });
-  const conn = connectedPlayers(room);
-  if (conn.length && conn.every((p) => cur.answers.get(p.userId)?.correct)) {
+  const active = connectedPlayers(room).filter((p) => !p.eliminated);
+  if (active.length && active.every((p) => cur.answers.get(p.userId)?.correct)) {
     clearTimeout(room.timer);
     endRound(room);
   }
+}
+
+function aliveCount(room) {
+  return [...room.players.values()].filter((p) => !p.eliminated).length;
+}
+function teamTotals(room) {
+  const t = [0, 0];
+  for (const p of room.players.values()) if (p.team != null) t[p.team] += p.score;
+  return t;
 }
 
 function endRound(room) {
@@ -247,22 +276,40 @@ function endRound(room) {
   const cur = room.current;
   room.current = null;
   const s = cur.song;
+
+  // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé
+  if (room.mode === 'elim') {
+    for (const p of room.players.values()) {
+      if (p.eliminated) continue;
+      if (!cur.answers.get(p.userId)?.correct) {
+        p.lives = Math.max(0, (p.lives || 0) - 1);
+        if (p.lives === 0) p.eliminated = true;
+      }
+    }
+  }
+
   const results = [...room.players.values()]
     .map((p) => {
       const a = cur.answers.get(p.userId);
-      return { name: p.name, avatarUrl: p.avatarUrl, correct: !!a?.correct, points: a?.points || 0, score: p.score };
+      return {
+        name: p.name, avatarUrl: p.avatarUrl, correct: !!a?.correct, points: a?.points || 0,
+        score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
+      };
     })
     .sort((a, b) => b.score - a.score);
+
   io.to(room.id).emit('mp:round:result', {
-    round: room.round, total: room.settings.rounds,
+    round: room.round, total: room.settings.rounds, mode: room.mode,
     answer: { animeTitle: s.animeTitle, title: s.title, artist: s.artist, type: s.type, number: s.number },
     results,
+    teams: room.mode === 'teams' ? teamTotals(room) : null,
   });
   room.revealSong = s;
   room.revealUntil = Date.now() + RESULT_MS;
   room.timer = setTimeout(() => {
     room.revealSong = null;
-    if (room.round >= room.settings.rounds) endGame(room);
+    const elimOver = room.mode === 'elim' && aliveCount(room) <= 1;
+    if (elimOver || room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS) endGame(room);
     else startRound(room);
   }, RESULT_MS);
 }
@@ -307,9 +354,16 @@ async function persistResults(room, ordered) {
 async function endGame(room) {
   room.status = 'over';
   clearTimeout(room.timer);
+  // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
   const ordered = [...room.players.values()]
-    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, score: p.score }))
-    .sort((a, b) => b.score - a.score);
+    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated }))
+    .sort((a, b) => {
+      if (room.mode === 'elim') {
+        if (!!a.eliminated !== !!b.eliminated) return a.eliminated ? 1 : -1;
+        if ((b.lives || 0) !== (a.lives || 0)) return (b.lives || 0) - (a.lives || 0);
+      }
+      return b.score - a.score;
+    });
 
   let deltaById = {};
   try { deltaById = await persistResults(room, ordered); }
@@ -317,10 +371,16 @@ async function endGame(room) {
   for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
 
   const ranking = ordered.map((p, i) => ({
-    name: p.name, avatarUrl: p.avatarUrl, score: p.score,
+    name: p.name, avatarUrl: p.avatarUrl, score: p.score, team: p.team,
+    lives: p.lives, eliminated: p.eliminated,
     mmrDelta: room.ranked ? deltaById[p.userId]?.delta ?? 0 : null,
   }));
-  io.to(room.id).emit('mp:game:over', { ranked: room.ranked, ranking });
+  let teams = null;
+  if (room.mode === 'teams') {
+    const t = teamTotals(room);
+    teams = TEAM_NAMES.map((name, i) => ({ name, score: t[i] }));
+  }
+  io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams, ranking });
 
   if (room.isPublic) {
     setTimeout(() => closeRoom(room), 30000);
@@ -407,8 +467,11 @@ function reattach(socket) {
   if (room.status === 'lobby' || room.status === 'over') {
     broadcastRoom(room);
   } else if (room.status === 'playing') {
-    socket.emit('mp:game:start', { totalRounds: room.settings.rounds, ranked: room.ranked, players: playersPublic(room) });
-    if (room.current) {
+    socket.emit('mp:game:start', {
+      totalRounds: room.settings.rounds, ranked: room.ranked, mode: room.mode, elimLives: ELIM_LIVES, teamNames: TEAM_NAMES,
+      players: [...room.players.values()].map((pp) => ({ name: pp.name, avatarUrl: pp.avatarUrl, team: pp.team })),
+    });
+    if (room.current && !p.eliminated) {
       const remaining = Math.max(1500, room.current.endsAt - Date.now());
       socket.emit('mp:round:start', {
         round: room.round, total: room.settings.rounds,

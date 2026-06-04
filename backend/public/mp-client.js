@@ -5,6 +5,9 @@
 let mpSocket = null;
 let mpTimer = null;
 let mpRoom = null; // dernier snapshot de salon
+let mpMode = 'classic'; // classic | teams | elim
+let mpTeamNames = ['Rouge', 'Bleu'];
+let mpEliminated = false; // moi, en mode élimination
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
 
@@ -92,12 +95,17 @@ function connectMp() {
   mpSocket.on('mp:game:start', (d) => {
     showView('mp');
     mpShow('game');
+    mpMode = d.mode || 'classic';
+    mpTeamNames = d.teamNames || ['Rouge', 'Bleu'];
+    mpEliminated = false;
+    const myTeam = (d.players.find((p) => p.name === currentUser.displayName) || {}).team;
     document.getElementById('mp-total').textContent = d.totalRounds;
     document.getElementById('mp-round').textContent = '—';
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-scores').innerHTML = '';
     document.getElementById('mp-progress').textContent = '';
-    document.getElementById('mp-feedback').textContent = (d.ranked ? '🏅 Partie classée — ' : '') + `c'est parti ! ${d.players.length} joueur(s) 🎮`;
+    const modeTxt = mpMode === 'teams' ? `Équipes — tu es ${mpTeamNames[myTeam] || '?'}` : mpMode === 'elim' ? `Élimination — ${d.elimLives} vies` : '';
+    document.getElementById('mp-feedback').textContent = (d.ranked ? '🏅 Classé — ' : '') + (modeTxt ? modeTxt + ' — ' : '') + `c'est parti ! ${d.players.length} joueur(s) 🎮`;
     renderEmotesBar();
   });
 
@@ -107,11 +115,12 @@ function connectMp() {
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
-    const answered = !!d.alreadyAnswered;
-    input.value = ''; input.disabled = answered;
-    if (!answered) input.focus();
-    document.getElementById('mp-submit').disabled = answered;
-    document.getElementById('mp-feedback').textContent = answered ? '✅ Déjà répondu' : (d.resumed ? '↩️ Reconnecté' : '');
+    const lock = !!d.alreadyAnswered || mpEliminated;
+    input.value = ''; input.disabled = lock;
+    if (!lock) input.focus();
+    document.getElementById('mp-submit').disabled = lock;
+    document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
+      : d.alreadyAnswered ? '✅ Déjà répondu' : (d.resumed ? '↩️ Reconnecté' : '');
     mpStartClip(d.clipUrl, d.startAt, d.duration);
   });
 
@@ -138,8 +147,16 @@ function connectMp() {
     res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
     renderMpScores(d.results, true);
+    if (d.teams) {
+      document.getElementById('mp-result').insertAdjacentHTML('beforeend',
+        `<div class="mp-teams">${d.teams.map((t, i) => `<span class="mp-team t${i}">${escapeHtml(mpTeamNames[i])} : <b>${t}</b></span>`).join('')}</div>`);
+    }
     const me = d.results.find((p) => p.name === currentUser.displayName);
-    if (me) (me.correct ? sfx.correct() : sfx.wrong());
+    if (me) {
+      mpEliminated = !!me.eliminated;
+      me.correct ? sfx.correct() : sfx.wrong();
+      if (mpEliminated) { sfx.lose(); document.getElementById('mp-feedback').textContent = '💀 Tu es éliminé !'; }
+    }
     document.getElementById('mp-input').disabled = true;
     document.getElementById('mp-submit').disabled = true;
   });
@@ -150,16 +167,28 @@ function connectMp() {
     mpShow('over');
     const iWon = d.ranking[0] && d.ranking[0].name === currentUser.displayName;
     if (iWon) { sfx.win(); burstConfetti(40); } else { sfx.lose(); }
-    document.querySelector('#mp-over h3').textContent = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
+    let title = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
+    let teamsHtml = '';
+    if (d.mode === 'teams' && d.teams) {
+      const win = d.teams[0].score === d.teams[1].score ? 'Égalité' : (d.teams[0].score > d.teams[1].score ? d.teams[0].name : d.teams[1].name);
+      title = `🏆 Victoire : ${win}`;
+      teamsHtml = `<div class="mp-teams big">${d.teams.map((t, i) => `<span class="mp-team t${i}">${escapeHtml(t.name)} : <b>${t.score}</b></span>`).join('')}</div>`;
+    } else if (d.mode === 'elim') {
+      const survivor = d.ranking.find((p) => !p.eliminated);
+      title = survivor ? `🏆 Survivant : ${escapeHtml(survivor.name)}` : '🏁 Tous éliminés !';
+    }
+    document.querySelector('#mp-over h3').textContent = title;
     const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
-    document.getElementById('mp-ranking').innerHTML = d.ranking
+    document.getElementById('mp-ranking').innerHTML = teamsHtml + d.ranking
       .map((p, i) => {
         const delta = p.mmrDelta != null
           ? ` <span class="mp-mmr ${p.mmrDelta >= 0 ? 'gain' : 'spend'}">${p.mmrDelta >= 0 ? '+' : ''}${p.mmrDelta} MMR</span>`
           : '';
+        const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
+        const tag = d.mode === 'elim' ? (p.eliminated ? ' 💀' : ' ❤️') : '';
         return `<li class="lb-row${p.name === currentUser.displayName ? ' me' : ''}">
           <span class="lb-rank">${medal(i + 1)}</span>
-          <span class="lb-name">${escapeHtml(p.name)}${delta}</span>
+          <span class="lb-name">${escapeHtml(p.name)}${team}${tag}</span>
           <span class="lb-value">${p.score} pts</span>
         </li>`;
       })
@@ -180,8 +209,10 @@ function renderRoom(d) {
 
   document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
   document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
+  document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
   document.getElementById('mp-set-rounds').disabled = !isHost;
   document.getElementById('mp-set-speed').disabled = !isHost;
+  document.getElementById('mp-set-mode').disabled = !isHost;
 
   const startBtn = document.getElementById('mp-start');
   const status = document.getElementById('mp-room-status');
@@ -234,13 +265,16 @@ function floatEmote(emote, name) {
 // ── Scores ──
 function renderMpScores(results, withPoints) {
   document.getElementById('mp-scores').innerHTML = results
-    .map(
-      (p) => `<div class="mp-score-row${p.correct ? ' ok' : ''}">
-      <span class="mp-name">${escapeHtml(p.name)}</span>
-      ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
-      <span class="mp-total">${p.score}</span>
-    </div>`
-    )
+    .map((p) => {
+      const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
+      const lives = `<span class="mp-lives">${mpMode === 'elim' ? (p.eliminated ? '💀' : ('❤️'.repeat(Math.max(0, p.lives || 0)) || '—')) : ''}</span>`;
+      return `<div class="mp-score-row${p.correct ? ' ok' : ''}${p.eliminated ? ' elim' : ''}">
+        <span class="mp-name">${escapeHtml(p.name)}${team}</span>
+        ${lives}
+        ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
+        <span class="mp-total">${p.score}</span>
+      </div>`;
+    })
     .join('');
 }
 
@@ -281,6 +315,7 @@ function mpSettingsPayload() {
   return {
     rounds: parseInt(document.getElementById('mp-set-rounds').value),
     roundMs: parseInt(document.getElementById('mp-set-speed').value),
+    mode: document.getElementById('mp-set-mode').value,
   };
 }
 
@@ -306,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-start').addEventListener('click', () => mpSocket && mpSocket.emit('mp:start'));
   document.getElementById('mp-set-rounds').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-speed').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-mode').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {
