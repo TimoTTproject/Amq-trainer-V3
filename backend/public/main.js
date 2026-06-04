@@ -1397,13 +1397,25 @@ async function runBackfillSeries() {
   const btn = document.getElementById('admin-backfill-btn');
   const status = document.getElementById('admin-backfill-status');
   btn.disabled = true;
-  let total = 0;
+  let total = 0, fails = 0;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     while (true) {
-      const r = await api('/api/admin/backfill-series', { method: 'POST', body: JSON.stringify({}) });
+      let r;
+      try {
+        r = await api('/api/admin/backfill-series', { method: 'POST', body: JSON.stringify({}) });
+      } catch (e) {
+        // Rate-limit / erreur réseau ponctuelle : on patiente et on réessaie
+        if (++fails > 5) throw e;
+        status.textContent = `Pause (AniList saturé)… réessai ${fails}/5`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
       total += r.processed;
       status.textContent = `${total} traités · ${r.remaining} restants…`;
       if (r.remaining === 0 || r.processed === 0) break;
+      await sleep(1500); // throttle pour rester sous la limite AniList
     }
     status.textContent = `Terminé ✅ (${total} personnages mis à jour)`;
     loadAdminChars(adminPage, adminSearch);

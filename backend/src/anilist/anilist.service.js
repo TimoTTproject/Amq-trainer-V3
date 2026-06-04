@@ -1,7 +1,7 @@
 // Accès à l'API GraphQL d'AniList
 const ANILIST_GQL = 'https://graphql.anilist.co';
 
-async function anilistQuery(query, variables, accessToken) {
+async function anilistQuery(query, variables, accessToken, retries = 3) {
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   const res = await fetch(ANILIST_GQL, {
@@ -9,6 +9,17 @@ async function anilistQuery(query, variables, accessToken) {
     headers,
     body: JSON.stringify({ query, variables }),
   });
+
+  // Limite de débit : on attend Retry-After puis on réessaie.
+  if (res.status === 429 && retries > 0) {
+    const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
+    await new Promise((r) => setTimeout(r, wait + 500));
+    return anilistQuery(query, variables, accessToken, retries - 1);
+  }
+  if (!res.ok) {
+    throw new Error(`AniList ${res.status}`);
+  }
+
   const json = await res.json();
   if (json.errors) {
     throw new Error('AniList: ' + json.errors.map((e) => e.message).join(', '));
