@@ -97,16 +97,17 @@ router.post('/backfill-series', requireAuth, requireAdmin, async (req, res) => {
 // — insertion groupée rapide. Appeler en boucle pour avancer dans les pages.
 router.post('/import-characters', requireAuth, requireAdmin, async (req, res) => {
   const count = await prisma.character.count();
-  const startPage = Math.floor(count / 50) + 1;
+  // Curseur de page explicite (le client incrémente) ; sinon estimation initiale.
+  const pageNum = parseInt(req.body?.page) || Math.floor(count / 50) + 1;
 
   let page;
   try {
-    page = await getTopCharacters(startPage, 50);
+    page = await getTopCharacters(pageNum, 50);
   } catch (e) {
     return res.status(502).json({ error: 'AniList indisponible : ' + e.message });
   }
   const chars = page.characters || [];
-  if (!chars.length) return res.json({ added: 0, total: count, hasMore: false, page: startPage });
+  if (!chars.length) return res.json({ added: 0, total: count, hasMore: false, page: pageNum });
 
   const ids = chars.map((c) => c.id);
   const existing = await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } });
@@ -121,7 +122,7 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 
   const total = await prisma.character.count();
-  res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: startPage });
+  res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
 });
 
 module.exports = { router };

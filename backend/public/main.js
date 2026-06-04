@@ -1582,12 +1582,13 @@ async function runImportCharacters() {
   btn.disabled = true;
   status.textContent = 'Import depuis AniList…';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  let totalAdded = 0, lastTotal = 0, fails = 0, emptyStreak = 0;
+  let totalAdded = 0, lastTotal = 0, fails = 0, nextPage = null;
   try {
-    for (let i = 0; i < 12; i++) { // jusqu'à ~600 personnages par clic
+    for (let i = 0; i < 16; i++) { // ~800 personnages parcourus par clic
       let r;
       try {
-        r = await api('/api/admin/import-characters', { method: 'POST', body: JSON.stringify({}) });
+        const body = nextPage == null ? {} : { page: nextPage };
+        r = await api('/api/admin/import-characters', { method: 'POST', body: JSON.stringify(body) });
       } catch (e) {
         if (++fails > 4) throw e;
         status.textContent = `Pause (AniList saturé)… réessai ${fails}/4`;
@@ -1597,11 +1598,10 @@ async function runImportCharacters() {
       fails = 0;
       totalAdded += r.added;
       lastTotal = r.total;
-      status.textContent = `+${totalAdded} ajoutés · ${r.total} au total…`;
+      nextPage = (r.page || 1) + 1; // on avance page par page, même si la page était déjà connue
+      status.textContent = `+${totalAdded} ajoutés · ${r.total} au total (page ${r.page})…`;
       if (!r.hasMore) { status.textContent = `✅ Terminé : ${r.total} personnages (fin du catalogue AniList).`; loadAdminChars(1, adminSearch); return; }
-      emptyStreak = r.added === 0 ? emptyStreak + 1 : 0;
-      if (emptyStreak >= 2) break; // plus rien de nouveau ici
-      await sleep(1200); // throttle AniList
+      await sleep(1100); // throttle AniList
     }
     status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique pour en importer plus.`;
     loadAdminChars(1, adminSearch);
