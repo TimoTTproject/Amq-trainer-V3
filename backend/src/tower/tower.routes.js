@@ -53,15 +53,18 @@ async function buildFloor() {
   return { songId: correct.id, options, answer: options.indexOf(correct.animeTitle) };
 }
 
-// Représentation cliente d'un étage (sans révéler la bonne réponse)
+// Représentation cliente d'un étage (sans révéler la bonne réponse).
+// `t` change à chaque nouvelle musique (floorStartedAt) → URL unique, sinon le
+// navigateur rejoue la vidéo en cache (même runId d'un étage à l'autre).
 function floorPayload(run) {
+  const bust = run.floorStartedAt ? new Date(run.floorStartedAt).getTime() : run.floor;
   return {
     runId: run.id,
     floor: run.floor,
     lives: run.lives,
     options: run.currentOptions,
     timeLimit: timeLimitForFloor(run.floor),
-    clipUrl: `/api/tower/clip/${run.id}`,
+    clipUrl: `/api/tower/clip/${run.id}?t=${bust}`,
   };
 }
 
@@ -255,10 +258,11 @@ router.get('/clip/:runId', requireAuth, async (req, res) => {
     if (req.headers.range) headers.Range = req.headers.range; // seek / lecture partielle
     const upstream = await fetch(song.videoUrl, { headers });
     res.status(upstream.status);
-    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control']) {
+    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
       const v = upstream.headers.get(h);
       if (v) res.setHeader(h, v);
     }
+    res.setHeader('Cache-Control', 'no-store'); // une question = un flux, jamais mis en cache
     if (!upstream.body) return res.end();
     Readable.fromWeb(upstream.body).pipe(res);
   } catch (err) {

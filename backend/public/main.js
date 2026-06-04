@@ -978,10 +978,12 @@ function enterFloor(floor) {
     .map((o, i) => `<button class="tower-choice" data-choice="${i}">${escapeHtml(o)}</button>`)
     .join('');
 
-  // Vidéo proxifiée (le titre ne fuite pas via l'URL)
+  // Vidéo proxifiée (le titre ne fuite pas via l'URL). URL unique par question
+  // (?t=...) + load() pour forcer le rechargement et éviter la lecture en cache.
   const v = towerVideo();
   v.src = floor.clipUrl;
   v.volume = +document.getElementById('tower-volume').value;
+  v.load();
   document.getElementById('tower-overlay').classList.remove('hidden'); // audio seul
   v.play().catch(() => {});
   setTowerPlayIcon();
