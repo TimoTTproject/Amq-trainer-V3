@@ -168,10 +168,14 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
 // Importe la liste AniList "completed" d'un user dans son catalogue perso.
 // onProgress({ progress, current, total, message, matchedAnime, totalSongs })
 async function importUserList(userId, username, onProgress, limit = 1000) {
-  const animeList = await getCompletedAnime(username);
+  const animeList = await getCompletedAnime(username); // valide le pseudo (lève une erreur sinon)
   const total = Math.min(animeList.length, limit);
   let matchedAnime = 0;
   let totalSongs = 0;
+
+  // Un import REMPLACE la liste perso (sinon changer de pseudo accumule les deux).
+  // On ne supprime que les liens utilisateur, jamais le catalogue global partagé.
+  await prisma.userCatalogEntry.deleteMany({ where: { userId } });
 
   for (let i = 0; i < total; i++) {
     const media = animeList[i];

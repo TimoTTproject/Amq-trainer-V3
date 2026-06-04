@@ -733,6 +733,7 @@ function applyModeUI() {
   );
   // L'import AniList ne concerne que « Ma liste »
   document.getElementById('import-row').classList.toggle('hidden', mode === 'global');
+  document.getElementById('import-hint').classList.toggle('hidden', mode === 'global');
 }
 
 function applyGameModeUI() {
