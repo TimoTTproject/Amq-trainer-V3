@@ -8,9 +8,10 @@ const { setAuthCookie } = require('./jwt');
 
 const router = express.Router();
 
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
+// .trim() : évite les espaces/retours à la ligne collés par erreur (redirect_uri_mismatch)
+const CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+const REDIRECT_URI = (process.env.GOOGLE_REDIRECT_URI || '').trim();
 
 function isConfigured() {
   return Boolean(CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);

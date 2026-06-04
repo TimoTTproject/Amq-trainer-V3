@@ -8,9 +8,9 @@ const { getViewer } = require('../anilist/anilist.service');
 
 const router = express.Router();
 
-const CLIENT_ID = process.env.ANILIST_CLIENT_ID;
-const CLIENT_SECRET = process.env.ANILIST_CLIENT_SECRET;
-const REDIRECT_URI = process.env.ANILIST_REDIRECT_URI;
+const CLIENT_ID = (process.env.ANILIST_CLIENT_ID || '').trim();
+const CLIENT_SECRET = (process.env.ANILIST_CLIENT_SECRET || '').trim();
+const REDIRECT_URI = (process.env.ANILIST_REDIRECT_URI || '').trim();
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5500';
 
 function isConfigured() {
