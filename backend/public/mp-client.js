@@ -103,6 +103,8 @@ function connectMp() {
     res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
     renderMpScores(d.results, true);
+    const me = d.results.find((p) => p.name === currentUser.displayName);
+    if (me) (me.correct ? sfx.correct() : sfx.wrong());
     document.getElementById('mp-input').disabled = true;
     document.getElementById('mp-submit').disabled = true;
   });
@@ -111,6 +113,8 @@ function connectMp() {
     mpStopClip();
     showView('mp');
     mpShow('over');
+    const iWon = d.ranking[0] && d.ranking[0].name === currentUser.displayName;
+    if (iWon) { sfx.win(); burstConfetti(40); } else { sfx.lose(); }
     document.querySelector('#mp-over h3').textContent = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
     const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
     document.getElementById('mp-ranking').innerHTML = d.ranking

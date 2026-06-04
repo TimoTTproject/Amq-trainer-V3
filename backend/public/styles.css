@@ -34,6 +34,22 @@ input { font-family: inherit; }
 .btn-google { background: #fff; color: #1f1f1f; width: 100%; justify-content: center; gap: 10px; border: 1px solid #dadce0; margin-bottom: 10px; font-weight: 600; }
 .btn-google .g-logo { width: 18px; height: 18px; flex-shrink: 0; }
 .btn-google:hover { filter: none; background: #f7f8fa; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+
+/* ── Confettis ── */
+.confetti-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 200; }
+.confetti-bit { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; opacity: .95; animation: confettiFall 2s cubic-bezier(.3,.6,.5,1) forwards; }
+@keyframes confettiFall {
+  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(102vh) rotate(540deg); opacity: .9; }
+}
+
+/* ── Bump du compteur de tokens ── */
+.token-bump { animation: tokenBump .45s ease; }
+@keyframes tokenBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); color: var(--green); }
+  100% { transform: scale(1); }
+}
 .btn-primary:hover, .btn-secondary:hover, .btn-anilist:hover { filter: brightness(1.12); }
 .btn-primary:active, .btn-secondary:active { transform: translateY(1px); }
 button:disabled { opacity: .5; cursor: not-allowed; }

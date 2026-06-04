@@ -183,9 +183,17 @@ function renderAvatar(el, user) {
   }
 }
 
+let _lastTokens = null;
 function renderHeaderUser() {
   document.getElementById('user-name').textContent = currentUser.displayName;
-  document.getElementById('user-tokens').textContent = currentUser.tokens;
+  const tk = document.getElementById('user-tokens');
+  tk.textContent = currentUser.tokens;
+  if (_lastTokens !== null && currentUser.tokens !== _lastTokens) {
+    tk.parentElement.classList.remove('token-bump');
+    void tk.parentElement.offsetWidth;
+    tk.parentElement.classList.add('token-bump');
+  }
+  _lastTokens = currentUser.tokens;
   renderAvatar(document.getElementById('header-avatar'), currentUser);
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
@@ -372,6 +380,7 @@ async function claimLevels() {
     const r = await api('/api/profile/claim-levels', { method: 'POST', body: JSON.stringify({}) });
     currentUser.tokens = r.tokens;
     renderHeaderUser();
+    if (r.granted > 0) { sfx.levelup(); burstConfetti(); }
     btn.innerHTML = `<i class="fas fa-check"></i> +${r.granted} 🪙 !`;
     profileData = await api(`/api/profile/${currentUser.id}`);
     setTimeout(() => renderProfile(profileData), 1200);
@@ -509,6 +518,12 @@ function setupAppUI() {
     location.reload();
   });
   document.getElementById('dev-tokens-btn').addEventListener('click', devGrantTokens);
+  const muteBtn = document.getElementById('mute-btn');
+  const updateMuteIcon = () => {
+    muteBtn.querySelector('i').className = sfx.isMuted() ? 'fas fa-volume-xmark' : 'fas fa-volume-high';
+  };
+  updateMuteIcon();
+  muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -872,8 +887,10 @@ async function guessAnswer() {
   const verdict = document.getElementById('answer-verdict');
   if (r.correct) {
     verdict.textContent = r.reward ? `✅ Bonne réponse !  +${r.reward} 🪙` : '✅ Bonne réponse !';
+    sfx.correct();
   } else {
     verdict.textContent = '❌ Raté';
+    sfx.wrong();
   }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
 
@@ -1020,6 +1037,9 @@ let pullCost = 0;
 function flipPullCard(card) {
   if (card.classList.contains('flipped')) { openCharacter(card.dataset.cid); return; }
   card.classList.add('flipped');
+  const rarity = (card.className.match(/r-(\w+)/) || [])[1] || 'common';
+  sfx.reveal(rarity);
+  if (rarity === 'legendary' || rarity === 'mythic') burstConfetti(rarity === 'mythic' ? 40 : 26);
   if ([...document.querySelectorAll('#pull-result .flip-card')].every((c) => c.classList.contains('flipped'))) {
     onAllRevealed();
   }
@@ -1030,6 +1050,9 @@ function revealAllPull() {
   cards.forEach((c, i) =>
     setTimeout(() => {
       c.classList.add('flipped');
+      const rarity = (c.className.match(/r-(\w+)/) || [])[1] || 'common';
+      sfx.reveal(rarity);
+      if (rarity === 'legendary' || rarity === 'mythic') burstConfetti(rarity === 'mythic' ? 40 : 26);
       if (i === cards.length - 1) onAllRevealed();
     }, i * 160)
   );
@@ -1344,8 +1367,10 @@ async function answerTower(choice, timeout = false) {
   const msg = document.getElementById('tower-msg');
   if (r.correct) {
     msg.textContent = r.lifeGained ? '✅ Bien vu ! ❤️ +1 vie !' : '✅ Bien vu !';
+    sfx.correct();
   } else {
     msg.textContent = r.timedOut ? '⏱️ Temps écoulé !' : '❌ Raté !';
+    sfx.wrong();
   }
 
   if (r.status === 'over') {
@@ -1362,6 +1387,7 @@ function showTowerOver(result) {
   document.getElementById('tower-over-cleared').textContent = result.cleared ?? 0;
   document.getElementById('tower-over-reward').textContent = result.reward ?? 0;
   document.getElementById('tower-tokens').textContent = currentUser.tokens;
+  if ((result.cleared ?? 0) >= 10) { sfx.win(); burstConfetti(); } else if (result.cleared > 0) sfx.win(); else sfx.lose();
 }
 
 async function abandonTower() {
