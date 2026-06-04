@@ -185,6 +185,7 @@ function showApp(user) {
   });
   refreshStats();
   if (typeof connectMp === 'function') connectMp(); // socket prêt → reconnexion auto si partie en cours
+  maybeOnboard();
 }
 
 // Affiche un avatar : image si dispo, sinon initiale colorée
@@ -940,7 +941,7 @@ async function nextSong() {
   resetAssist();
   answered = false;
   const v = video();
-  v.src = song.videoUrl;
+  v.src = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`; // flux proxifié (anti-triche)
   v.volume = +document.getElementById('volume').value;
   showOverlay(true); // mode audio : on masque l'image, le son joue quand même
 
@@ -2066,5 +2067,38 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rm) return removeFromPlaylist(rm.closest('tr'));
     const play = e.target.closest('[data-play]');
     if (play) togglePlaylistAudio(play);
+  });
+});
+
+// PWA : enregistre le service worker (installable + repli hors-ligne)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+
+// ── ONBOARDING (1ʳᵉ connexion) ──
+function maybeOnboard() {
+  if (localStorage.getItem('amq_onboarded')) return;
+  document.getElementById('onboard-modal').classList.remove('hidden');
+}
+function closeOnboard() {
+  localStorage.setItem('amq_onboarded', '1');
+  document.getElementById('onboard-modal').classList.add('hidden');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('onboard-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'onboard-modal') closeOnboard();
+  });
+  document.getElementById('onboard-import').addEventListener('click', () => {
+    closeOnboard();
+    mode = 'mine'; localStorage.setItem('amq_mode', 'mine');
+    applyModeUI();
+    openQuiz();
+    document.getElementById('anilist-username').focus();
+  });
+  document.getElementById('onboard-play').addEventListener('click', () => {
+    closeOnboard();
+    mode = 'global'; localStorage.setItem('amq_mode', 'global');
+    applyModeUI(); refreshCatalogInfo();
+    openQuiz();
   });
 });

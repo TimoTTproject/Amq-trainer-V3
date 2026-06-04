@@ -1,0 +1,14 @@
+{
+  "name": "Anime Music Quiz",
+  "short_name": "AMQ",
+  "description": "Devine l'anime à partir de son opening — quiz, gacha et multijoueur.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

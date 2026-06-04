@@ -787,6 +787,13 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .daily-btn { font-size: .82rem; padding: 7px 12px; animation: claimPulse 1.8s ease-in-out infinite; }
 .header-rank { display: inline-flex; align-items: center; gap: 5px; background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text); font-size: .78rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
 
+/* Onboarding */
+.onboard-lead { color: var(--text-2); margin-bottom: 12px; }
+.onboard-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.onboard-list li { background: var(--bg); border: 1px solid #2a2f42; border-radius: 10px; padding: 11px 14px; font-size: .9rem; line-height: 1.4; }
+.onboard-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.onboard-actions button { flex: 1; justify-content: center; min-width: 150px; }
+
 /* Duo / Carré / Cash */
 .assist-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 10px; }
 .assist-label { color: var(--text-2); font-size: .85rem; }

@@ -3,6 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { rollRarity, DUPLICATE_REFUND, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
+const { rateLimit } = require('../util/ratelimit');
 
 const router = express.Router();
 
@@ -29,7 +30,7 @@ async function pickRandomCharacter(tx, rarity) {
 }
 
 // Tirage : type = 'single' | 'pack'
-router.post('/pull', requireAuth, async (req, res) => {
+router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
   const type = req.body?.type === 'pack' ? 'pack' : 'single';
   const cfg = PRICES[type];
   const userId = req.user.id;

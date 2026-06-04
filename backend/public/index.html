@@ -2,8 +2,15 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Anime Music Quiz</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0f1117" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AMQ" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -659,6 +666,25 @@
       <div class="modal-card">
         <button class="modal-close" id="player-close" title="Fermer"><i class="fas fa-times"></i></button>
         <div id="player-body"></div>
+      </div>
+    </div>
+
+    <!-- Onboarding (première connexion) -->
+    <div id="onboard-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h2><i class="fas fa-music"></i> Bienvenue sur AMQ !</h2>
+        <p class="onboard-lead">Devine l'anime à partir de son opening. Pour démarrer :</p>
+        <ul class="onboard-list">
+          <li>🎧 <b>Joue</b> en mode classique pour gagner des <b>tokens</b> (Duo / Carré / Cash).</li>
+          <li>🎴 Dépense tes tokens au <b>Gacha</b> pour collectionner des personnages.</li>
+          <li>🎓 Le <b>Centre d'entraînement</b> te fait réviser tes points faibles (répétition espacée).</li>
+          <li>👥 Affronte d'autres joueurs en <b>Multijoueur</b> classé.</li>
+        </ul>
+        <p class="hint">Joue sur tes propres animes en important ta liste AniList, ou lance-toi tout de suite sur le catalogue global.</p>
+        <div class="onboard-actions">
+          <button class="btn-primary" id="onboard-import"><i class="fas fa-download"></i> Importer ma liste</button>
+          <button class="btn-secondary" id="onboard-play"><i class="fas fa-play"></i> Jouer (global)</button>
+        </div>
       </div>
     </div>
   </div>

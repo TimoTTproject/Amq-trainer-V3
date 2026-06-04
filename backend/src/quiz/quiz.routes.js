@@ -4,6 +4,8 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-token');
 const { isCorrectGuess } = require('./matching');
+const { proxyVideo } = require('../util/stream');
+const { rateLimit } = require('../util/ratelimit');
 
 const router = express.Router();
 
@@ -120,13 +122,25 @@ router.get('/random', requireAuth, async (req, res) => {
     where: { userId_songId: { userId: req.user.id, songId: song.id } },
     select: { liked: true },
   });
-  res.json({ song, roundToken, liked: !!stat?.liked });
+  // On ne renvoie PAS l'URL .webm (anti-triche) : le client lit le flux proxifié.
+  res.json({ song: { id: song.id }, roundToken, liked: !!stat?.liked });
+});
+
+// Flux vidéo de la manche, proxifié (le titre ne fuite pas par l'URL). Le jeton
+// de manche doit correspondre à cet utilisateur et cette musique.
+router.get('/clip/:songId', requireAuth, async (req, res) => {
+  const songId = parseInt(req.params.songId);
+  const round = verifyRoundToken(req.query.rt, { userId: req.user.id, songId });
+  if (!round) return res.status(403).end();
+  const song = await prisma.song.findUnique({ where: { id: songId }, select: { videoUrl: true } });
+  if (!song?.videoUrl) return res.status(404).end();
+  await proxyVideo(req, res, song.videoUrl);
 });
 
 // Passe en Carré (4) ou Duo (2) : verrouille le niveau (gain réduit) dans un
 // nouveau jeton et renvoie les propositions. L'ancien jeton est consommé pour
 // empêcher de revenir au gain « cash » après avoir vu les propositions.
-router.post('/choices', requireAuth, async (req, res) => {
+router.post('/choices', requireAuth, rateLimit({ max: 120 }), async (req, res) => {
   const level = req.body?.level === 'duo' ? 'duo' : 'carre';
   const round = verifyRoundToken(req.body?.roundToken, { userId: req.user.id });
   if (!round) return res.status(400).json({ error: 'Manche invalide' });
@@ -184,7 +198,7 @@ router.get('/playlist', requireAuth, async (req, res) => {
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.
-router.post('/guess', requireAuth, async (req, res) => {
+router.post('/guess', requireAuth, rateLimit({ max: 120 }), async (req, res) => {
   const { songId, guess } = req.body || {};
   if (!songId) return res.status(400).json({ error: 'songId requis' });
 
