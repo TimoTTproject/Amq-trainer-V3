@@ -212,6 +212,12 @@ router.get('/characters', requireAuth, async (req, res) => {
       { series: { contains: q, mode: 'insensitive' } },
     ];
   }
+  // Filtre possession : owned=1 (possédés) | owned=0 (manquants) | absent (tous)
+  if (req.query.owned === '0' || req.query.owned === '1') {
+    const mine = await prisma.userCard.findMany({ where: { userId: req.user.id }, select: { characterId: true } });
+    const ids = mine.map((m) => m.characterId);
+    where.id = req.query.owned === '1' ? { in: ids.length ? ids : [0] } : { notIn: ids.length ? ids : [0] };
+  }
   const orderBy = sort === 'name' ? [{ name: 'asc' }] : [{ favourites: 'desc' }];
 
   const [total, chars, pool] = await Promise.all([
@@ -236,12 +242,13 @@ router.get('/characters', requireAuth, async (req, res) => {
   pool.forEach((g) => (byRarity[g.rarity] = g._count._all));
 
   res.json({
-    characters: chars.map((c) => ({ ...c, owned: ownedById[c.id] || 0 })),
+    characters: chars.map((c) => ({ ...c, owned: ownedById[c.id] || 0, craftCost: CRAFT_COST[c.rarity] || 0 })),
     total,
     page,
     pages: Math.ceil(total / perPage),
     byRarity,
     labels: RARITY_LABELS,
+    dust: req.user.dust || 0,
   });
 });
 

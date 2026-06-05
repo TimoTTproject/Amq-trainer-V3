@@ -70,6 +70,7 @@
         <button id="dev-tokens-btn" class="btn-secondary dev-btn hidden" title="Dev : +1000 tokens"><i class="fas fa-bolt"></i> +1000</button>
         <span id="admin-badge" class="admin-badge hidden">ADMIN</span>
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="user-tokens">0</span></span>
+        <span class="token-badge dust-badge" title="Poussière (craft)">🌟 <span id="user-dust">0</span></span>
         <button id="profile-btn" class="profile-chip" title="Mon profil">
           <span class="avatar avatar-sm" id="header-avatar"></span>
           <span class="user-name" id="user-name"></span>
@@ -137,6 +138,11 @@
           <span class="hub-txt"><h3>Boutique</h3><p>Cosmétiques : dos de cartes, bordures, bannières</p></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+        <button class="hub-card" data-nav="craft" style="--c:#ffd34d">
+          <span class="hub-ico"><i class="fas fa-hammer"></i></span>
+          <span class="hub-txt"><h3>Atelier</h3><p>Fabrique les cartes qui te manquent avec ta poussière 🌟</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
         <button class="hub-card" data-nav="catalog" style="--c:#4db8ff">
           <span class="hub-ico"><i class="fas fa-list"></i></span>
           <span class="hub-txt"><h3>Catalogue</h3><p>Parcours tous les openings (anime, titre, artiste)</p></span>
@@ -179,6 +185,7 @@
         <div class="pstat"><span id="profile-tower">0</span><label>Étage max</label></div>
         <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
         <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
+        <div class="pstat"><span id="profile-dust">0</span><label>Poussière 🌟</label></div>
       </div>
 
       <div class="profile-grid">
@@ -572,6 +579,30 @@
       </div>
       <div id="lb-me" class="lb-me"></div>
       <ol id="lb-list" class="lb-list"></ol>
+    </div>
+
+    <!-- VUE ATELIER (craft) -->
+    <div id="view-craft" class="hidden">
+      <button class="btn-back" id="back-collection-craft"><i class="fas fa-arrow-left"></i> Collection</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-hammer"></i> Atelier</h2>
+        <span class="token-badge dust-badge" title="Poussière">🌟 <span id="craft-dust">0</span></span>
+      </div>
+      <p class="gacha-sub">Dépense ta poussière (gagnée avec les doublons) pour fabriquer une carte précise.</p>
+      <div class="craft-toolbar">
+        <div class="coll-filters" id="craft-filters"></div>
+        <label class="craft-toggle"><input type="checkbox" id="craft-missing" /> Manquants seulement</label>
+      </div>
+      <div class="catalog-search">
+        <input type="text" id="craft-search" placeholder="Rechercher un personnage ou une série…" />
+      </div>
+      <p id="craft-msg" class="gacha-msg"></p>
+      <div id="craft-grid" class="card-grid"></div>
+      <div class="catalog-pager">
+        <button class="btn-secondary" id="craft-prev"><i class="fas fa-chevron-left"></i></button>
+        <span id="craft-pageinfo">—</span>
+        <button class="btn-secondary" id="craft-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
     </div>
 
     <!-- VUE PERSONNAGES (pokédex) -->

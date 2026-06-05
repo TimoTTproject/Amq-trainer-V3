@@ -171,6 +171,7 @@ function showView(name) {
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
   document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
   document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
+  document.getElementById('view-craft').classList.toggle('hidden', name !== 'craft');
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
@@ -186,13 +187,14 @@ function showView(name) {
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play',
-  gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection',
+  gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
 };
 
 // Navigation depuis la navbar
 function navTo(name) {
   if (name === 'play') return showView('play');
   if (name === 'collection') return showView('collection');
+  if (name === 'craft') return openCraft();
   if (name === 'gacha') return openGacha();
   if (name === 'shop') return openShop();
   if (name === 'catalog') return openCatalog();
@@ -283,6 +285,8 @@ function renderHeaderUser() {
     tk.parentElement.classList.add('token-bump');
   }
   _lastTokens = currentUser.tokens;
+  const du = document.getElementById('user-dust');
+  if (du) du.textContent = currentUser.dust || 0;
   renderAvatar(document.getElementById('header-avatar'), currentUser);
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
@@ -398,6 +402,8 @@ function renderProfile(d) {
   document.getElementById('profile-tower').textContent = d.user.towerBestFloor || 0;
   document.getElementById('profile-cards-count').textContent = d.cardsCount || 0;
   document.getElementById('profile-tokens').textContent = d.user.tokens;
+  const dustEl = document.getElementById('profile-dust');
+  if (dustEl) dustEl.textContent = currentUser.dust || 0;
   const since = d.user.createdAt
     ? new Date(d.user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     : '—';
@@ -746,6 +752,25 @@ function setupAppUI() {
   document.getElementById('chars-grid').addEventListener('click', (e) => {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
+  });
+  // Atelier (craft)
+  document.getElementById('back-collection-craft').addEventListener('click', () => showView('collection'));
+  let craftSearchTimer;
+  document.getElementById('craft-search').addEventListener('input', (e) => {
+    clearTimeout(craftSearchTimer);
+    craftSearch = e.target.value.trim();
+    craftSearchTimer = setTimeout(() => loadCraft(1), 300);
+  });
+  document.getElementById('craft-missing').addEventListener('change', (e) => { craftMissing = e.target.checked; loadCraft(1); });
+  document.getElementById('craft-prev').addEventListener('click', () => loadCraft(craftPage - 1));
+  document.getElementById('craft-next').addEventListener('click', () => loadCraft(craftPage + 1));
+  document.getElementById('craft-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (btn) { craftRarity = btn.dataset.filter; loadCraft(1); }
+  });
+  document.getElementById('craft-grid').addEventListener('click', (e) => {
+    const btn = e.target.closest('.craft-btn');
+    if (btn) craftFromAtelier(btn);
   });
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('home'));
@@ -2173,6 +2198,82 @@ async function loadCharacters(page, search) {
     document.getElementById('chars-next').disabled = charsPage >= charsPages;
   } catch (e) {
     grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ── ATELIER (craft) ──
+let craftPage = 1, craftSearch = '', craftRarity = 'all', craftPages = 1, craftMissing = false;
+
+function openCraft() {
+  showView('craft');
+  document.getElementById('craft-search').value = '';
+  document.getElementById('craft-missing').checked = false;
+  craftSearch = ''; craftRarity = 'all'; craftMissing = false;
+  document.getElementById('craft-msg').textContent = '';
+  loadCraft(1);
+}
+
+async function loadCraft(page) {
+  if (page < 1) return;
+  const grid = document.getElementById('craft-grid');
+  grid.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const rq = craftRarity !== 'all' ? `&rarity=${craftRarity}` : '';
+    const ownedQ = craftMissing ? '&owned=0' : '';
+    const r = await api(`/api/gacha/characters?page=${page}&search=${encodeURIComponent(craftSearch)}${rq}${ownedQ}`);
+    craftPage = r.page; craftPages = r.pages || 1;
+    if (typeof r.dust === 'number') { currentUser.dust = r.dust; renderHeaderUser(); }
+    document.getElementById('craft-dust').textContent = currentUser.dust || 0;
+    document.getElementById('craft-filters').innerHTML = rarityFilterChips(r.byRarity, craftRarity);
+    if (!r.characters.length) {
+      grid.innerHTML = '<p class="muted">Aucun personnage.</p>';
+    } else {
+      grid.innerHTML = r.characters.map((c) => craftCardHTML(c)).join('');
+    }
+    document.getElementById('craft-pageinfo').textContent = `Page ${craftPage} / ${craftPages}`;
+    document.getElementById('craft-prev').disabled = craftPage <= 1;
+    document.getElementById('craft-next').disabled = craftPage >= craftPages;
+  } catch (e) {
+    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function craftCardHTML(c) {
+  const owned = c.owned > 0;
+  const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
+  const canAfford = (currentUser.dust || 0) >= c.craftCost;
+  const badge = owned ? `<span class="badge copies">×${c.owned}</span>` : '<span class="badge locked-badge"><i class="fas fa-lock"></i></span>';
+  return `<div class="gcard r-${c.rarity}${owned ? '' : ' locked'}">
+    <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
+    <div class="gcard-info">
+      <div class="gcard-name">${escapeHtml(c.name)}</div>
+      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+      ${sub}
+    </div>
+    ${badge}
+    <button class="btn-primary craft-btn" data-cid="${c.id}" data-cost="${c.craftCost}" data-name="${escapeHtml(c.name)}" ${canAfford ? '' : 'disabled'}>
+      <i class="fas fa-hammer"></i> ${c.craftCost} 🌟
+    </button>
+  </div>`;
+}
+
+async function craftFromAtelier(btn) {
+  const id = btn.dataset.cid;
+  const cost = btn.dataset.cost;
+  const name = btn.dataset.name;
+  if (!confirm(`Fabriquer ${name} pour ${cost} 🌟 ?`)) return;
+  btn.disabled = true;
+  const msg = document.getElementById('craft-msg');
+  try {
+    const r = await api('/api/gacha/craft', { method: 'POST', body: JSON.stringify({ characterId: parseInt(id) }) });
+    currentUser.dust = r.dust;
+    renderHeaderUser();
+    sfx.reveal && sfx.reveal('epic');
+    msg.textContent = `✅ ${name} ${r.isNew ? 'ajouté à ta collection' : 'fabriqué (doublon)'} ! Reste ${r.dust} 🌟`;
+    loadCraft(craftPage); // rafraîchit la possession + coûts abordables
+  } catch (e) {
+    msg.textContent = e.message;
+    btn.disabled = false;
   }
 }
 
