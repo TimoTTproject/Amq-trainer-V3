@@ -3,6 +3,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { notifyUser } = require('../mp/mp');
 
 const router = express.Router();
 
@@ -89,6 +90,7 @@ router.post('/', requireAuth, async (req, res) => {
   const trade = await prisma.trade.create({
     data: { fromUserId: fromId, toUserId, offeredIds, requestedIds, offeredTokens, requestedTokens, offeredDust, requestedDust },
   });
+  notifyUser(toUserId, 'trade:new', { from: req.user.displayName });
   res.json({ ok: true, id: trade.id });
 });
 
@@ -117,6 +119,28 @@ router.get('/list', requireAuth, async (req, res) => {
     });
   }
   res.json({ trades: out, incoming: out.filter((t) => t.direction === 'incoming').length });
+});
+
+// Historique : échanges résolus récents me concernant
+router.get('/history', requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  const trades = await prisma.trade.findMany({
+    where: { status: { in: ['accepted', 'declined', 'cancelled'] }, OR: [{ toUserId: uid }, { fromUserId: uid }] },
+    orderBy: { resolvedAt: 'desc' },
+    take: 20,
+    include: { from: { select: { displayName: true } }, to: { select: { displayName: true } } },
+  });
+  res.json({
+    trades: trades.map((t) => ({
+      id: t.id, status: t.status,
+      direction: t.toUserId === uid ? 'incoming' : 'outgoing',
+      other: (t.toUserId === uid ? t.from : t.to).displayName,
+      offeredCount: t.offeredIds.length, requestedCount: t.requestedIds.length,
+      offeredTokens: t.offeredTokens, requestedTokens: t.requestedTokens,
+      offeredDust: t.offeredDust, requestedDust: t.requestedDust,
+      resolvedAt: t.resolvedAt,
+    })),
+  });
 });
 
 // Accepte un échange (destinataire uniquement) → transfert atomique
@@ -156,6 +180,7 @@ router.post('/:id/accept', requireAuth, async (req, res) => {
       await resyncUserCards(tx, pairs);
 
       await tx.trade.update({ where: { id }, data: { status: 'accepted', resolvedAt: new Date() } });
+      notifyUser(t.fromUserId, 'trade:accepted', { by: req.user.displayName });
     });
     res.json({ ok: true });
   } catch (e) {

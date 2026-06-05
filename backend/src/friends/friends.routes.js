@@ -3,10 +3,12 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { isOnline } = require('../mp/mp');
+const { byId, publicCosmetic } = require('../shop/cosmetics');
 
 const router = express.Router();
 
-const pubUser = (u) => ({ id: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl });
+const pubUser = (u) => ({ id: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl, frame: publicCosmetic(byId(u.avatarFrame)) });
+const SEL = { id: true, displayName: true, avatarUrl: true, avatarFrame: true };
 
 // Recherche par pseudo (hors soi-même), pour envoyer une demande
 router.get('/search', requireAuth, async (req, res) => {
@@ -14,7 +16,7 @@ router.get('/search', requireAuth, async (req, res) => {
   if (q.length < 2) return res.json({ results: [] });
   const users = await prisma.user.findMany({
     where: { displayName: { contains: q, mode: 'insensitive' }, NOT: { id: req.user.id } },
-    select: { id: true, displayName: true, avatarUrl: true },
+    select: SEL,
     take: 10,
   });
   res.json({ results: users.map(pubUser) });
@@ -25,7 +27,7 @@ router.get('/', requireAuth, async (req, res) => {
   const me = req.user.id;
   const all = await prisma.friendship.findMany({
     where: { OR: [{ requesterId: me }, { addresseeId: me }] },
-    include: { requester: { select: { id: true, displayName: true, avatarUrl: true } }, addressee: { select: { id: true, displayName: true, avatarUrl: true } } },
+    include: { requester: { select: SEL }, addressee: { select: SEL } },
   });
   const friends = [];
   const incoming = [];

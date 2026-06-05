@@ -62,6 +62,12 @@ function removeOnline(socket) {
 function isOnline(userId) {
   return online.has(userId);
 }
+// Émet un événement à tous les sockets connectés d'un utilisateur (notifs hors-jeu).
+function notifyUser(userId, event, payload) {
+  const set = online.get(userId);
+  if (!io || !set) return;
+  for (const sid of set) io.sockets.sockets.get(sid)?.emit(event, payload);
+}
 
 // Invitation en salle privée : prévient tous les sockets de l'ami
 function invite(socket, toUserId) {
@@ -335,7 +341,8 @@ function endRound(room) {
     .map((p) => {
       const a = cur.answers.get(p.userId);
       return {
-        name: p.name, avatarUrl: p.avatarUrl, correct: !!a?.correct, points: a?.points || 0,
+        name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
+        correct: !!a?.correct, points: a?.points || 0,
         score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
       };
     })
@@ -435,7 +442,7 @@ async function endGame(room) {
   clearTimeout(room.timer);
   // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
   const ordered = [...room.players.values()]
-    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
+    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
     .sort((a, b) => {
       if (room.mode === 'elim') {
         if (!!a.eliminated !== !!b.eliminated) return a.eliminated ? 1 : -1;
@@ -451,7 +458,7 @@ async function endGame(room) {
 
   const ranking = ordered.map((p, i) => ({
     userId: p.userId,
-    name: p.name, avatarUrl: p.avatarUrl, score: p.score, team: p.team,
+    name: p.name, avatarUrl: p.avatarUrl, frame: p.frame, score: p.score, team: p.team,
     lives: p.lives, eliminated: p.eliminated,
     mmrDelta: room.ranked ? deltaById[p.userId]?.delta ?? 0 : null,
     tokenReward: rewardById[p.userId] || 0,
@@ -625,4 +632,4 @@ function initMp(server) {
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline };
+module.exports = { initMp, getCurrentVideo, isOnline, notifyUser };

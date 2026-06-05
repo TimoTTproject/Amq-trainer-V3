@@ -2324,6 +2324,28 @@ async function openTrades() {
   } catch (e) {
     list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }
+  loadTradeHistory();
+}
+
+async function loadTradeHistory() {
+  const box = document.getElementById('trades-history');
+  if (!box) return;
+  try {
+    const { trades } = await api('/api/trade/history');
+    if (!trades.length) { box.innerHTML = '<p class="muted">Aucun échange passé.</p>'; return; }
+    const STATUS = { accepted: '✅ Accepté', declined: '✖️ Refusé', cancelled: '↩️ Annulé' };
+    box.innerHTML = trades.map((t) => {
+      const give = `${t.offeredCount} carte(s)${t.offeredTokens ? ` +${t.offeredTokens}🪙` : ''}${t.offeredDust ? ` +${t.offeredDust}🌟` : ''}`;
+      const want = `${t.requestedCount} carte(s)${t.requestedTokens ? ` +${t.requestedTokens}🪙` : ''}${t.requestedDust ? ` +${t.requestedDust}🌟` : ''}`;
+      const date = t.resolvedAt ? new Date(t.resolvedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '';
+      return `<div class="trade-hist-row">
+        <span class="th-status">${STATUS[t.status] || t.status}</span>
+        <span class="th-other">${t.direction === 'incoming' ? 'de' : 'à'} <b>${escapeHtml(t.other)}</b></span>
+        <span class="th-detail hint">${give} ⇄ ${want}</span>
+        <span class="th-date hint">${date}</span>
+      </div>`;
+    }).join('');
+  } catch { box.innerHTML = ''; }
 }
 
 async function resolveTrade(id, act) {
@@ -2889,10 +2911,7 @@ function openFriends() {
   loadFriends();
 }
 
-function friendAvatar(u) {
-  if (u.avatarUrl) return `<span class="avatar avatar-sm" style="background-image:url('${u.avatarUrl}')"></span>`;
-  return `<span class="avatar avatar-sm">${escapeHtml((u.displayName || '?').charAt(0).toUpperCase())}</span>`;
-}
+function friendAvatar(u) { return otherAvatar(u, 'avatar-sm'); }
 
 async function loadFriends() {
   try {

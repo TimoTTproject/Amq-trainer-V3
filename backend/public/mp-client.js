@@ -114,6 +114,16 @@ function connectMp() {
 
   mpSocket.on('mp:emote', (d) => floatEmote(d.emote, d.name));
 
+  // Notifs d'échange en temps réel
+  mpSocket.on('trade:new', (d) => {
+    mpToast(`🔄 <b>${escapeHtml(d.from)}</b> te propose un échange !`, 'Voir', () => { if (typeof openTrades === 'function') openTrades(); });
+    if (typeof loadTradesBadge === 'function') loadTradesBadge();
+  });
+  mpSocket.on('trade:accepted', (d) => {
+    mpToast(`✅ <b>${escapeHtml(d.by)}</b> a accepté ton échange !`);
+    if (typeof loadTradesBadge === 'function') loadTradesBadge();
+  });
+
   mpSocket.on('mp:game:start', (d) => {
     if (mpLeft) return;
     mpEngaged = true;
@@ -217,8 +227,10 @@ function connectMp() {
         const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
         const tag = d.mode === 'elim' ? (p.eliminated ? ' 💀' : ' ❤️') : '';
         const isMe = p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName;
+        const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
         return `<li class="lb-row${isMe ? ' me' : ''}">
           <span class="lb-rank">${medal(i + 1)}</span>
+          ${av}
           <span class="lb-name">${escapeHtml(p.name)}${team}${tag}${delta}${reward}</span>
           <span class="lb-value">${p.score} pts</span>
         </li>`;
@@ -306,8 +318,9 @@ function renderMpScores(results, withPoints) {
     .map((p) => {
       const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
       const lives = `<span class="mp-lives">${mpMode === 'elim' ? (p.eliminated ? '💀' : ('❤️'.repeat(Math.max(0, p.lives || 0)) || '—')) : ''}</span>`;
+      const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
       return `<div class="mp-score-row${p.correct ? ' ok' : ''}${p.eliminated ? ' elim' : ''}">
-        <span class="mp-name">${escapeHtml(p.name)}${team}</span>
+        <span class="mp-name">${av}${escapeHtml(p.name)}${team}</span>
         ${lives}
         ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
         <span class="mp-total">${p.score}</span>
