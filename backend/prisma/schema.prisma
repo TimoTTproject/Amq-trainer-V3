@@ -217,6 +217,19 @@ model Song {
   catalogEntries UserCatalogEntry[]
 }
 
+// Analytics léger : 1 ligne par visiteur (id anonyme localStorage) et par jour.
+// Compter les lignes d'un jour = visiteurs uniques de ce jour.
+model Visit {
+  id        Int      @id @default(autoincrement())
+  visitorId String
+  day       String // AAAA-MM-JJ
+  authed    Boolean  @default(false) // visiteur connecté ce jour-là ?
+  createdAt DateTime @default(now())
+
+  @@unique([visitorId, day])
+  @@index([day])
+}
+
 // Marqueur « anime déjà exploré sur animethemes » : évite de re-chercher
 // à chaque import, même quand aucun opening n'a été trouvé (songCount = 0).
 model ScannedAnime {

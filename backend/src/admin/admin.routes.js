@@ -106,6 +106,44 @@ router.post('/backfill-series', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// Tableau de bord : visites, utilisateurs, activité globale.
+router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const since7 = new Date(now.getTime() - 7 * 86400000);
+  const dayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const [totalUsers, newToday, new7d, visitsRows, visitsToday, mpGames, towerRuns, tradesOk, charsAgg, pullsAgg, playAgg, cardInstances] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { createdAt: { gte: startToday } } }),
+    prisma.user.count({ where: { createdAt: { gte: since7 } } }),
+    prisma.visit.groupBy({ by: ['day'], _count: { _all: true }, orderBy: { day: 'desc' }, take: 14 }),
+    prisma.visit.count({ where: { day: dayStr } }),
+    prisma.mpResult.count(),
+    prisma.towerRun.count({ where: { status: 'over' } }),
+    prisma.trade.count({ where: { status: 'accepted' } }),
+    prisma.character.aggregate({ _sum: { minted: true } }),
+    prisma.user.aggregate({ _sum: { pullCommon: true, pullRare: true, pullEpic: true, pullLegendary: true, pullMythic: true } }),
+    prisma.userSongStat.aggregate({ _sum: { playCount: true, correctCount: true } }),
+    prisma.cardInstance.count(),
+  ]);
+
+  const visits = visitsRows.map((v) => ({ day: v.day, count: v._count._all })).reverse();
+  const pulls = ['pullCommon', 'pullRare', 'pullEpic', 'pullLegendary', 'pullMythic'].reduce((s, k) => s + (pullsAgg._sum[k] || 0), 0);
+
+  res.json({
+    users: { total: totalUsers, newToday, new7d },
+    visits: { today: visitsToday, daily: visits },
+    activity: {
+      quizPlays: playAgg._sum.playCount || 0,
+      quizCorrect: playAgg._sum.correctCount || 0,
+      mpGames, towerRuns, tradesOk, pulls,
+      cardsInCirculation: cardInstances,
+      charactersMinted: charsAgg._sum.minted || 0,
+    },
+  });
+});
+
 // Ajoute les Endings (ED) au catalogue pour les animes déjà explorés.
 // Appeler en boucle jusqu'à remaining === 0 (réseau throttlé → lots).
 router.post('/import-endings', requireAuth, requireAdmin, async (req, res) => {

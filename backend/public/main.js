@@ -61,9 +61,23 @@ async function api(path, opts = {}) {
 }
 
 // ── init ──
+// Analytics léger : un ping de visite par chargement (visiteur anonyme persistant)
+function pingVisit() {
+  let vid = localStorage.getItem('amq_vid');
+  if (!vid) {
+    vid = (crypto.randomUUID ? crypto.randomUUID() : 'v' + Date.now() + Math.random().toString(36).slice(2));
+    localStorage.setItem('amq_vid', vid);
+  }
+  fetch('/api/stats/hit', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    body: JSON.stringify({ visitorId: vid }),
+  }).catch(() => {});
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   setupAuthUI();
   setupAppUI();
+  pingVisit();
 
   // Retour d'OAuth AniList
   const params = new URLSearchParams(location.search);
@@ -2634,7 +2648,37 @@ function openAdmin() {
   document.getElementById('admin-search').value = '';
   adminSearch = ''; adminRarity = 'all';
   document.getElementById('admin-backfill-status').textContent = '';
+  loadAdminStats();
   loadAdminChars(1, '');
+}
+
+async function loadAdminStats() {
+  const box = document.getElementById('admin-stats');
+  if (!box) return;
+  try {
+    const d = await api('/api/admin/stats');
+    const stat = (label, val) => `<div class="astat"><span>${val}</span><label>${label}</label></div>`;
+    const daily = d.visits.daily || [];
+    const max = Math.max(1, ...daily.map((v) => v.count));
+    const bars = daily.map((v) =>
+      `<span class="avis-bar" style="height:${Math.max(6, Math.round((v.count / max) * 100))}%" title="${v.day} : ${v.count} visiteur(s)"></span>`
+    ).join('');
+    box.innerHTML = `
+      <div class="astat-grid">
+        ${stat('Visiteurs aujourd\'hui', d.visits.today)}
+        ${stat('Comptes', d.users.total)}
+        ${stat('Nouveaux (7j)', d.users.new7d)}
+        ${stat('Parties multi', d.activity.mpGames)}
+        ${stat('Parties Château', d.activity.towerRuns)}
+        ${stat('Tirages gacha', d.activity.pulls)}
+        ${stat('Échanges conclus', d.activity.tradesOk)}
+        ${stat('Cartes en circulation', d.activity.cardsInCirculation)}
+      </div>
+      <div class="avis-chart-wrap">
+        <label class="hint">Visiteurs uniques / jour (14 derniers jours)</label>
+        <div class="avis-chart">${bars || '<span class="hint">Pas encore de données.</span>'}</div>
+      </div>`;
+  } catch { box.innerHTML = ''; }
 }
 
 async function loadAdminChars(page, search) {
