@@ -5,6 +5,7 @@ const { verifyToken, COOKIE_NAME } = require('../auth/jwt');
 const { isCorrectGuess } = require('../quiz/matching');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
+const { byId, publicCosmetic } = require('../shop/cosmetics');
 
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
@@ -89,7 +90,8 @@ function roomSnapshot(room) {
     hostId: room.hostId, settings: room.settings,
     countdownEndsAt: room.countdownEndsAt || null, chat: room.chat.slice(-30),
     players: [...room.players.values()].map((p) => ({
-      name: p.name, avatarUrl: p.avatarUrl, isHost: p.userId === room.hostId, connected: p.connected,
+      name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
+      isHost: p.userId === room.hostId, connected: p.connected,
     })),
   };
 }
@@ -116,7 +118,7 @@ function addPlayer(room, socket) {
   socket.join(room.id);
   userRoom.set(u.id, room.id);
   if (!room.hostId) room.hostId = u.id;
-  room.players.set(u.id, { userId: u.id, name: u.displayName, avatarUrl: u.avatarUrl, socketId: socket.id, connected: true, score: 0, dcTimer: null });
+  room.players.set(u.id, { userId: u.id, name: u.displayName, avatarUrl: u.avatarUrl, avatarFrame: u.avatarFrame, socketId: socket.id, connected: true, score: 0, dcTimer: null });
 }
 
 function joinPublic(socket, ranked) {
@@ -515,7 +517,7 @@ function initMp(server) {
       const payload = verifyToken(cookies[COOKIE_NAME]);
       if (!payload?.sub) return next(new Error('auth'));
       const user = await prisma.user.findUnique({
-        where: { id: payload.sub }, select: { id: true, displayName: true, avatarUrl: true },
+        where: { id: payload.sub }, select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true },
       });
       if (!user) return next(new Error('auth'));
       socket.data.user = user;

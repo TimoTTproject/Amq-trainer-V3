@@ -205,7 +205,7 @@ function renderRoom(d) {
     : '⚡ Partie rapide';
   document.getElementById('mp-pcount').textContent = d.players.length;
   document.getElementById('mp-room-players').innerHTML = d.players
-    .map((p) => `<span class="mp-chip${p.isHost ? ' host' : ''}">${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`)
+    .map((p) => `<span class="mp-chip${p.isHost ? ' host' : ''}">${otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs')}${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`)
     .join('');
 
   document.getElementById('mp-set-rounds').value = String(d.settings.rounds);

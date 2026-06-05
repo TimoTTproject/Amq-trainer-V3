@@ -662,7 +662,7 @@ function setupAppUI() {
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('card-mp').addEventListener('click', openMultiplayer);
-  document.getElementById('back-home-shop').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home-shop').addEventListener('click', () => showView('collection'));
   document.getElementById('shop-groups').addEventListener('click', onShopClick);
   document.getElementById('training-exit').addEventListener('click', openTraining);
   document.getElementById('training-grid').addEventListener('click', (e) => {
@@ -749,10 +749,13 @@ function setupAppUI() {
       loadLeaderboard(b.dataset.lb);
     })
   );
-  document.getElementById('back-home').addEventListener('click', () => showView('home'));
-  document.getElementById('back-home-gacha').addEventListener('click', () => showView('home'));
-  document.getElementById('back-home-catalog').addEventListener('click', () => showView('home'));
-  document.getElementById('back-home-tower').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home').addEventListener('click', () => showView('play'));
+  document.getElementById('back-home-gacha').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-home-catalog').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-home-tower').addEventListener('click', () => showView('play'));
+  document.getElementById('back-play-training').addEventListener('click', () => showView('play'));
+  document.getElementById('back-collection-playlist').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-play-mp').addEventListener('click', () => showView('play'));
   document.getElementById('tower-start').addEventListener('click', startTower);
   document.getElementById('tower-again').addEventListener('click', openTower);
   document.getElementById('tower-abandon').addEventListener('click', abandonTower);
@@ -1944,10 +1947,16 @@ function openLeaderboard() {
 }
 
 // Petit avatar (image ou initiale colorée) en HTML
-function lbAvatar(entry) {
-  if (entry.avatarUrl) return `<span class="avatar avatar-sm" style="background-image:url('${entry.avatarUrl}')"></span>`;
-  const initial = (entry.displayName || '?').charAt(0).toUpperCase();
-  return `<span class="avatar avatar-sm">${escapeHtml(initial)}</span>`;
+function lbAvatar(entry) { return otherAvatar(entry, 'avatar-sm'); }
+
+// Avatar d'un AUTRE joueur en HTML, avec son cadre cosmétique (entry.frame) éventuel
+function otherAvatar(entry, sizeClass = 'avatar-sm') {
+  const fr = entry.frame;
+  const cls = fr && fr.className ? ' ' + fr.className : '';
+  const frameStyle = fr && fr.css ? fr.css + ';' : '';
+  const bg = entry.avatarUrl ? `background-image:url('${entry.avatarUrl}');` : '';
+  const inner = entry.avatarUrl ? '' : escapeHtml((entry.displayName || '?').charAt(0).toUpperCase());
+  return `<span class="avatar ${sizeClass}${cls}" style="${bg}${frameStyle}">${inner}</span>`;
 }
 
 async function loadLeaderboard(type) {
