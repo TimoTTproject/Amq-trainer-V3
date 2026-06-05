@@ -1375,8 +1375,27 @@ async function openGacha() {
     feat.innerHTML = (info.featured && info.featured.length)
       ? `<div class="featured-title">⭐ Personnages en vedette (taux boosté)</div><div class="featured-row">${info.featured.map((c) => cardHTML(c)).join('')}</div>`
       : '';
+    renderWeeklyBanner(info);
   } catch {}
   loadCollection();
+}
+
+// Bannière « vedettes de la semaine » + compte à rebours
+function renderWeeklyBanner(info) {
+  const el = document.getElementById('gacha-weekly');
+  if (!el) return;
+  const chars = info.weeklyFeatured || [];
+  if (!chars.length) { el.innerHTML = ''; return; }
+  const left = Math.max(0, (info.weeklyResetAt || 0) - Date.now());
+  const days = Math.floor(left / 86400000);
+  const hours = Math.floor((left % 86400000) / 3600000);
+  const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
+  el.innerHTML = `
+    <div class="weekly-head">
+      <span><i class="fas fa-star"></i> Vedettes de la semaine <span class="weekly-boost">+${info.weeklyBoost || 60}% de chance</span></span>
+      <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
+    </div>
+    <div class="featured-row">${chars.map((c) => cardHTML(c)).join('')}</div>`;
 }
 
 function renderGachaMeta(pityLimit = 60) {

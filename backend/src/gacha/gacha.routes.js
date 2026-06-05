@@ -8,6 +8,38 @@ const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
 
+// ── Bannière hebdomadaire (vedettes de la semaine, rate-up) ──
+// Sélection déterministe par n° de semaine → pas de cron ni d'action admin.
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+const WEEKLY_BOOST = 0.6; // proba de tomber sur la vedette de la rareté tirée
+let weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
+
+function seededIndex(wk, salt, mod) {
+  let h = (wk * 2654435761 + salt) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % mod;
+}
+
+async function getWeeklyFeatured() {
+  const wk = Math.floor(Date.now() / WEEK_MS);
+  if (weeklyCache.week === wk) return weeklyCache;
+  const chars = [];
+  const byRarity = {};
+  const salts = { mythic: 101, legendary: 211, epic: 307 };
+  for (const r of ['mythic', 'legendary', 'epic']) {
+    const count = await prisma.character.count({ where: { rarity: r } });
+    if (!count) continue;
+    const idx = seededIndex(wk, salts[r], count);
+    const c = await prisma.character.findFirst({
+      where: { rarity: r }, orderBy: { favourites: 'desc' }, skip: idx,
+      select: { id: true, name: true, imageUrl: true, rarity: true },
+    });
+    if (c) { chars.push(c); byRarity[r] = c.id; }
+  }
+  weeklyCache = { week: wk, byRarity, chars, resetAt: (wk + 1) * WEEK_MS };
+  return weeklyCache;
+}
+
 // Infos pour l'UI : prix, taille du pool, répartition par rareté
 router.get('/info', async (req, res) => {
   const total = await prisma.character.count();
@@ -19,7 +51,11 @@ router.get('/info', async (req, res) => {
     select: { id: true, name: true, imageUrl: true, rarity: true },
     take: 12,
   });
-  res.json({ prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, craftCost: CRAFT_COST, pityLimit: PITY_LIMIT });
+  const weekly = await getWeeklyFeatured();
+  res.json({
+    prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, craftCost: CRAFT_COST, pityLimit: PITY_LIMIT,
+    weeklyFeatured: weekly.chars, weeklyResetAt: weekly.resetAt, weeklyBoost: Math.round(WEEKLY_BOOST * 100),
+  });
 });
 
 // Stats de tirage de l'utilisateur : répartition par rareté (réelle vs attendue)
@@ -69,7 +105,13 @@ router.get('/stats', requireAuth, async (req, res) => {
 
 // Choisit un personnage aléatoire d'une rareté donnée, NON épuisé (fallback : n'importe lequel non épuisé).
 // Si un personnage « vedette » non épuisé existe pour cette rareté, 50% de chance de l'obtenir.
-async function pickRandomCharacter(tx, rarity) {
+async function pickRandomCharacter(tx, rarity, boost) {
+  // Rate-up vedette de la semaine (prioritaire)
+  const boostId = boost && boost[rarity];
+  if (boostId) {
+    const bc = await tx.character.findUnique({ where: { id: boostId }, select: { id: true, name: true, imageUrl: true, rarity: true, featured: true, soldOut: true } });
+    if (bc && !bc.soldOut && Math.random() < 0.6) return bc;
+  }
   const feat = await tx.character.findFirst({ where: { rarity, featured: true, soldOut: false } });
   if (feat && Math.random() < 0.5) return feat;
   let where = { rarity, soldOut: false };
@@ -151,6 +193,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
     rarities[Math.floor(Math.random() * rarities.length)] = 'rare';
   }
 
+  const weekly = await getWeeklyFeatured();
   const result = await prisma.$transaction(async (tx) => {
     // Débit du coût
     await tx.user.update({ where: { id: userId }, data: { tokens: { decrement: cfg.cost } } });
@@ -161,7 +204,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
     let dustTotal = 0;
     const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
     for (const rarity of rarities) {
-      const character = await pickRandomCharacter(tx, rarity);
+      const character = await pickRandomCharacter(tx, rarity, weekly.byRarity);
       if (!character) continue;
       const mint = await mintInstance(tx, userId, character.id);
       if (!mint) continue; // épuisé entre-temps (course)
