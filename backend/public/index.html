@@ -86,7 +86,7 @@
       <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
       <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span>Jouer</span></button>
       <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span>Collection</span></button>
-      <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span>Communauté</span></button>
+      <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span>Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
 
@@ -177,7 +177,46 @@
           <span class="hub-txt"><h3>Joueurs</h3><p>Parcours tous les joueurs et visite leurs profils</p></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+        <button class="hub-card" data-nav="trades" style="--c:#ff6bd6">
+          <span class="hub-ico"><i class="fas fa-right-left"></i></span>
+          <span class="hub-txt"><h3>Échanges <span id="trades-hub-badge" class="nav-badge hidden"></span></h3><p>Propose et reçois des échanges de cartes</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
       </div>
+    </div>
+
+    <!-- VUE ÉCHANGES (offres reçues / envoyées) -->
+    <div id="view-trades" class="hidden">
+      <button class="btn-back" id="back-community-trades"><i class="fas fa-arrow-left"></i> Communauté</button>
+      <div class="gacha-top"><h2><i class="fas fa-right-left"></i> Échanges</h2></div>
+      <p class="gacha-sub">Tes propositions en attente. Va sur le profil d'un joueur pour en créer une.</p>
+      <div id="trades-list" class="trades-list"></div>
+    </div>
+
+    <!-- VUE BUILDER D'ÉCHANGE -->
+    <div id="view-trade" class="hidden">
+      <button class="btn-back" id="back-trade"><i class="fas fa-arrow-left"></i> Retour</button>
+      <div class="gacha-top"><h2><i class="fas fa-right-left"></i> Échange avec <span id="trade-with">—</span></h2></div>
+      <div class="trade-cols">
+        <div class="trade-col">
+          <h3 class="trade-col-title give">Je donne</h3>
+          <div class="trade-cur">
+            <label>🪙 <input type="number" id="trade-give-tokens" min="0" value="0" /></label>
+            <label>🌟 <input type="number" id="trade-give-dust" min="0" value="0" /></label>
+          </div>
+          <div id="trade-give" class="trade-pool"></div>
+        </div>
+        <div class="trade-col">
+          <h3 class="trade-col-title want">Je reçois</h3>
+          <div class="trade-cur">
+            <label>🪙 <input type="number" id="trade-want-tokens" min="0" value="0" /></label>
+            <label>🌟 <input type="number" id="trade-want-dust" min="0" value="0" /></label>
+          </div>
+          <div id="trade-want" class="trade-pool"></div>
+        </div>
+      </div>
+      <p id="trade-msg" class="gacha-msg"></p>
+      <button class="btn-primary" id="trade-send"><i class="fas fa-paper-plane"></i> Envoyer la proposition</button>
     </div>
 
     <!-- VUE JOUEURS (annuaire) -->

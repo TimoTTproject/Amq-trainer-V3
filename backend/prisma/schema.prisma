@@ -84,8 +84,33 @@ model User {
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
+  tradesSent      Trade[] @relation("TradeFrom")
+  tradesReceived  Trade[] @relation("TradeTo")
   friendsSent     Friendship[] @relation("FriendReq")
   friendsReceived Friendship[] @relation("FriendAdr")
+}
+
+// Proposition d'échange entre deux joueurs (offre → double validation).
+// On échange des exemplaires précis (CardInstance) + éventuellement tokens/poussière.
+model Trade {
+  id              Int       @id @default(autoincrement())
+  fromUserId      String
+  toUserId        String
+  status          String    @default("pending") // pending | accepted | declined | cancelled
+  offeredIds      Int[]     @default([]) // CardInstance offerts par le proposant
+  requestedIds    Int[]     @default([]) // CardInstance demandés au destinataire
+  offeredTokens   Int       @default(0)
+  requestedTokens Int       @default(0)
+  offeredDust     Int       @default(0)
+  requestedDust   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+
+  from User @relation("TradeFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  to   User @relation("TradeTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
 }
 
 // Cosmétiques possédés (achetés en boutique). Le catalogue est défini en code

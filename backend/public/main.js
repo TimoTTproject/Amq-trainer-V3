@@ -166,6 +166,8 @@ function showView(name) {
   document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
   document.getElementById('view-community').classList.toggle('hidden', name !== 'community');
   document.getElementById('view-players').classList.toggle('hidden', name !== 'players');
+  document.getElementById('view-trades').classList.toggle('hidden', name !== 'trades');
+  document.getElementById('view-trade').classList.toggle('hidden', name !== 'trade');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
@@ -190,7 +192,7 @@ function showView(name) {
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
-  friends: 'community', leaderboard: 'community', players: 'community',
+  friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
 
 // Navigation depuis la navbar
@@ -199,6 +201,7 @@ function navTo(name) {
   if (name === 'collection') return showView('collection');
   if (name === 'community') return showView('community');
   if (name === 'players') return openPlayers();
+  if (name === 'trades') return openTrades();
   if (name === 'craft') return openCraft();
   if (name === 'gacha') return openGacha();
   if (name === 'shop') return openShop();
@@ -231,6 +234,7 @@ function showApp(user) {
   });
   refreshStats();
   if (typeof connectMp === 'function') connectMp(); // socket prêt → reconnexion auto si partie en cours
+  if (typeof loadTradesBadge === 'function') loadTradesBadge();
   maybeOnboard();
 }
 
@@ -735,6 +739,19 @@ function setupAppUI() {
   document.getElementById('players-list').addEventListener('click', (e) => {
     const row = e.target.closest('[data-userid]');
     if (row) openPlayer(row.dataset.userid);
+  });
+  // Échanges
+  document.getElementById('back-community-trades').addEventListener('click', () => showView('community'));
+  document.getElementById('back-trade').addEventListener('click', () => showView('community'));
+  document.getElementById('trade-give').addEventListener('click', (e) => {
+    const b = e.target.closest('.serial-chip'); if (b) toggleTradeChip('trade-give', tradeGiveSel, b);
+  });
+  document.getElementById('trade-want').addEventListener('click', (e) => {
+    const b = e.target.closest('.serial-chip'); if (b) toggleTradeChip('trade-want', tradeWantSel, b);
+  });
+  document.getElementById('trade-send').addEventListener('click', sendTrade);
+  document.getElementById('trades-list').addEventListener('click', (e) => {
+    const b = e.target.closest('.trade-act'); if (b) resolveTrade(b.dataset.id, b.dataset.act);
   });
   document.getElementById('back-home-lb').addEventListener('click', () => showView('community'));
   document.getElementById('back-community-friends').addEventListener('click', () => showView('community'));
@@ -2199,6 +2216,146 @@ async function loadPlayers(page) {
   }
 }
 
+// ── ÉCHANGE : builder ──
+let tradeTarget = null; // { id, name }
+const tradeGiveSel = new Set(); // instance ids que je donne
+const tradeWantSel = new Set(); // instance ids que je veux
+
+async function openTradeBuilder(userId, displayName) {
+  tradeTarget = { id: userId, name: displayName };
+  tradeGiveSel.clear(); tradeWantSel.clear();
+  showView('trade');
+  document.getElementById('trade-with').textContent = displayName;
+  document.getElementById('trade-msg').textContent = '';
+  ['trade-give-tokens', 'trade-give-dust', 'trade-want-tokens', 'trade-want-dust'].forEach((id) => { document.getElementById(id).value = 0; });
+  document.getElementById('trade-give').innerHTML = '<p class="muted">Chargement…</p>';
+  document.getElementById('trade-want').innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const [mine, theirs] = await Promise.all([
+      api(`/api/trade/instances/${currentUser.id}`),
+      api(`/api/trade/instances/${userId}`),
+    ]);
+    renderTradePool('trade-give', mine.characters, tradeGiveSel);
+    renderTradePool('trade-want', theirs.characters, tradeWantSel);
+  } catch (e) {
+    document.getElementById('trade-msg').textContent = e.message;
+  }
+}
+
+function renderTradePool(containerId, characters, selSet) {
+  const el = document.getElementById(containerId);
+  if (!characters.length) { el.innerHTML = '<p class="muted">Aucune carte.</p>'; return; }
+  el.innerHTML = characters.map((c) => `
+    <div class="trade-char">
+      <span class="rb-pill r-${c.rarity}">${escapeHtml(c.name)}</span>
+      <div class="trade-serials">
+        ${c.serials.map((s) => `<button class="serial-chip${selSet.has(s.id) ? ' on' : ''}" data-iid="${s.id}">#${s.serial}</button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function toggleTradeChip(containerId, selSet, btn) {
+  const iid = parseInt(btn.dataset.iid);
+  if (selSet.has(iid)) { selSet.delete(iid); btn.classList.remove('on'); }
+  else { selSet.add(iid); btn.classList.add('on'); }
+}
+
+async function sendTrade() {
+  if (!tradeTarget) return;
+  const body = {
+    toUserId: tradeTarget.id,
+    offeredIds: [...tradeGiveSel],
+    requestedIds: [...tradeWantSel],
+    offeredTokens: +document.getElementById('trade-give-tokens').value || 0,
+    requestedTokens: +document.getElementById('trade-want-tokens').value || 0,
+    offeredDust: +document.getElementById('trade-give-dust').value || 0,
+    requestedDust: +document.getElementById('trade-want-dust').value || 0,
+  };
+  const msg = document.getElementById('trade-msg');
+  const btn = document.getElementById('trade-send');
+  btn.disabled = true;
+  try {
+    await api('/api/trade', { method: 'POST', body: JSON.stringify(body) });
+    msg.textContent = '✅ Proposition envoyée !';
+    sfx.correct && sfx.correct();
+    setTimeout(() => openTrades(), 700);
+  } catch (e) {
+    msg.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── ÉCHANGE : offres reçues / envoyées ──
+function tradeItemsHTML(items, tokens, dust) {
+  const chips = items.map((i) => `<span class="trade-mini r-${i.rarity}">${escapeHtml(i.name)} <b>#${i.serial}</b></span>`);
+  if (tokens) chips.push(`<span class="trade-mini cur">${tokens} 🪙</span>`);
+  if (dust) chips.push(`<span class="trade-mini cur">${dust} 🌟</span>`);
+  return chips.length ? chips.join('') : '<span class="muted">rien</span>';
+}
+
+async function openTrades() {
+  showView('trades');
+  const list = document.getElementById('trades-list');
+  list.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const { trades } = await api('/api/trade/list');
+    updateTradesBadge(trades.filter((t) => t.direction === 'incoming').length);
+    if (!trades.length) { list.innerHTML = '<p class="muted">Aucun échange en attente.</p>'; return; }
+    list.innerHTML = trades.map((t) => {
+      const other = t.direction === 'incoming' ? t.from : t.to;
+      const head = t.direction === 'incoming'
+        ? `<b>${escapeHtml(other.displayName)}</b> te propose`
+        : `Proposition à <b>${escapeHtml(other.displayName)}</b>`;
+      const actions = t.direction === 'incoming'
+        ? `<button class="btn-primary trade-act" data-act="accept" data-id="${t.id}">Accepter</button>
+           <button class="btn-secondary trade-act" data-act="decline" data-id="${t.id}">Refuser</button>`
+        : `<button class="btn-secondary trade-act" data-act="decline" data-id="${t.id}">Annuler</button>`;
+      return `<div class="trade-offer">
+        <div class="trade-offer-head">${head}</div>
+        <div class="trade-offer-body">
+          <div class="trade-side"><label>${t.direction === 'incoming' ? 'Tu reçois' : 'Tu donnes'}</label>${tradeItemsHTML(t.offered, t.offeredTokens, t.offeredDust)}</div>
+          <i class="fas fa-right-left trade-arrow"></i>
+          <div class="trade-side"><label>${t.direction === 'incoming' ? 'Tu donnes' : 'Tu reçois'}</label>${tradeItemsHTML(t.requested, t.requestedTokens, t.requestedDust)}</div>
+        </div>
+        <div class="trade-offer-actions">${actions}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function resolveTrade(id, act) {
+  try {
+    if (act === 'accept') {
+      await api(`/api/trade/${id}/accept`, { method: 'POST' });
+      // solde tokens/poussière peut avoir changé → recharge le profil minimal
+      try { const me = await api('/api/auth/me'); if (me && me.user) { currentUser = me.user; renderHeaderUser(); } } catch {}
+      sfx.win && sfx.win();
+    } else {
+      await api(`/api/trade/${id}/decline`, { method: 'POST' });
+    }
+    openTrades();
+    loadTradesBadge();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// Badge « échanges reçus » (navbar + hub)
+function updateTradesBadge(n) {
+  ['trades-nav-badge', 'trades-hub-badge'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = n || '';
+    el.classList.toggle('hidden', !n);
+  });
+}
+async function loadTradesBadge() {
+  try { const { incoming } = await api('/api/trade/list'); updateTradesBadge(incoming); } catch {}
+}
+
 // ── PROFIL JOUEUR (public, depuis le classement) ──
 async function openPlayer(userId) {
   const modal = document.getElementById('player-modal');
@@ -2239,7 +2396,13 @@ async function openPlayer(userId) {
       </div>
       ${best}
       ${seriesHtml}
-      <p class="hint">Membre depuis ${since}</p>`;
+      <p class="hint">Membre depuis ${since}</p>
+      ${userId !== currentUser.id ? `<button class="btn-primary" id="player-trade-btn"><i class="fas fa-right-left"></i> Proposer un échange</button>` : ''}`;
+    const tradeBtn = document.getElementById('player-trade-btn');
+    if (tradeBtn) tradeBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      openTradeBuilder(userId, u.displayName);
+    });
   } catch (e) {
     body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }

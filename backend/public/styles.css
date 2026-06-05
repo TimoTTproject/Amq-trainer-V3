@@ -683,6 +683,43 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .soldout-badge { background: #ff6b6b; color: #2a0000; font-size: .62rem; font-weight: 800; padding: 2px 7px; border-radius: 8px; vertical-align: middle; margin-left: 6px; }
 .char-serials { background: var(--bg-3); border-radius: 8px; padding: 8px 12px; font-size: .82rem; color: var(--text-2); margin: 10px 0; }
 .char-serials i { color: #ffd34d; }
+
+/* ── Badge navbar/hub (échanges reçus) ── */
+.nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--red); color: #fff; font-size: .68rem; font-weight: 800; margin-left: 4px; }
+.nav-item { position: relative; }
+.nav-item .nav-badge { position: absolute; top: 4px; right: 6px; margin: 0; }
+
+/* ── Échange : builder ── */
+.trade-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.trade-col { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 14px; }
+.trade-col-title { font-size: 1rem; margin-bottom: 10px; }
+.trade-col-title.give { color: var(--orange); }
+.trade-col-title.want { color: var(--green); }
+.trade-cur { display: flex; gap: 12px; margin-bottom: 10px; }
+.trade-cur label { color: var(--text-2); font-size: .85rem; display: inline-flex; align-items: center; gap: 5px; }
+.trade-cur input { width: 70px; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
+.trade-pool { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.trade-char { border-bottom: 1px solid #23283a; padding-bottom: 7px; }
+.trade-serials { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.serial-chip { background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text-2); border-radius: 8px; padding: 3px 8px; font-size: .76rem; font-weight: 700; }
+.serial-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+#trade-send { margin-top: 14px; }
+@media (max-width: 620px) { .trade-cols { grid-template-columns: 1fr; } }
+
+/* ── Échange : offres ── */
+.trades-list { display: flex; flex-direction: column; gap: 12px; }
+.trade-offer { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 14px; }
+.trade-offer-head { margin-bottom: 10px; }
+.trade-offer-body { display: flex; align-items: center; gap: 12px; }
+.trade-side { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.trade-side label { color: var(--text-2); font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; }
+.trade-arrow { color: var(--accent); }
+.trade-mini { display: inline-block; background: var(--bg-3); border-left: 3px solid #4a5066; border-radius: 6px; padding: 3px 8px; font-size: .8rem; margin: 2px 0; }
+.trade-mini.cur { border-left-color: var(--orange); color: var(--orange); font-weight: 700; }
+.trade-mini.r-rare { border-left-color: #3aa0ff; } .trade-mini.r-epic { border-left-color: #b06cff; }
+.trade-mini.r-legendary { border-left-color: #ffb648; } .trade-mini.r-mythic { border-left-color: #ff5d8f; }
+.trade-offer-actions { display: flex; gap: 8px; margin-top: 12px; }
+@media (max-width: 620px) { .trade-offer-body { flex-direction: column; align-items: stretch; } .trade-arrow { transform: rotate(90deg); align-self: center; } }
 .lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
 .ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .ranked-tier { font-size: 1.2rem; font-weight: 700; }
