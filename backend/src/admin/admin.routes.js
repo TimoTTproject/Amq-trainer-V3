@@ -5,6 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
+const { scanEndingsBatch } = require('../catalog/catalog.service');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -102,6 +103,17 @@ router.post('/backfill-series', requireAuth, requireAdmin, async (req, res) => {
     res.json({ processed, remaining });
   } catch (e) {
     res.status(502).json({ error: 'AniList indisponible : ' + e.message });
+  }
+});
+
+// Ajoute les Endings (ED) au catalogue pour les animes déjà explorés.
+// Appeler en boucle jusqu'à remaining === 0 (réseau throttlé → lots).
+router.post('/import-endings', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await scanEndingsBatch(20);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
   }
 });
 

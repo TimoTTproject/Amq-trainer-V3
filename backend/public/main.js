@@ -832,6 +832,7 @@ function setupAppUI() {
   });
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
+  document.getElementById('admin-endings-btn').addEventListener('click', runImportEndings);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
@@ -2761,6 +2762,37 @@ async function setCharacterRarity(id, rarity, sel) {
     alert(e.message);
   } finally {
     sel.disabled = false;
+  }
+}
+
+async function runImportEndings() {
+  const btn = document.getElementById('admin-endings-btn');
+  const status = document.getElementById('admin-endings-status');
+  btn.disabled = true;
+  let total = 0, added = 0, fails = 0;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    while (true) {
+      let r;
+      try {
+        r = await api('/api/admin/import-endings', { method: 'POST', body: JSON.stringify({}) });
+      } catch (e) {
+        if (++fails > 5) throw e;
+        status.textContent = `Pause (animethemes saturé)… réessai ${fails}/5`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
+      total += r.processed; added += r.added;
+      status.textContent = `${total} animes scannés · ${added} endings ajoutés · ${r.remaining} restants…`;
+      if (r.remaining === 0 || r.processed === 0) break;
+      await sleep(1200);
+    }
+    status.textContent = `Terminé ✅ (${added} endings ajoutés)`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 

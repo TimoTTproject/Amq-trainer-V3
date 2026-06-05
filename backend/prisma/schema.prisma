@@ -223,6 +223,7 @@ model ScannedAnime {
   anilistId  Int      @id
   animeTitle String
   songCount  Int      @default(0)
+  edScanned  Boolean  @default(false) // les Endings ont-ils été cherchés ? (re-scan ciblé)
   scannedAt  DateTime @default(now())
 }
 

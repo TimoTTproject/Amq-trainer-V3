@@ -49,7 +49,7 @@ function extractThemes(animeData, displayTitle) {
   const out = [];
   if (!Array.isArray(animeData.animethemes)) return out;
   for (const theme of animeData.animethemes) {
-    if (theme.type !== 'OP') continue; // OP seulement pour l'instant
+    if (theme.type !== 'OP' && theme.type !== 'ED') continue; // openings + endings
     for (const entry of theme.animethemeentries || []) {
       const video = (entry.videos || []).find((v) => v.link && v.basename !== 'NC');
       if (!video) continue;
@@ -58,7 +58,7 @@ function extractThemes(animeData, displayTitle) {
       // Exclure covers / versions alternatives
       if (/cover|alternative|yorinuki|remix|version/i.test(title)) break;
       if (!title || title.length <= 2) break;
-      out.push({ type: 'OP', number: theme.sequence || 1, title, artist, videoUrl: video.link });
+      out.push({ type: theme.type, number: theme.sequence || 1, title, artist, videoUrl: video.link });
       break;
     }
   }
@@ -216,4 +216,42 @@ async function importUserList(userId, username, onProgress, limit = 1000) {
   return { totalAnime: animeList.length, matchedAnime, totalSongs };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles };
+// Re-scan ciblé des Endings : pour les animes déjà explorés (OPs) mais pas encore
+// scannés pour les EDs, récupère les ED sur animethemes et les ajoute au catalogue.
+// Traite un lot (appeler en boucle jusqu'à remaining === 0). Réseau throttlé.
+async function scanEndingsBatch(limit = 20) {
+  const batch = await prisma.scannedAnime.findMany({
+    where: { edScanned: false },
+    take: limit,
+    select: { anilistId: true, animeTitle: true },
+  });
+  if (!batch.length) return { processed: 0, added: 0, remaining: 0 };
+
+  let added = 0;
+  for (const a of batch) {
+    try {
+      const themes = await fetchThemesFromAnimeThemes(a.animeTitle, []);
+      const eds = themes.filter((t) => t.type === 'ED');
+      if (eds.length) {
+        const ref = await prisma.song.findFirst({ where: { anilistId: a.anilistId }, select: { popularity: true, altTitles: true } });
+        for (const t of eds) {
+          await prisma.song.upsert({
+            where: { anilistId_type_number_title: { anilistId: a.anilistId, type: t.type, number: t.number, title: t.title } },
+            update: { videoUrl: t.videoUrl, artist: t.artist },
+            create: {
+              anilistId: a.anilistId, animeTitle: a.animeTitle, type: t.type, number: t.number,
+              title: t.title, artist: t.artist, videoUrl: t.videoUrl,
+              popularity: ref?.popularity || 0, altTitles: ref?.altTitles || [],
+            },
+          });
+          added++;
+        }
+      }
+    } catch { /* réseau indispo : on marque quand même pour ne pas bloquer la boucle */ }
+    await prisma.scannedAnime.update({ where: { anilistId: a.anilistId }, data: { edScanned: true } });
+  }
+  const remaining = await prisma.scannedAnime.count({ where: { edScanned: false } });
+  return { processed: batch.length, added, remaining };
+}
+
+module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles, scanEndingsBatch };
