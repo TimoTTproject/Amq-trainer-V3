@@ -62,7 +62,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .auth-card h1 { font-size: 1.5rem; text-align: center; }
 .auth-card h1 i { color: var(--accent); }
-.auth-sub { text-align: center; color: var(--text-2); margin: 8px 0 24px; font-size: .9rem; }
+.auth-sub { text-align: center; color: var(--text-2); margin: 8px 0 16px; font-size: .9rem; line-height: 1.45; }
+.auth-features { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 22px; }
+.auth-features .af { display: inline-flex; align-items: center; gap: 7px; background: var(--bg-3); border-radius: 8px; padding: 7px 10px; font-size: .82rem; font-weight: 600; }
+.auth-features .af i { color: var(--accent); width: 16px; text-align: center; }
 .auth-tabs { display: flex; gap: 8px; margin-bottom: 18px; background: var(--bg); border-radius: 10px; padding: 4px; }
 .auth-tab { flex: 1; background: none; border: none; color: var(--text-2); padding: 8px; border-radius: 8px; }
 .auth-tab.active { background: var(--bg-3); color: var(--text); }
