@@ -164,6 +164,8 @@ function showView(name) {
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-play').classList.toggle('hidden', name !== 'play');
   document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
+  document.getElementById('view-community').classList.toggle('hidden', name !== 'community');
+  document.getElementById('view-players').classList.toggle('hidden', name !== 'players');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
@@ -188,12 +190,15 @@ function showView(name) {
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
+  friends: 'community', leaderboard: 'community', players: 'community',
 };
 
 // Navigation depuis la navbar
 function navTo(name) {
   if (name === 'play') return showView('play');
   if (name === 'collection') return showView('collection');
+  if (name === 'community') return showView('community');
+  if (name === 'players') return openPlayers();
   if (name === 'craft') return openCraft();
   if (name === 'gacha') return openGacha();
   if (name === 'shop') return openShop();
@@ -717,7 +722,22 @@ function setupAppUI() {
   const hubClick = (e) => { const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav); };
   document.getElementById('view-play').addEventListener('click', hubClick);
   document.getElementById('view-collection').addEventListener('click', hubClick);
-  document.getElementById('back-home-lb').addEventListener('click', () => showView('home'));
+  document.getElementById('view-community').addEventListener('click', hubClick);
+  document.getElementById('back-community-players').addEventListener('click', () => showView('community'));
+  let playersSearchTimer;
+  document.getElementById('players-search').addEventListener('input', (e) => {
+    clearTimeout(playersSearchTimer);
+    playersSearch = e.target.value.trim();
+    playersSearchTimer = setTimeout(() => loadPlayers(1), 300);
+  });
+  document.getElementById('players-prev').addEventListener('click', () => loadPlayers(playersPage - 1));
+  document.getElementById('players-next').addEventListener('click', () => loadPlayers(playersPage + 1));
+  document.getElementById('players-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-userid]');
+    if (row) openPlayer(row.dataset.userid);
+  });
+  document.getElementById('back-home-lb').addEventListener('click', () => showView('community'));
+  document.getElementById('back-community-friends').addEventListener('click', () => showView('community'));
   document.getElementById('lb-list').addEventListener('click', (e) => {
     const row = e.target.closest('.lb-row[data-userid]');
     if (row) openPlayer(row.dataset.userid);
@@ -846,6 +866,7 @@ function setupAppUI() {
     collSort = e.target.value;
     renderCollection();
   });
+  document.getElementById('recycle-all-btn').addEventListener('click', recycleAllDupes);
   const openCardFromEvent = (e) => {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
@@ -1488,6 +1509,27 @@ async function loadCollection() {
   }
 }
 
+// Recycle tous les doublons de la collection en poussière
+async function recycleAllDupes() {
+  const dupes = collectionCards.filter((c) => c.copies > 1).reduce((s, c) => s + (c.copies - 1), 0);
+  if (!dupes) { alert('Aucun doublon à recycler.'); return; }
+  if (!confirm(`Recycler ${dupes} doublon(s) en poussière ? (tu gardes 1 exemplaire de chaque carte)`)) return;
+  const btn = document.getElementById('recycle-all-btn');
+  btn.disabled = true;
+  try {
+    const r = await api('/api/gacha/recycle-all', { method: 'POST' });
+    currentUser.dust = r.dust;
+    renderHeaderUser();
+    sfx.correct && sfx.correct();
+    document.getElementById('gacha-msg').textContent = `♻️ ${r.recycled} doublon(s) recyclé(s) · +${r.gain} 🌟 (total ${r.dust})`;
+    loadCollection();
+  } catch (e) {
+    document.getElementById('gacha-msg').textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // Boutons de filtre par rareté (n'affiche que les raretés possédées)
 function renderCollFilters(ownedByRarity) {
   const total = collectionCards.length;
@@ -1719,6 +1761,9 @@ async function openCharacter(id) {
       <button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
         <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
       </button>
+      ${d.owned > 1 ? `<button class="btn-secondary char-recycle" id="char-recycle-btn">
+        <i class="fas fa-recycle"></i> Recycler ${d.owned - 1} doublon(s) · +${(d.owned - 1) * d.dustGain} 🌟
+      </button>` : ''}
       <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
         <i class="fas fa-external-link-alt"></i> Voir sur AniList
       </a>`;
@@ -1735,6 +1780,20 @@ async function openCharacter(id) {
           openCharacter(c.id); // recharge la fiche (possession + poussière à jour)
           loadCollection();
         } catch (e) { alert(e.message); craftBtn.disabled = false; }
+      });
+    }
+    const recycleBtn = document.getElementById('char-recycle-btn');
+    if (recycleBtn) {
+      recycleBtn.addEventListener('click', async () => {
+        if (!confirm(`Recycler ${d.owned - 1} doublon(s) de ${c.name} en poussière ?`)) return;
+        recycleBtn.disabled = true;
+        try {
+          const r = await api('/api/gacha/recycle', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+          currentUser.dust = r.dust;
+          sfx.correct && sfx.correct();
+          openCharacter(c.id); // recharge la fiche (copies + poussière à jour)
+          loadCollection();
+        } catch (e) { alert(e.message); recycleBtn.disabled = false; }
       });
     }
     const favBtn = document.getElementById('char-fav-btn');
@@ -2094,6 +2153,46 @@ async function loadLeaderboard(type) {
       .join('');
   } catch (e) {
     list.innerHTML = `<li class="muted">${escapeHtml(e.message)}</li>`;
+  }
+}
+
+// ── ANNUAIRE DES JOUEURS (vue Communauté) ──
+let playersPage = 1, playersSearch = '', playersPages = 1;
+
+function openPlayers() {
+  showView('players');
+  document.getElementById('players-search').value = '';
+  playersSearch = '';
+  loadPlayers(1);
+}
+
+async function loadPlayers(page) {
+  if (page < 1) return;
+  const list = document.getElementById('players-list');
+  list.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const r = await api(`/api/profile/players/list?page=${page}&search=${encodeURIComponent(playersSearch)}`);
+    playersPage = r.page; playersPages = r.pages || 1;
+    document.getElementById('players-total').textContent = `${r.total} joueur(s)`;
+    if (!r.players.length) {
+      list.innerHTML = '<p class="muted">Aucun joueur trouvé.</p>';
+    } else {
+      list.innerHTML = r.players.map((p) => {
+        const tier = p.tier ? `<span class="lb-tier">${p.tier.icon} ${escapeHtml(p.tier.name)}</span>` : '';
+        const floor = p.towerBestFloor ? `<span class="pl-floor"><i class="fas fa-chess-rook"></i> ${p.towerBestFloor}</span>` : '';
+        return `<div class="pl-row${p.isMe ? ' me' : ''}" data-userid="${p.userId}">
+          ${otherAvatar(p, 'avatar-sm')}
+          <span class="pl-name">${escapeHtml(p.displayName)}${p.isMe ? ' <span class="hint">(toi)</span>' : ''}</span>
+          ${tier}${floor}
+          <i class="fas fa-chevron-right pl-go"></i>
+        </div>`;
+      }).join('');
+    }
+    document.getElementById('players-pageinfo').textContent = `Page ${playersPage} / ${playersPages}`;
+    document.getElementById('players-prev').disabled = playersPage <= 1;
+    document.getElementById('players-next').disabled = playersPage >= playersPages;
+  } catch (e) {
+    list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }
 }
 

@@ -194,6 +194,56 @@ router.post('/craft', requireAuth, async (req, res) => {
   res.json({ ...result, cost });
 });
 
+// Recyclage : convertit les doublons (copies au-delà de 1) en poussière.
+// Garde toujours 1 exemplaire de chaque personnage.
+router.post('/recycle', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  const out = await prisma.$transaction(async (tx) => {
+    const card = await tx.userCard.findUnique({
+      where: { userId_characterId: { userId: req.user.id, characterId } },
+      include: { character: true },
+    });
+    if (!card || card.copies <= 1) return { error: 'Aucun doublon à recycler' };
+    const extra = card.copies - 1;
+    const gain = extra * (DUST_GAIN[card.character.rarity] || 0);
+    await tx.userCard.update({
+      where: { userId_characterId: { userId: req.user.id, characterId } },
+      data: { copies: 1 },
+    });
+    const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { increment: gain } } });
+    return { recycled: extra, gain, dust: u.dust };
+  });
+  if (out.error) return res.status(400).json({ error: out.error });
+  res.json(out);
+});
+
+// Recycle TOUS les doublons de la collection d'un coup.
+router.post('/recycle-all', requireAuth, async (req, res) => {
+  const dupes = await prisma.userCard.findMany({
+    where: { userId: req.user.id, copies: { gt: 1 } },
+    include: { character: { select: { rarity: true } } },
+  });
+  if (!dupes.length) return res.status(400).json({ error: 'Aucun doublon à recycler' });
+  let gain = 0, recycled = 0;
+  for (const c of dupes) {
+    const extra = c.copies - 1;
+    recycled += extra;
+    gain += extra * (DUST_GAIN[c.character.rarity] || 0);
+  }
+  const dust = await prisma.$transaction(async (tx) => {
+    for (const c of dupes) {
+      await tx.userCard.update({
+        where: { userId_characterId: { userId: req.user.id, characterId: c.characterId } },
+        data: { copies: 1 },
+      });
+    }
+    const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { increment: gain } } });
+    return u.dust;
+  });
+  res.json({ recycled, gain, dust });
+});
+
 // Catalogue (pokédex) des personnages : filtre rareté/recherche (nom ou série),
 // pagination, et indicateur de possession pour l'utilisateur.
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -300,6 +350,7 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     rarityLabel: RARITY_LABELS[character.rarity] || character.rarity,
     pullRate: RARITY_RATES[character.rarity] ?? null,
     dupRefund: DUPLICATE_REFUND[character.rarity] ?? 0,
+    dustGain: DUST_GAIN[character.rarity] ?? 0,
     rankInRarity,
     totalInRarity,
     owned: card ? card.copies : 0,

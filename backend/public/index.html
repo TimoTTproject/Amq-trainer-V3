@@ -86,8 +86,7 @@
       <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
       <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span>Jouer</span></button>
       <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span>Collection</span></button>
-      <button class="nav-item" data-nav="friends"><i class="fas fa-user-group"></i><span>Amis</span></button>
-      <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
+      <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span>Communauté</span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
 
@@ -153,6 +152,49 @@
           <span class="hub-txt"><h3>Playlist</h3><p>Tes openings favoris likés</p></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+      </div>
+    </div>
+
+    <!-- VUE COMMUNAUTÉ (hub amis / classement / joueurs) -->
+    <div id="view-community" class="hidden">
+      <div class="hub-head">
+        <h2 class="hub-title"><i class="fas fa-user-group"></i> Communauté</h2>
+        <p class="hub-sub">Tes amis, les classements et tous les joueurs.</p>
+      </div>
+      <div class="hub-grid">
+        <button class="hub-card" data-nav="friends" style="--c:#3ec98a">
+          <span class="hub-ico"><i class="fas fa-user-group"></i></span>
+          <span class="hub-txt"><h3>Amis</h3><p>Ajoute des amis, vois qui est en ligne, invite en partie</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+        <button class="hub-card" data-nav="leaderboard" style="--c:#ffb648">
+          <span class="hub-ico"><i class="fas fa-trophy"></i></span>
+          <span class="hub-txt"><h3>Classement</h3><p>Classé, Château, Collection — qui domine ?</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+        <button class="hub-card" data-nav="players" style="--c:#6c8cff">
+          <span class="hub-ico"><i class="fas fa-users"></i></span>
+          <span class="hub-txt"><h3>Joueurs</h3><p>Parcours tous les joueurs et visite leurs profils</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- VUE JOUEURS (annuaire) -->
+    <div id="view-players" class="hidden">
+      <button class="btn-back" id="back-community-players"><i class="fas fa-arrow-left"></i> Communauté</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-users"></i> Joueurs</h2>
+        <span class="catalog-info" id="players-total"></span>
+      </div>
+      <div class="catalog-search">
+        <input type="text" id="players-search" placeholder="Rechercher un joueur par pseudo…" />
+      </div>
+      <div id="players-list" class="players-list"></div>
+      <div class="catalog-pager">
+        <button class="btn-secondary" id="players-prev"><i class="fas fa-chevron-left"></i></button>
+        <span id="players-pageinfo">—</span>
+        <button class="btn-secondary" id="players-next"><i class="fas fa-chevron-right"></i></button>
       </div>
     </div>
 
@@ -451,6 +493,7 @@
               <option value="copies">Exemplaires</option>
             </select>
           </label>
+          <button class="btn-secondary" id="recycle-all-btn"><i class="fas fa-recycle"></i> Recycler les doublons</button>
         </div>
         <div id="collection-grid" class="card-grid"></div>
       </div>
@@ -568,7 +611,7 @@
 
     <!-- VUE CLASSEMENT -->
     <div id="view-leaderboard" class="hidden">
-      <button class="btn-back" id="back-home-lb"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <button class="btn-back" id="back-home-lb"><i class="fas fa-arrow-left"></i> Communauté</button>
       <div class="gacha-top">
         <h2><i class="fas fa-trophy"></i> Classement</h2>
       </div>
@@ -683,6 +726,7 @@
 
     <!-- VUE AMIS -->
     <div id="view-friends" class="hidden">
+      <button class="btn-back" id="back-community-friends"><i class="fas fa-arrow-left"></i> Communauté</button>
       <div class="gacha-top"><h2><i class="fas fa-user-group"></i> Amis</h2></div>
       <div class="friends-search">
         <input type="text" id="friends-search-input" placeholder="Rechercher un joueur par pseudo…" />

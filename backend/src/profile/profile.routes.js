@@ -4,7 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { publicUser } = require('../auth/auth.routes');
 const { tierFromMmr } = require('../mp/rank');
-const { resolveEquipped } = require('../shop/cosmetics');
+const { resolveEquipped, byId, publicCosmetic } = require('../shop/cosmetics');
 
 const router = express.Router();
 
@@ -117,6 +117,36 @@ router.post('/claim-levels', requireAuth, async (req, res) => {
     return user;
   });
   res.json({ granted: reward, tokens: u.tokens, claimedLevel: current, level: current });
+});
+
+// Annuaire des joueurs : liste paginée + recherche par pseudo (vue Communauté)
+router.get('/players/list', requireAuth, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const perPage = 30;
+  const q = (req.query.search || '').trim();
+  const where = q ? { displayName: { contains: q, mode: 'insensitive' } } : {};
+  const [total, users] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      orderBy: [{ mmr: 'desc' }, { createdAt: 'asc' }],
+      skip: (page - 1) * perPage,
+      take: perPage,
+      select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, mmr: true, rankedGames: true, towerBestFloor: true, createdAt: true },
+    }),
+  ]);
+  res.json({
+    total, page, pages: Math.ceil(total / perPage),
+    players: users.map((u) => ({
+      userId: u.id,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      frame: publicCosmetic(byId(u.avatarFrame)),
+      tier: u.rankedGames > 0 ? tierFromMmr(u.mmr) : null,
+      towerBestFloor: u.towerBestFloor || 0,
+      isMe: u.id === req.user.id,
+    })),
+  });
 });
 
 // Profil riche d'un joueur (sert le profil perso ET la fiche publique)
