@@ -62,7 +62,8 @@ function openMultiplayer() {
   }).catch(() => {});
 }
 
-function mpIsHost() { return mpRoom && mpSocket && mpRoom.hostId === mpSocket.id; }
+// hostId est l'userId de l'hôte (le serveur clé les joueurs par userId, pas par socket)
+function mpIsHost() { return !!(mpRoom && currentUser && mpRoom.hostId === currentUser.id); }
 
 function connectMp() {
   if (mpSocket) return;
