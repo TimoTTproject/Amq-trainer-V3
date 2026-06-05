@@ -8,8 +8,26 @@ let mpRoom = null; // dernier snapshot de salon
 let mpMode = 'classic'; // classic | teams | elim
 let mpTeamNames = ['Rouge', 'Bleu'];
 let mpEliminated = false; // moi, en mode élimination
+let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
+let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
+
+// Quitter la salle quand on navigue HORS de la vue multi (back, navbar, etc.).
+// Sans ça, on reste membre côté serveur : sons qui continuent + re-bascule forcée
+// vers la vue multi au moindre broadcast (mp:room).
+function mpHandleLeaveView() {
+  if (!mpEngaged) return;
+  mpEngaged = false;
+  mpLeft = true;
+  if (mpSocket) mpSocket.emit('mp:leave');
+  mpRoom = null;
+  mpEliminated = false;
+  mpShow('menu');
+  const mm = document.getElementById('mp-menu-msg');
+  if (mm) mm.textContent = '';
+  if (typeof stopMpMedia === 'function') stopMpMedia();
+}
 
 // Toast (notifications multi : invitations, infos)
 function mpToast(html, actionLabel, onAction) {
@@ -46,6 +64,7 @@ function mpShow(panel) {
 }
 
 function openMultiplayer() {
+  mpLeft = false; // entrée délibérée dans la vue
   showView('mp');
   connectMp();
   if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; }
@@ -85,7 +104,9 @@ function connectMp() {
   });
 
   mpSocket.on('mp:room', (d) => {
+    if (mpLeft) return; // on a quitté la vue : ignore les broadcasts résiduels
     mpRoom = d;
+    mpEngaged = true;
     if (d.status === 'lobby') { showView('mp'); mpShow('room'); renderRoom(d); }
   });
 
@@ -94,6 +115,8 @@ function connectMp() {
   mpSocket.on('mp:emote', (d) => floatEmote(d.emote, d.name));
 
   mpSocket.on('mp:game:start', (d) => {
+    if (mpLeft) return;
+    mpEngaged = true;
     showView('mp');
     mpShow('game');
     mpMode = d.mode || 'classic';
@@ -111,6 +134,7 @@ function connectMp() {
   });
 
   mpSocket.on('mp:round:start', (d) => {
+    if (mpLeft) return;
     document.getElementById('mp-round').textContent = d.round;
     document.getElementById('mp-total').textContent = d.total;
     document.getElementById('mp-result').classList.add('hidden');
@@ -166,6 +190,7 @@ function connectMp() {
   });
 
   mpSocket.on('mp:game:over', (d) => {
+    if (mpLeft) return;
     mpStopClip();
     showView('mp');
     mpShow('over');
@@ -337,20 +362,25 @@ function mpSettingsPayload() {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-quick').addEventListener('click', () => {
+    mpLeft = false; mpEngaged = true;
     connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche…'; mpSocket && mpSocket.emit('mp:quick');
   });
   document.getElementById('mp-ranked').addEventListener('click', () => {
+    mpLeft = false; mpEngaged = true;
     connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche d\'une partie classée…'; mpSocket && mpSocket.emit('mp:ranked');
   });
   document.getElementById('mp-create').addEventListener('click', () => {
+    mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());
   });
   document.getElementById('mp-join').addEventListener('click', () => {
     const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
     if (!code) return;
+    mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:join', code);
   });
   document.getElementById('mp-leave').addEventListener('click', () => {
+    mpEngaged = false;
     mpSocket && mpSocket.emit('mp:leave'); mpRoom = null; mpShow('menu');
     document.getElementById('mp-menu-msg').textContent = '';
   });

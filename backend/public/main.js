@@ -157,6 +157,7 @@ function showAuth() {
 function showView(name) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
+  if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
   if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } }
