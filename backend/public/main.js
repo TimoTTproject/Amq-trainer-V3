@@ -1416,7 +1416,7 @@ function flipCardHTML(c, i) {
           <div class="gcard-img" ${img}>${holo}</div>
           <div class="gcard-info">
             <div class="gcard-name">${escapeHtml(c.name)}</div>
-            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${c.serial ? ` · <span class="gcard-serial">#${c.serial}</span>` : ''}</div>
           </div>
           ${badges.join('')}
         </div>
@@ -1748,19 +1748,22 @@ async function openCharacter(id) {
       </div>
       <h2 class="char-name">${escapeHtml(c.name)}</h2>
       ${c.series && c.series !== '—' ? `<div class="char-series">${escapeHtml(c.series)}</div>` : ''}
-      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}</div>
+      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''}</div>
       <div class="char-stats">
         <div class="cstat"><span>${rate}</span><label>Taux de tirage</label></div>
         <div class="cstat"><span>#${d.rankInRarity}/${d.totalInRarity}</span><label>Rang en ${d.rarityLabel}</label></div>
-        <div class="cstat"><span>${(c.favourites || 0).toLocaleString('fr-FR')}</span><label>❤ AniList</label></div>
+        <div class="cstat"><span>${d.minted}/${d.maxSupply}</span><label>En circulation</label></div>
         <div class="cstat"><span>+${d.dupRefund} 🪙</span><label>Doublon</label></div>
       </div>
+      ${d.serials && d.serials.length ? `<div class="char-serials"><i class="fas fa-hashtag"></i> Tes exemplaires : ${d.serials.map((s) => '#' + s).join(', ')}</div>` : ''}
       ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}">
         <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Mettre en favori'}
       </button>` : ''}
-      <button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
+      ${d.soldOut
+        ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Épuisé — échange seulement</button>`
+        : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
         <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
-      </button>
+      </button>`}
       ${d.owned > 1 ? `<button class="btn-secondary char-recycle" id="char-recycle-btn">
         <i class="fas fa-recycle"></i> Recycler ${d.owned - 1} doublon(s) · +${(d.owned - 1) * d.dustGain} 🌟
       </button>` : ''}
@@ -2341,7 +2344,13 @@ function craftCardHTML(c) {
   const owned = c.owned > 0;
   const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
   const canAfford = (currentUser.dust || 0) >= c.craftCost;
-  const badge = owned ? `<span class="badge copies">×${c.owned}</span>` : '<span class="badge locked-badge"><i class="fas fa-lock"></i></span>';
+  const badge = c.soldOut ? '<span class="badge soldout">ÉPUISÉ</span>'
+    : owned ? `<span class="badge copies">×${c.owned}</span>` : '<span class="badge locked-badge"><i class="fas fa-lock"></i></span>';
+  const btn = c.soldOut
+    ? `<button class="btn-secondary craft-btn" disabled><i class="fas fa-ban"></i> Épuisé</button>`
+    : `<button class="btn-primary craft-btn" data-cid="${c.id}" data-cost="${c.craftCost}" data-name="${escapeHtml(c.name)}" ${canAfford ? '' : 'disabled'}>
+      <i class="fas fa-hammer"></i> ${c.craftCost} 🌟
+    </button>`;
   return `<div class="gcard r-${c.rarity}${owned ? '' : ' locked'}">
     <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
     <div class="gcard-info">
@@ -2350,9 +2359,7 @@ function craftCardHTML(c) {
       ${sub}
     </div>
     ${badge}
-    <button class="btn-primary craft-btn" data-cid="${c.id}" data-cost="${c.craftCost}" data-name="${escapeHtml(c.name)}" ${canAfford ? '' : 'disabled'}>
-      <i class="fas fa-hammer"></i> ${c.craftCost} 🌟
-    </button>
+    ${btn}
   </div>`;
 }
 

@@ -4,7 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
-const { rarityForRank } = require('../gacha/rarity');
+const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -131,7 +131,7 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
     .filter((c) => !existingSet.has(c.id))
     .map((c) => {
       const { series, seriesId } = seriesOfCharacter(c);
-      return { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity: 'common', series, seriesId };
+      return { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity: 'common', series, seriesId, maxSupply: MAX_SUPPLY.common };
     });
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 

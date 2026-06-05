@@ -77,6 +77,7 @@ model User {
   songStats     UserSongStat[]
   catalogEntries UserCatalogEntry[]
   cards         UserCard[]
+  cardInstances CardInstance[]
   transactions  TokenTransaction[]
   towerRuns     TowerRun[]
   mpResults     MpResult[]
@@ -266,10 +267,35 @@ model Character {
   seriesId   Int? // id AniList de cet anime
   featured   Boolean @default(false) // personnage en vedette (taux boosté)
 
-  cards UserCard[]
+  // Rareté réelle : stock fini (circulation simultanée) + numéros de série
+  maxSupply  Int     @default(0) // exemplaires max EN CIRCULATION simultanée
+  minted     Int     @default(0) // exemplaires actuellement en circulation
+  nextSerial Int     @default(0) // dernier n° de série attribué (croissant, jamais réutilisé)
+  soldOut    Boolean @default(false) // minted >= maxSupply → plus tirable (échange seulement)
+
+  cards     UserCard[]
+  instances CardInstance[]
 
   @@index([rarity])
   @@index([series])
+  @@index([rarity, soldOut])
+}
+
+// Un exemplaire physique d'une carte : porte le numéro de série et le propriétaire.
+// C'est l'unité qui s'échange entre joueurs (Phase 2).
+model CardInstance {
+  id          Int      @id @default(autoincrement())
+  characterId Int
+  serial      Int // numéro de série unique pour ce personnage (#serial)
+  userId      String
+  obtainedAt  DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, serial])
+  @@index([userId])
+  @@index([userId, characterId])
 }
 
 model UserCard {

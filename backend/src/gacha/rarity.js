@@ -54,6 +54,17 @@ const CRAFT_COST = { common: 20, rare: 60, epic: 200, legendary: 600, mythic: 15
 // Pitié : nombre de tirages sans Légendaire+ avant garantie
 const PITY_LIMIT = 60;
 
+// Rareté réelle : stock max EN CIRCULATION simultanée, par rareté.
+// Généreux pour durer ; le recyclage rend l'exemplaire au stock (rareté dynamique).
+// Les communs sont quasi illimités ; ce sont les mythiques/légendaires qui se raréfient.
+const MAX_SUPPLY = {
+  common: 1000000,
+  rare: 5000,
+  epic: 1000,
+  legendary: 250,
+  mythic: 60,
+};
+
 // Prix et contenu des achats
 const PRICES = {
   single: { cost: 25, count: 1, guaranteeRarePlus: false },
@@ -70,5 +81,6 @@ module.exports = {
   DUST_GAIN,
   CRAFT_COST,
   PITY_LIMIT,
+  MAX_SUPPLY,
   PRICES,
 };

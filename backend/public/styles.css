@@ -676,6 +676,13 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .pl-floor { color: var(--text-2); font-size: .82rem; }
 .pl-floor i { color: var(--accent); }
 .pl-go { color: var(--text-2); }
+
+/* ── Rareté réelle (stock + n° de série) ── */
+.gcard-serial { color: #ffd34d; font-weight: 700; }
+.gcard .badge.soldout { left: 6px; right: 6px; top: auto; bottom: 6px; text-align: center; background: rgba(0,0,0,.78); color: #ff6b6b; border: 1px solid #ff6b6b; }
+.soldout-badge { background: #ff6b6b; color: #2a0000; font-size: .62rem; font-weight: 800; padding: 2px 7px; border-radius: 8px; vertical-align: middle; margin-left: 6px; }
+.char-serials { background: var(--bg-3); border-radius: 8px; padding: 8px 12px; font-size: .82rem; color: var(--text-2); margin: 10px 0; }
+.char-serials i { color: #ffd34d; }
 .lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
 .ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .ranked-tier { font-size: 1.2rem; font-weight: 700; }
