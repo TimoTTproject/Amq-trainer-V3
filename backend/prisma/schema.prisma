@@ -54,6 +54,12 @@ model User {
   pity Int @default(0) // tirages depuis le dernier Légendaire+ (garantie)
   dust Int @default(0) // poussière obtenue avec les doublons (pour fabriquer)
 
+  // Cosmétiques équipés (id de l'item ; null = apparence par défaut)
+  cardBack      String? // dos de carte (ouverture de booster)
+  cardBorder    String? // bordure des cartes possédées
+  profileBanner String? // bannière du profil
+  avatarFrame   String? // cadre autour de l'avatar
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -65,8 +71,23 @@ model User {
   mpResults     MpResult[]
   quests        Quest[]
   dailyStats    DailyStat[]
+  cosmetics     UserCosmetic[]
   friendsSent     Friendship[] @relation("FriendReq")
   friendsReceived Friendship[] @relation("FriendAdr")
+}
+
+// Cosmétiques possédés (achetés en boutique). Le catalogue est défini en code
+// (src/shop/cosmetics.js) ; on ne stocke ici que la possession.
+model UserCosmetic {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  cosmeticId String // id de l'item dans le catalogue
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cosmeticId])
+  @@index([userId])
 }
 
 // Stats quotidiennes (pour le graphe de progression)

@@ -870,3 +870,64 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .choice-opt:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
 .choice-opt:disabled { opacity: .6; cursor: default; }
 @media (max-width: 480px) { .choice-buttons { grid-template-columns: 1fr; } }
+
+/* ── Boutique de cosmétiques ── */
+.shop-group { margin: 22px 0; }
+.shop-group h3 { font-size: 1rem; margin-bottom: 12px; color: var(--text); }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+.shop-item {
+  background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius);
+  padding: 14px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  transition: border-color .15s, transform .05s;
+}
+.shop-item.is-equipped { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.shop-name { font-size: .85rem; font-weight: 600; text-align: center; }
+.shop-btn { font-size: .85rem; padding: 7px 14px; }
+.shop-btn b { color: var(--orange); }
+.shop-item .btn-primary b { color: #fff; }
+.shop-tag.equipped { font-size: .8rem; color: var(--green); font-weight: 700; padding: 7px 0; }
+
+/* Aperçus */
+.shop-prev { display: flex; align-items: center; justify-content: center; }
+.shop-prev-back {
+  width: 64px; height: 88px; border-radius: 10px; color: #fff; font-size: 1.6rem;
+  background: linear-gradient(135deg, #2a2f42, #1a1d29); border: 1px solid #3a3f55;
+}
+.shop-prev-card {
+  width: 64px; height: 88px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--bg-3), var(--bg-2));
+}
+.shop-prev-banner {
+  width: 100%; height: 56px; border-radius: 10px;
+  background: linear-gradient(120deg, var(--bg-3), var(--bg-2));
+}
+.shop-prev-frame {
+  width: 56px; height: 56px; border-radius: 50%; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+/* ── Cosmétiques animés ── */
+@keyframes cosmShine { to { background-position: 200% center; } }
+.cb-shine { background-size: 200% auto !important; animation: cosmShine 3s linear infinite; }
+.cb-neon { box-shadow: inset 0 0 16px rgba(108,140,255,.5), 0 0 12px rgba(138,108,255,.5); }
+.cb-neon i { color: #8a6cff; text-shadow: 0 0 8px #6c8cff, 0 0 16px #8a6cff; }
+
+@keyframes cosmRainbow {
+  0% { box-shadow: 0 0 0 3px #ff5757, 0 0 12px #ff5757; }
+  33% { box-shadow: 0 0 0 3px #57ff8f, 0 0 12px #57ff8f; }
+  66% { box-shadow: 0 0 0 3px #57b8ff, 0 0 12px #57b8ff; }
+  100% { box-shadow: 0 0 0 3px #ff5757, 0 0 12px #ff5757; }
+}
+.cosm-rainbow-border { animation: cosmRainbow 3s linear infinite; }
+
+@keyframes cosmHolo { to { background-position: 200% center; } }
+.cosm-holo-banner {
+  background: linear-gradient(120deg, #5f2c82, #49a09d, #5f2c82, #49a09d) !important;
+  background-size: 200% auto !important; animation: cosmHolo 6s linear infinite;
+}
+
+@keyframes cosmMythic {
+  0%, 100% { box-shadow: 0 0 0 3px #ffd700, 0 0 14px rgba(255,215,0,.7); }
+  50% { box-shadow: 0 0 0 3px #ff7bff, 0 0 20px rgba(255,123,255,.8); }
+}
+.cosm-mythic-frame { animation: cosmMythic 2.5s ease-in-out infinite; }

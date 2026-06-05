@@ -21,6 +21,7 @@ const adminRoutes = require('./admin/admin.routes');
 const leaderboardRoutes = require('./leaderboard/leaderboard.routes');
 const questsRoutes = require('./quests/quests.routes');
 const friendsRoutes = require('./friends/friends.routes');
+const shopRoutes = require('./shop/shop.routes');
 const mpRoutes = require('./mp/mp.routes');
 const { initMp } = require('./mp/mp');
 
@@ -57,6 +58,7 @@ app.use('/api/admin', adminRoutes.router);
 app.use('/api/leaderboard', leaderboardRoutes.router);
 app.use('/api/quests', questsRoutes.router);
 app.use('/api/friends', friendsRoutes.router);
+app.use('/api/shop', shopRoutes.router);
 app.use('/api/mp', mpRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 

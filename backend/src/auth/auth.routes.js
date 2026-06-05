@@ -6,6 +6,7 @@ const { setAuthCookie, clearAuthCookie } = require('./jwt');
 const { requireAuth } = require('./auth.middleware');
 const { isAdmin } = require('../admin/admin');
 const { tierFromMmr } = require('../mp/rank');
+const { resolveEquipped } = require('../shop/cosmetics');
 
 const router = express.Router();
 
@@ -36,6 +37,7 @@ function publicUser(u) {
     dailyAvailable: dailyAvailable(u.lastDailyAt),
     createdAt: u.createdAt,
     isAdmin: isAdmin(u),
+    cosmetics: resolveEquipped(u),
   };
 }
 

@@ -143,6 +143,7 @@ function showView(name) {
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
+  document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
   document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
@@ -160,6 +161,7 @@ function showView(name) {
 // Navigation depuis la navbar
 function navTo(name) {
   if (name === 'gacha') return openGacha();
+  if (name === 'shop') return openShop();
   if (name === 'catalog') return openCatalog();
   if (name === 'tower') return openTower();
   if (name === 'leaderboard') return openLeaderboard();
@@ -192,7 +194,9 @@ function showApp(user) {
   maybeOnboard();
 }
 
-// Affiche un avatar : image si dispo, sinon initiale colorée
+// Affiche un avatar : image si dispo, sinon initiale colorée.
+// Applique le cadre cosmétique de l'utilisateur connecté (renderAvatar ne sert
+// que pour l'avatar du joueur courant : header + son propre profil).
 function renderAvatar(el, user) {
   if (user.avatarUrl) {
     el.style.backgroundImage = `url("${user.avatarUrl}")`;
@@ -200,6 +204,38 @@ function renderAvatar(el, user) {
   } else {
     el.style.backgroundImage = 'none';
     el.textContent = (user.displayName || '?').charAt(0).toUpperCase();
+  }
+  applyAvatarFrame(el, currentUser && currentUser.cosmetics && currentUser.cosmetics.avatarFrame);
+}
+
+// ── Cosmétiques : helpers d'application ─────────────────────
+// Classes animées définies dans styles.css (à retirer avant ré-application).
+const COSM_CLASSES = ['cb-neon', 'cb-shine', 'cosm-rainbow-border', 'cosm-holo-banner', 'cosm-mythic-frame'];
+// Fragment de classe à injecter dans un template literal
+function cosmClass(cos) { return cos && cos.className ? ' ' + cos.className : ''; }
+// Fragment de style à injecter (fusion avec un style existant)
+function cosmStyle(cos) { return cos && cos.css ? cos.css : ''; }
+
+// Cadre d'avatar : un anneau (box-shadow) + éventuelle classe animée,
+// sans toucher au fond (image/initiale) déjà posé.
+function applyAvatarFrame(el, cos) {
+  if (!el) return;
+  COSM_CLASSES.forEach((c) => el.classList.remove(c));
+  el.style.boxShadow = '';
+  if (cos) {
+    if (cos.className) el.classList.add(cos.className);
+    if (cos.css) el.style.boxShadow = cos.css.replace(/^box-shadow:/, '');
+  }
+}
+
+// Applique fond + classe à un conteneur (bannière de profil).
+function applyBackgroundCosmetic(el, cos, baseStyle = '') {
+  if (!el) return;
+  COSM_CLASSES.forEach((c) => el.classList.remove(c));
+  el.style.cssText = baseStyle;
+  if (cos) {
+    if (cos.css) el.style.cssText = (baseStyle ? baseStyle + ';' : '') + cos.css;
+    if (cos.className) el.classList.add(cos.className);
   }
 }
 
@@ -318,6 +354,10 @@ async function openProfile() {
 
 // Rendu commun (utilisé pour le profil perso et la fiche publique)
 function renderProfile(d) {
+  applyBackgroundCosmetic(
+    document.querySelector('#view-profile .profile-banner'),
+    d.cosmetics && d.cosmetics.profileBanner
+  );
   const s = d.stats || { played: 0, correct: 0, rate: 0 };
   document.getElementById('profile-played').textContent = s.played;
   document.getElementById('profile-correct').textContent = s.correct;
@@ -606,9 +646,12 @@ function setupAppUI() {
   document.getElementById('card-training').addEventListener('click', openTraining);
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
+  document.getElementById('card-shop').addEventListener('click', openShop);
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('card-mp').addEventListener('click', openMultiplayer);
+  document.getElementById('back-home-shop').addEventListener('click', () => showView('home'));
+  document.getElementById('shop-groups').addEventListener('click', onShopClick);
   document.getElementById('training-exit').addEventListener('click', openTraining);
   document.getElementById('training-grid').addEventListener('click', (e) => {
     const card = e.target.closest('[data-src]');
@@ -1241,10 +1284,13 @@ function cardHTML(c, opts = {}) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.favorite) badges.push('<span class="badge fav">★</span>');
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
-  const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '');
-  const delay = opts.index != null ? ` style="animation-delay:${(opts.index * 0.45).toFixed(2)}s"` : '';
+  const bd = !opts.noBorder && currentUser.cosmetics && currentUser.cosmetics.cardBorder;
+  const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '') + cosmClass(bd);
+  const delayCss = opts.index != null ? `animation-delay:${(opts.index * 0.45).toFixed(2)}s` : '';
+  const style = [delayCss, cosmStyle(bd)].filter(Boolean).join(';');
+  const styleAttr = style ? ` style="${style}"` : '';
   const cid = c.id != null ? ` data-cid="${c.id}"` : '';
-  return `<div class="${cls}"${delay}${cid}>
+  return `<div class="${cls}"${styleAttr}${cid}>
     <div class="gcard-img" ${img}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -1263,11 +1309,14 @@ function flipCardHTML(c, i) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
   const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
+  const cb = currentUser.cosmetics && currentUser.cosmetics.cardBack;
+  const bd = currentUser.cosmetics && currentUser.cosmetics.cardBorder;
+  const backIcon = (cb && cb.icon) || 'fa-music';
   return `<div class="flip-card r-${c.rarity}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
     <div class="flip-inner">
-      <div class="flip-face flip-back"><div class="flip-back-inner"><i class="fas fa-music"></i></div></div>
+      <div class="flip-face flip-back${cosmClass(cb)}" style="${cosmStyle(cb)}"><div class="flip-back-inner"><i class="fas ${backIcon}"></i></div></div>
       <div class="flip-face flip-front">
-        <div class="gcard r-${c.rarity}">
+        <div class="gcard r-${c.rarity}${cosmClass(bd)}" style="${cosmStyle(bd)}">
           <div class="gcard-img" ${img}>${holo}</div>
           <div class="gcard-info">
             <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -1390,6 +1439,131 @@ function renderCollection() {
   grid.innerHTML = list.length
     ? list.map((c) => cardHTML(c)).join('')
     : '<p class="muted">Aucune carte dans ce filtre.</p>';
+}
+
+// ── Boutique de cosmétiques ─────────────────────────────────
+let shopData = null;
+
+async function openShop() {
+  showView('shop');
+  document.getElementById('shop-tokens').textContent = currentUser.tokens;
+  document.getElementById('shop-msg').textContent = '';
+  const wrap = document.getElementById('shop-groups');
+  wrap.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    shopData = await api('/api/shop');
+    renderShop();
+  } catch (e) {
+    wrap.innerHTML = `<p class="muted">${e.message}</p>`;
+  }
+}
+
+// Aperçu visuel d'un item selon son slot
+function shopPreview(slot, item) {
+  const cls = item.className ? ' ' + item.className : '';
+  const style = item.css || '';
+  if (slot === 'cardBack') {
+    const icon = item.icon || 'fa-music';
+    return `<span class="shop-prev shop-prev-back${cls}" style="${style}"><i class="fas ${icon}"></i></span>`;
+  }
+  if (slot === 'cardBorder') {
+    return `<span class="shop-prev shop-prev-card${cls}" style="${style}"></span>`;
+  }
+  if (slot === 'profileBanner') {
+    return `<span class="shop-prev shop-prev-banner${cls}" style="${style}"></span>`;
+  }
+  // avatarFrame
+  const box = style.replace(/^box-shadow:/, '');
+  return `<span class="shop-prev shop-prev-frame${cls}" style="${box ? 'box-shadow:' + box : ''}">A</span>`;
+}
+
+function renderShop() {
+  document.getElementById('shop-tokens').textContent = shopData.tokens;
+  const wrap = document.getElementById('shop-groups');
+  wrap.innerHTML = shopData.groups.map((g) => `
+    <div class="shop-group">
+      <h3>${g.label}</h3>
+      <div class="shop-grid">
+        ${g.items.map((item) => {
+          const owned = item.owned;
+          const equipped = item.equipped;
+          let action;
+          if (equipped) action = '<span class="shop-tag equipped">Équipé</span>';
+          else if (owned) action = `<button class="btn-secondary shop-btn" data-act="equip" data-id="${item.id}">Équiper</button>`;
+          else action = `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
+          return `<div class="shop-item${equipped ? ' is-equipped' : ''}">
+            ${shopPreview(g.slot, item)}
+            <div class="shop-name">${escapeHtml(item.name)}</div>
+            ${action}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function onShopClick(e) {
+  const btn = e.target.closest('.shop-btn');
+  if (!btn) return;
+  if (btn.dataset.act === 'buy') buyCosmetic(btn.dataset.id);
+  else equipCosmetic(btn.dataset.id);
+}
+
+async function buyCosmetic(id) {
+  const msg = document.getElementById('shop-msg');
+  try {
+    const r = await api('/api/shop/buy', { method: 'POST', body: JSON.stringify({ cosmeticId: id }) });
+    currentUser.tokens = r.tokens;
+    renderHeaderUser();
+    sfx.correct && sfx.correct();
+    msg.textContent = 'Acheté ! Clique sur « Équiper » pour l\'utiliser.';
+    // Marque l'item possédé localement puis re-rend
+    markOwned(id);
+    shopData.tokens = r.tokens;
+    renderShop();
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+}
+
+async function equipCosmetic(id) {
+  const msg = document.getElementById('shop-msg');
+  try {
+    const r = await api('/api/shop/equip', { method: 'POST', body: JSON.stringify({ cosmeticId: id }) });
+    // Met à jour le cosmétique équipé du joueur courant pour application immédiate
+    const item = findShopItem(id);
+    if (item && currentUser.cosmetics) {
+      currentUser.cosmetics[r.slot] = r.equipped
+        ? { id: item.id, slot: r.slot, name: item.name, css: item.css || '', className: item.className || '', icon: item.icon || null }
+        : defaultCosmetic(r.slot);
+    }
+    setEquipped(r.slot, r.equipped);
+    renderShop();
+    renderHeaderUser();
+    msg.textContent = 'Équipé ✓';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+}
+
+// Le slot revient au défaut : on garde l'item gratuit (price 0) du slot
+function defaultCosmetic(slot) {
+  const g = shopData.groups.find((x) => x.slot === slot);
+  const def = g && g.items.find((i) => i.price === 0);
+  return def ? { id: def.id, slot, name: def.name, css: def.css || '', className: def.className || '', icon: def.icon || null } : null;
+}
+function findShopItem(id) {
+  for (const g of shopData.groups) { const it = g.items.find((i) => i.id === id); if (it) return it; }
+  return null;
+}
+function markOwned(id) {
+  for (const g of shopData.groups) { const it = g.items.find((i) => i.id === id); if (it) it.owned = true; }
+}
+function setEquipped(slot, equippedId) {
+  const g = shopData.groups.find((x) => x.slot === slot);
+  if (!g) return;
+  g.equipped = equippedId;
+  g.items.forEach((i) => { i.equipped = equippedId ? i.id === equippedId : i.price === 0; });
 }
 
 // ── Détail personnage (modale) ──
@@ -1804,14 +1978,17 @@ async function openPlayer(userId) {
   try {
     const d = await api(`/api/profile/${userId}`);
     const u = d.user;
+    const af = d.cosmetics && d.cosmetics.avatarFrame;
+    const frameCls = af && af.className ? ' ' + af.className : '';
+    const frameStyle = af && af.css ? af.css : '';
     const avatar = u.avatarUrl
-      ? `<span class="avatar avatar-lg" style="background-image:url('${u.avatarUrl}')"></span>`
-      : `<span class="avatar avatar-lg">${escapeHtml((u.displayName || '?').charAt(0).toUpperCase())}</span>`;
+      ? `<span class="avatar avatar-lg${frameCls}" style="background-image:url('${u.avatarUrl}');${frameStyle}"></span>`
+      : `<span class="avatar avatar-lg${frameCls}" style="${frameStyle}">${escapeHtml((u.displayName || '?').charAt(0).toUpperCase())}</span>`;
     const since = u.createdAt
       ? new Date(u.createdAt).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })
       : '—';
     const best = d.bestCard
-      ? `<div class="player-best">${cardHTML({ ...d.bestCard, copies: 1 })}<p class="hint">Meilleure carte</p></div>`
+      ? `<div class="player-best">${cardHTML({ ...d.bestCard, copies: 1 }, { noBorder: true })}<p class="hint">Meilleure carte</p></div>`
       : '';
     const lv = d.level || { level: 1 };
     const series = (d.topSeries || []).slice(0, 4);

@@ -19,6 +19,7 @@ const REASON_LABELS = {
   admin_grant: 'Bonus admin',
   daily_bonus: 'Bonus quotidien',
   quest_reward: 'Récompense de quête',
+  cosmetic_purchase: 'Achat boutique',
 };
 
 // Bonus de connexion déjà disponible aujourd'hui ?

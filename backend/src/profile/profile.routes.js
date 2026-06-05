@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { publicUser } = require('../auth/auth.routes');
 const { tierFromMmr } = require('../mp/rank');
+const { resolveEquipped } = require('../shop/cosmetics');
 
 const router = express.Router();
 
@@ -122,7 +123,7 @@ router.post('/claim-levels', requireAuth, async (req, res) => {
 router.get('/:userId', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.userId },
-    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true, claimedLevel: true, mmr: true, rankedGames: true, rankedWins: true },
+    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true, claimedLevel: true, mmr: true, rankedGames: true, rankedWins: true, cardBack: true, cardBorder: true, profileBanner: true, avatarFrame: true },
   });
   if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
 
@@ -191,6 +192,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
 
   res.json({
     user,
+    cosmetics: resolveEquipped(user),
     stats: { played, correct, rate: played ? Math.round((correct / played) * 100) : 0 },
     ranked: {
       mmr: user.mmr, tier: tierFromMmr(user.mmr), games: user.rankedGames, wins: user.rankedWins,
