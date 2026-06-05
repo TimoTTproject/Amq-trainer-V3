@@ -310,7 +310,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .quiz-options select { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
 .quiz-options input[type="checkbox"] { accent-color: var(--accent); }
 
-.answer-area { display: flex; gap: 10px; }
+.answer-area { display: flex; gap: 10px; flex-wrap: wrap; }
 .answer-area input { flex: 1; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; }
 .answer-area input:focus { outline: none; border-color: var(--accent); }
 
@@ -764,6 +764,8 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .user-section { gap: 10px; flex-wrap: wrap; }
 .token-badge { padding: 7px 14px; border-radius: 999px; }
 #mute-btn, #logout-btn { width: 38px; height: 38px; justify-content: center; padding: 0; border-radius: 10px; }
+.header-volume { width: 90px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+@media (max-width: 640px) { .header-volume { width: 64px; } }
 
 /* Navbar : barre à pilules qui s'enroule (plus de scroll horizontal) */
 .navbar {

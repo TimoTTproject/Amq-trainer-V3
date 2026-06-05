@@ -74,7 +74,8 @@
           <span class="avatar avatar-sm" id="header-avatar"></span>
           <span class="user-name" id="user-name"></span>
         </button>
-        <button id="mute-btn" class="btn-secondary" title="Activer/couper le son"><i class="fas fa-volume-high"></i></button>
+        <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" />
+        <button id="mute-btn" class="btn-secondary" title="Activer/couper les effets sonores"><i class="fas fa-volume-high"></i></button>
         <button id="logout-btn" class="btn-secondary"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     </header>
@@ -755,6 +756,7 @@
         <div class="answer-area">
           <input type="text" id="mp-input" placeholder="Nom de l'anime…" />
           <button class="btn-primary" id="mp-submit">Valider</button>
+          <button class="btn-secondary" id="mp-skip" title="Je ne sais pas"><i class="fas fa-forward"></i> Passer</button>
         </div>
         <div class="mp-emotes" id="mp-emotes"></div>
         <p id="mp-feedback" class="gacha-msg"></p>

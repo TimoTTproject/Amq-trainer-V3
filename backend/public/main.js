@@ -20,6 +20,26 @@ let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraîneme
 let clipTimer = null; // coupe l'extrait après la durée choisie
 const video = () => document.getElementById('quiz-video');
 
+// ── Volume global de la musique (persistant, partagé par tous les médias) ──
+function getVolume() {
+  const v = parseFloat(localStorage.getItem('amq_volume'));
+  return isNaN(v) ? 0.8 : Math.min(1, Math.max(0, v));
+}
+function applyVolume() {
+  const v = getVolume();
+  document.querySelectorAll('audio, video').forEach((el) => { el.volume = v; });
+}
+function setVolume(v) {
+  v = Math.min(1, Math.max(0, v));
+  localStorage.setItem('amq_volume', String(v));
+  applyVolume();
+  // garde tous les curseurs de volume (header + en-vue) synchronisés
+  ['header-volume', 'volume', 'tower-volume'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && +el.value !== v) el.value = v;
+  });
+}
+
 // Réglages quiz (persistés)
 const settings = {
   randomStart: localStorage.getItem('amq_randomStart') !== 'false',
@@ -640,6 +660,9 @@ function setupAppUI() {
   };
   updateMuteIcon();
   muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
+  const headerVol = document.getElementById('header-volume');
+  if (headerVol) headerVol.addEventListener('input', (e) => setVolume(+e.target.value));
+  setVolume(getVolume()); // synchronise tous les curseurs au volume sauvegardé
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
@@ -761,7 +784,7 @@ function setupAppUI() {
   document.getElementById('tower-abandon').addEventListener('click', abandonTower);
   document.getElementById('tower-play').addEventListener('click', toggleTowerPlay);
   document.getElementById('tower-replay').addEventListener('click', replayTower);
-  document.getElementById('tower-volume').addEventListener('input', (e) => { towerVideo().volume = +e.target.value; });
+  document.getElementById('tower-volume').addEventListener('input', (e) => setVolume(+e.target.value));
   document.getElementById('tower-choices').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-choice]');
     if (btn) answerTower(parseInt(btn.dataset.choice));
@@ -848,7 +871,7 @@ function setupAppUI() {
     settings.clipSeconds = parseInt(optClip.value);
     localStorage.setItem('amq_clip', optClip.value);
   });
-  document.getElementById('volume').addEventListener('input', (e) => { video().volume = +e.target.value; });
+  document.getElementById('volume').addEventListener('input', (e) => setVolume(+e.target.value));
   document.getElementById('answer-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') guessAnswer();
   });
@@ -1071,7 +1094,7 @@ async function nextSong() {
   answered = false;
   const v = video();
   v.src = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`; // flux proxifié (anti-triche)
-  v.volume = +document.getElementById('volume').value;
+  v.volume = getVolume();
   showOverlay(true); // mode audio : on masque l'image, le son joue quand même
 
   document.getElementById('answer-input').disabled = false;
@@ -1725,7 +1748,7 @@ function toggleCatalogAudio(btn) {
   if (catalogPlayingBtn) setRowPlayIcon(catalogPlayingBtn, false);
   catalogPlayingBtn = btn;
   audio.src = btn.dataset.src;
-  audio.volume = +(document.getElementById('volume')?.value ?? 0.8);
+  audio.volume = getVolume();
   audio.play().catch(() => {});
   setRowPlayIcon(btn, true);
   audio.onended = () => stopCatalogAudio();
@@ -1820,7 +1843,7 @@ function enterFloor(floor) {
   // (?t=...) + load() pour forcer le rechargement et éviter la lecture en cache.
   const v = towerVideo();
   v.src = floor.clipUrl;
-  v.volume = +document.getElementById('tower-volume').value;
+  v.volume = getVolume();
   v.load();
   document.getElementById('tower-overlay').classList.remove('hidden'); // audio seul
   v.play().catch(() => {});
@@ -2363,7 +2386,7 @@ function togglePlaylistAudio(btn) {
   if (playlistPlayingBtn) playlistPlayingBtn.querySelector('i').className = 'fas fa-play';
   playlistPlayingBtn = btn;
   audio.src = btn.dataset.src;
-  audio.volume = 0.8;
+  audio.volume = getVolume();
   audio.play().catch(() => {});
   btn.querySelector('i').className = 'fas fa-pause';
   audio.onended = () => stopPlaylistAudio();

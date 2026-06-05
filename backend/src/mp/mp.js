@@ -230,12 +230,31 @@ async function startRound(room) {
   if (!song) return endGame(room);
   const startAt = Date.now() + PREP_MS;
   const endsAt = startAt + room.settings.roundMs;
-  room.current = { song, startAt, endsAt, answers: new Map() };
+  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set() };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.settings.rounds,
     clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: room.settings.roundMs,
   });
   room.timer = setTimeout(() => endRound(room), PREP_MS + room.settings.roundMs);
+}
+
+// Progrès de la manche (combien ont trouvé / passé sur le total)
+function emitProgress(room) {
+  const cur = room.current;
+  if (!cur) return;
+  io.to(room.id).emit('mp:round:progress', {
+    answered: [...cur.answers.values()].filter((a) => a.correct).length,
+    passed: cur.passed.size,
+    total: connectedPlayers(room).length,
+  });
+}
+
+// Tous les joueurs actifs ont-ils trouvé OU passé ? → manche terminée
+function everyoneResolved(room) {
+  const cur = room.current;
+  if (!cur) return false;
+  const active = connectedPlayers(room).filter((p) => !p.eliminated);
+  return active.length > 0 && active.every((p) => cur.answers.get(p.userId)?.correct || cur.passed.has(p.userId));
 }
 
 function onGuess(socket, text) {
@@ -245,7 +264,7 @@ function onGuess(socket, text) {
   const player = room.players.get(uid);
   if (!player || player.eliminated) return; // les éliminés sont spectateurs
   const cur = room.current;
-  if (cur.answers.get(uid)?.correct || Date.now() > cur.endsAt) return;
+  if (cur.answers.get(uid)?.correct || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   const correct = isCorrectGuess(text, cur.song);
   socket.emit('mp:guess:ack', { correct });
   if (!correct) return;
@@ -253,15 +272,23 @@ function onGuess(socket, text) {
   const points = 300 + Math.round((timeLeft / room.settings.roundMs) * 700);
   cur.answers.set(uid, { correct: true, points });
   player.score += points;
-  io.to(room.id).emit('mp:round:progress', {
-    answered: [...cur.answers.values()].filter((a) => a.correct).length,
-    total: connectedPlayers(room).length,
-  });
-  const active = connectedPlayers(room).filter((p) => !p.eliminated);
-  if (active.length && active.every((p) => cur.answers.get(p.userId)?.correct)) {
-    clearTimeout(room.timer);
-    endRound(room);
-  }
+  emitProgress(room);
+  if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
+}
+
+// « Passer » : le joueur déclare ne pas savoir (verrouillé pour la manche)
+function onSkip(socket) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || !room.current) return;
+  const uid = socket.data.user.id;
+  const player = room.players.get(uid);
+  if (!player || player.eliminated) return;
+  const cur = room.current;
+  if (cur.answers.get(uid)?.correct || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
+  cur.passed.add(uid);
+  socket.emit('mp:skip:ack', {});
+  emitProgress(room);
+  if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
 }
 
 function aliveCount(room) {
@@ -478,7 +505,9 @@ function reattach(socket) {
       socket.emit('mp:round:start', {
         round: room.round, total: room.settings.rounds,
         clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt: Date.now(),
-        duration: remaining, resumed: true, alreadyAnswered: !!room.current.answers.get(uid)?.correct,
+        duration: remaining, resumed: true,
+        alreadyAnswered: !!room.current.answers.get(uid)?.correct,
+        alreadyPassed: room.current.passed.has(uid),
       });
     }
   }
@@ -538,6 +567,7 @@ function initMp(server) {
     socket.on('mp:chat', (t) => chat(socket, t));
     socket.on('mp:emote', (e) => emote(socket, e));
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
+    socket.on('mp:skip', () => onSkip(socket));
     socket.on('disconnect', () => { removeOnline(socket); onDisconnect(socket); });
   });
   return io;

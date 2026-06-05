@@ -116,12 +116,11 @@ function connectMp() {
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
-    const lock = !!d.alreadyAnswered || mpEliminated;
-    input.value = ''; input.disabled = lock;
+    const lock = !!d.alreadyAnswered || !!d.alreadyPassed || mpEliminated;
+    input.value = ''; mpLockAnswer(lock);
     if (!lock) input.focus();
-    document.getElementById('mp-submit').disabled = lock;
     document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
-      : d.alreadyAnswered ? '✅ Déjà répondu' : (d.resumed ? '↩️ Reconnecté' : '');
+      : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
     mpStartClip(d.clipUrl, d.startAt, d.duration);
   });
 
@@ -129,15 +128,20 @@ function connectMp() {
     const fb = document.getElementById('mp-feedback');
     if (d.correct) {
       fb.textContent = '✅ Bonne réponse !';
-      document.getElementById('mp-input').disabled = true;
-      document.getElementById('mp-submit').disabled = true;
+      mpLockAnswer(true);
     } else {
       fb.textContent = '❌ Essaie encore…';
     }
   });
 
+  mpSocket.on('mp:skip:ack', () => {
+    document.getElementById('mp-feedback').textContent = '⏭️ Tu as passé cette manche';
+    mpLockAnswer(true);
+  });
+
   mpSocket.on('mp:round:progress', (d) => {
-    document.getElementById('mp-progress').textContent = `${d.answered}/${d.total} ont trouvé`;
+    const passed = d.passed ? ` · ${d.passed} passé${d.passed > 1 ? 's' : ''}` : '';
+    document.getElementById('mp-progress').textContent = `${d.answered}/${d.total} ont trouvé${passed}`;
   });
 
   mpSocket.on('mp:round:result', (d) => {
@@ -158,8 +162,7 @@ function connectMp() {
       me.correct ? sfx.correct() : sfx.wrong();
       if (mpEliminated) { sfx.lose(); document.getElementById('mp-feedback').textContent = '💀 Tu es éliminé !'; }
     }
-    document.getElementById('mp-input').disabled = true;
-    document.getElementById('mp-submit').disabled = true;
+    mpLockAnswer(true);
   });
 
   mpSocket.on('mp:game:over', (d) => {
@@ -282,7 +285,7 @@ function renderMpScores(results, withPoints) {
 // ── Clip synchronisé ──
 function mpStartClip(url, startAt, duration) {
   const v = mpVideo();
-  v.src = url; v.load(); v.volume = 0.8;
+  v.src = url; v.load(); v.volume = (typeof getVolume === 'function' ? getVolume() : 0.8);
   document.getElementById('mp-overlay').classList.remove('hidden'); // audio seul
   const delay = Math.max(0, startAt - Date.now());
   setTimeout(() => { v.play().catch(() => {}); mpRunTimer(duration); }, delay);
@@ -306,11 +309,23 @@ function stopMpMedia() {
   if (v) { v.removeAttribute('src'); v.load(); }
 }
 
+// Verrouille/déverrouille la saisie de réponse (input + valider + passer)
+function mpLockAnswer(locked) {
+  document.getElementById('mp-input').disabled = locked;
+  document.getElementById('mp-submit').disabled = locked;
+  document.getElementById('mp-skip').disabled = locked;
+}
+
 function mpSubmitGuess() {
   const input = document.getElementById('mp-input');
   const text = input.value.trim();
   if (!text || input.disabled || !mpSocket) return;
   mpSocket.emit('mp:guess', text);
+}
+
+function mpSkip() {
+  if (document.getElementById('mp-skip').disabled || !mpSocket) return;
+  mpSocket.emit('mp:skip');
 }
 function mpSettingsPayload() {
   return {
@@ -350,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (b && mpSocket) mpSocket.emit('mp:emote', b.dataset.emote);
   });
   document.getElementById('mp-submit').addEventListener('click', mpSubmitGuess);
+  document.getElementById('mp-skip').addEventListener('click', mpSkip);
   document.getElementById('mp-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSubmitGuess(); });
   document.getElementById('mp-again').addEventListener('click', () => {
     // retour au salon (privé) ou au menu (rapide)
