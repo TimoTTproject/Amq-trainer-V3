@@ -82,11 +82,13 @@ router.get('/random', requireAuth, async (req, res) => {
   const ranked = req.query.ranked !== 'false'; // défaut : classé
   // Sources d'entraînement (toujours hors classé)
   const source = ['review', 'missed', 'liked', 'due', 'series'].includes(req.query.source) ? req.query.source : null;
+  // Filtre type de thème : 'OP' | 'ED' | (rien = les deux)
+  const typeFilter = ['OP', 'ED'].includes(req.query.type) ? req.query.type : null;
 
   let song = null;
   if (!source && mode === 'global') {
     // Perf : on évite de charger tous les ids → count + skip aléatoire
-    const where = { videoUrl: { not: null } };
+    const where = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) };
     const total = await prisma.song.count({ where });
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true } });
@@ -102,7 +104,7 @@ router.get('/random', requireAuth, async (req, res) => {
       songIds = stats.map((s) => s.songId);
     } else if (source === 'series') {
       const series = (req.query.series || '').trim();
-      const rows = await prisma.song.findMany({ where: { animeTitle: series, videoUrl: { not: null } }, select: { id: true } });
+      const rows = await prisma.song.findMany({ where: { animeTitle: series, videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) }, select: { id: true } });
       songIds = rows.map((r) => r.id);
     } else if (source) {
       const where = { userId: req.user.id };
@@ -113,6 +115,11 @@ router.get('/random', requireAuth, async (req, res) => {
     } else {
       const entries = await prisma.userCatalogEntry.findMany({ where: { userId: req.user.id }, select: { songId: true } });
       songIds = entries.map((e) => e.songId);
+    }
+    // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series')
+    if (typeFilter && source !== 'series' && songIds.length) {
+      const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
+      songIds = f.map((s) => s.id);
     }
     if (!songIds.length) {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });

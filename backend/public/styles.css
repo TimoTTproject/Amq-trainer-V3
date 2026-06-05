@@ -733,6 +733,11 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .weekly-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 10px 14px; border-radius: 10px; background: linear-gradient(120deg, #5f2c82, #ec4899, #f0a832); background-size: 200% auto; animation: cosmHolo 8s linear infinite; font-weight: 700; color: #fff; }
 .weekly-boost { font-size: .75rem; background: rgba(0,0,0,.3); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
 .weekly-timer { font-size: .85rem; background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 999px; }
+
+/* ── Filtre OP/ED ── */
+.type-filter { display: inline-flex; gap: 4px; margin-left: auto; background: var(--bg-3); border-radius: 999px; padding: 3px; }
+.tf-btn { background: none; border: none; color: var(--text-2); font-size: .8rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+.tf-btn.active { background: var(--accent); color: #fff; }
 .lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
 .ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .ranked-tier { font-size: 1.2rem; font-weight: 700; }

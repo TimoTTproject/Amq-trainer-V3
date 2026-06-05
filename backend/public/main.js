@@ -17,6 +17,7 @@ let chronoTimer = null;
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
 let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
+let quizType = localStorage.getItem('amq_quiz_type') || 'all'; // 'all' | 'OP' | 'ED'
 let clipTimer = null; // coupe l'extrait après la durée choisie
 const video = () => document.getElementById('quiz-video');
 
@@ -679,6 +680,15 @@ function setupAppUI() {
   const headerVol = document.getElementById('header-volume');
   if (headerVol) headerVol.addEventListener('input', (e) => setVolume(+e.target.value));
   setVolume(getVolume()); // synchronise tous les curseurs au volume sauvegardé
+  // Filtre OP/ED du quiz
+  syncTypeFilter();
+  document.getElementById('type-filter').addEventListener('click', (e) => {
+    const b = e.target.closest('.tf-btn');
+    if (!b) return;
+    quizType = b.dataset.type;
+    localStorage.setItem('amq_quiz_type', quizType);
+    syncTypeFilter();
+  });
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
@@ -1137,6 +1147,10 @@ async function toggleLike() {
   } catch (e) { setHint(e.message); }
 }
 
+function syncTypeFilter() {
+  document.querySelectorAll('#type-filter .tf-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === quizType));
+}
+
 async function nextSong() {
   resetQuizUI();
   setHint('Chargement…');
@@ -1151,6 +1165,7 @@ async function nextSong() {
   } else {
     qs = `mode=${mode}&ranked=${gameMode === 'ranked'}`;
   }
+  if (quizType && quizType !== 'all') qs += `&type=${quizType}`;
   try {
     ({ song, roundToken, liked } = await api(`/api/quiz/random?${qs}`));
   } catch (err) {
