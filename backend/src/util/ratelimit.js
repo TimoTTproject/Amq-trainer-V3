@@ -1,21 +1,20 @@
-// Limiteur de débit en mémoire (fenêtre fixe), par utilisateur (sinon IP).
-// Suffisant pour une instance unique (Railway). Renvoie 429 au-delà du quota.
-function rateLimit({ windowMs = 60000, max = 60 } = {}) {
-  const hits = new Map();
-  const sweep = () => {
-    const now = Date.now();
-    for (const [k, e] of hits) if (e.reset < now) hits.delete(k);
-  };
-  setInterval(sweep, windowMs).unref?.();
+// Limiteur de débit (fenêtre fixe) par utilisateur (sinon IP), via le store partagé
+// (Redis si dispo, sinon mémoire). Renvoie 429 au-delà du quota.
+const store = require('./store');
 
-  return (req, res, next) => {
+let instanceSeq = 0;
+
+function rateLimit({ windowMs = 60000, max = 60, name } = {}) {
+  const ns = 'rl:' + (name || 'r' + ++instanceSeq) + ':';
+  const ttlSec = Math.max(1, Math.round(windowMs / 1000));
+
+  return async (req, res, next) => {
     const id = (req.user && req.user.id) || req.ip || 'anon';
-    const now = Date.now();
-    let e = hits.get(id);
-    if (!e || e.reset < now) { e = { count: 0, reset: now + windowMs }; hits.set(id, e); }
-    e.count++;
-    if (e.count > max) {
-      return res.status(429).json({ error: 'Trop de requêtes, réessaie dans un instant.' });
+    try {
+      const n = await store.incr(ns + id, ttlSec);
+      if (n > max) return res.status(429).json({ error: 'Trop de requêtes, réessaie dans un instant.' });
+    } catch {
+      // En cas d'erreur du store, on ne bloque pas la requête.
     }
     next();
   };

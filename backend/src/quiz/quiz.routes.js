@@ -152,11 +152,11 @@ router.get('/clip/:songId', requireAuth, async (req, res) => {
 // Passe en Carré (4) ou Duo (2) : verrouille le niveau (gain réduit) dans un
 // nouveau jeton et renvoie les propositions. L'ancien jeton est consommé pour
 // empêcher de revenir au gain « cash » après avoir vu les propositions.
-router.post('/choices', requireAuth, rateLimit({ max: 120 }), async (req, res) => {
+router.post('/choices', requireAuth, rateLimit({ max: 120, name: 'choices' }), async (req, res) => {
   const level = req.body?.level === 'duo' ? 'duo' : 'carre';
   const round = verifyRoundToken(req.body?.roundToken, { userId: req.user.id });
   if (!round) return res.status(400).json({ error: 'Manche invalide' });
-  if (!consumeRound(round)) return res.status(409).json({ error: 'Manche déjà jouée' });
+  if (!(await consumeRound(round))) return res.status(409).json({ error: 'Manche déjà jouée' });
 
   const song = await prisma.song.findUnique({ where: { id: round.sid } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
@@ -225,7 +225,7 @@ router.get('/playlist', requireAuth, async (req, res) => {
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.
-router.post('/guess', requireAuth, rateLimit({ max: 120 }), async (req, res) => {
+router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async (req, res) => {
   const { songId, guess } = req.body || {};
   if (!songId) return res.status(400).json({ error: 'songId requis' });
 
@@ -238,7 +238,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120 }), async (req, res) => 
   // Le mode classé est décidé par le jeton de manche émis au tirage, pas par le
   // client. Sans jeton valide et non rejoué pour CETTE manche → aucun token.
   const round = verifyRoundToken(req.body?.roundToken, { userId, songId });
-  const ranked = !!(round && round.ranked && consumeRound(round));
+  const ranked = !!(round && round.ranked && (await consumeRound(round)));
 
   const prev = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId, songId } },

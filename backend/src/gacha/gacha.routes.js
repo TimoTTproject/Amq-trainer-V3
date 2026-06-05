@@ -165,7 +165,7 @@ async function destroyInstances(tx, userId, characterId, n) {
 }
 
 // Tirage : type = 'single' | 'pack'
-router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
+router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (req, res) => {
   const type = req.body?.type === 'pack' ? 'pack' : 'single';
   const cfg = PRICES[type];
   const userId = req.user.id;

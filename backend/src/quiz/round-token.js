@@ -3,18 +3,10 @@
 // des tokens en mode entraînement) et de revalider plusieurs fois la même manche.
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const store = require('../util/store');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const ROUND_TTL = '30m'; // une manche doit être validée dans les 30 min
-
-// Manches déjà consommées (jti → expiration). En mémoire : suffisant pour une
-// instance unique (Railway). Si on passe à plusieurs instances, déplacer en BDD/Redis.
-const consumed = new Map();
-function sweep() {
-  const now = Date.now();
-  for (const [jti, exp] of consumed) if (exp < now) consumed.delete(jti);
-}
-setInterval(sweep, 5 * 60 * 1000).unref?.();
 
 // Émet un jeton liant la manche à l'utilisateur, à la musique, au mode classé
 // et au niveau d'aide (cash | carre | duo, qui détermine le multiplicateur de gain).
@@ -41,13 +33,11 @@ function verifyRoundToken(token, { userId, songId } = {}) {
   return p;
 }
 
-// Marque la manche comme jouée. Retourne false si elle l'a déjà été (rejeu).
-function consumeRound(payload) {
+// Marque la manche comme jouée (anti-rejeu, store partagé). Retourne false si déjà jouée.
+async function consumeRound(payload) {
   if (!payload?.jti) return false;
-  if (consumed.has(payload.jti)) return false;
-  const exp = (payload.exp ? payload.exp * 1000 : Date.now() + 30 * 60 * 1000);
-  consumed.set(payload.jti, exp);
-  return true;
+  const ttl = payload.exp ? Math.max(1, payload.exp - Math.floor(Date.now() / 1000)) : 1800;
+  return store.setIfAbsent('rt:' + payload.jti, ttl);
 }
 
 module.exports = { issueRoundToken, verifyRoundToken, consumeRound };
