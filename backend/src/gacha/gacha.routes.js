@@ -22,6 +22,51 @@ router.get('/info', async (req, res) => {
   res.json({ prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, craftCost: CRAFT_COST, pityLimit: PITY_LIMIT });
 });
 
+// Stats de tirage de l'utilisateur : répartition par rareté (réelle vs attendue)
+// + indice de chance. La « valeur » d'une rareté = 1/probabilité, si bien que
+// l'espérance par tirage vaut le nombre de raretés → indice 100% = pile dans la moyenne.
+const RARITY_KEYS = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+const LUCK_MIN_PULLS = 10;
+router.get('/stats', requireAuth, async (req, res) => {
+  const u = req.user;
+  const counts = {
+    common: u.pullCommon || 0, rare: u.pullRare || 0, epic: u.pullEpic || 0,
+    legendary: u.pullLegendary || 0, mythic: u.pullMythic || 0,
+  };
+  const total = RARITY_KEYS.reduce((s, r) => s + counts[r], 0);
+
+  const perRarity = RARITY_KEYS.map((r) => ({
+    rarity: r,
+    label: RARITY_LABELS[r],
+    count: counts[r],
+    actualRate: total ? (counts[r] / total) * 100 : 0,
+    expectedRate: RARITY_RATES[r], // en %
+    expectedCount: total * (RARITY_RATES[r] / 100),
+  }));
+
+  let luckPercent = null;
+  let luckLabel = `Encore ${Math.max(0, LUCK_MIN_PULLS - total)} tirage(s) pour évaluer ta chance`;
+  if (total >= LUCK_MIN_PULLS) {
+    let actualValue = 0;
+    for (const r of RARITY_KEYS) {
+      const p = RARITY_RATES[r] / 100;
+      if (p > 0) actualValue += counts[r] * (1 / p);
+    }
+    const expectedValue = total * RARITY_KEYS.length;
+    luckPercent = Math.round((actualValue / expectedValue) * 100);
+    luckLabel =
+      luckPercent >= 140 ? 'Très chanceux 🍀🍀' :
+      luckPercent >= 112 ? 'Chanceux 🍀' :
+      luckPercent >= 88 ? 'Dans la moyenne ⚖️' :
+      luckPercent >= 60 ? 'Malchanceux 😕' : 'Très malchanceux 💀';
+  }
+
+  res.json({
+    total, pity: u.pity || 0, pityLimit: PITY_LIMIT,
+    perRarity, luck: { percent: luckPercent, label: luckLabel, min: LUCK_MIN_PULLS },
+  });
+});
+
 // Choisit un personnage aléatoire d'une rareté donnée (fallback : n'importe lequel).
 // Si un personnage « vedette » existe pour cette rareté, 50% de chance de l'obtenir.
 async function pickRandomCharacter(tx, rarity) {
@@ -75,9 +120,11 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
     const cards = [];
     let refundTotal = 0;
     let dustTotal = 0;
+    const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
     for (const rarity of rarities) {
       const character = await pickRandomCharacter(tx, rarity);
       if (!character) continue;
+      pullCounts[character.rarity] = (pullCounts[character.rarity] || 0) + 1;
       const existing = await tx.userCard.findUnique({
         where: { userId_characterId: { userId, characterId: character.id } },
       });
@@ -108,6 +155,11 @@ router.post('/pull', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
         pity,
         ...(refundTotal > 0 ? { tokens: { increment: refundTotal } } : {}),
         ...(dustTotal > 0 ? { dust: { increment: dustTotal } } : {}),
+        ...(pullCounts.common ? { pullCommon: { increment: pullCounts.common } } : {}),
+        ...(pullCounts.rare ? { pullRare: { increment: pullCounts.rare } } : {}),
+        ...(pullCounts.epic ? { pullEpic: { increment: pullCounts.epic } } : {}),
+        ...(pullCounts.legendary ? { pullLegendary: { increment: pullCounts.legendary } } : {}),
+        ...(pullCounts.mythic ? { pullMythic: { increment: pullCounts.mythic } } : {}),
       },
     });
     if (refundTotal > 0) {

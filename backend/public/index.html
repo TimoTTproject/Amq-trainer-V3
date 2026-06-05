@@ -410,7 +410,10 @@
       <p class="gacha-sub" id="gacha-pool"></p>
       <div class="gacha-meta" id="gacha-meta"></div>
       <div class="gacha-featured" id="gacha-featured"></div>
-      <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
+      <div class="gacha-tools">
+        <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
+        <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
+      </div>
 
       <div class="gacha-actions">
         <button class="btn-primary" id="pull-single">
@@ -456,6 +459,14 @@
       <p class="gacha-sub">Personnalise ton style : dos de cartes, bordures, bannières et cadres d'avatar.</p>
       <p id="shop-msg" class="gacha-msg"></p>
       <div id="shop-groups"></div>
+    </div>
+
+    <!-- Modale stats de tirage -->
+    <div id="gacha-stats-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <button class="modal-close" id="gacha-stats-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <div id="gacha-stats-body" class="gacha-stats-body"></div>
+      </div>
     </div>
 
     <!-- Modale détail personnage -->

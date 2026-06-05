@@ -58,6 +58,13 @@ model User {
   pity Int @default(0) // tirages depuis le dernier Légendaire+ (garantie)
   dust Int @default(0) // poussière obtenue avec les doublons (pour fabriquer)
 
+  // Stats de tirage gacha (par rareté tirée) → indice de chance
+  pullCommon    Int @default(0)
+  pullRare      Int @default(0)
+  pullEpic      Int @default(0)
+  pullLegendary Int @default(0)
+  pullMythic    Int @default(0)
+
   // Cosmétiques équipés (id de l'item ; null = apparence par défaut)
   cardBack      String? // dos de carte (ouverture de booster)
   cardBorder    String? // bordure des cartes possédées

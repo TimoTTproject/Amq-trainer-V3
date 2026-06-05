@@ -725,6 +725,13 @@ function setupAppUI() {
   // Pokédex personnages
   document.getElementById('open-chars-btn').addEventListener('click', openCharacters);
   document.getElementById('back-gacha-chars').addEventListener('click', () => showView('gacha'));
+  // Stats de tirage (chance)
+  document.getElementById('gacha-stats-btn').addEventListener('click', openGachaStats);
+  document.getElementById('gacha-stats-close').addEventListener('click', () =>
+    document.getElementById('gacha-stats-modal').classList.add('hidden'));
+  document.getElementById('gacha-stats-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'gacha-stats-modal') e.currentTarget.classList.add('hidden');
+  });
   let charsSearchTimer;
   document.getElementById('chars-search').addEventListener('input', (e) => {
     clearTimeout(charsSearchTimer);
@@ -1607,6 +1614,53 @@ function setEquipped(slot, equippedId) {
   if (!g) return;
   g.equipped = equippedId;
   g.items.forEach((i) => { i.equipped = equippedId ? i.id === equippedId : i.price === 0; });
+}
+
+// ── Stats de tirage (modale chance) ──
+async function openGachaStats() {
+  const modal = document.getElementById('gacha-stats-modal');
+  const body = document.getElementById('gacha-stats-body');
+  body.innerHTML = '<p class="muted">Chargement…</p>';
+  modal.classList.remove('hidden');
+  try {
+    body.innerHTML = renderGachaStats(await api('/api/gacha/stats'));
+  } catch (e) {
+    body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderGachaStats(d) {
+  const luck = d.luck || {};
+  const cls = luck.percent == null ? 'neutral' : luck.percent >= 112 ? 'lucky' : luck.percent <= 88 ? 'unlucky' : 'neutral';
+  const luckHead = luck.percent == null
+    ? `<div class="luck-head neutral"><div class="luck-label">${escapeHtml(luck.label)}</div></div>`
+    : `<div class="luck-head ${cls}">
+         <div class="luck-pct">${luck.percent}<span>%</span></div>
+         <div class="luck-label">${escapeHtml(luck.label)}</div>
+         <div class="hint">100 % = pile dans les taux théoriques</div>
+       </div>`;
+  const rows = (d.perRarity || []).map((r) => {
+    const delta = r.actualRate - r.expectedRate;
+    const dcls = Math.abs(delta) < 0.5 ? '' : delta > 0 ? 'up' : 'down';
+    const sign = delta >= 0 ? '+' : '';
+    return `<div class="gs-row">
+      <div class="gs-line">
+        <span class="rb-pill r-${r.rarity}">${escapeHtml(r.label)}</span>
+        <span class="gs-rates">${r.actualRate.toFixed(1)}% <i class="hint">(attendu ${r.expectedRate.toFixed(1)}%)</i>
+          ${dcls ? `<span class="gs-delta ${dcls}">${sign}${delta.toFixed(1)}</span>` : ''}</span>
+        <span class="gs-count">×${r.count}</span>
+      </div>
+      <div class="gs-bar">
+        <div class="gs-fill r-${r.rarity}" style="width:${Math.min(100, r.actualRate)}%"></div>
+        <span class="gs-exp" style="left:${Math.min(100, r.expectedRate)}%" title="Taux attendu"></span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<h2 class="gs-title"><i class="fas fa-chart-simple"></i> Mes stats de tirage</h2>
+    ${luckHead}
+    <div class="gs-meta"><span><b>${d.total}</b> tirage(s)</span><span>Pitié : <b>${d.pity}</b>/${d.pityLimit}</span></div>
+    <div class="gs-rows">${rows}</div>
+    <p class="hint gs-foot">Le repère clair sur chaque barre indique le taux attendu.</p>`;
 }
 
 // ── Détail personnage (modale) ──

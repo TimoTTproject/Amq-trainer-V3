@@ -627,6 +627,36 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-mmr { font-size: .8rem; font-weight: 700; }
 .mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
 .mp-reward { font-size: .8rem; font-weight: 700; color: var(--orange); margin-left: 6px; }
+
+/* ── Stats de tirage (chance) ── */
+.gacha-tools { display: flex; gap: 10px; flex-wrap: wrap; }
+.gacha-stats-body { padding: 4px 2px; }
+.gs-title { font-size: 1.2rem; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.gs-title i { color: var(--accent); }
+.luck-head { text-align: center; padding: 16px; border-radius: var(--radius); background: var(--bg-3); margin-bottom: 14px; border: 1px solid #2a2f42; }
+.luck-head.lucky { border-color: var(--green); box-shadow: 0 0 18px -6px var(--green); }
+.luck-head.unlucky { border-color: var(--red); box-shadow: 0 0 18px -6px var(--red); }
+.luck-pct { font-size: 2.6rem; font-weight: 800; line-height: 1; }
+.luck-pct span { font-size: 1.2rem; }
+.luck-head.lucky .luck-pct { color: var(--green); }
+.luck-head.unlucky .luck-pct { color: var(--red); }
+.luck-head.neutral .luck-pct { color: var(--text); }
+.luck-label { font-weight: 700; margin-top: 6px; }
+.gs-meta { display: flex; justify-content: space-between; color: var(--text-2); font-size: .88rem; margin-bottom: 12px; }
+.gs-meta b { color: var(--text); }
+.gs-row { margin-bottom: 12px; }
+.gs-line { display: flex; align-items: center; gap: 8px; font-size: .85rem; margin-bottom: 5px; }
+.gs-rates { flex: 1; color: var(--text); }
+.gs-rates .hint { font-style: normal; }
+.gs-count { font-weight: 700; color: var(--text-2); }
+.gs-delta { font-weight: 700; margin-left: 6px; }
+.gs-delta.up { color: var(--green); } .gs-delta.down { color: var(--red); }
+.gs-bar { position: relative; height: 9px; background: var(--bg); border-radius: 999px; }
+.gs-fill { height: 100%; border-radius: 999px; background: #6b7280; transition: width .4s; }
+.gs-fill.r-rare { background: #3aa0ff; } .gs-fill.r-epic { background: #b06cff; }
+.gs-fill.r-legendary { background: #ffb648; } .gs-fill.r-mythic { background: #ff5d8f; }
+.gs-exp { position: absolute; top: -2px; width: 2px; height: 13px; background: #fff; opacity: .85; transform: translateX(-1px); }
+.gs-foot { margin-top: 10px; text-align: center; }
 .lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
 .ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .ranked-tier { font-size: 1.2rem; font-weight: 700; }
