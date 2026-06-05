@@ -690,6 +690,7 @@ function setupAppUI() {
     syncTypeFilter();
   });
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
+  document.getElementById('share-btn').addEventListener('click', shareGame);
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1145,6 +1146,22 @@ async function toggleLike() {
     setLikeButton();
     if (currentLiked && typeof sfx !== 'undefined') sfx.correct();
   } catch (e) { setHint(e.message); }
+}
+
+// Partage du jeu : Web Share API (mobile) sinon copie du lien
+async function shareGame() {
+  const url = location.origin || 'https://amqtrainer.fr';
+  const btn = document.getElementById('share-btn');
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Anime Music Quiz', text: "Devine l'anime à son opening — rejoins-moi !", url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    const old = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i> Lien copié !';
+    setTimeout(() => { btn.innerHTML = old; }, 1800);
+  } catch {}
 }
 
 function syncTypeFilter() {
