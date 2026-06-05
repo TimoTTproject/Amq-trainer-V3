@@ -626,6 +626,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-myrank b { color: var(--text); }
 .mp-mmr { font-size: .8rem; font-weight: 700; }
 .mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
+.mp-reward { font-size: .8rem; font-weight: 700; color: var(--orange); margin-left: 6px; }
 .lb-tier { font-size: .72rem; color: var(--text-2); font-weight: 600; }
 .ranked-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(160deg, var(--bg-3), var(--bg)); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .ranked-tier { font-size: 1.2rem; font-weight: 700; }

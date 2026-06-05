@@ -213,15 +213,24 @@ function connectMp() {
         const delta = p.mmrDelta != null
           ? ` <span class="mp-mmr ${p.mmrDelta >= 0 ? 'gain' : 'spend'}">${p.mmrDelta >= 0 ? '+' : ''}${p.mmrDelta} MMR</span>`
           : '';
+        const reward = p.tokenReward ? ` <span class="mp-reward">+${p.tokenReward} 🪙</span>` : '';
         const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
         const tag = d.mode === 'elim' ? (p.eliminated ? ' 💀' : ' ❤️') : '';
-        return `<li class="lb-row${p.name === currentUser.displayName ? ' me' : ''}">
+        const isMe = p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName;
+        return `<li class="lb-row${isMe ? ' me' : ''}">
           <span class="lb-rank">${medal(i + 1)}</span>
-          <span class="lb-name">${escapeHtml(p.name)}${team}${tag}</span>
+          <span class="lb-name">${escapeHtml(p.name)}${team}${tag}${delta}${reward}</span>
           <span class="lb-value">${p.score} pts</span>
         </li>`;
       })
       .join('');
+
+    // Crédite mon solde des tokens gagnés
+    const mine = d.ranking.find((p) => (p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName));
+    if (mine && mine.tokenReward && typeof renderHeaderUser === 'function') {
+      currentUser.tokens = (currentUser.tokens || 0) + mine.tokenReward;
+      renderHeaderUser();
+    }
   });
 }
 

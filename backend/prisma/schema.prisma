@@ -50,6 +50,10 @@ model User {
   rankedGames Int @default(0)
   rankedWins  Int @default(0)
 
+  // Plafond quotidien de tokens gagnés en multijoueur (anti-abus)
+  mpRewardDay   String? // AAAA-MM-JJ
+  mpRewardToday Int     @default(0)
+
   // Gacha enrichi
   pity Int @default(0) // tirages depuis le dernier Légendaire+ (garantie)
   dust Int @default(0) // poussière obtenue avec les doublons (pour fabriquer)

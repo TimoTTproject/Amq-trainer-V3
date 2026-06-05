@@ -23,6 +23,19 @@ const TEAM_NAMES = ['Rouge', 'Bleu'];
 const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic' };
 
+// Récompense en tokens (perf + plafond quotidien anti-abus). Le farm entre amis
+// est toléré (jeu pour s'amuser) ; le plafond/jour borne les dérives (bots/nuit).
+const MP_TOKENS_PER_CORRECT = 2; // par bonne réponse sur la partie
+const MP_PLACEMENT_BONUS = [20, 10, 5]; // 1er / 2e / 3e
+const MP_GAME_CAP = 40; // max de tokens gagnés en une partie
+const MP_DAILY_CAP = 200; // max de tokens multi par jour
+const MP_MIN_PLAYERS_REWARD = 2; // au moins 2 comptes distincts pour récompenser
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function shuffle(a) {
   a = [...a];
   for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
@@ -198,7 +211,7 @@ function startGame(room) {
   room.mode = room.settings.mode || 'classic';
 
   const arr = [...room.players.values()];
-  arr.forEach((p) => { p.score = 0; p.team = null; p.lives = ELIM_LIVES; p.eliminated = false; });
+  arr.forEach((p) => { p.score = 0; p.correct = 0; p.team = null; p.lives = ELIM_LIVES; p.eliminated = false; });
   if (room.mode === 'teams') shuffle(arr).forEach((p, i) => { p.team = i % 2; });
 
   io.to(room.id).emit('mp:game:start', {
@@ -272,6 +285,7 @@ function onGuess(socket, text) {
   const points = 300 + Math.round((timeLeft / room.settings.roundMs) * 700);
   cur.answers.set(uid, { correct: true, points });
   player.score += points;
+  player.correct = (player.correct || 0) + 1;
   emitProgress(room);
   if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
 }
@@ -343,16 +357,31 @@ function endRound(room) {
   }, RESULT_MS);
 }
 
-// Persistance + MMR à la fin
+// Récompense brute (avant plafond quotidien) d'un joueur selon perf + placement
+function rawReward(p, placement) {
+  const base = (p.correct || 0) * MP_TOKENS_PER_CORRECT + (MP_PLACEMENT_BONUS[placement - 1] || 0);
+  return Math.min(MP_GAME_CAP, base);
+}
+
+// Persistance + MMR + récompense tokens à la fin
 async function persistResults(room, ordered) {
-  // ordered: [{userId, name, avatarUrl, score}] trié par score
+  // ordered: [{userId, name, score, correct}] trié (vainqueur d'abord)
   const ids = ordered.map((p) => p.userId);
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, mmr: true } });
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, mmr: true, mpRewardDay: true, mpRewardToday: true },
+  });
+  const byId = Object.fromEntries(users.map((u) => [u.id, u]));
   const mmrById = Object.fromEntries(users.map((u) => [u.id, u.mmr]));
   const deltas = room.ranked
     ? computeMmrDeltas(ordered.map((p) => ({ userId: p.userId, score: p.score, mmr: mmrById[p.userId] ?? 1000 })))
     : [];
   const deltaById = Object.fromEntries(deltas.map((d) => [d.userId, d]));
+
+  // Récompense seulement si au moins 2 comptes distincts (pas de solo en boucle)
+  const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD;
+  const today = todayStr();
+  const rewardById = {};
 
   await prisma.$transaction(
     ordered.flatMap((p, i) => {
@@ -360,6 +389,17 @@ async function persistResults(room, ordered) {
       const before = mmrById[p.userId] ?? 1000;
       const delta = room.ranked ? deltaById[p.userId]?.delta || 0 : 0;
       const after = before + delta;
+
+      // Token reward avec plafond quotidien
+      let granted = 0;
+      if (rewardEnabled) {
+        const u = byId[p.userId] || {};
+        const usedToday = u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0;
+        const dailyLeft = Math.max(0, MP_DAILY_CAP - usedToday);
+        granted = Math.min(rawReward(p, placement), dailyLeft);
+      }
+      rewardById[p.userId] = granted;
+
       const ops = [
         prisma.mpResult.create({
           data: {
@@ -368,16 +408,26 @@ async function persistResults(room, ordered) {
           },
         }),
       ];
+
+      // Mise à jour utilisateur : MMR (si classé) + tokens (si récompense)
+      const data = {};
       if (room.ranked) {
-        ops.push(prisma.user.update({
-          where: { id: p.userId },
-          data: { mmr: Math.max(100, after), rankedGames: { increment: 1 }, rankedWins: { increment: placement === 1 ? 1 : 0 } },
-        }));
+        data.mmr = Math.max(100, after);
+        data.rankedGames = { increment: 1 };
+        data.rankedWins = { increment: placement === 1 ? 1 : 0 };
       }
+      if (granted > 0) {
+        const usedToday = byId[p.userId]?.mpRewardDay === today ? (byId[p.userId]?.mpRewardToday || 0) : 0;
+        data.tokens = { increment: granted };
+        data.mpRewardDay = today;
+        data.mpRewardToday = usedToday + granted;
+      }
+      if (Object.keys(data).length) ops.push(prisma.user.update({ where: { id: p.userId }, data }));
+      if (granted > 0) ops.push(prisma.tokenTransaction.create({ data: { userId: p.userId, amount: granted, reason: 'mp_reward' } }));
       return ops;
     })
   );
-  return deltaById;
+  return { deltaById, rewardById };
 }
 
 async function endGame(room) {
@@ -385,7 +435,7 @@ async function endGame(room) {
   clearTimeout(room.timer);
   // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
   const ordered = [...room.players.values()]
-    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated }))
+    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
     .sort((a, b) => {
       if (room.mode === 'elim') {
         if (!!a.eliminated !== !!b.eliminated) return a.eliminated ? 1 : -1;
@@ -394,15 +444,17 @@ async function endGame(room) {
       return b.score - a.score;
     });
 
-  let deltaById = {};
-  try { deltaById = await persistResults(room, ordered); }
+  let deltaById = {}, rewardById = {};
+  try { ({ deltaById, rewardById } = await persistResults(room, ordered)); }
   catch (e) { console.error('mp persist error:', e.message); }
   for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
 
   const ranking = ordered.map((p, i) => ({
+    userId: p.userId,
     name: p.name, avatarUrl: p.avatarUrl, score: p.score, team: p.team,
     lives: p.lives, eliminated: p.eliminated,
     mmrDelta: room.ranked ? deltaById[p.userId]?.delta ?? 0 : null,
+    tokenReward: rewardById[p.userId] || 0,
   }));
   let teams = null;
   if (room.mode === 'teams') {
