@@ -78,6 +78,7 @@
       </p>
 
       <p id="auth-error" class="auth-error"></p>
+      <button class="btn-link about-link" data-about>À propos & règles du jeu</button>
     </div>
   </div>
 
@@ -362,6 +363,7 @@
         <h2>Bienvenue, <span id="home-name"></span> 👋</h2>
         <p>Que veux-tu faire ?</p>
         <button class="btn-secondary home-share" id="share-btn"><i class="fas fa-share-nodes"></i> Partager le jeu</button>
+        <button class="btn-secondary home-share" data-about><i class="fas fa-circle-info"></i> Règles</button>
       </div>
       <div class="home-grid">
         <button class="home-card" id="card-play">
@@ -956,6 +958,39 @@
           <button class="btn-secondary" id="onboard-play"><i class="fas fa-play"></i> Jouer (global)</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modale À propos / Règles (accessible connecté ou non) -->
+  <div id="about-modal" class="modal-overlay hidden">
+    <div class="modal-card about-card">
+      <button class="modal-close" id="about-close" title="Fermer"><i class="fas fa-times"></i></button>
+      <h2 class="about-title"><i class="fas fa-music"></i> Anime Music Quiz — Règles</h2>
+
+      <h3>🎯 Le principe</h3>
+      <p>Un extrait d'<b>opening</b> (ou d'<b>ending</b>) d'anime est joué : devine de quel anime il s'agit en tapant son titre. L'orthographe approximative et les titres alternatifs (romaji, anglais…) sont acceptés.</p>
+
+      <h3>🎮 Modes de jeu</h3>
+      <ul>
+        <li><b>Classique</b> : gagne des <b>tokens 🪙</b> en trouvant les bonnes réponses (bonus si l'anime est peu connu).</li>
+        <li><b>Entraînement</b> : révise sans enjeu (séries, répétition espacée), vidéo et réponse visibles.</li>
+        <li><b>Château de l'Infini</b> : survie en QCM, 3 vies, chrono dégressif — monte le plus haut possible.</li>
+        <li><b>Multijoueur</b> : affronte d'autres joueurs en temps réel. Score = <code>300 + 700 × temps restant</code> par bonne réponse ; classique / équipes / élimination. Récompenses en tokens (plafonnées/jour).</li>
+      </ul>
+
+      <h3>🎴 Cartes & gacha</h3>
+      <ul>
+        <li>Dépense tes tokens pour <b>tirer</b> des cartes de personnages (5 raretés : Commun → Mythique).</li>
+        <li>Chaque carte est un <b>exemplaire numéroté</b> (#série) à stock limité : les plus rares se raréfient avec le temps.</li>
+        <li><b>Doublons</b> → <b>poussière 🌟</b> (recyclage) qui sert à <b>fabriquer</b> une carte précise à l'Atelier.</li>
+        <li><b>Pitié</b> : un Légendaire+ garanti au bout de 60 tirages sans en obtenir.</li>
+      </ul>
+
+      <h3>🔄 Échange & communauté</h3>
+      <p>Propose des <b>échanges</b> de cartes (par n° de série) à d'autres joueurs depuis leur profil, ajoute des <b>amis</b>, grimpe aux <b>classements</b> (classé, Château, collection). Personnalise ton style à la <b>Boutique</b> (dos de cartes, bordures, bannières, cadres d'avatar).</p>
+
+      <h3>ℹ️ À propos</h3>
+      <p class="hint">Anime Music Quiz est un projet de fan, gratuit, sans publicité. Les extraits proviennent d'<a href="https://animethemes.moe" target="_blank" rel="noopener">AnimeThemes</a> et les données de personnages d'<a href="https://anilist.co" target="_blank" rel="noopener">AniList</a>. Tous droits réservés à leurs ayants droit respectifs.</p>
     </div>
   </div>
 

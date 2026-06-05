@@ -691,6 +691,12 @@ function setupAppUI() {
   });
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
   document.getElementById('share-btn').addEventListener('click', shareGame);
+  // Modale À propos / Règles (déclencheurs [data-about], dispo connecté ou non)
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-about]')) { e.preventDefault(); document.getElementById('about-modal').classList.remove('hidden'); }
+  });
+  document.getElementById('about-close').addEventListener('click', () => document.getElementById('about-modal').classList.add('hidden'));
+  document.getElementById('about-modal').addEventListener('click', (e) => { if (e.target.id === 'about-modal') e.currentTarget.classList.add('hidden'); });
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {

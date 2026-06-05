@@ -67,6 +67,15 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .auth-features .af { display: inline-flex; align-items: center; gap: 7px; background: var(--bg-3); border-radius: 8px; padding: 7px 10px; font-size: .82rem; font-weight: 600; }
 .auth-features .af i { color: var(--accent); width: 16px; text-align: center; }
 .home-share { margin-top: 12px; }
+.about-link { display: block; margin: 16px auto 0; color: var(--text-2); font-size: .85rem; background: none; border: none; text-decoration: underline; }
+.about-card { max-width: 620px; max-height: 85vh; overflow-y: auto; text-align: left; }
+.about-title { font-size: 1.3rem; display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.about-title i { color: var(--accent); }
+.about-card h3 { font-size: 1rem; margin: 18px 0 6px; }
+.about-card p { color: var(--text); font-size: .9rem; line-height: 1.5; }
+.about-card ul { margin: 4px 0 4px 18px; }
+.about-card li { font-size: .9rem; line-height: 1.55; }
+.about-card a { color: var(--accent); }
 .auth-tabs { display: flex; gap: 8px; margin-bottom: 18px; background: var(--bg); border-radius: 10px; padding: 4px; }
 .auth-tab { flex: 1; background: none; border: none; color: var(--text-2); padding: 8px; border-radius: 8px; }
 .auth-tab.active { background: var(--bg-3); color: var(--text); }
