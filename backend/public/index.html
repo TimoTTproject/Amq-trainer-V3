@@ -82,19 +82,66 @@
     <!-- Barre de navigation -->
     <nav class="navbar" id="navbar">
       <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span>Accueil</span></button>
-      <button class="nav-item" data-nav="profile"><i class="fas fa-user"></i><span>Profil</span></button>
-      <button class="nav-item" data-nav="quiz"><i class="fas fa-play"></i><span>Jouer</span></button>
-      <button class="nav-item" data-nav="training"><i class="fas fa-graduation-cap"></i><span>Entraînement</span></button>
-      <button class="nav-item" data-nav="tower"><i class="fas fa-chess-rook"></i><span>Château</span></button>
-      <button class="nav-item" data-nav="mp"><i class="fas fa-users"></i><span>Multi</span></button>
+      <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span>Jouer</span></button>
+      <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span>Collection</span></button>
       <button class="nav-item" data-nav="friends"><i class="fas fa-user-group"></i><span>Amis</span></button>
-      <button class="nav-item" data-nav="gacha"><i class="fas fa-layer-group"></i><span>Gacha</span></button>
-      <button class="nav-item" data-nav="shop"><i class="fas fa-store"></i><span>Boutique</span></button>
-      <button class="nav-item" data-nav="catalog"><i class="fas fa-list"></i><span>Catalogue</span></button>
-      <button class="nav-item" data-nav="playlist"><i class="fas fa-heart"></i><span>Playlist</span></button>
       <button class="nav-item" data-nav="leaderboard"><i class="fas fa-trophy"></i><span>Classement</span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span>Admin</span></button>
     </nav>
+
+    <!-- VUE JOUER (hub des modes de jeu) -->
+    <div id="view-play" class="hidden">
+      <h2 class="hub-title"><i class="fas fa-play"></i> Jouer</h2>
+      <div class="home-grid">
+        <button class="home-card" data-nav="quiz">
+          <i class="fas fa-trophy"></i>
+          <h3>Quiz classique</h3>
+          <p>Devine l'anime, gagne des tokens</p>
+        </button>
+        <button class="home-card" data-nav="training">
+          <i class="fas fa-graduation-cap"></i>
+          <h3>Entraînement</h3>
+          <p>Révise sans pression (séries, répétition espacée)</p>
+        </button>
+        <button class="home-card" data-nav="tower">
+          <i class="fas fa-chess-rook"></i>
+          <h3>Château de l'Infini</h3>
+          <p>QCM en survie : 3 vies, monte le plus haut possible</p>
+        </button>
+        <button class="home-card" data-nav="mp">
+          <i class="fas fa-users"></i>
+          <h3>Multijoueur</h3>
+          <p>Affronte d'autres joueurs en temps réel</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- VUE COLLECTION (hub gacha / boutique / catalogue / playlist) -->
+    <div id="view-collection" class="hidden">
+      <h2 class="hub-title"><i class="fas fa-layer-group"></i> Collection</h2>
+      <div class="home-grid">
+        <button class="home-card" data-nav="gacha">
+          <i class="fas fa-layer-group"></i>
+          <h3>Gacha</h3>
+          <p>Dépense tes tokens pour collectionner des cartes</p>
+        </button>
+        <button class="home-card" data-nav="shop">
+          <i class="fas fa-store"></i>
+          <h3>Boutique</h3>
+          <p>Cosmétiques : dos de cartes, bordures, bannières</p>
+        </button>
+        <button class="home-card" data-nav="catalog">
+          <i class="fas fa-list"></i>
+          <h3>Catalogue</h3>
+          <p>Parcours tous les openings (anime, titre, artiste)</p>
+        </button>
+        <button class="home-card" data-nav="playlist">
+          <i class="fas fa-heart"></i>
+          <h3>Playlist</h3>
+          <p>Tes openings favoris likés</p>
+        </button>
+      </div>
+    </div>
 
     <!-- VUE PROFIL (page pleine largeur) -->
     <div id="view-profile" class="hidden">

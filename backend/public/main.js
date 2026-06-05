@@ -141,6 +141,8 @@ function showView(name) {
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
   if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } }
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
+  document.getElementById('view-play').classList.toggle('hidden', name !== 'play');
+  document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
@@ -154,12 +156,22 @@ function showView(name) {
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === name));
+  // Les sous-vues gardent leur hub parent en surbrillance dans la navbar
+  const navActive = NAV_GROUP[name] || name;
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === navActive));
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
 }
 
+// Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
+const NAV_GROUP = {
+  quiz: 'play', training: 'play', tower: 'play', mp: 'play',
+  gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection',
+};
+
 // Navigation depuis la navbar
 function navTo(name) {
+  if (name === 'play') return showView('play');
+  if (name === 'collection') return showView('collection');
   if (name === 'gacha') return openGacha();
   if (name === 'shop') return openShop();
   if (name === 'catalog') return openCatalog();
@@ -671,6 +683,10 @@ function setupAppUI() {
   document.querySelectorAll('.nav-item').forEach((b) =>
     b.addEventListener('click', () => navTo(b.dataset.nav))
   );
+  // Hubs « Jouer » et « Collection » : les cartes portent data-nav
+  const hubClick = (e) => { const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav); };
+  document.getElementById('view-play').addEventListener('click', hubClick);
+  document.getElementById('view-collection').addEventListener('click', hubClick);
   document.getElementById('back-home-lb').addEventListener('click', () => showView('home'));
   document.getElementById('lb-list').addEventListener('click', (e) => {
     const row = e.target.closest('.lb-row[data-userid]');
