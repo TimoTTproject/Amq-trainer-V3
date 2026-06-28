@@ -4,8 +4,9 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { isCorrectGuess } = require('../quiz/matching');
-const { issueRoundToken, verifyRoundToken } = require('../quiz/round-token');
 const { tierFromMmr } = require('../mp/rank');
+const { proxyVideo } = require('../util/stream');
+const { preferredMediaUrl } = require('../storage/r2');
 const { preferMainContent } = require('../catalog/format');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { progressQuests } = require('../quests/quests');
@@ -40,15 +41,14 @@ async function getOrCreateChallenge(day) {
   });
 }
 
-async function serveCurrentSong(run) {
-  const songId = run.songIds[run.index];
-  const token = issueRoundToken({ userId: run.userId, songId, ranked: false, level: 'cash' });
+// Anti-triche : on ne révèle JAMAIS le songId au client (sinon il pourrait
+// récupérer le titre via /api/quiz/{guess,answer} ou le catalogue). Le média
+// passe par un proxy lié au run, et la réponse se soumet via l'état serveur.
+function serveCurrentSong(run) {
   return {
     index: run.index,
     total: run.songIds.length,
-    songId,
-    roundToken: token,
-    clipUrl: `/api/quiz/clip/${songId}?rt=${encodeURIComponent(token)}`,
+    clipUrl: `/api/daily/clip?i=${run.index}`,
     durationMs: DAILY_DURATION_MS,
   };
 }
@@ -100,17 +100,29 @@ router.post('/start', requireAuth, async (req, res) => {
   res.json(await serveCurrentSong(run));
 });
 
+// Proxy média de la chanson en cours, lié au run : ne révèle jamais le songId
+// ni l'URL réelle (anti-triche). `i` ne sert qu'au cache-bust côté navigateur.
+router.get('/clip', requireAuth, async (req, res) => {
+  const day = todayStr();
+  const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
+  if (!run || run.finished) return res.status(404).end();
+  const songId = run.songIds[run.index];
+  if (songId == null) return res.status(404).end();
+  const song = await prisma.song.findUnique({ where: { id: songId }, select: { videoUrl: true, audioUrl: true } });
+  if (!song || !preferredMediaUrl(song)) return res.status(404).end();
+  if (song.audioUrl) return res.redirect(302, song.audioUrl);
+  await proxyVideo(req, res, song.videoUrl);
+});
+
 // Soumet une réponse pour la chanson en cours (vide = passer). Avance d'une chanson.
+// La chanson est déterminée par l'état serveur (run.index), pas par le client.
 router.post('/guess', requireAuth, async (req, res) => {
   const day = todayStr();
-  const { roundToken, guess } = req.body || {};
+  const { guess } = req.body || {};
   const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
   if (!run || run.finished) return res.status(400).json({ error: 'Aucune tentative en cours' });
 
   const songId = run.songIds[run.index];
-  const payload = verifyRoundToken(roundToken, { userId: req.user.id, songId });
-  if (!payload) return res.status(403).json({ error: 'Jeton de manche invalide' });
-
   const song = await prisma.song.findUnique({
     where: { id: songId },
     select: { id: true, animeTitle: true, altTitles: true, title: true, artist: true, type: true, number: true },

@@ -1,8 +1,7 @@
 // Défi du jour (solo classé) — extrait autonome (scope global partagé).
 // Réutilise les globals de main.js (api, currentUser, showView, getVolume, sfx,
 // escapeHtml, navTo, mediaUrlWithRetry, waitForMediaEvent, burstConfetti).
-let dailyToken = null;      // jeton de manche de la chanson en cours
-let dailySongId = null;
+let dailyIndex = -1;        // index de la chanson en cours (anti-stale)
 let dailyTotal = 0;
 let dailyScore = 0;
 let dailyDuration = 30000;  // ms (fourni par le serveur)
@@ -168,8 +167,7 @@ async function startDaily() {
 
 async function playDailySong(s) {
   dailyAnswering = false;
-  dailyToken = s.roundToken;
-  dailySongId = s.songId;
+  dailyIndex = s.index;
   dailyDuration = s.durationMs || 30000;
   document.getElementById('daily-index').textContent = s.index + 1;
   document.getElementById('daily-total').textContent = s.total;
@@ -195,7 +193,7 @@ async function playDailySong(s) {
       playing = true;
     } catch {}
   }
-  if (dailySongId !== s.songId) return; // une autre chanson a pris le relais
+  if (dailyIndex !== s.index) return; // une autre chanson a pris le relais
   fb.textContent = playing ? '' : '⚠️ Son indisponible — tu peux passer cette chanson.';
   setDailyPlayIcon();
   input.focus();
@@ -229,7 +227,7 @@ async function submitDaily(forced) {
 
   let r;
   try {
-    r = await api('/api/daily/guess', { method: 'POST', body: JSON.stringify({ roundToken: dailyToken, guess }) });
+    r = await api('/api/daily/guess', { method: 'POST', body: JSON.stringify({ guess }) });
   } catch (e) {
     document.getElementById('daily-feedback').textContent = e.message;
     return;
