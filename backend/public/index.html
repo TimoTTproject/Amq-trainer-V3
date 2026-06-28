@@ -739,6 +739,7 @@
         </div>
         <button class="btn-primary btn-lg" id="daily-start"><i class="fas fa-play"></i> Jouer le défi</button>
         <p id="daily-intro-msg" class="gacha-msg"></p>
+        <div class="daily-board" id="daily-board-intro"></div>
       </div>
 
       <!-- Run en cours -->
@@ -780,7 +781,11 @@
         </div>
         <p id="daily-over-delta" class="daily-delta"></p>
         <p id="daily-over-streak" class="daily-streak-line"></p>
-        <button class="btn-secondary" id="daily-see-lb"><i class="fas fa-trophy"></i> Voir le classement solo</button>
+        <div class="daily-over-actions">
+          <button class="btn-primary" id="daily-share"><i class="fas fa-share-nodes"></i> Partager mon score</button>
+          <button class="btn-secondary" id="daily-see-lb"><i class="fas fa-trophy"></i> Classement solo</button>
+        </div>
+        <div class="daily-board" id="daily-board-over"></div>
       </div>
     </div>
 

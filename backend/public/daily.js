@@ -8,6 +8,7 @@ let dailyScore = 0;
 let dailyDuration = 30000;  // ms (fourni par le serveur)
 let dailyTimer = null;      // chrono de la chanson
 let dailyAnswering = false;
+let dailyMyScore = 0; // mon score du jour (pour le partage)
 const dailyVideo = () => document.getElementById('daily-video');
 
 function dailyShow(panel) {
@@ -26,6 +27,51 @@ async function openDaily() {
     renderDailyIntro(d);
   } catch (e) {
     document.getElementById('daily-intro-msg').textContent = e.message;
+  }
+  loadDailyBoard();
+}
+
+// Classement du JOUR (meilleurs scores du jour) — rempli dans accueil + résultats.
+async function loadDailyBoard() {
+  let d;
+  try { d = await api('/api/daily/board'); } catch { return; }
+  renderDailyBoard(d, 'daily-board-intro');
+  renderDailyBoard(d, 'daily-board-over');
+}
+function renderDailyBoard(d, containerId) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  if (!d.top || !d.top.length) {
+    box.innerHTML = '<h3 class="daily-board-title">Classement du jour</h3><p class="muted">Personne n\'a encore joué aujourd\'hui — sois le premier !</p>';
+    return;
+  }
+  const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+  const rows = d.top.map((e) => {
+    const av = (typeof otherAvatar === 'function')
+      ? otherAvatar({ avatarUrl: e.avatarUrl, frame: e.frame, displayName: e.displayName }, 'avatar-xs')
+      : '';
+    return `<li class="lb-row${e.isMe ? ' me' : ''}">
+      <span class="lb-rank">${medal(e.rank)}</span>${av}
+      <span class="lb-name">${escapeHtml(e.displayName)}</span>
+      <span class="lb-value">${e.score} pts</span>
+    </li>`;
+  }).join('');
+  const meOut = d.me && !d.top.some((e) => e.isMe)
+    ? `<li class="lb-row me"><span class="lb-rank">#${d.me.rank}</span><span class="lb-name">Toi</span><span class="lb-value">${d.me.score} pts</span></li>`
+    : '';
+  box.innerHTML = `<h3 class="daily-board-title">Classement du jour · ${d.players} joueur(s)</h3><ol class="lb-list">${rows}${meOut}</ol>`;
+}
+
+function shareDaily() {
+  const text = `J'ai marqué ${dailyMyScore} pts au Défi du jour sur Anime Music Quiz 🎵 — bats-moi !`;
+  const url = location.origin;
+  if (navigator.share) {
+    navigator.share({ title: 'Anime Music Quiz', text, url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(`${text} ${url}`).then(() => {
+      const b = document.getElementById('daily-share');
+      if (b) { const old = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copié !'; setTimeout(() => (b.innerHTML = old), 1800); }
+    }).catch(() => {});
   }
 }
 
@@ -158,6 +204,7 @@ async function submitDaily(forced) {
 function renderDailyResult(res) {
   stopDailyMedia();
   dailyShow('over');
+  dailyMyScore = res.score;
   document.getElementById('daily-over-score').textContent = res.score;
   document.getElementById('daily-over-correct').textContent = `${res.correct}/${res.total}`;
   document.getElementById('daily-over-mmr').textContent = res.mmrAfter;
@@ -174,6 +221,7 @@ function renderDailyResult(res) {
   // Le serveur a crédité la récompense : on relit le solde autoritaire.
   if (res.reward && typeof syncTokenBalance === 'function') syncTokenBalance();
   if (delta > 0) { sfx.win(); if (typeof burstConfetti === 'function') burstConfetti(30); } else { sfx.lose(); }
+  loadDailyBoard(); // rafraîchit le classement du jour avec mon score
 }
 
 function stopDailyMedia() {
@@ -211,6 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof setVolume === 'function') setVolume(+e.target.value);
     dailyVideo().volume = +e.target.value;
   });
+  document.getElementById('daily-share').addEventListener('click', shareDaily);
   document.getElementById('back-home-daily').addEventListener('click', () => { stopDailyMedia(); navTo('play'); });
   document.getElementById('daily-see-lb').addEventListener('click', () => {
     if (typeof openLeaderboard === 'function') { navTo('leaderboard'); setTimeout(() => { const t = document.querySelector('.lb-tab[data-lb="solo"]'); if (t) t.click(); }, 50); }

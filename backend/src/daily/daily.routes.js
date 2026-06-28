@@ -7,6 +7,8 @@ const { isCorrectGuess } = require('../quiz/matching');
 const { issueRoundToken, verifyRoundToken } = require('../quiz/round-token');
 const { tierFromMmr } = require('../mp/rank');
 const { preferMainContent } = require('../catalog/format');
+const { byId, publicCosmetic } = require('../shop/cosmetics');
+const { progressQuests } = require('../quests/quests');
 const {
   DAILY_SONG_COUNT, DAILY_DURATION_MS, DAILY_GRACE_MS,
   todayStr, yesterdayStr, pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
@@ -162,6 +164,7 @@ router.post('/guess', requireAuth, async (req, res) => {
     }),
     prisma.tokenTransaction.create({ data: { userId: req.user.id, amount: reward, reason: 'daily_reward' } }),
   ]);
+  progressQuests(req.user.id, 'daily', 1); // quête « Termine le défi du jour »
 
   res.json({
     done: true, correct, points, answer,
@@ -171,6 +174,40 @@ router.post('/guess', requireAuth, async (req, res) => {
       streak, streakBest, reward,
     },
   });
+});
+
+// Classement du JOUR : meilleurs scores des défis terminés aujourd'hui.
+router.get('/board', requireAuth, async (req, res) => {
+  const day = todayStr();
+  const runs = await prisma.dailyRun.findMany({
+    where: { day, finished: true },
+    orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
+    take: 50,
+    select: { userId: true, score: true, correct: true },
+  });
+  const users = await prisma.user.findMany({
+    where: { id: { in: runs.map((r) => r.userId) } },
+    select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true },
+  });
+  const byUser = Object.fromEntries(users.map((u) => [u.id, u]));
+  const top = runs.map((r, i) => {
+    const u = byUser[r.userId] || {};
+    return {
+      rank: i + 1, userId: r.userId, displayName: u.displayName || '—',
+      avatarUrl: u.avatarUrl || null, frame: publicCosmetic(byId(u.avatarFrame)),
+      score: r.score, correct: r.correct, isMe: r.userId === req.user.id,
+    };
+  });
+  // Mon rang même si hors top 50.
+  let me = top.find((e) => e.isMe) || null;
+  if (!me) {
+    const mine = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
+    if (mine?.finished) {
+      const better = await prisma.dailyRun.count({ where: { day, finished: true, score: { gt: mine.score } } });
+      me = { rank: better + 1, score: mine.score, correct: mine.correct, isMe: true };
+    }
+  }
+  res.json({ day, players: runs.length, top, me });
 });
 
 module.exports = { router };

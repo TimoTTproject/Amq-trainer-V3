@@ -8,6 +8,7 @@ const POOL = [
   { type: 'tower', label: 'Franchis 8 étages au Château', target: 8, reward: 40 },
   { type: 'mp', label: 'Termine 2 parties multijoueur', target: 2, reward: 50 },
   { type: 'like', label: 'Ajoute 3 sons à ta playlist', target: 3, reward: 20 },
+  { type: 'daily', label: 'Termine le défi du jour', target: 1, reward: 30 },
 ];
 
 function todayStr() {
