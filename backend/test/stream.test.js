@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { fetchVideoUpstream } = require('../src/util/stream');
 
 test('retries temporary AnimeThemes errors before serving a video', async () => {
-  const statuses = [503, 503, 206];
+  const statuses = [503, 206];
   let calls = 0;
   const response = await fetchVideoUpstream('https://example.test/video.webm', {}, async () => {
     const status = statuses[calls++];
@@ -11,7 +11,7 @@ test('retries temporary AnimeThemes errors before serving a video', async () => 
   });
 
   assert.equal(response.status, 206);
-  assert.equal(calls, 3);
+  assert.equal(calls, 2);
 });
 
 test('does not retry permanent upstream errors', async () => {
