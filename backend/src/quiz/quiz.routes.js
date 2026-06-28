@@ -241,33 +241,37 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
 
   let collaborativeCounts = new Map();
   if (likedIds.length) {
-    const neighbors = await prisma.userSongStat.groupBy({
-      by: ['userId'],
-      where: { liked: true, songId: { in: likedIds }, userId: { not: userId } },
-      _count: { songId: true },
-      orderBy: { _count: { songId: 'desc' } },
-      take: 40,
-    });
-    if (neighbors.length) {
-      const coLikes = await prisma.userSongStat.groupBy({
-        by: ['songId'],
-        where: {
-          liked: true,
-          userId: { in: neighbors.map((row) => row.userId) },
-          songId: { notIn: likedIds },
-        },
-        _count: { userId: true },
-        orderBy: { _count: { userId: 'desc' } },
-        take: 120,
+    try {
+      const neighbors = await prisma.userSongStat.groupBy({
+        by: ['userId'],
+        where: { liked: true, songId: { in: likedIds }, userId: { not: userId } },
+        _count: { songId: true },
+        orderBy: { _count: { songId: 'desc' } },
+        take: 40,
       });
-      collaborativeCounts = new Map(coLikes.map((row) => [row.songId, row._count.userId]));
+      if (neighbors.length) {
+        const coLikes = await prisma.userSongStat.groupBy({
+          by: ['songId'],
+          where: {
+            liked: true,
+            userId: { in: neighbors.map((row) => row.userId) },
+            songId: { notIn: likedIds },
+          },
+          _count: { userId: true },
+          orderBy: { _count: { userId: 'desc' } },
+          take: 120,
+        });
+        collaborativeCounts = new Map(coLikes.map((row) => [row.songId, row._count.userId]));
+      }
+    } catch (err) {
+      // Les recommandations de contenu restent disponibles même si l'agrégat
+      // collaboratif n'est pas supporté ou rencontre une donnée inattendue.
+      console.warn('Collaborative recommendations unavailable:', err.message);
     }
   }
 
-  const baseWhere = {
-    id: likedIds.length ? { notIn: likedIds } : undefined,
-    videoUrl: { not: null },
-  };
+  const baseWhere = { videoUrl: { not: null } };
+  if (likedIds.length) baseWhere.id = { notIn: likedIds };
   const tasteSignals = [];
   if (artists.length) tasteSignals.push({ artist: { in: artists } });
   if (anilistIds.length) tasteSignals.push({ anilistId: { in: anilistIds } });
@@ -277,22 +281,36 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     id: true, anilistId: true, animeTitle: true, type: true, number: true,
     title: true, artist: true, videoUrl: true, popularity: true,
   };
-  const [tasteCandidates, popularCandidates] = await Promise.all([
-    tasteSignals.length
-      ? prisma.song.findMany({
-          where: { ...baseWhere, OR: tasteSignals },
-          select,
-          orderBy: { popularity: 'desc' },
-          take: 250,
-        })
-      : [],
-    prisma.song.findMany({
-      where: baseWhere,
+  let tasteCandidates = [];
+  let popularCandidates = [];
+  try {
+    [tasteCandidates, popularCandidates] = await Promise.all([
+      tasteSignals.length
+        ? prisma.song.findMany({
+            where: { ...baseWhere, OR: tasteSignals },
+            select,
+            orderBy: { popularity: 'desc' },
+            take: 250,
+          })
+        : [],
+      prisma.song.findMany({
+        where: baseWhere,
+        select,
+        orderBy: { popularity: 'desc' },
+        take: 80,
+      }),
+    ]);
+  } catch (err) {
+    console.warn('Personalized candidate query unavailable:', err.message);
+    popularCandidates = await prisma.song.findMany({
+      where: { videoUrl: { not: null } },
       select,
       orderBy: { popularity: 'desc' },
-      take: 80,
-    }),
-  ]);
+      take: 200,
+    });
+    const likedSet = new Set(likedIds);
+    popularCandidates = popularCandidates.filter((song) => !likedSet.has(song.id));
+  }
 
   const byId = new Map([...tasteCandidates, ...popularCandidates].map((song) => [song.id, song]));
   const recommendations = rankRecommendations({
