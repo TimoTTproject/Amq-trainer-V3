@@ -10,10 +10,24 @@ function sseSend(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+function normalizeAniListUsername(value) {
+  let username = String(value || '').trim();
+  username = username.replace(/^@/, '');
+  const profile = username.match(/^https?:\/\/(?:www\.)?anilist\.co\/user\/([^/?#]+)/i);
+  if (profile) {
+    try {
+      username = decodeURIComponent(profile[1]);
+    } catch {
+      username = profile[1];
+    }
+  }
+  return username.replace(/\/+$/, '').trim();
+}
+
 // Import de la liste AniList de l'utilisateur (SSE, avec progression).
 // Pseudo : ?username=... ou, à défaut, le pseudo AniList lié au compte.
 router.get('/import', requireAuth, async (req, res) => {
-  const username = req.query.username || req.user.anilistListName || req.user.anilistName;
+  const username = normalizeAniListUsername(req.query.username || req.user.anilistListName || req.user.anilistName);
   const limit = parseInt(req.query.limit) || 100000; // pas de limite : on importe toute la liste
   if (!username) {
     return res.status(400).json({ error: 'Pseudo AniList requis (?username=)' });
@@ -33,13 +47,16 @@ router.get('/import', requireAuth, async (req, res) => {
 
   try {
     sseSend(res, { message: `Début de l'import pour ${username}`, progress: 0 });
+    const ownsAniListProfile =
+      req.user.anilistName && req.user.anilistName.toLocaleLowerCase() === username.toLocaleLowerCase();
     const result = await importUserList(
       req.user.id,
       username,
       (p) => {
         if (!closed) sseSend(res, p);
       },
-      limit
+      limit,
+      ownsAniListProfile ? req.user.anilistToken : undefined
     );
     // Mémorise le pseudo lié au compte (liste préchargée aux sessions suivantes)
     await prisma.user.update({ where: { id: req.user.id }, data: { anilistListName: username } });
@@ -50,7 +67,11 @@ router.get('/import', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Import error:', err.message);
     if (!closed) {
-      sseSend(res, { error: err.message });
+      const message =
+        err.status === 404
+          ? `Profil AniList « ${username} » introuvable. Vérifie le pseudo (pas le nom affiché) ou connecte AniList si la liste est privée.`
+          : err.message;
+      sseSend(res, { error: message });
       res.end();
     }
   }
@@ -100,4 +121,4 @@ router.get('/stats', async (req, res) => {
   res.json({ totalSongs, totalAnimes: animes.length });
 });
 
-module.exports = { router };
+module.exports = { router, normalizeAniListUsername };

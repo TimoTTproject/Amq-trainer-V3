@@ -167,8 +167,8 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
 
 // Importe la liste AniList "completed" d'un user dans son catalogue perso.
 // onProgress({ progress, current, total, message, matchedAnime, totalSongs })
-async function importUserList(userId, username, onProgress, limit = 1000) {
-  const animeList = await getCompletedAnime(username); // valide le pseudo (lève une erreur sinon)
+async function importUserList(userId, username, onProgress, limit = 1000, accessToken) {
+  const animeList = await getCompletedAnime(username, accessToken); // valide le pseudo (lève une erreur sinon)
   const total = Math.min(animeList.length, limit);
   let matchedAnime = 0;
   let totalSongs = 0;

@@ -1,6 +1,14 @@
 // Accès à l'API GraphQL d'AniList
 const ANILIST_GQL = 'https://graphql.anilist.co';
 
+class AniListError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'AniListError';
+    this.status = status;
+  }
+}
+
 async function anilistQuery(query, variables, accessToken, retries = 3) {
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -16,26 +24,35 @@ async function anilistQuery(query, variables, accessToken, retries = 3) {
     await new Promise((r) => setTimeout(r, wait + 500));
     return anilistQuery(query, variables, accessToken, retries - 1);
   }
-  if (!res.ok) {
-    throw new Error(`AniList ${res.status}`);
+  let json;
+  try {
+    json = await res.json();
+  } catch {
+    throw new AniListError(`AniList indisponible (HTTP ${res.status})`, res.status);
   }
-
-  const json = await res.json();
-  if (json.errors) {
-    throw new Error('AniList: ' + json.errors.map((e) => e.message).join(', '));
+  if (!res.ok || json.errors?.length) {
+    const message = json.errors?.map((e) => e.message).filter(Boolean).join(', ');
+    throw new AniListError(message ? `AniList : ${message}` : `AniList indisponible (HTTP ${res.status})`, res.status);
   }
   return json.data;
 }
 
 // Liste des anime terminés d'un utilisateur (par pseudo)
-async function getCompletedAnime(username) {
+async function getCompletedAnime(username, accessToken) {
   const query = `
     query ($name: String) {
       MediaListCollection(userName: $name, type: ANIME, status: COMPLETED) {
         lists { entries { media { id title { romaji english native } synonyms popularity } } }
       }
     }`;
-  const data = await anilistQuery(query, { name: username });
+  let data;
+  try {
+    data = await anilistQuery(query, { name: username }, accessToken);
+  } catch (err) {
+    // Un ancien jeton OAuth ne doit pas empêcher l'import d'une liste publique.
+    if (!accessToken || ![400, 401, 403].includes(err.status)) throw err;
+    data = await anilistQuery(query, { name: username });
+  }
   const lists = data?.MediaListCollection?.lists || [];
   const map = new Map();
   for (const entry of lists.flatMap((l) => l.entries)) {
@@ -120,4 +137,4 @@ async function getAnimeTitlesByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
