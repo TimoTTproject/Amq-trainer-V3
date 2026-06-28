@@ -2778,14 +2778,25 @@ function openAdmin() {
 }
 
 async function loadR2Status() {
+  clearTimeout(loadR2Status.timer);
+  const btn = document.getElementById('admin-r2-btn');
   const status = document.getElementById('admin-r2-status');
   try {
     const r = await api('/api/admin/r2-status');
+    const running = !!r.migration?.running;
+    btn.dataset.running = String(running);
+    btn.disabled = !r.connected;
+    btn.innerHTML = running
+      ? '<i class="fas fa-stop"></i> Arrêter la migration R2'
+      : '<i class="fas fa-cloud-arrow-up"></i> Lancer la migration R2';
     status.textContent = r.connected
       ? `${r.uploaded}/${r.total} sons sur le CDN · ${r.remaining} restants`
+        + (running ? ` · migration active (+${r.migration.uploaded}, ${r.migration.failed} échec(s))` : '')
+        + (!running && r.migration?.lastError ? ` · dernier problème : ${r.migration.lastError}` : '')
       : r.configured
         ? `R2 configuré mais inaccessible : ${r.error || 'vérifie les identifiants'}`
         : 'R2 non configuré sur Railway';
+    if (running) loadR2Status.timer = setTimeout(loadR2Status, 2500);
   } catch (error) {
     status.textContent = 'R2 : ' + error.message;
   }
@@ -2795,21 +2806,18 @@ async function runR2Migration() {
   const btn = document.getElementById('admin-r2-btn');
   const status = document.getElementById('admin-r2-status');
   btn.disabled = true;
-  let uploaded = 0;
-  let failed = 0;
   try {
-    for (let i = 0; i < 5; i++) {
-      status.textContent = `Envoi vers Cloudflare R2… ${i + 1}/5`;
-      const r = await api('/api/admin/r2-migrate', { method: 'POST', body: JSON.stringify({}) });
-      uploaded += r.uploaded || 0;
-      failed += r.failed || 0;
-      status.textContent = `+${uploaded} sur le CDN · ${r.remaining} restants${failed ? ` · ${failed} source(s) ignorée(s)` : ''}`;
-      if (!r.remaining || !r.processed) break;
-    }
+    const running = btn.dataset.running === 'true';
+    status.textContent = running ? 'Arrêt après le fichier en cours…' : 'Démarrage de la migration continue…';
+    await api(`/api/admin/r2-migration/${running ? 'stop' : 'start'}`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await loadR2Status();
   } catch (error) {
     status.textContent = 'Erreur R2 : ' + error.message;
   } finally {
-    btn.disabled = false;
+    if (btn.dataset.running !== 'true') btn.disabled = false;
   }
 }
 

@@ -7,6 +7,15 @@ const { fetchVideoUpstream } = require('../util/stream');
 
 const failedSongIds = new Set();
 let client = null;
+let migrationPromise = null;
+const migrationState = {
+  running: false,
+  uploaded: 0,
+  failed: 0,
+  startedAt: null,
+  lastError: null,
+};
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function r2Config() {
   const accountId = process.env.R2_ACCOUNT_ID?.trim();
@@ -133,11 +142,46 @@ async function r2Status() {
     total,
     uploaded,
     remaining: Math.max(0, total - uploaded),
+    migration: { ...migrationState },
   };
 }
 
 function preferredMediaUrl(song) {
   return song?.audioUrl || song?.videoUrl || null;
+}
+
+async function runContinuousMigration() {
+  try {
+    while (migrationState.running) {
+      const result = await migrateOneSongToR2();
+      migrationState.uploaded += result.uploaded || 0;
+      migrationState.failed += result.failed || 0;
+      migrationState.lastError = result.error || null;
+      if (!result.processed || !result.remaining) break;
+      await sleep(400);
+    }
+  } catch (error) {
+    migrationState.lastError = error.message;
+  } finally {
+    migrationState.running = false;
+    migrationPromise = null;
+  }
+}
+
+function startContinuousMigration() {
+  if (migrationState.running) return { ...migrationState };
+  migrationState.running = true;
+  migrationState.uploaded = 0;
+  migrationState.failed = 0;
+  migrationState.startedAt = Date.now();
+  migrationState.lastError = null;
+  migrationPromise = runContinuousMigration();
+  return { ...migrationState };
+}
+
+function stopContinuousMigration() {
+  migrationState.running = false;
+  return { ...migrationState };
 }
 
 module.exports = {
@@ -146,4 +190,6 @@ module.exports = {
   preferredMediaUrl,
   r2Config,
   r2Status,
+  startContinuousMigration,
+  stopContinuousMigration,
 };

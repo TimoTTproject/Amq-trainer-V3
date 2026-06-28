@@ -6,7 +6,12 @@ const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
 const { scanEndingsBatch } = require('../catalog/catalog.service');
-const { migrateOneSongToR2, r2Status } = require('../storage/r2');
+const {
+  migrateOneSongToR2,
+  r2Status,
+  startContinuousMigration,
+  stopContinuousMigration,
+} = require('../storage/r2');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -23,6 +28,16 @@ router.post('/r2-migrate', requireAuth, requireAdmin, async (req, res) => {
   } catch (error) {
     res.status(503).json({ error: error.message });
   }
+});
+
+router.post('/r2-migration/start', requireAuth, requireAdmin, async (req, res) => {
+  const status = await r2Status();
+  if (!status.connected) return res.status(503).json({ error: status.error || 'R2 inaccessible' });
+  res.json({ migration: startContinuousMigration() });
+});
+
+router.post('/r2-migration/stop', requireAuth, requireAdmin, async (req, res) => {
+  res.json({ migration: stopContinuousMigration() });
 });
 
 // Crédite des tokens au compte courant (test gacha / achats)
