@@ -2027,6 +2027,9 @@ function toggleVideo() {
 let towerRun = null; // payload de l'étage en cours
 let towerAnswering = false;
 let towerTimer = null; // setTimeout d'expiration du chrono
+let towerEntryCost = 50;
+let towerFreeAvailable = false;
+let towerEntryKnown = false;
 const towerVideo = () => document.getElementById('tower-video');
 
 function towerShowPanel(which) {
@@ -2046,6 +2049,28 @@ async function openTower() {
     document.getElementById('tower-free').textContent = s.admin
       ? 'Admin ∞'
       : s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
+    towerEntryCost = s.admin ? 0 : s.entryCost;
+    towerFreeAvailable = s.admin || s.freeAvailable;
+    towerEntryKnown = true;
+    const notice = document.getElementById('tower-entry-notice');
+    const title = document.getElementById('tower-entry-title');
+    const detail = document.getElementById('tower-entry-detail');
+    const start = document.getElementById('tower-start');
+    notice.classList.toggle('free', towerFreeAvailable);
+    notice.classList.toggle('paid', !towerFreeAvailable);
+    if (s.admin) {
+      title.textContent = 'Entrée administrateur gratuite';
+      detail.textContent = 'Aucun token ne sera débité.';
+      start.innerHTML = '<i class="fas fa-play"></i> Entrer gratuitement';
+    } else if (s.freeAvailable) {
+      title.textContent = 'Ton entrée gratuite du jour est disponible';
+      detail.textContent = 'Cette partie ne coûtera aucun token.';
+      start.innerHTML = '<i class="fas fa-ticket"></i> Utiliser mon entrée gratuite';
+    } else {
+      title.textContent = `Cette entrée coûte ${s.entryCost} pièces`;
+      detail.textContent = `Solde actuel : ${s.tokens} 🪙 · après l’entrée : ${Math.max(0, s.tokens - s.entryCost)} 🪙`;
+      start.innerHTML = `<i class="fas fa-coins"></i> Payer ${s.entryCost} 🪙 et entrer`;
+    }
     if (s.activeRun) {
       enterFloor(s.activeRun); // reprise d'une partie interrompue
       return;
@@ -2056,6 +2081,10 @@ async function openTower() {
 
 async function startTower() {
   const btn = document.getElementById('tower-start');
+  if (towerEntryKnown && !towerFreeAvailable && currentUser.tokens < towerEntryCost) {
+    document.getElementById('tower-intro-msg').textContent = `Il te faut ${towerEntryCost} 🪙 pour entrer.`;
+    return;
+  }
   btn.disabled = true;
   document.getElementById('tower-intro-msg').textContent = 'Ouverture des portes…';
   try {

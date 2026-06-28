@@ -3,6 +3,7 @@
 const { prisma } = require('../db');
 const { verifyToken, COOKIE_NAME } = require('../auth/jwt');
 const { isCorrectGuess } = require('../quiz/matching');
+const { englishTitleFor } = require('../quiz/anime-titles');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
@@ -125,7 +126,8 @@ function newRoom({ isPublic, ranked }) {
     id, isPublic, ranked: !!ranked, code: isPublic ? null : genCode(),
     hostId: null, players: new Map(),
     settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic' },
-    status: 'lobby', chat: [], round: 0, current: null, usedSongIds: new Set(),
+    status: 'lobby', chat: [], round: 0, current: null,
+    usedSongIds: new Set(), usedAnilistIds: new Set(),
     timer: null, countdownTimer: null, countdownEndsAt: 0, revealSong: null, revealUntil: 0,
   };
   rooms.set(id, room);
@@ -141,7 +143,7 @@ function addPlayer(room, socket) {
 }
 
 function joinPublic(socket, ranked) {
-  if (socket.data.roomId) return;
+  if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
   const ptr = ranked ? rankedRoomId : publicRoomId;
   let room = ptr ? rooms.get(ptr) : null;
   if (!room || room.status !== 'lobby' || room.players.size >= MAX_PLAYERS) {
@@ -152,25 +154,28 @@ function joinPublic(socket, ranked) {
   sysChat(room, `${socket.data.user.displayName} a rejoint`);
   maybeCountdown(room);
   broadcastRoom(room);
+  return room;
 }
 function createRoom(socket, settings) {
-  if (socket.data.roomId) return;
+  if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
   const room = newRoom({ isPublic: false, ranked: false });
   applySettings(room, settings);
   addPlayer(room, socket);
   socket.emit('mp:joined', { roomId: room.id });
   broadcastRoom(room);
+  return room;
 }
 function joinByCode(socket, code) {
-  if (socket.data.roomId) return;
+  if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
   const room = [...rooms.values()].find((r) => r.code === String(code || '').toUpperCase() && !r.isPublic);
-  if (!room) return socket.emit('mp:error', { msg: 'Salle introuvable' });
-  if (room.status !== 'lobby') return socket.emit('mp:error', { msg: 'Partie déjà commencée' });
-  if (room.players.size >= MAX_PLAYERS) return socket.emit('mp:error', { msg: 'Salle pleine' });
+  if (!room) { socket.emit('mp:error', { msg: 'Salle introuvable' }); return null; }
+  if (room.status !== 'lobby') { socket.emit('mp:error', { msg: 'Partie déjà commencée' }); return null; }
+  if (room.players.size >= MAX_PLAYERS) { socket.emit('mp:error', { msg: 'Salle pleine' }); return null; }
   addPlayer(room, socket);
   sysChat(room, `${socket.data.user.displayName} a rejoint`);
   socket.emit('mp:joined', { roomId: room.id });
   broadcastRoom(room);
+  return room;
 }
 
 function applySettings(room, s) {
@@ -214,6 +219,7 @@ function startGame(room) {
   room.status = 'playing';
   room.round = 0;
   room.usedSongIds = new Set();
+  room.usedAnilistIds = new Set();
   room.mode = room.settings.mode || 'classic';
 
   const arr = [...room.players.values()];
@@ -229,17 +235,28 @@ function startGame(room) {
 }
 
 async function pickSong(room) {
-  const where = { videoUrl: { not: null } };
+  const where = availableSongWhere(room);
   const total = await prisma.song.count({ where });
   if (!total) return null;
-  for (let t = 0; t < 8; t++) {
-    const song = await prisma.song.findFirst({
-      where, skip: Math.floor(Math.random() * total),
-      select: { id: true, animeTitle: true, altTitles: true, title: true, artist: true, type: true, number: true, videoUrl: true },
-    });
-    if (song && !room.usedSongIds.has(song.id)) { room.usedSongIds.add(song.id); return song; }
-  }
-  return null;
+  const song = await prisma.song.findFirst({
+    where,
+    skip: Math.floor(Math.random() * total),
+    select: {
+      id: true, anilistId: true, animeTitle: true, altTitles: true,
+      title: true, artist: true, type: true, number: true, videoUrl: true,
+    },
+  });
+  if (!song) return null;
+  room.usedSongIds.add(song.id);
+  room.usedAnilistIds.add(song.anilistId);
+  return song;
+}
+
+function availableSongWhere(room) {
+  return {
+    videoUrl: { not: null },
+    ...(room.usedAnilistIds.size ? { anilistId: { notIn: [...room.usedAnilistIds] } } : {}),
+  };
 }
 
 async function startRound(room) {
@@ -262,18 +279,20 @@ function emitProgress(room) {
   const cur = room.current;
   if (!cur) return;
   io.to(room.id).emit('mp:round:progress', {
-    answered: [...cur.answers.values()].filter((a) => a.correct).length,
+    answered: cur.answers.size,
+    correct: [...cur.answers.values()].filter((a) => a.correct).length,
     passed: cur.passed.size,
     total: connectedPlayers(room).length,
   });
 }
 
-// Tous les joueurs actifs ont-ils trouvé OU passé ? → manche terminée
+// Une réponse validée est définitive : dès que tous les joueurs ont répondu
+// ou passé, on révèle immédiatement le résultat.
 function everyoneResolved(room) {
   const cur = room.current;
   if (!cur) return false;
   const active = connectedPlayers(room).filter((p) => !p.eliminated);
-  return active.length > 0 && active.every((p) => cur.answers.get(p.userId)?.correct || cur.passed.has(p.userId));
+  return active.length > 0 && active.every((p) => cur.answers.has(p.userId) || cur.passed.has(p.userId));
 }
 
 function onGuess(socket, text) {
@@ -283,15 +302,16 @@ function onGuess(socket, text) {
   const player = room.players.get(uid);
   if (!player || player.eliminated) return; // les éliminés sont spectateurs
   const cur = room.current;
-  if (cur.answers.get(uid)?.correct || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
+  if (cur.answers.has(uid) || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   const correct = isCorrectGuess(text, cur.song);
-  socket.emit('mp:guess:ack', { correct });
-  if (!correct) return;
-  const timeLeft = Math.max(0, cur.endsAt - Date.now());
-  const points = 300 + Math.round((timeLeft / room.settings.roundMs) * 700);
-  cur.answers.set(uid, { correct: true, points });
-  player.score += points;
-  player.correct = (player.correct || 0) + 1;
+  const timeLeft = correct ? Math.max(0, cur.endsAt - Date.now()) : 0;
+  const points = correct ? 300 + Math.round((timeLeft / room.settings.roundMs) * 700) : 0;
+  cur.answers.set(uid, { correct, points, guess: text });
+  if (correct) {
+    player.score += points;
+    player.correct = (player.correct || 0) + 1;
+  }
+  socket.emit('mp:guess:ack', { correct, final: true });
   emitProgress(room);
   if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
 }
@@ -304,7 +324,7 @@ function onSkip(socket) {
   const player = room.players.get(uid);
   if (!player || player.eliminated) return;
   const cur = room.current;
-  if (cur.answers.get(uid)?.correct || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
+  if (cur.answers.has(uid) || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   cur.passed.add(uid);
   socket.emit('mp:skip:ack', {});
   emitProgress(room);
@@ -350,7 +370,10 @@ function endRound(room) {
 
   io.to(room.id).emit('mp:round:result', {
     round: room.round, total: room.settings.rounds, mode: room.mode,
-    answer: { animeTitle: s.animeTitle, title: s.title, artist: s.artist, type: s.type, number: s.number },
+    answer: {
+      animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
+      title: s.title, artist: s.artist, type: s.type, number: s.number,
+    },
     results,
     teams: room.mode === 'teams' ? teamTotals(room) : null,
   });
@@ -474,7 +497,8 @@ async function endGame(room) {
     setTimeout(() => closeRoom(room), 30000);
   } else {
     room.status = 'lobby';
-    room.round = 0; room.current = null; room.usedSongIds = new Set();
+    room.round = 0; room.current = null;
+    room.usedSongIds = new Set(); room.usedAnilistIds = new Set();
     sysChat(room, 'Partie terminée — prêts pour une autre ?');
     setTimeout(() => { if (rooms.has(room.id)) broadcastRoom(room); }, 8000);
   }
@@ -616,10 +640,22 @@ function initMp(server) {
     addOnline(socket);
     reattach(socket); // restaure une partie en cours si l'utilisateur en avait une
     socket.on('mp:invite', (toUserId) => invite(socket, String(toUserId || '')));
-    socket.on('mp:quick', () => joinPublic(socket, false));
-    socket.on('mp:ranked', () => joinPublic(socket, true));
-    socket.on('mp:create', (s) => createRoom(socket, s));
-    socket.on('mp:join', (code) => joinByCode(socket, code));
+    socket.on('mp:quick', (ack) => {
+      const room = joinPublic(socket, false);
+      if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0 });
+    });
+    socket.on('mp:ranked', (ack) => {
+      const room = joinPublic(socket, true);
+      if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0 });
+    });
+    socket.on('mp:create', (s, ack) => {
+      const room = createRoom(socket, s);
+      if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0, code: room?.code || null });
+    });
+    socket.on('mp:join', (code, ack) => {
+      const room = joinByCode(socket, code);
+      if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0 });
+    });
     socket.on('mp:settings', (s) => setSettings(socket, s));
     socket.on('mp:start', () => hostStart(socket));
     socket.on('mp:leave', () => leaveRoom(socket));
@@ -632,4 +668,4 @@ function initMp(server) {
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser };
+module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere };

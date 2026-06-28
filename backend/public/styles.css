@@ -435,6 +435,19 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .tower-rules { color: var(--text-2); line-height: 1.6; margin-bottom: 20px; }
 .tower-rules b { color: var(--text); }
 .tower-intro-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+.tower-entry-notice {
+  display: flex; align-items: center; gap: 12px; margin: -6px 0 16px; padding: 12px 14px;
+  border: 1px solid #3b414b; border-left: 4px solid var(--accent-2); border-radius: 6px;
+  background: #14171d; text-align: left;
+}
+.tower-entry-notice > i { width: 30px; color: var(--accent-2); font-size: 1.35rem; text-align: center; }
+.tower-entry-notice div { display: flex; flex-direction: column; gap: 2px; }
+.tower-entry-notice strong { font-size: .88rem; }
+.tower-entry-notice span { color: var(--text-2); font-size: .72rem; }
+.tower-entry-notice.paid { border-color: rgba(255, 92, 122, .55); border-left-color: var(--accent); background: rgba(255, 92, 122, .07); }
+.tower-entry-notice.paid > i, .tower-entry-notice.paid strong { color: var(--accent); }
+.tower-entry-notice.free { border-color: rgba(62, 201, 138, .45); border-left-color: var(--green); background: rgba(62, 201, 138, .07); }
+.tower-entry-notice.free > i, .tower-entry-notice.free strong { color: var(--green); }
 .btn-lg { font-size: 1.05rem; padding: 14px 28px; }
 .tower-game { max-width: 720px; margin: 0 auto; }
 .tower-hud { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 1.1rem; }
@@ -621,8 +634,26 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-players { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .mp-chip { background: var(--bg-3); border-radius: 999px; padding: 4px 12px 4px 5px; font-size: .82rem; display: inline-flex; align-items: center; gap: 7px; }
 .mp-game { max-width: 720px; margin: 0 auto; }
+.mp-autocomplete { position: relative; flex: 1 1 260px; min-width: 0; }
+.answer-area .mp-autocomplete input { width: 100%; }
+.mp-suggestions {
+  position: absolute; z-index: 35; top: calc(100% + 5px); left: 0; right: 0;
+  max-height: 230px; overflow-y: auto; padding: 5px;
+  background: #101217; border: 1px solid #343943; border-radius: 6px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.48);
+}
+.mp-suggestion {
+  width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 9px; padding: 9px 10px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--text);
+  text-align: left; font-size: .82rem;
+}
+.mp-suggestion::before { content: 'ANIME'; grid-row: 1 / 3; color: var(--accent-2); font-size: .52rem; font-weight: 800; letter-spacing: .1em; }
+.mp-suggestion span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-suggestion small { overflow: hidden; color: var(--text-2); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
+.mp-suggestion:hover, .mp-suggestion.active { background: #222630; color: #fff; }
 .mp-result { background: var(--bg-2); border: 1px solid var(--accent); border-radius: 12px; padding: 14px; margin: 12px 0; text-align: center; }
 .mp-answer strong { color: var(--accent); }
+.mp-answer-english { color: var(--text-2); font-size: .86rem; }
 .mp-answer .hint { display: block; margin-top: 4px; }
 .mp-scores { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .mp-score-row { display: grid; grid-template-columns: 1fr auto auto 56px; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 8px; padding: 8px 14px; font-size: .9rem; }

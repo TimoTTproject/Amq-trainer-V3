@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-token');
 const { isCorrectGuess } = require('./matching');
+const { englishTitleFor } = require('./anime-titles');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
@@ -14,6 +15,7 @@ const router = express.Router();
 // Multiplicateur de récompense selon le niveau d'aide (Duo/Carré/Cash)
 const LEVEL_MULT = { cash: 1, carre: 0.5, duo: 0.3 };
 const LEVEL_COUNT = { carre: 4, duo: 2 };
+let seriesSearchCache = { expiresAt: 0, entries: [] };
 
 function shuffle(arr) {
   const a = [...arr];
@@ -199,15 +201,46 @@ router.get('/training-stats', requireAuth, async (req, res) => {
 // Recherche de séries (animes) pour l'entraînement ciblé
 router.get('/series', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim();
-  if (q.length < 2) return res.json({ series: [] });
-  const rows = await prisma.song.findMany({
-    where: { animeTitle: { contains: q, mode: 'insensitive' }, videoUrl: { not: null } },
-    distinct: ['animeTitle'],
-    select: { animeTitle: true },
-    take: 20,
-    orderBy: { animeTitle: 'asc' },
+  if (q.length < 2) return res.json({ series: [], suggestions: [] });
+  if (seriesSearchCache.expiresAt < Date.now()) {
+    const rows = await prisma.song.findMany({
+      where: { videoUrl: { not: null } },
+      select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
+      orderBy: { popularity: 'desc' },
+    });
+    const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
+    seriesSearchCache = {
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      entries: uniqueRows.map((row) => {
+        const englishTitle = englishTitleFor(row);
+        return {
+          title: row.animeTitle,
+          englishTitle,
+          popularity: row.popularity || 0,
+          searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
+        };
+      }),
+    };
+  }
+  const needle = q.toLocaleLowerCase();
+  const suggestions = seriesSearchCache.entries
+    .filter((entry) => entry.searchTitles.some((title) => title.includes(needle)))
+    .sort((a, b) => {
+      const ai = Math.min(...a.searchTitles.map((title) => {
+        const index = title.indexOf(needle);
+        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+      }));
+      const bi = Math.min(...b.searchTitles.map((title) => {
+        const index = title.indexOf(needle);
+        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+      }));
+      return ai - bi || b.popularity - a.popularity || a.title.localeCompare(b.title);
+    })
+    .slice(0, 20);
+  res.json({
+    series: suggestions.map((entry) => entry.title),
+    suggestions: suggestions.map(({ title, englishTitle }) => ({ title, englishTitle })),
   });
-  res.json({ series: rows.map((r) => r.animeTitle) });
 });
 
 // Playlist perso : les musiques likées

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { rankRecommendations } = require('../src/quiz/recommendations');
+const { englishTitleFor } = require('../src/quiz/anime-titles');
 
 test('prioritizes related songs and explains the recommendation', () => {
   const likedSongs = [
@@ -38,4 +39,15 @@ test('keeps the first selection diverse', () => {
 
   const ranked = rankRecommendations({ candidates, limit: 4 });
   assert.ok(ranked.filter((song) => song.anilistId === 10).length <= 2);
+});
+
+test('extracts the English AniList title without mistaking synonyms', () => {
+  assert.equal(englishTitleFor({
+    animeTitle: 'Shingeki no Kyojin',
+    altTitles: ['Shingeki no Kyojin', 'Attack on Titan', '進撃の巨人', 'AoT'],
+  }), 'Attack on Titan');
+  assert.equal(englishTitleFor({
+    animeTitle: 'Odd Taxi',
+    altTitles: ['Odd Taxi', 'オッドタクシー', 'ODDTAXI'],
+  }), null);
 });

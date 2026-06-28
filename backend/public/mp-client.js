@@ -10,6 +10,11 @@ let mpTeamNames = ['Rouge', 'Bleu'];
 let mpEliminated = false; // moi, en mode élimination
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
+let mpSuggestions = [];
+let mpSuggestionIndex = -1;
+let mpSuggestionTimer = null;
+let mpSuggestionRequest = 0;
+const mpSuggestionCache = new Map();
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
 
@@ -85,12 +90,18 @@ function openMultiplayer() {
 function mpIsHost() { return !!(mpRoom && currentUser && mpRoom.hostId === currentUser.id); }
 
 function connectMp() {
-  if (mpSocket) return;
+  if (mpSocket) return mpSocket;
   if (typeof io === 'undefined') {
     document.getElementById('mp-menu-msg').textContent = 'Connexion temps réel indisponible.';
-    return;
+    return null;
   }
-  mpSocket = io({ path: '/socket.io' });
+  // Une connexion WebSocket unique reste attachée au même serveur derrière
+  // Railway, contrairement au long-polling qui peut changer de cible.
+  mpSocket = io({ path: '/socket.io', transports: ['websocket'] });
+  mpSocket.on('connect', () => {
+    const msg = document.getElementById('mp-menu-msg');
+    if (msg && msg.textContent.includes('Connexion au serveur')) msg.textContent = 'Connecté — entrée dans la file…';
+  });
   mpSocket.on('connect_error', () => {
     document.getElementById('mp-menu-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
   });
@@ -151,7 +162,7 @@ function connectMp() {
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
     const lock = !!d.alreadyAnswered || !!d.alreadyPassed || mpEliminated;
-    input.value = ''; mpLockAnswer(lock);
+    input.value = ''; closeMpSuggestions(); mpLockAnswer(lock);
     if (!lock) input.focus();
     document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
       : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
@@ -164,7 +175,8 @@ function connectMp() {
       fb.textContent = '✅ Bonne réponse !';
       mpLockAnswer(true);
     } else {
-      fb.textContent = '❌ Essaie encore…';
+      fb.textContent = '❌ Réponse enregistrée — en attente des autres joueurs…';
+      mpLockAnswer(true);
     }
   });
 
@@ -175,7 +187,7 @@ function connectMp() {
 
   mpSocket.on('mp:round:progress', (d) => {
     const passed = d.passed ? ` · ${d.passed} passé${d.passed > 1 ? 's' : ''}` : '';
-    document.getElementById('mp-progress').textContent = `${d.answered}/${d.total} ont trouvé${passed}`;
+    document.getElementById('mp-progress').textContent = `${d.answered + (d.passed || 0)}/${d.total} ont joué${passed}`;
   });
 
   mpSocket.on('mp:round:result', (d) => {
@@ -183,7 +195,10 @@ function connectMp() {
     document.getElementById('mp-overlay').classList.add('hidden'); // révèle la vidéo
     const res = document.getElementById('mp-result');
     res.classList.remove('hidden');
-    res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>
+    const englishTitle = d.answer.englishTitle && d.answer.englishTitle !== d.answer.animeTitle
+      ? ` <span class="mp-answer-english">(${escapeHtml(d.answer.englishTitle)})</span>`
+      : '';
+    res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
     renderMpScores(d.results, true);
     if (d.teams) {
@@ -244,6 +259,34 @@ function connectMp() {
       syncTokenBalance();
     }
   });
+  return mpSocket;
+}
+
+function joinMatchmaking(event, searchingText) {
+  mpLeft = false;
+  mpEngaged = true;
+  const msg = document.getElementById('mp-menu-msg');
+  msg.textContent = searchingText;
+  const socket = connectMp();
+  if (!socket) return;
+
+  const send = () => {
+    socket.timeout(10000).emit(event, (err, ack) => {
+      if (err || !ack?.ok) {
+        msg.textContent = 'La file ne répond pas. Réessaie dans quelques secondes.';
+        mpEngaged = false;
+        return;
+      }
+      msg.textContent = ack.players > 1
+        ? `${ack.players} joueurs trouvés — préparation de la partie…`
+        : 'File rejointe — en attente d’un autre joueur…';
+    });
+  };
+  if (socket.connected) send();
+  else {
+    msg.textContent = 'Connexion au serveur…';
+    socket.once('connect', send);
+  }
 }
 
 // ── Salon (lobby) ──
@@ -361,12 +404,92 @@ function mpLockAnswer(locked) {
   document.getElementById('mp-input').disabled = locked;
   document.getElementById('mp-submit').disabled = locked;
   document.getElementById('mp-skip').disabled = locked;
+  if (locked) closeMpSuggestions();
+}
+
+function closeMpSuggestions() {
+  const box = document.getElementById('mp-suggestions');
+  if (!box) return;
+  box.classList.add('hidden');
+  box.innerHTML = '';
+  mpSuggestions = [];
+  mpSuggestionIndex = -1;
+  document.getElementById('mp-input')?.setAttribute('aria-expanded', 'false');
+}
+
+function renderMpSuggestions() {
+  const box = document.getElementById('mp-suggestions');
+  if (!mpSuggestions.length) return closeMpSuggestions();
+  box.innerHTML = mpSuggestions
+    .map((suggestion, index) => `<button type="button" class="mp-suggestion${index === mpSuggestionIndex ? ' active' : ''}" role="option" aria-selected="${index === mpSuggestionIndex}" data-suggestion-index="${index}">
+      <span>${escapeHtml(suggestion.title)}</span>
+      ${suggestion.englishTitle ? `<small>${escapeHtml(suggestion.englishTitle)}</small>` : ''}
+    </button>`)
+    .join('');
+  box.classList.remove('hidden');
+  document.getElementById('mp-input').setAttribute('aria-expanded', 'true');
+}
+
+function chooseMpSuggestion(index) {
+  const suggestion = mpSuggestions[index];
+  if (!suggestion) return;
+  const input = document.getElementById('mp-input');
+  input.value = suggestion.title;
+  closeMpSuggestions();
+  input.focus();
+}
+
+async function fetchMpSuggestions(value) {
+  const query = value.trim();
+  if (query.length < 2) return closeMpSuggestions();
+  const key = query.toLocaleLowerCase();
+  const request = ++mpSuggestionRequest;
+  try {
+    let suggestions = mpSuggestionCache.get(key);
+    if (!suggestions) {
+      const data = await api(`/api/quiz/series?q=${encodeURIComponent(query)}`);
+      suggestions = data.suggestions || (data.series || []).map((title) => ({ title, englishTitle: null }));
+      mpSuggestionCache.set(key, suggestions);
+    }
+    if (request !== mpSuggestionRequest || document.getElementById('mp-input').value.trim() !== query) return;
+    mpSuggestions = suggestions;
+    mpSuggestionIndex = -1;
+    renderMpSuggestions();
+  } catch {
+    closeMpSuggestions();
+  }
+}
+
+function onMpSuggestionInput(e) {
+  clearTimeout(mpSuggestionTimer);
+  const value = e.target.value;
+  if (value.trim().length < 2) return closeMpSuggestions();
+  mpSuggestionTimer = setTimeout(() => fetchMpSuggestions(value), 160);
+}
+
+function onMpSuggestionKeydown(e) {
+  if (e.key === 'ArrowDown' && mpSuggestions.length) {
+    e.preventDefault();
+    mpSuggestionIndex = (mpSuggestionIndex + 1) % mpSuggestions.length;
+    renderMpSuggestions();
+  } else if (e.key === 'ArrowUp' && mpSuggestions.length) {
+    e.preventDefault();
+    mpSuggestionIndex = (mpSuggestionIndex - 1 + mpSuggestions.length) % mpSuggestions.length;
+    renderMpSuggestions();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (mpSuggestionIndex >= 0) chooseMpSuggestion(mpSuggestionIndex);
+    else mpSubmitGuess();
+  } else if (e.key === 'Escape') {
+    closeMpSuggestions();
+  }
 }
 
 function mpSubmitGuess() {
   const input = document.getElementById('mp-input');
   const text = input.value.trim();
   if (!text || input.disabled || !mpSocket) return;
+  closeMpSuggestions();
   mpSocket.emit('mp:guess', text);
 }
 
@@ -384,12 +507,10 @@ function mpSettingsPayload() {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-quick').addEventListener('click', () => {
-    mpLeft = false; mpEngaged = true;
-    connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche…'; mpSocket && mpSocket.emit('mp:quick');
+    joinMatchmaking('mp:quick', 'Recherche d’une partie rapide…');
   });
   document.getElementById('mp-ranked').addEventListener('click', () => {
-    mpLeft = false; mpEngaged = true;
-    connectMp(); document.getElementById('mp-menu-msg').textContent = 'Recherche d\'une partie classée…'; mpSocket && mpSocket.emit('mp:ranked');
+    joinMatchmaking('mp:ranked', 'Recherche d’une partie classée…');
   });
   document.getElementById('mp-create').addEventListener('click', () => {
     mpLeft = false; mpEngaged = true;
@@ -418,7 +539,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('mp-submit').addEventListener('click', mpSubmitGuess);
   document.getElementById('mp-skip').addEventListener('click', mpSkip);
-  document.getElementById('mp-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSubmitGuess(); });
+  const answerInput = document.getElementById('mp-input');
+  answerInput.addEventListener('input', onMpSuggestionInput);
+  answerInput.addEventListener('keydown', onMpSuggestionKeydown);
+  answerInput.addEventListener('blur', () => setTimeout(closeMpSuggestions, 120));
+  document.getElementById('mp-suggestions').addEventListener('mousedown', (e) => {
+    const option = e.target.closest('[data-suggestion-index]');
+    if (!option) return;
+    e.preventDefault();
+    chooseMpSuggestion(parseInt(option.dataset.suggestionIndex));
+  });
   document.getElementById('mp-again').addEventListener('click', () => {
     // retour au salon (privé) ou au menu (rapide)
     if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }

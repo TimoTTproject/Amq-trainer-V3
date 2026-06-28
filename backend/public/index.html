@@ -655,6 +655,13 @@
           <div class="pstat"><span id="tower-cost">50</span><label>Entrée 🪙</label></div>
           <div class="pstat"><span id="tower-free">—</span><label>Entrée gratuite</label></div>
         </div>
+        <div class="tower-entry-notice" id="tower-entry-notice">
+          <i class="fas fa-ticket"></i>
+          <div>
+            <strong id="tower-entry-title">Vérification de ton entrée…</strong>
+            <span id="tower-entry-detail">Une entrée gratuite est disponible chaque jour.</span>
+          </div>
+        </div>
         <button class="btn-primary btn-lg" id="tower-start"><i class="fas fa-play"></i> Entrer dans le château</button>
         <p id="tower-intro-msg" class="gacha-msg"></p>
       </div>
@@ -957,7 +964,10 @@
           <div id="mp-reactions" class="mp-reactions"></div>
         </div>
         <div class="answer-area">
-          <input type="text" id="mp-input" placeholder="Nom de l'anime…" />
+          <div class="mp-autocomplete">
+            <input type="text" id="mp-input" placeholder="Nom de l'anime…" autocomplete="off" aria-autocomplete="list" aria-controls="mp-suggestions" />
+            <div id="mp-suggestions" class="mp-suggestions hidden" role="listbox"></div>
+          </div>
           <button class="btn-primary" id="mp-submit">Valider</button>
           <button class="btn-secondary" id="mp-skip" title="Je ne sais pas"><i class="fas fa-forward"></i> Passer</button>
         </div>
