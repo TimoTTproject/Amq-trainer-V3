@@ -41,7 +41,7 @@ un Postgres local ou l'URL publique du Postgres Railway.
 
 | Variable | Requis | Description |
 |----------|--------|-------------|
-| `JWT_SECRET` | **oui en prod** | Secret de signature des tokens. Chaîne aléatoire longue (`openssl rand -hex 32`). Le démarrage **échoue** en production si absent ou trop faible. |
+| `JWT_SECRET` | **oui en prod** | Secret de signature des tokens. Chaîne aléatoire longue (`openssl rand -hex 32`). Un avertissement est loggé au démarrage si absent ou trop faible. |
 | `DATABASE_URL` | **oui en prod** | URL de connexion PostgreSQL. |
 | `NODE_ENV` | recommandé | Mettre `production` en déploiement → cookies marqués `secure`. |
 | `PORT` | non | Port HTTP (défaut 3000). |
@@ -52,8 +52,8 @@ un Postgres local ou l'URL publique du Postgres Railway.
 | `ADMIN_EMAILS` | non | CSV des emails admin (défaut `melfisk6@gmail.com`). |
 | `R2_ACCOUNT_ID` / `R2_BUCKET` / `R2_ENDPOINT` / `R2_PUBLIC_URL` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | non | Stockage médias Cloudflare R2 (voir `src/storage/r2.js`). |
 
-La config est validée au démarrage par `src/util/env.js` : erreur bloquante en
-production, simples avertissements en développement.
+La config est vérifiée au démarrage par `src/util/env.js` : des avertissements
+sont loggés si quelque chose manque, sans jamais bloquer le démarrage.
 
 ## Tests
 

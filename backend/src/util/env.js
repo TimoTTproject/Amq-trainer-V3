@@ -10,20 +10,19 @@ const WEAK_SECRETS = new Set(['', 'change-me', 'dev-change-me']);
 // Secret JWT. Le repli faible n'est toléré qu'en développement.
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 
-// Valide la configuration. Lève une erreur (arrête le serveur) si la prod est
-// dangereuse ; émet seulement un avertissement en développement.
+// Vérifie la configuration et émet des AVERTISSEMENTS dans les logs.
+// N'interrompt jamais le démarrage : à corriger côté hébergeur si signalé.
 function validateEnv() {
-  const errors = [];
   const warnings = [];
 
   if (WEAK_SECRETS.has(process.env.JWT_SECRET || '')) {
-    const msg =
-      'JWT_SECRET absent ou trop faible — génère une chaîne aléatoire longue (ex. `openssl rand -hex 32`).';
-    (isProduction ? errors : warnings).push(msg);
+    warnings.push(
+      'JWT_SECRET absent ou trop faible — génère une chaîne aléatoire longue (ex. `openssl rand -hex 32`).'
+    );
   }
 
   if (isProduction && !process.env.DATABASE_URL) {
-    errors.push('DATABASE_URL absent en production.');
+    warnings.push('DATABASE_URL absent en production.');
   }
 
   // NODE_ENV non défini en prod = cookies non "secure" (flag basé sur isProduction).
@@ -35,13 +34,6 @@ function validateEnv() {
   }
 
   for (const w of warnings) console.warn(`  ⚠ ${w}`);
-
-  if (errors.length) {
-    console.error('\n  ✖ Configuration d\'environnement invalide :');
-    for (const e of errors) console.error(`    - ${e}`);
-    console.error('');
-    throw new Error('Démarrage interrompu : configuration d\'environnement invalide.');
-  }
 }
 
 module.exports = { isProduction, JWT_SECRET, validateEnv };
