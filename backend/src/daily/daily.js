@@ -13,6 +13,24 @@ const MIN_MMR = 100;
 function todayStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+function yesterdayStr(d = new Date()) {
+  const y = new Date(d);
+  y.setDate(y.getDate() - 1);
+  return todayStr(y);
+}
+
+// Nouvelle série après avoir terminé le défi : +1 si la veille était jouée,
+// inchangée si déjà jouée aujourd'hui (sécurité), sinon repart à 1.
+function computeStreak(lastDay, currentStreak, today = todayStr(), yest = yesterdayStr()) {
+  if (lastDay === today) return currentStreak || 1;
+  if (lastDay === yest) return (currentStreak || 0) + 1;
+  return 1;
+}
+
+// Récompense en tokens du défi, croissante avec la série (plafonnée).
+function streakReward(streak) {
+  return Math.min(100, 20 + Math.max(0, streak - 1) * 10);
+}
 
 // Tire `count` ids distincts au hasard parmi des candidats (mélange de Fisher-Yates).
 // Appelé UNE fois par jour ; le résultat est stocké → tout le monde a le même set.
@@ -60,6 +78,9 @@ module.exports = {
   K_FACTOR,
   MIN_MMR,
   todayStr,
+  yesterdayStr,
+  computeStreak,
+  streakReward,
   pickDailySongIds,
   scoreSong,
   maxScore,

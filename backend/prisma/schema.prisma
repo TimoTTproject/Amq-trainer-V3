@@ -54,6 +54,9 @@ model User {
   soloMmr       Int @default(1000)
   soloGames     Int @default(0)
   soloBestScore Int @default(0)
+  dailyStreak     Int     @default(0) // jours consécutifs avec défi terminé
+  dailyStreakBest Int     @default(0)
+  dailyLastDay    String? // AAAA-MM-JJ du dernier défi terminé
 
   // Plafond quotidien de tokens gagnés en multijoueur (anti-abus)
   mpRewardDay   String? // AAAA-MM-JJ

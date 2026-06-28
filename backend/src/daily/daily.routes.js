@@ -9,7 +9,8 @@ const { tierFromMmr } = require('../mp/rank');
 const { preferMainContent } = require('../catalog/format');
 const {
   DAILY_SONG_COUNT, DAILY_DURATION_MS, DAILY_GRACE_MS,
-  todayStr, pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
+  todayStr, yesterdayStr, pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
+  computeStreak, streakReward,
 } = require('./daily');
 
 const router = express.Router();
@@ -57,8 +58,10 @@ router.get('/status', requireAuth, async (req, res) => {
   const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
   const me = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { soloMmr: true, soloGames: true, soloBestScore: true },
+    select: { soloMmr: true, soloGames: true, soloBestScore: true, dailyStreak: true, dailyStreakBest: true, dailyLastDay: true },
   });
+  // La série n'est « vivante » que si le dernier jour joué est aujourd'hui ou hier.
+  const streakAlive = me.dailyLastDay === day || me.dailyLastDay === yesterdayStr();
   res.json({
     day,
     total: challenge.songIds.length,
@@ -71,6 +74,8 @@ router.get('/status', requireAuth, async (req, res) => {
     soloGames: me.soloGames,
     soloBestScore: me.soloBestScore,
     tier: me.soloGames > 0 ? tierFromMmr(me.soloMmr) : null,
+    streak: streakAlive ? me.dailyStreak : 0,
+    streakBest: me.dailyStreakBest,
   });
 });
 
@@ -130,11 +135,17 @@ router.post('/guess', requireAuth, async (req, res) => {
     return res.json({ done: false, correct, points, answer, next: await serveCurrentSong(updated) });
   }
 
-  // Dernière chanson → finalisation + MMR (transaction).
-  const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { soloMmr: true, soloBestScore: true } });
+  // Dernière chanson → finalisation + MMR + série + récompense (transaction).
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { soloMmr: true, soloBestScore: true, dailyStreak: true, dailyStreakBest: true, dailyLastDay: true },
+  });
   const before = user.soloMmr;
   const delta = computeSoloMmrDelta(before, newScore, maxScore(run.songIds.length));
   const after = applyMmr(before, delta);
+  const streak = computeStreak(user.dailyLastDay, user.dailyStreak);
+  const streakBest = Math.max(user.dailyStreakBest, streak);
+  const reward = streakReward(streak);
 
   await prisma.$transaction([
     prisma.dailyRun.update({
@@ -143,8 +154,13 @@ router.post('/guess', requireAuth, async (req, res) => {
     }),
     prisma.user.update({
       where: { id: req.user.id },
-      data: { soloMmr: after, soloGames: { increment: 1 }, soloBestScore: Math.max(user.soloBestScore, newScore) },
+      data: {
+        soloMmr: after, soloGames: { increment: 1 }, soloBestScore: Math.max(user.soloBestScore, newScore),
+        dailyStreak: streak, dailyStreakBest: streakBest, dailyLastDay: day,
+        tokens: { increment: reward },
+      },
     }),
+    prisma.tokenTransaction.create({ data: { userId: req.user.id, amount: reward, reason: 'daily_reward' } }),
   ]);
 
   res.json({
@@ -152,6 +168,7 @@ router.post('/guess', requireAuth, async (req, res) => {
     result: {
       score: newScore, correct: newCorrect, total: run.songIds.length,
       mmrBefore: before, mmrAfter: after, delta, tier: tierFromMmr(after),
+      streak, streakBest, reward,
     },
   });
 });

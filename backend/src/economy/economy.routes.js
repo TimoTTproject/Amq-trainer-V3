@@ -21,6 +21,7 @@ const REASON_LABELS = {
   quest_reward: 'Récompense de quête',
   cosmetic_purchase: 'Achat boutique',
   mp_reward: 'Récompense multijoueur',
+  daily_reward: 'Défi du jour',
 };
 
 // Bonus de connexion déjà disponible aujourd'hui ?

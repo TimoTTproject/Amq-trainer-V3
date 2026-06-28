@@ -2,8 +2,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
-  BASE_RATING, DAILY_DURATION_MS,
+  computeStreak, streakReward, BASE_RATING, DAILY_DURATION_MS,
 } = require('../src/daily/daily');
+
+test('computeStreak extends on consecutive days, resets after a gap', () => {
+  assert.equal(computeStreak('2026-06-27', 4, '2026-06-28', '2026-06-27'), 5); // veille jouée → +1
+  assert.equal(computeStreak('2026-06-25', 4, '2026-06-28', '2026-06-27'), 1); // trou → reset
+  assert.equal(computeStreak(null, 0, '2026-06-28', '2026-06-27'), 1); // 1er jour
+  assert.equal(computeStreak('2026-06-28', 3, '2026-06-28', '2026-06-27'), 3); // déjà joué aujourd'hui
+});
+
+test('streakReward grows with the streak and is capped', () => {
+  assert.equal(streakReward(1), 20);
+  assert.equal(streakReward(2), 30);
+  assert.equal(streakReward(9), 100);
+  assert.equal(streakReward(50), 100); // plafond
+});
 
 test('pickDailySongIds returns the requested count of distinct ids', () => {
   const ids = pickDailySongIds([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 10);

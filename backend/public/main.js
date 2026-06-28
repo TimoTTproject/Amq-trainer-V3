@@ -521,7 +521,7 @@ function renderProfile(d) {
   }
 
   renderProgression(d.progression || []);
-  renderProfileRanked(d.ranked, d.mpRecent || []);
+  renderProfileRanked(d.ranked, d.mpRecent || [], d.solo);
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
   renderProfileBadges(d);
@@ -547,17 +547,25 @@ function renderProgression(data) {
     <div class="prog-legend"><span>${data[0].day.slice(5)}</span><span>Réussite % · ${data.length} j</span><span>${data[n - 1].day.slice(5)}</span></div>`;
 }
 
-function renderProfileRanked(r, recent) {
+function renderProfileRanked(r, recent, solo) {
   const box = document.getElementById('profile-ranked');
-  if (!r || !r.games) {
-    box.innerHTML = '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>';
-  } else {
-    box.innerHTML = `<div class="ranked-card">
-      <span class="ranked-tier">${r.tier.icon} ${escapeHtml(r.tier.name)}</span>
-      <span class="ranked-mmr">${r.mmr} MMR</span>
-      <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
-    </div>`;
-  }
+  const multiCard = (!r || !r.games)
+    ? '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>'
+    : `<div class="ranked-card">
+        <span class="ranked-label">🏅 Multi</span>
+        <span class="ranked-tier">${r.tier.icon} ${escapeHtml(r.tier.name)}</span>
+        <span class="ranked-mmr">${r.mmr} MMR</span>
+        <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
+      </div>`;
+  const soloCard = (!solo || !solo.games)
+    ? ''
+    : `<div class="ranked-card">
+        <span class="ranked-label">🗓️ Solo</span>
+        <span class="ranked-tier">${solo.tier.icon} ${escapeHtml(solo.tier.name)}</span>
+        <span class="ranked-mmr">${solo.mmr} MMR</span>
+        <span class="hint">${solo.games} défi(s) · meilleur score ${solo.bestScore}</span>
+      </div>`;
+  box.innerHTML = multiCard + soloCard;
   const hist = document.getElementById('profile-mp-history');
   hist.innerHTML = (recent || []).length
     ? recent.map((m) => {

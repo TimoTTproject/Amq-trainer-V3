@@ -35,6 +35,7 @@ function renderDailyIntro(d) {
   document.getElementById('daily-mmr').textContent = d.soloGames > 0 ? d.soloMmr : '—';
   document.getElementById('daily-tier').textContent = d.tier ? `${d.tier.icon} ${d.tier.name}` : 'Non classé';
   document.getElementById('daily-best').textContent = d.soloBestScore || 0;
+  document.getElementById('daily-streak').textContent = d.streak || 0;
   const rank = document.getElementById('daily-rank');
   rank.innerHTML = d.tier ? `${d.tier.icon} <b>${escapeHtml(d.tier.name)}</b> · ${d.soloMmr} MMR` : 'Pas encore classé';
 
@@ -165,6 +166,13 @@ function renderDailyResult(res) {
   document.getElementById('daily-over-delta').innerHTML =
     `${res.mmrBefore} → <b>${res.mmrAfter}</b> MMR <span class="${delta >= 0 ? 'gain' : 'spend'}">(${sign}${delta})</span>`
     + (res.tier ? ` · ${res.tier.icon} ${escapeHtml(res.tier.name)}` : '');
+  const streakLine = document.getElementById('daily-over-streak');
+  if (streakLine) {
+    const best = res.streak >= res.streakBest && res.streak > 1 ? ' · record !' : '';
+    streakLine.innerHTML = `🔥 Série de <b>${res.streak}</b> jour${res.streak > 1 ? 's' : ''}${best} · <span class="gain">+${res.reward} 🪙</span>`;
+  }
+  // Le serveur a crédité la récompense : on relit le solde autoritaire.
+  if (res.reward && typeof syncTokenBalance === 'function') syncTokenBalance();
   if (delta > 0) { sfx.win(); if (typeof burstConfetti === 'function') burstConfetti(30); } else { sfx.lose(); }
 }
 
