@@ -29,6 +29,28 @@ async function closePictureInPictureFor(media) {
   }
 }
 
+function mediaUrlWithRetry(url, attempt) {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}retry=${attempt}`;
+}
+
+function waitForMediaEvent(media, eventName, timeoutMs = 9000) {
+  if (eventName === 'loadedmetadata' && media.readyState >= 1) return Promise.resolve();
+  if (eventName === 'canplay' && media.readyState >= 3) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      media.removeEventListener(eventName, onReady);
+      media.removeEventListener('error', onError);
+    };
+    const onReady = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error('media')); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, timeoutMs);
+    media.addEventListener(eventName, onReady, { once: true });
+    media.addEventListener('error', onError, { once: true });
+  });
+}
+
 // ── Volume global de la musique (persistant, partagé par tous les médias) ──
 function getVolume() {
   const v = parseFloat(localStorage.getItem('amq_volume'));
@@ -1241,7 +1263,11 @@ async function nextSong() {
   answered = false;
   const v = video();
   await closePictureInPictureFor(v);
-  v.src = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`; // flux proxifié (anti-triche)
+  const clipUrl = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`;
+  v.dataset.clipUrl = clipUrl;
+  v.src = clipUrl; // flux proxifié (anti-triche)
+  v.preload = 'auto';
+  v.load();
   v.volume = getVolume();
   showOverlay(true); // mode audio : on masque l'image, le son joue quand même
 
@@ -1258,6 +1284,8 @@ async function nextSong() {
 async function startClip() {
   const v = video();
   clearTimeout(clipTimer);
+  const clipUrl = v.dataset.clipUrl || v.getAttribute('src');
+  if (!clipUrl) return;
 
   const seek = () => {
     if (settings.randomStart && v.duration && isFinite(v.duration)) {
@@ -1268,15 +1296,35 @@ async function startClip() {
       v.currentTime = 0;
     }
   };
-  if (v.readyState >= 1 && v.duration) seek();
-  else await new Promise((r) => v.addEventListener('loadedmetadata', () => { seek(); r(); }, { once: true }));
-
-  try {
-    await v.play();
-    setHint("🎵 Devine l'anime à partir de l'extrait.");
-  } catch {
-    setHint('▶ Lecture bloquée par le navigateur — clique sur le bouton lecture.');
+  let playing = false;
+  for (let attempt = 0; attempt < 3 && !playing; attempt++) {
+    try {
+      if (attempt > 0) {
+        setHint(`Chargement du son… tentative ${attempt + 1}/3`);
+        v.src = mediaUrlWithRetry(clipUrl, attempt);
+        v.load();
+      } else {
+        setHint('Chargement du son…');
+      }
+      await waitForMediaEvent(v, 'loadedmetadata');
+      seek();
+      await waitForMediaEvent(v, 'canplay');
+      await v.play();
+      playing = true;
+    } catch (error) {
+      if (error?.name === 'NotAllowedError') {
+        setHint('▶ Lecture bloquée par le navigateur — clique sur le bouton lecture.');
+        break;
+      }
+    }
   }
+  if (!playing && !v.paused) playing = true;
+  if (!playing) {
+    setHint('⚠️ Le son ne charge pas. Clique sur réécouter pour relancer.');
+    setPlayIcon();
+    return;
+  }
+  setHint("🎵 Devine l'anime à partir de l'extrait.");
   setPlayIcon();
 
   // Coupure après la durée choisie (sauf "Illimitée" ou si la vidéo est révélée)
@@ -2118,7 +2166,8 @@ async function enterFloor(floor) {
   document.getElementById('tower-tokens').textContent = currentUser.tokens;
   document.getElementById('tower-floor').textContent = floor.floor;
   renderTowerLives(floor.lives);
-  document.getElementById('tower-msg').textContent = '';
+  const towerMsg = document.getElementById('tower-msg');
+  towerMsg.textContent = 'Chargement du son…';
 
   // 4 propositions
   document.getElementById('tower-choices').innerHTML = floor.options
@@ -2129,11 +2178,29 @@ async function enterFloor(floor) {
   // (?t=...) + load() pour forcer le rechargement et éviter la lecture en cache.
   const v = towerVideo();
   await closePictureInPictureFor(v);
-  v.src = floor.clipUrl;
   v.volume = getVolume();
-  v.load();
   document.getElementById('tower-overlay').classList.remove('hidden'); // audio seul
-  v.play().catch(() => {});
+  const buttons = [...document.querySelectorAll('#tower-choices .tower-choice')];
+  buttons.forEach((button) => { button.disabled = true; });
+  let playing = false;
+  for (let attempt = 0; attempt < 3 && !playing; attempt++) {
+    try {
+      towerMsg.textContent = attempt ? `Chargement du son… tentative ${attempt + 1}/3` : 'Chargement du son…';
+      v.src = attempt ? mediaUrlWithRetry(floor.clipUrl, attempt) : floor.clipUrl;
+      v.load();
+      await waitForMediaEvent(v, 'canplay');
+      await v.play();
+      playing = true;
+    } catch {}
+  }
+  if (towerRun !== floor) return;
+  if (!playing) {
+    towerMsg.textContent = '⚠️ Son indisponible — nouvelle tentative…';
+    setTimeout(() => { if (towerRun === floor && !towerAnswering) enterFloor(floor); }, 1200);
+    return;
+  }
+  towerMsg.textContent = '';
+  buttons.forEach((button) => { button.disabled = false; });
   setTowerPlayIcon();
 
   startTowerTimer(floor.timeLimit);

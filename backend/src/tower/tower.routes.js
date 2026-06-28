@@ -1,9 +1,9 @@
 // Routes du Château de l'Infini : statut, démarrage, réponse, abandon, flux vidéo.
 // Tout l'état (étage, vies, réponse, chrono) est autoritaire côté serveur.
 const express = require('express');
-const { Readable } = require('stream');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { proxyVideo } = require('../util/stream');
 const { isAdmin } = require('../admin/admin');
 const { progressQuests } = require('../quests/quests');
 const {
@@ -19,12 +19,6 @@ const {
 } = require('./tower');
 
 const router = express.Router();
-
-// animethemes renvoie 403 sans User-Agent identifiable
-const ANIMETHEMES_HEADERS = {
-  'User-Agent': 'AnimeMusicQuiz/1.0 (+https://github.com/local/amq)',
-  Accept: '*/*',
-};
 
 // Construit un étage : une musique correcte + 3 distracteurs (animes distincts).
 async function buildFloor() {
@@ -122,7 +116,7 @@ router.post('/start', requireAuth, async (req, res) => {
         currentSongId: floor.songId,
         currentOptions: floor.options,
         currentAnswer: floor.answer,
-        floorStartedAt: new Date(),
+        floorStartedAt: null,
       },
     });
   });
@@ -169,7 +163,7 @@ router.post('/answer', requireAuth, async (req, res) => {
   if (run.currentAnswer == null) return res.status(409).json({ error: 'Étage invalide' });
 
   // Chrono vérifié côté serveur (le client ne peut pas tricher en désactivant le timer)
-  const elapsed = run.floorStartedAt ? Date.now() - new Date(run.floorStartedAt).getTime() : 0;
+  const elapsed = run.floorStartedAt ? Date.now() - new Date(run.floorStartedAt).getTime() : Number.POSITIVE_INFINITY;
   const limitMs = timeLimitForFloor(run.floor) * 1000 + ANSWER_GRACE_MS;
   const timedOut = !!timeout || elapsed > limitMs;
 
@@ -195,7 +189,7 @@ router.post('/answer', requireAuth, async (req, res) => {
         currentSongId: next.songId,
         currentOptions: next.options,
         currentAnswer: next.answer,
-        floorStartedAt: new Date(),
+        floorStartedAt: null,
       },
     });
     return res.json({
@@ -219,7 +213,7 @@ router.post('/answer', requireAuth, async (req, res) => {
         currentSongId: next.songId,
         currentOptions: next.options,
         currentAnswer: next.answer,
-        floorStartedAt: new Date(),
+        floorStartedAt: null,
       },
     });
     return res.json({
@@ -261,22 +255,19 @@ router.get('/clip/:runId', requireAuth, async (req, res) => {
   });
   if (!song?.videoUrl) return res.status(404).end();
 
-  try {
-    const headers = { ...ANIMETHEMES_HEADERS };
-    if (req.headers.range) headers.Range = req.headers.range; // seek / lecture partielle
-    const upstream = await fetch(song.videoUrl, { headers });
-    res.status(upstream.status);
-    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
-      const v = upstream.headers.get(h);
-      if (v) res.setHeader(h, v);
-    }
-    res.setHeader('Cache-Control', 'no-store'); // une question = un flux, jamais mis en cache
-    if (!upstream.body) return res.end();
-    Readable.fromWeb(upstream.body).pipe(res);
-  } catch (err) {
-    console.error('tower clip proxy error:', err.message);
-    if (!res.headersSent) res.status(502).end();
-  }
+  await proxyVideo(req, res, song.videoUrl, {
+    // Le chrono serveur commence quand AnimeThemes a réellement fourni le flux,
+    // pas pendant les secondes de chargement réseau.
+    onReady: () => prisma.towerRun.updateMany({
+      where: {
+        id: req.params.runId,
+        userId: req.user.id,
+        currentSongId: run.currentSongId,
+        floorStartedAt: null,
+      },
+      data: { floorStartedAt: new Date() },
+    }),
+  });
 });
 
 module.exports = { router };

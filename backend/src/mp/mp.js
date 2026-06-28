@@ -11,7 +11,8 @@ const { byId, publicCosmetic } = require('../shop/cosmetics');
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
 const COUNTDOWN_MS = 20000;
-const PREP_MS = 1000;
+const FIRST_ROUND_PREP_MS = 3000;
+const PRELOADED_ROUND_PREP_MS = 750;
 const RESULT_MS = 4000;
 const DC_GRACE_LOBBY = 25000; // délai avant retrait après déconnexion (lobby)
 const DC_GRACE_GAME = 120000; // ... en partie (reconnexion possible)
@@ -129,6 +130,7 @@ function newRoom({ isPublic, ranked }) {
     settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' },
     status: 'lobby', chat: [], round: 0, current: null,
     usedSongIds: new Set(), usedAnilistIds: new Set(),
+    nextSong: null, nextSongPromise: null,
     timer: null, countdownTimer: null, countdownEndsAt: 0, revealSong: null, revealUntil: 0,
   };
   rooms.set(id, room);
@@ -222,6 +224,8 @@ function startGame(room) {
   room.round = 0;
   room.usedSongIds = new Set();
   room.usedAnilistIds = new Set();
+  room.nextSong = null;
+  room.nextSongPromise = null;
   room.mode = room.settings.mode || 'classic';
 
   const arr = [...room.players.values()];
@@ -233,7 +237,9 @@ function startGame(room) {
     teamNames: TEAM_NAMES,
     players: arr.map((p) => ({ name: p.name, avatarUrl: p.avatarUrl, team: p.team })),
   });
-  setTimeout(() => startRound(room), 2500);
+  // La première musique commence à charger presque immédiatement ; son délai
+  // de préparation remplace l'ancien écran d'attente vide.
+  setTimeout(() => startRound(room), 250);
 }
 
 async function pickSong(room) {
@@ -265,16 +271,38 @@ function availableSongWhere(room) {
 async function startRound(room) {
   if (room.status !== 'playing' || !rooms.has(room.id)) return;
   room.round++;
-  const song = await pickSong(room);
+  let song = room.nextSong;
+  if (!song && room.nextSongPromise) song = await room.nextSongPromise;
+  room.nextSong = null;
+  room.nextSongPromise = null;
+  if (!song) song = await pickSong(room);
   if (!song) return endGame(room);
-  const startAt = Date.now() + PREP_MS;
+  const prepMs = room.round === 1 ? FIRST_ROUND_PREP_MS : PRELOADED_ROUND_PREP_MS;
+  const startAt = Date.now() + prepMs;
   const endsAt = startAt + room.settings.roundMs;
   room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set() };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.settings.rounds,
     clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: room.settings.roundMs,
   });
-  room.timer = setTimeout(() => endRound(room), PREP_MS + room.settings.roundMs);
+  room.timer = setTimeout(() => endRound(room), prepMs + room.settings.roundMs);
+}
+
+async function prepareNextRound(room) {
+  if (room.nextSong || room.nextSongPromise || room.status !== 'playing') return;
+  const nextRound = room.round + 1;
+  room.nextSongPromise = pickSong(room);
+  try {
+    const song = await room.nextSongPromise;
+    if (!song || room.status !== 'playing' || room.current || nextRound !== room.round + 1) return;
+    room.nextSong = song;
+    io.to(room.id).emit('mp:round:preload', {
+      round: nextRound,
+      clipUrl: `/api/mp/clip/${room.id}?r=${nextRound}`,
+    });
+  } catch (error) {
+    console.error('mp preload error:', error.message);
+  }
 }
 
 // Progrès de la manche (combien ont trouvé / passé sur le total)
@@ -382,10 +410,12 @@ function endRound(room) {
   });
   room.revealSong = s;
   room.revealUntil = Date.now() + RESULT_MS;
+  const elimOver = room.mode === 'elim' && aliveCount(room) <= 1;
+  const matchOver = elimOver || room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS;
+  if (!matchOver) prepareNextRound(room);
   room.timer = setTimeout(() => {
     room.revealSong = null;
-    const elimOver = room.mode === 'elim' && aliveCount(room) <= 1;
-    if (elimOver || room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS) endGame(room);
+    if (matchOver) endGame(room);
     else startRound(room);
   }, RESULT_MS);
 }
@@ -502,6 +532,7 @@ async function endGame(room) {
     room.status = 'lobby';
     room.round = 0; room.current = null;
     room.usedSongIds = new Set(); room.usedAnilistIds = new Set();
+    room.nextSong = null; room.nextSongPromise = null;
     sysChat(room, 'Partie terminée — prêts pour une autre ?');
     setTimeout(() => { if (rooms.has(room.id)) broadcastRoom(room); }, 8000);
   }
@@ -615,12 +646,20 @@ function emote(socket, e) {
   io.to(room.id).emit('mp:emote', { name: socket.data.user.displayName, emote: e });
 }
 
-function getCurrentVideo(roomId, userId) {
+function videoForRound(room, requestedRound) {
+  const round = Number(requestedRound);
+  if (room.current && (!round || round === room.round)) return room.current.song.videoUrl;
+  if (room.nextSong && round === room.round + 1) return room.nextSong.videoUrl;
+  if (room.revealSong && (!round || round === room.round) && Date.now() < (room.revealUntil || 0)) {
+    return room.revealSong.videoUrl;
+  }
+  return null;
+}
+
+function getCurrentVideo(roomId, userId, requestedRound) {
   const room = rooms.get(roomId);
   if (!room || !room.players.has(userId)) return null;
-  if (room.current) return room.current.song.videoUrl;
-  if (room.revealSong && Date.now() < (room.revealUntil || 0)) return room.revealSong.videoUrl;
-  return null;
+  return videoForRound(room, requestedRound);
 }
 
 function initMp(server) {
@@ -671,4 +710,4 @@ function initMp(server) {
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere };
+module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound };

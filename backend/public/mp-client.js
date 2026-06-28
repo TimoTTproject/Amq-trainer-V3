@@ -5,6 +5,10 @@
 let mpSocket = null;
 let mpTimer = null;
 let mpLobbyCountdown = null;
+let mpPreloadTimer = null;
+let mpPreparedUrl = null;
+let mpActiveRound = 0;
+let mpPlaybackSequence = 0;
 let mpRoom = null; // dernier snapshot de salon
 let mpMode = 'classic'; // classic | teams | elim
 let mpTeamNames = ['Rouge', 'Bleu'];
@@ -156,6 +160,8 @@ function connectMp() {
 
   mpSocket.on('mp:round:start', (d) => {
     if (mpLeft) return;
+    mpActiveRound = d.round;
+    clearTimeout(mpPreloadTimer);
     document.getElementById('mp-round').textContent = d.round;
     document.getElementById('mp-total').textContent = d.total;
     document.getElementById('mp-result').classList.add('hidden');
@@ -169,6 +175,20 @@ function connectMp() {
     document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
       : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
     mpStartClip(d.clipUrl, d.startAt, d.duration);
+  });
+
+  mpSocket.on('mp:round:preload', (d) => {
+    clearTimeout(mpPreloadTimer);
+    mpPreloadTimer = setTimeout(() => {
+      if (mpLeft || d.round <= mpActiveRound) return;
+      const v = mpVideo();
+      v.pause();
+      document.getElementById('mp-overlay').classList.remove('hidden');
+      v.src = d.clipUrl;
+      v.preload = 'auto';
+      v.load();
+      mpPreparedUrl = d.clipUrl;
+    }, 900);
   });
 
   mpSocket.on('mp:guess:ack', (d) => {
@@ -385,18 +405,72 @@ function renderMpScores(results, withPoints) {
 }
 
 // ── Clip synchronisé ──
+function mpUrlWithRetry(url, attempt) {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}retry=${attempt}`;
+}
+
+function mpWaitUntil(timestamp) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
+}
+
+function mpWaitForCanPlay(media, timeoutMs = 9000) {
+  if (media.readyState >= 3) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      media.removeEventListener('canplay', onReady);
+      media.removeEventListener('error', onError);
+    };
+    const onReady = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error('media')); };
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, timeoutMs);
+    media.addEventListener('canplay', onReady, { once: true });
+    media.addEventListener('error', onError, { once: true });
+  });
+}
+
 async function mpStartClip(url, startAt, duration) {
   const v = mpVideo();
+  const sequence = ++mpPlaybackSequence;
   v.disablePictureInPicture = true;
   // Une fenêtre PiP ouverte pendant le résultat ne doit jamais continuer sur
   // la manche suivante et dévoiler l'anime avant la réponse.
   if (document.pictureInPictureElement === v && document.exitPictureInPicture) {
     try { await document.exitPictureInPicture(); } catch {}
   }
-  v.src = url; v.load(); v.volume = (typeof getVolume === 'function' ? getVolume() : 0.8);
+  const alreadyPrepared = mpPreparedUrl === url && v.getAttribute('src') === url;
+  if (!alreadyPrepared) {
+    v.src = url;
+    v.preload = 'auto';
+    v.load();
+  }
+  mpPreparedUrl = null;
+  v.volume = (typeof getVolume === 'function' ? getVolume() : 0.8);
   document.getElementById('mp-overlay').classList.remove('hidden'); // audio seul
-  const delay = Math.max(0, startAt - Date.now());
-  setTimeout(() => { v.play().catch(() => {}); mpRunTimer(duration); }, delay);
+  const feedback = document.getElementById('mp-feedback');
+  if (!mpEliminated) feedback.textContent = 'Chargement du son…';
+
+  for (let attempt = 0; attempt < 3 && sequence === mpPlaybackSequence; attempt++) {
+    try {
+      if (attempt > 0) {
+        feedback.textContent = `Chargement du son… tentative ${attempt + 1}/3`;
+        v.src = mpUrlWithRetry(url, attempt);
+        v.load();
+      }
+      await Promise.all([mpWaitUntil(startAt), mpWaitForCanPlay(v)]);
+      if (sequence !== mpPlaybackSequence) return;
+      await v.play();
+      if (sequence !== mpPlaybackSequence) return;
+      const remaining = Math.max(1000, startAt + duration - Date.now());
+      mpRunTimer(remaining);
+      if (!mpEliminated && feedback.textContent.startsWith('Chargement du son')) feedback.textContent = '';
+      return;
+    } catch {}
+  }
+  if (sequence === mpPlaybackSequence) {
+    feedback.textContent = '⚠️ Son indisponible — tu peux passer cette manche.';
+  }
 }
 function mpRunTimer(duration) {
   const fill = document.getElementById('mp-timefill');
@@ -407,7 +481,10 @@ function mpRunTimer(duration) {
   mpTimer = setTimeout(() => fill.classList.add('low'), Math.max(0, duration - 5000));
 }
 function mpStopClip() {
+  mpPlaybackSequence++;
   clearTimeout(mpTimer);
+  clearTimeout(mpPreloadTimer);
+  mpPreparedUrl = null;
   const v = mpVideo();
   if (v) v.pause();
 }

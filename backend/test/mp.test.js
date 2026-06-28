@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { everyoneResolved, availableSongWhere } = require('../src/mp/mp');
+const { everyoneResolved, availableSongWhere, videoForRound } = require('../src/mp/mp');
 
 function roomWithTwoPlayers() {
   return {
@@ -40,4 +40,17 @@ test('filters multiplayer songs by opening or ending', () => {
     videoUrl: { not: null },
     type: 'ED',
   });
+});
+
+test('serves the preloaded song only for the upcoming round', () => {
+  const room = {
+    round: 2,
+    current: null,
+    nextSong: { videoUrl: 'next.webm' },
+    revealSong: { videoUrl: 'current.webm' },
+    revealUntil: Date.now() + 1000,
+  };
+  assert.equal(videoForRound(room, 2), 'current.webm');
+  assert.equal(videoForRound(room, 3), 'next.webm');
+  assert.equal(videoForRound(room, 4), null);
 });

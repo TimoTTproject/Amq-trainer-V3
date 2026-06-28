@@ -7,7 +7,7 @@ const { getCurrentVideo } = require('./mp');
 const router = express.Router();
 
 router.get('/clip/:gameId', requireAuth, async (req, res) => {
-  const videoUrl = getCurrentVideo(req.params.gameId, req.user.id);
+  const videoUrl = getCurrentVideo(req.params.gameId, req.user.id, req.query.r);
   if (!videoUrl) return res.status(404).end();
   await proxyVideo(req, res, videoUrl);
 });
