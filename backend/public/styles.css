@@ -1475,3 +1475,50 @@ header h1 i { color: var(--accent); }
   .playlist-recs-grid { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
   .playlist-rec-card { flex: 0 0 78%; scroll-snap-align: start; }
 }
+
+/* ════════════════════════════════════════════
+   MOBILE & PWA — adaptations téléphone (bloc final = précédence max)
+   ════════════════════════════════════════════ */
+
+/* Pas de défilement horizontal parasite ; médias toujours contenus */
+html, body { overflow-x: hidden; }
+img, video, canvas, svg, iframe { max-width: 100%; }
+
+/* Hauteur dynamique : évite les sauts dus à la barre d'URL mobile */
+@supports (height: 100dvh) {
+  body { min-height: 100dvh; }
+  .auth-screen { min-height: 100dvh; }
+}
+
+/* Zones sûres (encoche / barre d'accueil) en mode PWA plein écran */
+.container {
+  padding-left: max(22px, env(safe-area-inset-left));
+  padding-right: max(22px, env(safe-area-inset-right));
+  padding-bottom: max(84px, calc(env(safe-area-inset-bottom) + 28px));
+}
+header { padding-top: env(safe-area-inset-top); }
+
+/* Confort tactile : pas de flash gris au tap, défilement souple */
+button, a, .nav-item, .hub-card, .home-card, .gcard, .tower-choice {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS : empêche le zoom automatique au focus d'un champ (déclenché si < 16px) */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px; }
+}
+
+@media (max-width: 600px) {
+  .container { padding-top: 14px; }
+  header { margin-bottom: 14px; gap: 10px; }
+  header h1 { font-size: 1.25rem; }
+  .user-section { gap: 8px; }
+
+  /* Modales : moins de marge, hauteur dynamique, fermeture facile au pouce */
+  .modal-overlay { padding: 12px; }
+  .modal-card { padding: 20px; max-height: 90dvh; }
+
+  /* Saisie de réponse : champ + bouton empilés et pleine largeur */
+  .answer-area { flex-direction: column; align-items: stretch; }
+  .answer-area > .btn-primary, .answer-area > button { width: 100%; justify-content: center; }
+}
