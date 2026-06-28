@@ -464,6 +464,11 @@
         <button id="import-btn" class="btn-primary"><i class="fas fa-rotate"></i> Charger / synchroniser ma liste</button>
       </div>
       <p class="hint" id="import-hint">⚠️ Importe <b>toute</b> ta liste AniList et <b>remplace</b> la liste actuelle. Une fois chargée, elle reste liée à ton compte (pas besoin de réimporter).</p>
+      <p class="hint import-linked hidden" id="import-linked">
+        <i class="fas fa-circle-check"></i> Liste de <b id="import-linked-name"></b> liée à ton compte.
+        <button class="btn-link" id="import-resync">Resynchroniser</button> ·
+        <button class="btn-link" id="import-change">Changer de liste</button>
+      </p>
       <div class="import-progress hidden" id="import-progress">
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         <span id="progress-status">…</span>

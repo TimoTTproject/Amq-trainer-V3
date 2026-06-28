@@ -9,8 +9,10 @@ function openPlaylist() {
 }
 
 let playlistSongs = [];
-let playlistRecommendations = [];
+let playlistRecommendations = []; // recos affichées
+let playlistRecReserve = [];      // recos en réserve (pour remplacer celles ajoutées)
 let playlistTrackId = null;
+const REC_DISPLAY = 8; // nombre de recos visibles
 
 async function loadPlaylist() {
   const tbody = document.getElementById('playlist-tbody');
@@ -18,15 +20,18 @@ async function loadPlaylist() {
   stopPlaylistAudio();
   playlistSongs = [];
   playlistRecommendations = [];
+  playlistRecReserve = [];
   playlistTrackId = null;
   updatePlaylistPlayer();
   try {
     const [{ songs }, recommendationData] = await Promise.all([
       api('/api/quiz/playlist'),
-      api('/api/quiz/playlist/recommendations').catch(() => ({ recommendations: [], personalized: false })),
+      api('/api/quiz/playlist/recommendations?limit=24').catch(() => ({ recommendations: [], personalized: false })),
     ]);
     playlistSongs = songs;
-    playlistRecommendations = recommendationData.recommendations || [];
+    const recs = recommendationData.recommendations || [];
+    playlistRecommendations = recs.slice(0, REC_DISPLAY); // affichées
+    playlistRecReserve = recs.slice(REC_DISPLAY);         // réserve pour le remplacement
     document.getElementById('playlist-total').textContent = `${songs.length} musique${songs.length > 1 ? 's' : ''}`;
     renderPlaylistRecommendations(recommendationData.personalized);
     if (!songs.length) {
@@ -169,15 +174,31 @@ function changePlaylistTrack(direction) {
   else if (direction < 0) audio.currentTime = 0;
 }
 
+// Va chercher de nouvelles recos en réserve (exclut celles déjà affichées / en playlist).
+async function refillRecReserve() {
+  try {
+    const data = await api('/api/quiz/playlist/recommendations?limit=24');
+    const shown = new Set(playlistRecommendations.map((s) => s.id));
+    const inList = new Set(playlistSongs.map((s) => s.id));
+    playlistRecReserve = (data.recommendations || []).filter((s) => !shown.has(s.id) && !inList.has(s.id));
+  } catch { /* on garde la réserve en l'état */ }
+}
+
 async function addPlaylistRecommendation(songId, btn) {
-  const song = playlistRecommendations.find((item) => item.id === songId);
-  if (!song) return;
+  const idx = playlistRecommendations.findIndex((item) => item.id === songId);
+  if (idx < 0) return;
+  const song = playlistRecommendations[idx];
   btn.disabled = true;
   try {
     await api('/api/quiz/like', { method: 'POST', body: JSON.stringify({ songId, liked: true }) });
     if (currentSong && currentSong.id === songId) { currentLiked = true; setLikeButton(); }
     playlistSongs.unshift(song);
-    playlistRecommendations = playlistRecommendations.filter((item) => item.id !== songId);
+    // Remplace la reco ajoutée par une nouvelle (au même emplacement) plutôt que
+    // de simplement la retirer → la sélection reste fournie.
+    if (!playlistRecReserve.length) await refillRecReserve();
+    const replacement = playlistRecReserve.shift();
+    if (replacement) playlistRecommendations.splice(idx, 1, replacement);
+    else playlistRecommendations.splice(idx, 1);
     document.getElementById('playlist-total').textContent = `${playlistSongs.length} musique${playlistSongs.length > 1 ? 's' : ''}`;
     renderPlaylistRows();
     renderPlaylistRecommendations(true);

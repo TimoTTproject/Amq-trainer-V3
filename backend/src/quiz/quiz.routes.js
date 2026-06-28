@@ -371,11 +371,12 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
   }
 
   const byId = new Map([...tasteCandidates, ...popularCandidates].map((song) => [song.id, song]));
+  const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 8));
   const recommendations = rankRecommendations({
     likedSongs,
     candidates: [...byId.values()],
     collaborativeCounts,
-    limit: 8,
+    limit,
   });
   res.json({
     recommendations: recommendations.map((song) => ({

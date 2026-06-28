@@ -16,6 +16,7 @@ let trainingChrono = false; // mode chrono (auto-révélation)
 let chronoTimer = null;
 let answered = false;
 let mode = localStorage.getItem('amq_mode') || 'mine';
+let importRowForced = false; // « Changer de liste » : force l'affichage de l'import même si une liste est liée
 let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
 let quizType = localStorage.getItem('amq_quiz_type') || 'all'; // 'all' | 'OP' | 'ED'
 let clipTimer = null; // coupe l'extrait après la durée choisie
@@ -1006,6 +1007,12 @@ function setupAppUI() {
   });
 
   document.getElementById('import-btn').addEventListener('click', startImport);
+  document.getElementById('import-resync').addEventListener('click', startImport);
+  document.getElementById('import-change').addEventListener('click', () => {
+    importRowForced = true;
+    applyModeUI();
+    document.getElementById('anilist-username').focus();
+  });
   document.getElementById('next-btn').addEventListener('click', nextSong);
   document.getElementById('reveal-btn').addEventListener('click', guessAnswer);
   document.getElementById('play-btn').addEventListener('click', togglePlay);
@@ -1051,9 +1058,21 @@ function applyModeUI() {
   document.querySelectorAll('.mode-btn').forEach((b) =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
-  // L'import AniList ne concerne que « Ma liste »
-  document.getElementById('import-row').classList.toggle('hidden', mode === 'global');
-  document.getElementById('import-hint').classList.toggle('hidden', mode === 'global');
+  // L'import AniList ne concerne que « Ma liste ». Quand une liste est déjà liée
+  // au compte, on masque le formulaire d'import (accessible via « Gérer ma liste »).
+  const isGlobal = mode === 'global';
+  const linkedName = currentUser && (currentUser.anilistListName || currentUser.anilistName);
+  const showImport = !isGlobal && (!linkedName || importRowForced);
+  document.getElementById('import-row').classList.toggle('hidden', !showImport);
+  document.getElementById('import-hint').classList.toggle('hidden', !showImport);
+  const linkedEl = document.getElementById('import-linked');
+  if (linkedEl) {
+    const showLinked = !isGlobal && !!linkedName && !importRowForced;
+    linkedEl.classList.toggle('hidden', !showLinked);
+    if (showLinked) {
+      document.getElementById('import-linked-name').textContent = linkedName;
+    }
+  }
 }
 
 function applyGameModeUI() {
@@ -1222,6 +1241,8 @@ function startImport() {
       status.textContent = `Terminé : ${d.totalSongs} musiques (${d.matchedAnime} animes).`;
       es.close();
       if (currentUser) currentUser.anilistListName = username; // liste liée au compte
+      importRowForced = false; // liste liée → on remasque le formulaire d'import
+      applyModeUI();
       refreshCatalogInfo();
       setTimeout(() => prog.classList.add('hidden'), 4000);
     }
