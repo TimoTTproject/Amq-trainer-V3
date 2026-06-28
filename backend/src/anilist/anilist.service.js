@@ -42,7 +42,7 @@ async function getCompletedAnime(username, accessToken) {
   const query = `
     query ($name: String) {
       MediaListCollection(userName: $name, type: ANIME, status: COMPLETED) {
-        lists { entries { media { id title { romaji english native } synonyms popularity } } }
+        lists { entries { media { id title { romaji english native } synonyms popularity format } } }
       }
     }`;
   let data;
@@ -75,7 +75,7 @@ async function getPopularAnime(page = 1, perPage = 50) {
     query ($page: Int, $perPage: Int) {
       Page(page: $page, perPage: $perPage) {
         media(type: ANIME, sort: POPULARITY_DESC) {
-          id title { romaji english native } synonyms popularity
+          id title { romaji english native } synonyms popularity format
         }
       }
     }`;
@@ -130,11 +130,23 @@ async function getAnimeTitlesByIds(ids) {
   const query = `
     query ($ids: [Int]) {
       Page(perPage: 50) {
-        media(id_in: $ids, type: ANIME) { id title { romaji english native } synonyms }
+        media(id_in: $ids, type: ANIME) { id title { romaji english native } synonyms format }
       }
     }`;
   const data = await anilistQuery(query, { ids });
   return data?.Page?.media || [];
 }
 
-module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
+// Récupère le format (TV/MOVIE/OVA…) de plusieurs animes par leurs ids (backfill).
+async function getAnimeFormatsByIds(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(id_in: $ids, type: ANIME) { id format }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.media || [];
+}
+
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };

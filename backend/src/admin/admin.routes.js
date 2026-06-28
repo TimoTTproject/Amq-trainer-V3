@@ -5,7 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
-const { scanEndingsBatch } = require('../catalog/catalog.service');
+const { scanEndingsBatch, backfillFormatsBatch } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
   r2Status,
@@ -179,6 +179,17 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
 router.post('/import-endings', requireAuth, requireAdmin, async (req, res) => {
   try {
     const r = await scanEndingsBatch(20);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Remplit le champ `format` (TV/MOVIE/OVA…) du catalogue existant, par lots.
+// Appeler en boucle jusqu'à remaining === 0 (throttlé par AniList).
+router.post('/backfill-format', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await backfillFormatsBatch(50);
     res.json(r);
   } catch (e) {
     res.status(502).json({ error: e.message });

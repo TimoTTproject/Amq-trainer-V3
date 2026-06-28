@@ -1,3 +1,5 @@
+const { isMainFormat } = require('../catalog/format');
+
 function cleanArtist(value) {
   return String(value || '').trim().toLocaleLowerCase();
 }
@@ -54,7 +56,9 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
     const typeAffinity = (typeLikes.get(song.type) || 0) / likedTotal;
     const popularity = Math.log1p(song.popularity || 0) / Math.log1p(maxPopularity);
     // Film/OAV/spécial → on déprioritise, sauf si c'est exactement un anime déjà aimé.
-    const side = !sameSeries && isSideContent(song.animeTitle);
+    // On se fie au format AniList quand il est connu, sinon à l'heuristique de titre.
+    const knownFormat = song.format && song.format !== 'UNKNOWN';
+    const side = !sameSeries && (knownFormat ? !isMainFormat(song.format) : isSideContent(song.animeTitle));
 
     const score =
       (sameSeries ? 7 + Math.min(3, sameSeries - 1) : 0) +

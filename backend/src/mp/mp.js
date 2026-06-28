@@ -8,6 +8,7 @@ const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { preferredMediaUrl } = require('../storage/r2');
+const { preferMainContent } = require('../catalog/format');
 
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
@@ -244,8 +245,11 @@ function startGame(room) {
 }
 
 async function pickSong(room) {
-  const where = availableSongWhere(room);
-  const total = await prisma.song.count({ where });
+  const base = availableSongWhere(room);
+  // Priorité à la série principale (exclut films/OAV connus), repli si vide.
+  let where = { ...base, ...preferMainContent };
+  let total = await prisma.song.count({ where });
+  if (!total) { where = base; total = await prisma.song.count({ where }); }
   if (!total) return null;
   const song = await prisma.song.findFirst({
     where,

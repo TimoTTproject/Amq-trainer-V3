@@ -1,6 +1,6 @@
 // Château de l'Infini — règles du mode (économie « douce » + chrono qui se resserre)
 
-const ENTRY_COST = 50; // coût en tokens (1 entrée gratuite par jour)
+const ENTRY_COST = 40; // coût en tokens (1 entrée gratuite par jour)
 const START_LIVES = 3;
 const MAX_LIVES = 5;
 const LIFE_BONUS_EVERY = 5; // +1 vie tous les 5 étages franchis (jusqu'à MAX_LIVES)
@@ -13,8 +13,10 @@ function timeLimitForFloor(floor) {
 }
 
 // Récompense en tokens à la fin d'une partie selon le nombre d'étages franchis.
+// Gain volontairement généreux : rentable dès ~8 étages (entrée 40), avec un
+// bonus de palier tous les 10 étages pour récompenser les longues montées.
 function computeReward(clearedFloors) {
-  return clearedFloors * 3 + Math.floor(clearedFloors / 10) * 20;
+  return clearedFloors * 5 + Math.floor(clearedFloors / 10) * 25;
 }
 
 // Une nouvelle entrée gratuite est-elle disponible aujourd'hui ?

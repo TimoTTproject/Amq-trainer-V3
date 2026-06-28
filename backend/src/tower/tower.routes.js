@@ -7,6 +7,7 @@ const { proxyVideo } = require('../util/stream');
 const { preferredMediaUrl } = require('../storage/r2');
 const { isAdmin } = require('../admin/admin');
 const { progressQuests } = require('../quests/quests');
+const { preferMainContent } = require('../catalog/format');
 const {
   ENTRY_COST,
   START_LIVES,
@@ -23,8 +24,10 @@ const router = express.Router();
 
 // Construit un étage : une musique correcte + 3 distracteurs (animes distincts).
 async function buildFloor() {
-  const where = { videoUrl: { not: null } };
-  const total = await prisma.song.count({ where });
+  // Priorité à la série principale (exclut films/OAV connus), repli si trop peu de titres.
+  let where = { videoUrl: { not: null }, ...preferMainContent };
+  let total = await prisma.song.count({ where });
+  if (total < 4) { where = { videoUrl: { not: null } }; total = await prisma.song.count({ where }); }
   if (total < 4) return null;
 
   const correct = await prisma.song.findFirst({

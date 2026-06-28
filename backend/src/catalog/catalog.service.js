@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds } = require('../anilist/anilist.service');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
 // animethemes.moe renvoie 403 sans User-Agent identifiable
@@ -118,7 +118,7 @@ async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
 }
 
 // Récupère (ou crée) les Song d'un anime dans le catalogue global. Retourne les rows DB.
-async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], popularity = 0, altTitles = []) {
+async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], popularity = 0, altTitles = [], format = null) {
   // 1) Déjà des musiques en catalogue → réutilisation immédiate (aucun appel réseau).
   const existing = await prisma.song.findMany({ where: { anilistId } });
   if (existing.length) return existing;
@@ -141,7 +141,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
           title: t.title,
         },
       },
-      update: { videoUrl: t.videoUrl, artist: t.artist, popularity, altTitles },
+      update: { videoUrl: t.videoUrl, artist: t.artist, popularity, altTitles, ...(format ? { format } : {}) },
       create: {
         anilistId,
         animeTitle: cleanTitle,
@@ -152,6 +152,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
         videoUrl: t.videoUrl,
         popularity,
         altTitles,
+        format,
       },
     });
     rows.push(row);
@@ -194,7 +195,8 @@ async function importUserList(userId, username, onProgress, limit = 1000, access
         title,
         media.synonyms || [],
         media.popularity || 0,
-        buildAltTitles(media)
+        buildAltTitles(media),
+        media.format || null
       );
       if (songs.length) {
         matchedAnime++;
@@ -254,4 +256,37 @@ async function scanEndingsBatch(limit = 20) {
   return { processed: batch.length, added, remaining };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles, scanEndingsBatch };
+// Backfill du champ `format` (TV/MOVIE/OVA…) pour le catalogue existant.
+// Traite un lot d'anilistId distincts encore sans format (appeler en boucle).
+async function backfillFormatsBatch(limit = 50) {
+  const rows = await prisma.song.findMany({
+    where: { format: null },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const ids = rows.map((r) => r.anilistId);
+  let updated = 0;
+  try {
+    const media = await getAnimeFormatsByIds(ids);
+    const formatById = new Map(media.map((m) => [m.id, m.format]).filter(([, f]) => f));
+    for (const [anilistId, format] of formatById) {
+      const res = await prisma.song.updateMany({ where: { anilistId, format: null }, data: { format } });
+      updated += res.count;
+    }
+    // Les ids sans format renvoyé par AniList : on évite de boucler dessus
+    // indéfiniment en posant une valeur neutre.
+    const missing = ids.filter((id) => !formatById.has(id));
+    if (missing.length) {
+      await prisma.song.updateMany({ where: { anilistId: { in: missing }, format: null }, data: { format: 'UNKNOWN' } });
+    }
+  } catch (err) {
+    console.warn('backfill format error:', err.message);
+  }
+  const remaining = await prisma.song.count({ where: { format: null } });
+  return { processed: ids.length, updated, remaining };
+}
+
+module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles, scanEndingsBatch, backfillFormatsBatch };

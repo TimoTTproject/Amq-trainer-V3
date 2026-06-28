@@ -9,6 +9,7 @@ const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations, artistTokens } = require('./recommendations');
+const { preferMainContent } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
 
 const router = express.Router();
@@ -91,9 +92,12 @@ router.get('/random', requireAuth, async (req, res) => {
 
   let song = null;
   if (!source && mode === 'global') {
-    // Perf : on évite de charger tous les ids → count + skip aléatoire
-    const where = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) };
-    const total = await prisma.song.count({ where });
+    // Perf : on évite de charger tous les ids → count + skip aléatoire.
+    // Priorité à la série principale (exclut films/OAV connus), avec repli si vide.
+    const baseFilter = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) };
+    let where = { ...baseFilter, ...preferMainContent };
+    let total = await prisma.song.count({ where });
+    if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true } });
   } else {
@@ -124,6 +128,12 @@ router.get('/random', requireAuth, async (req, res) => {
     if (typeFilter && source !== 'series' && songIds.length) {
       const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
       songIds = f.map((s) => s.id);
+    }
+    // Ma liste (mode normal) : priorise la série principale (exclut films/OAV connus),
+    // avec repli si ça vide tout (catalogue pas encore tagué, ou liste 100 % secondaire).
+    if (!source && songIds.length) {
+      const f = await prisma.song.findMany({ where: { id: { in: songIds }, ...preferMainContent }, select: { id: true } });
+      if (f.length) songIds = f.map((s) => s.id);
     }
     if (!songIds.length) {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
@@ -327,7 +337,7 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
 
   const select = {
     id: true, anilistId: true, animeTitle: true, type: true, number: true,
-    title: true, artist: true, videoUrl: true, audioUrl: true, popularity: true,
+    title: true, artist: true, videoUrl: true, audioUrl: true, popularity: true, format: true,
   };
   let tasteCandidates = [];
   let popularCandidates = [];

@@ -28,6 +28,17 @@ test('prioritizes the main series over a movie/OVA of comparable popularity', ()
   assert.equal(ranked[0].id, 3); // la série principale passe devant le film
 });
 
+test('deprioritizes a MOVIE via the AniList format field (no title keyword needed)', () => {
+  const likedSongs = [{ id: 1, anilistId: 10, animeTitle: 'Bleach', artist: 'Shiro Sagisu', type: 'OP' }];
+  const candidates = [
+    // Titre neutre (l'heuristique ne le détecterait pas) mais format = MOVIE
+    { id: 2, anilistId: 20, animeTitle: 'Bleach: Memories of Nobody', artist: 'Shiro Sagisu', type: 'OP', popularity: 100, format: 'MOVIE' },
+    { id: 3, anilistId: 30, animeTitle: 'Bleach: Sennen Kessen-hen', artist: 'Shiro Sagisu', type: 'OP', popularity: 100, format: 'TV' },
+  ];
+  const ranked = rankRecommendations({ likedSongs, candidates, limit: 2 });
+  assert.equal(ranked[0].id, 3); // la série TV passe devant le film
+});
+
 test('recommends a same-artist track even when credited as a collaboration', () => {
   const likedSongs = [{ id: 1, anilistId: 10, animeTitle: 'A', artist: 'LiSA', type: 'OP' }];
   const candidates = [

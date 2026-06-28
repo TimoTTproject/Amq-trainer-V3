@@ -38,7 +38,7 @@ async function main() {
       processed++;
       const title = m.title.romaji || m.title.english || `#${m.id}`;
       try {
-        const songs = await getOrCreateSongsForAnime(m.id, title, m.synonyms || [], m.popularity || 0, buildAltTitles(m));
+        const songs = await getOrCreateSongsForAnime(m.id, title, m.synonyms || [], m.popularity || 0, buildAltTitles(m), m.format || null);
         if (songs.length) {
           withSongs++;
           totalSongs += songs.length;

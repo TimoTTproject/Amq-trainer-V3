@@ -6,7 +6,7 @@
 let towerRun = null; // payload de l'étage en cours
 let towerAnswering = false;
 let towerTimer = null; // setTimeout d'expiration du chrono
-let towerEntryCost = 50;
+let towerEntryCost = 40;
 let towerFreeAvailable = false;
 let towerEntryKnown = false;
 const towerVideo = () => document.getElementById('tower-video');

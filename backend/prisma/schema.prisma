@@ -204,6 +204,7 @@ model Song {
   artist      String?
   videoUrl    String?
   audioUrl    String?
+  format      String? // format AniList : TV, TV_SHORT, MOVIE, OVA, ONA, SPECIAL, MUSIC (null = inconnu)
   popularity  Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
   altTitles   String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
 

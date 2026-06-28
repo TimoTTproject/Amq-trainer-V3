@@ -912,6 +912,7 @@ function setupAppUI() {
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-endings-btn').addEventListener('click', runImportEndings);
+  document.getElementById('admin-format-btn').addEventListener('click', runBackfillFormat);
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
