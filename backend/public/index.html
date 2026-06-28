@@ -468,7 +468,7 @@
     <!-- Quiz -->
     <section class="quiz-panel">
       <div class="media-wrapper" id="media-wrapper">
-        <video id="quiz-video" playsinline></video>
+        <video id="quiz-video" playsinline disablepictureinpicture></video>
         <!-- couvre la vidéo en mode "audio seul" (la vidéo reste rendue et joue le son) -->
         <div class="audio-overlay" id="audio-overlay"><i class="fas fa-music"></i></div>
       </div>
@@ -505,7 +505,10 @@
       </div>
 
       <div class="answer-area" id="answer-area">
-        <input type="text" id="answer-input" placeholder="Nom de l'anime… (Cash ×1)" disabled />
+        <div class="anime-autocomplete">
+          <input type="text" id="answer-input" placeholder="Nom de l'anime… (Cash ×1)" autocomplete="off" aria-autocomplete="list" aria-controls="answer-suggestions" disabled />
+          <div id="answer-suggestions" class="anime-suggestions hidden" role="listbox"></div>
+        </div>
         <button id="reveal-btn" class="btn-primary" disabled>Valider</button>
       </div>
       <div id="choice-buttons" class="choice-buttons hidden"></div>
@@ -675,7 +678,7 @@
         <div class="tower-timebar"><div class="tower-timefill" id="tower-timefill"></div></div>
 
         <div class="media-wrapper tower-media">
-          <video id="tower-video" playsinline></video>
+          <video id="tower-video" playsinline disablepictureinpicture></video>
           <div class="audio-overlay" id="tower-overlay"><i class="fas fa-music"></i></div>
         </div>
         <div class="tower-media-controls">
@@ -936,9 +939,16 @@
                   <option value="40000">Lent (40s)</option>
                 </select>
               </label>
+              <label>Musiques
+                <select id="mp-set-theme">
+                  <option value="all" selected>Openings + Endings</option>
+                  <option value="OP">Openings uniquement</option>
+                  <option value="ED">Endings uniquement</option>
+                </select>
+              </label>
             </div>
             <p id="mp-room-status" class="hint"></p>
-            <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Démarrer</button>
+            <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Lancer la partie</button>
           </div>
           <div class="profile-section">
             <h3><i class="fas fa-comments"></i> Chat</h3>
@@ -959,14 +969,14 @@
         </div>
         <div class="tower-timebar"><div class="tower-timefill" id="mp-timefill"></div></div>
         <div class="media-wrapper tower-media">
-          <video id="mp-video" playsinline></video>
+          <video id="mp-video" playsinline disablepictureinpicture></video>
           <div class="audio-overlay" id="mp-overlay"><i class="fas fa-music"></i></div>
           <div id="mp-reactions" class="mp-reactions"></div>
         </div>
         <div class="answer-area">
-          <div class="mp-autocomplete">
+          <div class="anime-autocomplete">
             <input type="text" id="mp-input" placeholder="Nom de l'anime…" autocomplete="off" aria-autocomplete="list" aria-controls="mp-suggestions" />
-            <div id="mp-suggestions" class="mp-suggestions hidden" role="listbox"></div>
+            <div id="mp-suggestions" class="anime-suggestions hidden" role="listbox"></div>
           </div>
           <button class="btn-primary" id="mp-submit">Valider</button>
           <button class="btn-secondary" id="mp-skip" title="Je ne sais pas"><i class="fas fa-forward"></i> Passer</button>
@@ -1049,6 +1059,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="sfx.js"></script>
   <script src="main.js"></script>
+  <script src="anime-autocomplete.js"></script>
   <script src="mp-client.js"></script>
 </body>
 </html>

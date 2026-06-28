@@ -10,6 +10,7 @@ function roomWithTwoPlayers() {
     ]),
     current: { answers: new Map(), passed: new Set() },
     usedAnilistIds: new Set(),
+    settings: { themeType: 'all' },
   };
 }
 
@@ -29,5 +30,14 @@ test('excludes every anime already played in the match', () => {
   assert.deepEqual(availableSongWhere(room), {
     videoUrl: { not: null },
     anilistId: { notIn: [21, 42] },
+  });
+});
+
+test('filters multiplayer songs by opening or ending', () => {
+  const room = roomWithTwoPlayers();
+  room.settings.themeType = 'ED';
+  assert.deepEqual(availableSongWhere(room), {
+    videoUrl: { not: null },
+    type: 'ED',
   });
 });

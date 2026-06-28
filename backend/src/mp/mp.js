@@ -11,18 +11,19 @@ const { byId, publicCosmetic } = require('../shop/cosmetics');
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
 const COUNTDOWN_MS = 20000;
-const PREP_MS = 1500;
-const RESULT_MS = 6500;
+const PREP_MS = 1000;
+const RESULT_MS = 4000;
 const DC_GRACE_LOBBY = 25000; // délai avant retrait après déconnexion (lobby)
 const DC_GRACE_GAME = 120000; // ... en partie (reconnexion possible)
 const VALID_ROUNDS = [5, 10, 15, 20];
 const VALID_ROUNDMS = [15000, 25000, 40000];
 const VALID_MODES = ['classic', 'teams', 'elim'];
+const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
 const TEAM_NAMES = ['Rouge', 'Bleu'];
 const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
-const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic' };
+const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
 // Récompense en tokens (perf + plafond quotidien anti-abus). Le farm entre amis
 // est toléré (jeu pour s'amuser) ; le plafond/jour borne les dérives (bots/nuit).
@@ -125,7 +126,7 @@ function newRoom({ isPublic, ranked }) {
   const room = {
     id, isPublic, ranked: !!ranked, code: isPublic ? null : genCode(),
     hostId: null, players: new Map(),
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic' },
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' },
     status: 'lobby', chat: [], round: 0, current: null,
     usedSongIds: new Set(), usedAnilistIds: new Set(),
     timer: null, countdownTimer: null, countdownEndsAt: 0, revealSong: null, revealUntil: 0,
@@ -183,6 +184,7 @@ function applySettings(room, s) {
   if (VALID_ROUNDS.includes(s.rounds)) room.settings.rounds = s.rounds;
   if (VALID_ROUNDMS.includes(s.roundMs)) room.settings.roundMs = s.roundMs;
   if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
+  if (VALID_THEME_TYPES.includes(s.themeType)) room.settings.themeType = s.themeType;
 }
 function setSettings(socket, s) {
   const room = rooms.get(socket.data.roomId);
@@ -205,7 +207,7 @@ function maybeCountdown(room) {
 function hostStart(socket) {
   const room = rooms.get(socket.data.roomId);
   if (!room || room.hostId !== socket.data.user.id || room.status !== 'lobby') return;
-  if (room.players.size < 1) return;
+  if (room.players.size < (room.isPublic ? PUBLIC_MIN : 1)) return;
   startGame(room);
 }
 
@@ -255,6 +257,7 @@ async function pickSong(room) {
 function availableSongWhere(room) {
   return {
     videoUrl: { not: null },
+    ...(room.settings?.themeType && room.settings.themeType !== 'all' ? { type: room.settings.themeType } : {}),
     ...(room.usedAnilistIds.size ? { anilistId: { notIn: [...room.usedAnilistIds] } } : {}),
   };
 }

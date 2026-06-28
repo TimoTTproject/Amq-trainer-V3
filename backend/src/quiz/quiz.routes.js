@@ -201,7 +201,7 @@ router.get('/training-stats', requireAuth, async (req, res) => {
 // Recherche de séries (animes) pour l'entraînement ciblé
 router.get('/series', requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim();
-  if (q.length < 2) return res.json({ series: [], suggestions: [] });
+  if (q.length < 1) return res.json({ series: [], suggestions: [] });
   if (seriesSearchCache.expiresAt < Date.now()) {
     const rows = await prisma.song.findMany({
       where: { videoUrl: { not: null } },

@@ -4,17 +4,13 @@
 // ════════════════════════════════════════════
 let mpSocket = null;
 let mpTimer = null;
+let mpLobbyCountdown = null;
 let mpRoom = null; // dernier snapshot de salon
 let mpMode = 'classic'; // classic | teams | elim
 let mpTeamNames = ['Rouge', 'Bleu'];
 let mpEliminated = false; // moi, en mode élimination
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
-let mpSuggestions = [];
-let mpSuggestionIndex = -1;
-let mpSuggestionTimer = null;
-let mpSuggestionRequest = 0;
-const mpSuggestionCache = new Map();
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const mpVideo = () => document.getElementById('mp-video');
 
@@ -32,6 +28,8 @@ function mpHandleLeaveView() {
   const mm = document.getElementById('mp-menu-msg');
   if (mm) mm.textContent = '';
   if (typeof stopMpMedia === 'function') stopMpMedia();
+  clearInterval(mpLobbyCountdown);
+  mpLobbyCountdown = null;
 }
 
 // Toast (notifications multi : invitations, infos)
@@ -138,6 +136,8 @@ function connectMp() {
   mpSocket.on('mp:game:start', (d) => {
     if (mpLeft) return;
     mpEngaged = true;
+    clearInterval(mpLobbyCountdown);
+    mpLobbyCountdown = null;
     showView('mp');
     mpShow('game');
     mpMode = d.mode || 'classic';
@@ -162,7 +162,9 @@ function connectMp() {
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
     const lock = !!d.alreadyAnswered || !!d.alreadyPassed || mpEliminated;
-    input.value = ''; closeMpSuggestions(); mpLockAnswer(lock);
+    input.value = '';
+    if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('mp-input');
+    mpLockAnswer(lock);
     if (!lock) input.focus();
     document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
       : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
@@ -303,21 +305,31 @@ function renderRoom(d) {
   document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
   document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
   document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
+  document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
   document.getElementById('mp-set-rounds').disabled = !isHost;
   document.getElementById('mp-set-speed').disabled = !isHost;
   document.getElementById('mp-set-mode').disabled = !isHost;
+  document.getElementById('mp-set-theme').disabled = !isHost;
 
   const startBtn = document.getElementById('mp-start');
   const status = document.getElementById('mp-room-status');
+  clearInterval(mpLobbyCountdown);
+  mpLobbyCountdown = null;
   if (d.isPublic) {
-    startBtn.classList.add('hidden');
+    startBtn.classList.toggle('hidden', !isHost);
+    startBtn.disabled = d.players.length < 2;
     if (d.countdownEndsAt) {
-      const sec = Math.max(0, Math.round((d.countdownEndsAt - Date.now()) / 1000));
-      status.textContent = `Lancement automatique dans ${sec}s…`;
+      const updateCountdown = () => {
+        const sec = Math.max(0, Math.ceil((d.countdownEndsAt - Date.now()) / 1000));
+        status.textContent = sec > 0 ? `Lancement automatique dans ${sec}s…` : 'Lancement de la partie…';
+      };
+      updateCountdown();
+      mpLobbyCountdown = setInterval(updateCountdown, 250);
     } else {
       status.textContent = `En attente de joueurs (min 2)…`;
     }
   } else {
+    startBtn.disabled = false;
     status.textContent = isHost ? 'Lance la partie quand tout le monde est prêt.' : "En attente que l'hôte lance la partie…";
     startBtn.classList.toggle('hidden', !isHost);
   }
@@ -373,8 +385,14 @@ function renderMpScores(results, withPoints) {
 }
 
 // ── Clip synchronisé ──
-function mpStartClip(url, startAt, duration) {
+async function mpStartClip(url, startAt, duration) {
   const v = mpVideo();
+  v.disablePictureInPicture = true;
+  // Une fenêtre PiP ouverte pendant le résultat ne doit jamais continuer sur
+  // la manche suivante et dévoiler l'anime avant la réponse.
+  if (document.pictureInPictureElement === v && document.exitPictureInPicture) {
+    try { await document.exitPictureInPicture(); } catch {}
+  }
   v.src = url; v.load(); v.volume = (typeof getVolume === 'function' ? getVolume() : 0.8);
   document.getElementById('mp-overlay').classList.remove('hidden'); // audio seul
   const delay = Math.max(0, startAt - Date.now());
@@ -404,92 +422,14 @@ function mpLockAnswer(locked) {
   document.getElementById('mp-input').disabled = locked;
   document.getElementById('mp-submit').disabled = locked;
   document.getElementById('mp-skip').disabled = locked;
-  if (locked) closeMpSuggestions();
-}
-
-function closeMpSuggestions() {
-  const box = document.getElementById('mp-suggestions');
-  if (!box) return;
-  box.classList.add('hidden');
-  box.innerHTML = '';
-  mpSuggestions = [];
-  mpSuggestionIndex = -1;
-  document.getElementById('mp-input')?.setAttribute('aria-expanded', 'false');
-}
-
-function renderMpSuggestions() {
-  const box = document.getElementById('mp-suggestions');
-  if (!mpSuggestions.length) return closeMpSuggestions();
-  box.innerHTML = mpSuggestions
-    .map((suggestion, index) => `<button type="button" class="mp-suggestion${index === mpSuggestionIndex ? ' active' : ''}" role="option" aria-selected="${index === mpSuggestionIndex}" data-suggestion-index="${index}">
-      <span>${escapeHtml(suggestion.title)}</span>
-      ${suggestion.englishTitle ? `<small>${escapeHtml(suggestion.englishTitle)}</small>` : ''}
-    </button>`)
-    .join('');
-  box.classList.remove('hidden');
-  document.getElementById('mp-input').setAttribute('aria-expanded', 'true');
-}
-
-function chooseMpSuggestion(index) {
-  const suggestion = mpSuggestions[index];
-  if (!suggestion) return;
-  const input = document.getElementById('mp-input');
-  input.value = suggestion.title;
-  closeMpSuggestions();
-  input.focus();
-}
-
-async function fetchMpSuggestions(value) {
-  const query = value.trim();
-  if (query.length < 2) return closeMpSuggestions();
-  const key = query.toLocaleLowerCase();
-  const request = ++mpSuggestionRequest;
-  try {
-    let suggestions = mpSuggestionCache.get(key);
-    if (!suggestions) {
-      const data = await api(`/api/quiz/series?q=${encodeURIComponent(query)}`);
-      suggestions = data.suggestions || (data.series || []).map((title) => ({ title, englishTitle: null }));
-      mpSuggestionCache.set(key, suggestions);
-    }
-    if (request !== mpSuggestionRequest || document.getElementById('mp-input').value.trim() !== query) return;
-    mpSuggestions = suggestions;
-    mpSuggestionIndex = -1;
-    renderMpSuggestions();
-  } catch {
-    closeMpSuggestions();
-  }
-}
-
-function onMpSuggestionInput(e) {
-  clearTimeout(mpSuggestionTimer);
-  const value = e.target.value;
-  if (value.trim().length < 2) return closeMpSuggestions();
-  mpSuggestionTimer = setTimeout(() => fetchMpSuggestions(value), 160);
-}
-
-function onMpSuggestionKeydown(e) {
-  if (e.key === 'ArrowDown' && mpSuggestions.length) {
-    e.preventDefault();
-    mpSuggestionIndex = (mpSuggestionIndex + 1) % mpSuggestions.length;
-    renderMpSuggestions();
-  } else if (e.key === 'ArrowUp' && mpSuggestions.length) {
-    e.preventDefault();
-    mpSuggestionIndex = (mpSuggestionIndex - 1 + mpSuggestions.length) % mpSuggestions.length;
-    renderMpSuggestions();
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (mpSuggestionIndex >= 0) chooseMpSuggestion(mpSuggestionIndex);
-    else mpSubmitGuess();
-  } else if (e.key === 'Escape') {
-    closeMpSuggestions();
-  }
+  if (locked && typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('mp-input');
 }
 
 function mpSubmitGuess() {
   const input = document.getElementById('mp-input');
   const text = input.value.trim();
   if (!text || input.disabled || !mpSocket) return;
-  closeMpSuggestions();
+  if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('mp-input');
   mpSocket.emit('mp:guess', text);
 }
 
@@ -502,6 +442,7 @@ function mpSettingsPayload() {
     rounds: parseInt(document.getElementById('mp-set-rounds').value),
     roundMs: parseInt(document.getElementById('mp-set-speed').value),
     mode: document.getElementById('mp-set-mode').value,
+    themeType: document.getElementById('mp-set-theme').value,
   };
 }
 
@@ -531,6 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-set-rounds').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-speed').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-mode').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-theme').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {
@@ -539,16 +481,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('mp-submit').addEventListener('click', mpSubmitGuess);
   document.getElementById('mp-skip').addEventListener('click', mpSkip);
-  const answerInput = document.getElementById('mp-input');
-  answerInput.addEventListener('input', onMpSuggestionInput);
-  answerInput.addEventListener('keydown', onMpSuggestionKeydown);
-  answerInput.addEventListener('blur', () => setTimeout(closeMpSuggestions, 120));
-  document.getElementById('mp-suggestions').addEventListener('mousedown', (e) => {
-    const option = e.target.closest('[data-suggestion-index]');
-    if (!option) return;
-    e.preventDefault();
-    chooseMpSuggestion(parseInt(option.dataset.suggestionIndex));
-  });
   document.getElementById('mp-again').addEventListener('click', () => {
     // retour au salon (privé) ou au menu (rapide)
     if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }

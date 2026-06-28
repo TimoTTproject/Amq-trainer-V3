@@ -634,23 +634,23 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-players { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .mp-chip { background: var(--bg-3); border-radius: 999px; padding: 4px 12px 4px 5px; font-size: .82rem; display: inline-flex; align-items: center; gap: 7px; }
 .mp-game { max-width: 720px; margin: 0 auto; }
-.mp-autocomplete { position: relative; flex: 1 1 260px; min-width: 0; }
-.answer-area .mp-autocomplete input { width: 100%; }
-.mp-suggestions {
+.anime-autocomplete { position: relative; flex: 1 1 260px; min-width: 0; }
+.answer-area .anime-autocomplete input { width: 100%; }
+.anime-suggestions {
   position: absolute; z-index: 35; top: calc(100% + 5px); left: 0; right: 0;
   max-height: 230px; overflow-y: auto; padding: 5px;
   background: #101217; border: 1px solid #343943; border-radius: 6px;
   box-shadow: 0 14px 34px rgba(0,0,0,.48);
 }
-.mp-suggestion {
+.anime-suggestion {
   width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 9px; padding: 9px 10px;
   border: 0; border-radius: 4px; background: transparent; color: var(--text);
   text-align: left; font-size: .82rem;
 }
-.mp-suggestion::before { content: 'ANIME'; grid-row: 1 / 3; color: var(--accent-2); font-size: .52rem; font-weight: 800; letter-spacing: .1em; }
-.mp-suggestion span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-suggestion small { overflow: hidden; color: var(--text-2); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
-.mp-suggestion:hover, .mp-suggestion.active { background: #222630; color: #fff; }
+.anime-suggestion::before { content: 'ANIME'; grid-row: 1 / 3; color: var(--accent-2); font-size: .52rem; font-weight: 800; letter-spacing: .1em; }
+.anime-suggestion span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anime-suggestion small { overflow: hidden; color: var(--text-2); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
+.anime-suggestion:hover, .anime-suggestion.active { background: #222630; color: #fff; }
 .mp-result { background: var(--bg-2); border: 1px solid var(--accent); border-radius: 12px; padding: 14px; margin: 12px 0; text-align: center; }
 .mp-answer strong { color: var(--accent); }
 .mp-answer-english { color: var(--text-2); font-size: .86rem; }

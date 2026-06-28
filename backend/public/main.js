@@ -21,6 +21,14 @@ let quizType = localStorage.getItem('amq_quiz_type') || 'all'; // 'all' | 'OP' |
 let clipTimer = null; // coupe l'extrait après la durée choisie
 const video = () => document.getElementById('quiz-video');
 
+async function closePictureInPictureFor(media) {
+  if (!media) return;
+  media.disablePictureInPicture = true;
+  if (document.pictureInPictureElement === media && document.exitPictureInPicture) {
+    try { await document.exitPictureInPicture(); } catch {}
+  }
+}
+
 // ── Volume global de la musique (persistant, partagé par tous les médias) ──
 function getVolume() {
   const v = parseFloat(localStorage.getItem('amq_volume'));
@@ -993,9 +1001,6 @@ function setupAppUI() {
     localStorage.setItem('amq_clip', optClip.value);
   });
   document.getElementById('volume').addEventListener('input', (e) => setVolume(+e.target.value));
-  document.getElementById('answer-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') guessAnswer();
-  });
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => {
     b.addEventListener('click', () => sendFeedback(b.dataset.fb));
   });
@@ -1235,6 +1240,7 @@ async function nextSong() {
   resetAssist();
   answered = false;
   const v = video();
+  await closePictureInPictureFor(v);
   v.src = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`; // flux proxifié (anti-triche)
   v.volume = getVolume();
   showOverlay(true); // mode audio : on masque l'image, le son joue quand même
@@ -1298,6 +1304,7 @@ function replayClip() {
 function resetQuizUI() {
   document.getElementById('answer-result').classList.add('hidden');
   document.getElementById('answer-input').value = '';
+  if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('answer-input');
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = false));
   showOverlay(true);
 }
@@ -1334,6 +1341,7 @@ async function requestChoices(level) {
 // Valide la réponse côté serveur, révèle l'anime et attribue les tokens.
 async function guessAnswer(forcedGuess) {
   if (!currentSong || answered) return;
+  if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('answer-input');
   answered = true;
   clearTimeout(clipTimer); // plus de coupure une fois validé
   clearTimeout(chronoTimer);
@@ -2103,7 +2111,7 @@ function renderTowerLives(lives) {
   el.innerHTML = Array.from({ length: Math.max(lives, 0) }, () => '❤️').join('') || '💀';
 }
 
-function enterFloor(floor) {
+async function enterFloor(floor) {
   towerRun = floor;
   towerAnswering = false;
   towerShowPanel('game');
@@ -2120,6 +2128,7 @@ function enterFloor(floor) {
   // Vidéo proxifiée (le titre ne fuite pas via l'URL). URL unique par question
   // (?t=...) + load() pour forcer le rechargement et éviter la lecture en cache.
   const v = towerVideo();
+  await closePictureInPictureFor(v);
   v.src = floor.clipUrl;
   v.volume = getVolume();
   v.load();
