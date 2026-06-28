@@ -720,4 +720,4 @@ function initMp(server) {
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound };
+module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound, rawReward, MP_GAME_CAP };

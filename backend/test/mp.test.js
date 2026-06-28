@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { everyoneResolved, availableSongWhere, videoForRound } = require('../src/mp/mp');
+const { everyoneResolved, availableSongWhere, videoForRound, rawReward, MP_GAME_CAP } = require('../src/mp/mp');
+
+test('rawReward = bonnes réponses ×2 + bonus de placement, plafonné par partie', () => {
+  assert.equal(rawReward({ correct: 0 }, 1), 20); // 0 + bonus 1er
+  assert.equal(rawReward({ correct: 5 }, 1), 30); // 10 + 20
+  assert.equal(rawReward({ correct: 3 }, 2), 16); // 6 + 10
+  assert.equal(rawReward({ correct: 1 }, 4), 2); // placement >3 → pas de bonus
+  assert.equal(rawReward({ correct: 100 }, 1), MP_GAME_CAP); // plafonné
+});
 
 function roomWithTwoPlayers() {
   return {

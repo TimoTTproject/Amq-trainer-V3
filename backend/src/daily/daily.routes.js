@@ -8,6 +8,7 @@ const { tierFromMmr } = require('../mp/rank');
 const { proxyVideo } = require('../util/stream');
 const { preferredMediaUrl } = require('../storage/r2');
 const { preferMainContent } = require('../catalog/format');
+const { rateLimit } = require('../util/ratelimit');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { progressQuests } = require('../quests/quests');
 const {
@@ -82,7 +83,7 @@ router.get('/status', requireAuth, async (req, res) => {
 });
 
 // Démarre (ou reprend) la tentative du jour.
-router.post('/start', requireAuth, async (req, res) => {
+router.post('/start', requireAuth, rateLimit({ max: 20, name: 'daily-start' }), async (req, res) => {
   const day = todayStr();
   const challenge = await getOrCreateChallenge(day);
   const existing = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
@@ -116,7 +117,7 @@ router.get('/clip', requireAuth, async (req, res) => {
 
 // Soumet une réponse pour la chanson en cours (vide = passer). Avance d'une chanson.
 // La chanson est déterminée par l'état serveur (run.index), pas par le client.
-router.post('/guess', requireAuth, async (req, res) => {
+router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }), async (req, res) => {
   const day = todayStr();
   const { guess } = req.body || {};
   const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
@@ -189,7 +190,7 @@ router.post('/guess', requireAuth, async (req, res) => {
 });
 
 // Classement du JOUR : meilleurs scores des défis terminés aujourd'hui.
-router.get('/board', requireAuth, async (req, res) => {
+router.get('/board', requireAuth, rateLimit({ max: 60, name: 'daily-board' }), async (req, res) => {
   const day = todayStr();
   const runs = await prisma.dailyRun.findMany({
     where: { day, finished: true },

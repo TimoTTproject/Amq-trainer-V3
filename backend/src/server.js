@@ -80,6 +80,16 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 const FRONTEND_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIR));
 
+// Gestion centralisée des erreurs : on logge côté serveur et on renvoie un JSON
+// générique (jamais de stack au client). Express 5 capture aussi les rejets des
+// handlers async, donc une route qui oublie son try/catch ne tue plus le process.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('Erreur non gérée:', req.method, req.originalUrl, '-', err && err.message);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Erreur serveur. Réessaie dans un instant.' });
+});
+
 // Serveur HTTP + Socket.io (multijoueur temps réel)
 const server = http.createServer(app);
 initMp(server);

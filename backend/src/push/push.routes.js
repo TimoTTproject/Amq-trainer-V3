@@ -2,6 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { rateLimit } = require('../util/ratelimit');
 const { isEnabled, publicKey, sendToUser } = require('./push');
 
 const router = express.Router();
@@ -10,7 +11,7 @@ const router = express.Router();
 router.get('/key', (req, res) => res.json({ enabled: isEnabled(), publicKey: publicKey() }));
 
 // Enregistre l'abonnement du navigateur courant pour l'utilisateur.
-router.post('/subscribe', requireAuth, async (req, res) => {
+router.post('/subscribe', requireAuth, rateLimit({ max: 20, name: 'push-sub' }), async (req, res) => {
   const sub = req.body?.subscription || req.body;
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
     return res.status(400).json({ error: 'Abonnement invalide' });
@@ -30,7 +31,7 @@ router.post('/unsubscribe', requireAuth, async (req, res) => {
 });
 
 // Envoi de test à soi-même (vérification rapide de la config).
-router.post('/test', requireAuth, async (req, res) => {
+router.post('/test', requireAuth, rateLimit({ max: 10, name: 'push-test' }), async (req, res) => {
   const sent = await sendToUser(req.user.id, {
     title: 'Test 🔔', body: 'Les notifications fonctionnent !', url: '/?nav=daily',
   });

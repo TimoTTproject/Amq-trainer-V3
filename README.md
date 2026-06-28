@@ -101,6 +101,20 @@ backend/
   commit vide (`git commit --allow-empty`) ou « Deploy Latest Commit ». Toujours
   vérifier qu'un déploiement est bien passé (tester une route récente).
 
+## Sauvegardes base de données
+
+Pas de migrations versionnées → la donnée est la seule source de vérité. Faire
+un dump régulier (avant tout changement de schéma, et idéalement planifié) :
+
+```bash
+# DATABASE_URL = l'URL PUBLIQUE du Postgres Railway (…proxy.rlwy.net:…)
+pg_dump "$DATABASE_URL" -Fc -f amq-backup-$(date +%F).dump      # sauvegarde
+pg_restore --clean --if-exists -d "$DATABASE_URL" fichier.dump  # restauration
+```
+
+Railway propose aussi des backups automatiques du plugin PostgreSQL (à activer
+dans le service) — les garder en complément du dump manuel avant migration.
+
 ## Crédits
 
 Données et médias : [AniList](https://anilist.co) et
