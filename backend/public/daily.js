@@ -29,6 +29,55 @@ async function openDaily() {
     document.getElementById('daily-intro-msg').textContent = e.message;
   }
   loadDailyBoard();
+  initDailyNotif();
+}
+
+// ── Notifications push (rappel du défi du jour) ──
+let dailyPushKey = null;
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+async function initDailyNotif() {
+  const btn = document.getElementById('daily-notif-btn');
+  if (!btn) return;
+  btn.classList.add('hidden');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+  let info;
+  try { info = await api('/api/push/key'); } catch { return; }
+  if (!info.enabled || !info.publicKey) return; // push non configuré côté serveur
+  dailyPushKey = info.publicKey;
+  const reg = await navigator.serviceWorker.ready.catch(() => null);
+  const existing = reg && (await reg.pushManager.getSubscription());
+  btn.classList.remove('hidden');
+  if (Notification.permission === 'granted' && existing) {
+    btn.innerHTML = '<i class="fas fa-bell"></i> Rappels activés ✓';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = '<i class="fas fa-bell"></i> Activer les rappels';
+    btn.disabled = false;
+  }
+}
+async function enableDailyNotif() {
+  const btn = document.getElementById('daily-notif-btn');
+  if (!dailyPushKey) return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { btn.innerHTML = '<i class="fas fa-bell-slash"></i> Notifications refusées'; return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(dailyPushKey),
+    });
+    await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+    btn.innerHTML = '<i class="fas fa-bell"></i> Rappels activés ✓';
+    btn.disabled = true;
+  } catch (e) {
+    btn.innerHTML = '<i class="fas fa-bell"></i> Réessayer';
+    console.warn('push subscribe failed:', e.message);
+  }
 }
 
 // Classement du JOUR (meilleurs scores du jour) — rempli dans accueil + résultats.
@@ -260,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dailyVideo().volume = +e.target.value;
   });
   document.getElementById('daily-share').addEventListener('click', shareDaily);
+  document.getElementById('daily-notif-btn').addEventListener('click', enableDailyNotif);
   document.getElementById('back-home-daily').addEventListener('click', () => { stopDailyMedia(); navTo('play'); });
   document.getElementById('daily-see-lb').addEventListener('click', () => {
     if (typeof openLeaderboard === 'function') { navTo('leaderboard'); setTimeout(() => { const t = document.querySelector('.lb-tab[data-lb="solo"]'); if (t) t.click(); }, 50); }

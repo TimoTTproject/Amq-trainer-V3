@@ -90,6 +90,7 @@ model User {
   towerRuns     TowerRun[]
   mpResults     MpResult[]
   dailyRuns     DailyRun[]
+  pushSubs      PushSubscription[]
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
@@ -226,6 +227,20 @@ model DailyRun {
 
   @@unique([userId, day])
   @@index([day])
+}
+
+// Abonnement aux notifications push (Web Push) — un par navigateur/appareil.
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────

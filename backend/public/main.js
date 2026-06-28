@@ -140,6 +140,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       history.replaceState({}, '', location.pathname);
       openPlayer(shared);
     }
+    // Raccourci de navigation (?nav=daily) — utilisé par les notifications push
+    const nav = params.get('nav');
+    if (nav) {
+      history.replaceState({}, '', location.pathname);
+      navTo(nav);
+    }
   } catch {
     showAuth();
   }

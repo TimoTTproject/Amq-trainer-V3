@@ -29,7 +29,10 @@ const shopRoutes = require('./shop/shop.routes');
 const tradeRoutes = require('./trade/trade.routes');
 const statsRoutes = require('./stats/stats.routes');
 const dailyRoutes = require('./daily/daily.routes');
+const pushRoutes = require('./push/push.routes');
 const mpRoutes = require('./mp/mp.routes');
+const { isEnabled: pushEnabled, sendDailyReminder } = require('./push/push');
+const store = require('./util/store');
 const { initMp } = require('./mp/mp');
 
 const app = express();
@@ -69,6 +72,7 @@ app.use('/api/shop', shopRoutes.router);
 app.use('/api/trade', tradeRoutes.router);
 app.use('/api/stats', statsRoutes.router);
 app.use('/api/daily', dailyRoutes.router);
+app.use('/api/push', pushRoutes.router);
 app.use('/api/mp', mpRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
@@ -79,6 +83,24 @@ app.use(express.static(FRONTEND_DIR));
 // Serveur HTTP + Socket.io (multijoueur temps réel)
 const server = http.createServer(app);
 initMp(server);
+
+// Rappel quotidien du Défi du jour (si push activé). On vérifie toutes les 5 min ;
+// le store partagé (Redis/mémoire) garantit un envoi unique par jour, même
+// multi-instance ou après redéploiement.
+if (pushEnabled()) {
+  const REMINDER_HOUR = parseInt(process.env.DAILY_REMINDER_HOUR || '18', 10); // heure UTC
+  setInterval(async () => {
+    if (new Date().getUTCHours() !== REMINDER_HOUR) return;
+    const day = new Date().toISOString().slice(0, 10);
+    try {
+      if (!(await store.setIfAbsent('daily-reminder:' + day, 82800))) return; // déjà envoyé aujourd'hui
+      const r = await sendDailyReminder();
+      console.log(`  → Rappel défi du jour : ${r.sent}/${r.targets} envoyés`);
+    } catch (e) {
+      console.error('Rappel quotidien échoué:', e.message);
+    }
+  }, 5 * 60 * 1000);
+}
 
 server.listen(PORT, () => {
   console.log(`\n  Anime Music Quiz`);

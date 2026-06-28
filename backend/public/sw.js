@@ -1,12 +1,12 @@
 // Service worker : network-first (évite le contenu périmé après déploiement),
 // repli sur le cache hors-ligne, et précache de la coquille applicative pour un
 // démarrage instantané / hors-ligne. N'intercepte ni l'API, ni les flux, ni Socket.io.
-const CACHE = 'amq-v2';
+const CACHE = 'amq-v3';
 
 // Coquille applicative : tout le statique nécessaire au 1er rendu.
 const SHELL = [
   '/', '/index.html', '/styles.css', '/manifest.webmanifest', '/icon.svg',
-  '/sfx.js', '/tower.js', '/admin.js', '/playlist.js', '/gacha.js',
+  '/sfx.js', '/tower.js', '/admin.js', '/playlist.js', '/daily.js', '/gacha.js',
   '/catalog.js', '/community.js', '/main.js', '/anime-autocomplete.js', '/mp-client.js',
 ];
 
@@ -20,6 +20,33 @@ self.addEventListener('activate', (e) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// Notifications push : affiche la notif reçue.
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch {}
+  const title = data.title || 'Anime Music Quiz';
+  e.waitUntil(self.registration.showNotification(title, {
+    body: data.body || '',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
+    data: { url: data.url || '/' },
+  }));
+});
+
+// Clic sur la notif : focalise un onglet existant (ou en ouvre un) sur l'URL cible.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ('focus' in c) { if (c.navigate) c.navigate(url).catch(() => {}); return c.focus(); }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
   );
 });
 
