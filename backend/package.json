@@ -17,6 +17,8 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/lib-storage": "^3.1075.0",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -27,7 +29,8 @@
     "jsonwebtoken": "^9.0.3",
     "prisma": "^6.19.3",
     "socket.io": "^4.8.3",
-    "string-similarity": "^4.0.4"
+    "string-similarity": "^4.0.4",
+    "tslib": "^2.8.1"
   },
   "keywords": [],
   "author": "",

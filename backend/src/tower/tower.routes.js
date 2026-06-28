@@ -4,6 +4,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { proxyVideo } = require('../util/stream');
+const { preferredMediaUrl } = require('../storage/r2');
 const { isAdmin } = require('../admin/admin');
 const { progressQuests } = require('../quests/quests');
 const {
@@ -251,9 +252,21 @@ router.get('/clip/:runId', requireAuth, async (req, res) => {
   if (!run?.currentSongId) return res.status(404).end();
   const song = await prisma.song.findUnique({
     where: { id: run.currentSongId },
-    select: { videoUrl: true },
+    select: { videoUrl: true, audioUrl: true },
   });
-  if (!song?.videoUrl) return res.status(404).end();
+  if (!preferredMediaUrl(song)) return res.status(404).end();
+  if (song.audioUrl) {
+    await prisma.towerRun.updateMany({
+      where: {
+        id: req.params.runId,
+        userId: req.user.id,
+        currentSongId: run.currentSongId,
+        floorStartedAt: null,
+      },
+      data: { floorStartedAt: new Date() },
+    });
+    return res.redirect(302, song.audioUrl);
+  }
 
   await proxyVideo(req, res, song.videoUrl, {
     // Le chrono serveur commence quand AnimeThemes a réellement fourni le flux,

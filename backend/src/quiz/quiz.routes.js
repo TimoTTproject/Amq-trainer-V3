@@ -9,6 +9,7 @@ const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations } = require('./recommendations');
+const { preferredMediaUrl } = require('../storage/r2');
 
 const router = express.Router();
 
@@ -94,7 +95,7 @@ router.get('/random', requireAuth, async (req, res) => {
     const where = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) };
     const total = await prisma.song.count({ where });
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
-    song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true } });
+    song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true } });
   } else {
     let songIds;
     if (source === 'review') {
@@ -128,7 +129,7 @@ router.get('/random', requireAuth, async (req, res) => {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
     }
     const randomId = songIds[Math.floor(Math.random() * songIds.length)];
-    song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true } });
+    song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true, audioUrl: true } });
   }
   if (!song) return res.status(404).json({ error: 'Aucune musique disponible' });
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
@@ -147,8 +148,9 @@ router.get('/clip/:songId', requireAuth, async (req, res) => {
   const songId = parseInt(req.params.songId);
   const round = verifyRoundToken(req.query.rt, { userId: req.user.id, songId });
   if (!round) return res.status(403).end();
-  const song = await prisma.song.findUnique({ where: { id: songId }, select: { videoUrl: true } });
-  if (!song?.videoUrl) return res.status(404).end();
+  const song = await prisma.song.findUnique({ where: { id: songId }, select: { videoUrl: true, audioUrl: true } });
+  if (!preferredMediaUrl(song)) return res.status(404).end();
+  if (song.audioUrl) return res.redirect(302, song.audioUrl);
   await proxyVideo(req, res, song.videoUrl);
 });
 
@@ -253,7 +255,7 @@ router.get('/playlist', requireAuth, async (req, res) => {
   res.json({
     songs: stats.map((s) => ({
       id: s.song.id, animeTitle: s.song.animeTitle, type: s.song.type, number: s.song.number,
-      title: s.song.title, artist: s.song.artist, videoUrl: s.song.videoUrl,
+      title: s.song.title, artist: s.song.artist, videoUrl: preferredMediaUrl(s.song),
     })),
   });
 });
@@ -312,7 +314,7 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
 
   const select = {
     id: true, anilistId: true, animeTitle: true, type: true, number: true,
-    title: true, artist: true, videoUrl: true, popularity: true,
+    title: true, artist: true, videoUrl: true, audioUrl: true, popularity: true,
   };
   let tasteCandidates = [];
   let popularCandidates = [];
@@ -353,7 +355,11 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     limit: 8,
   });
   res.json({
-    recommendations,
+    recommendations: recommendations.map((song) => ({
+      ...song,
+      videoUrl: preferredMediaUrl(song),
+      audioUrl: undefined,
+    })),
     personalized: likedSongs.length > 0,
   });
 });

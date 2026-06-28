@@ -7,6 +7,7 @@ const { englishTitleFor } = require('../quiz/anime-titles');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
+const { preferredMediaUrl } = require('../storage/r2');
 
 const MAX_PLAYERS = 8;
 const PUBLIC_MIN = 2;
@@ -251,7 +252,7 @@ async function pickSong(room) {
     skip: Math.floor(Math.random() * total),
     select: {
       id: true, anilistId: true, animeTitle: true, altTitles: true,
-      title: true, artist: true, type: true, number: true, videoUrl: true,
+      title: true, artist: true, type: true, number: true, videoUrl: true, audioUrl: true,
     },
   });
   if (!song) return null;
@@ -648,10 +649,10 @@ function emote(socket, e) {
 
 function videoForRound(room, requestedRound) {
   const round = Number(requestedRound);
-  if (room.current && (!round || round === room.round)) return room.current.song.videoUrl;
-  if (room.nextSong && round === room.round + 1) return room.nextSong.videoUrl;
+  if (room.current && (!round || round === room.round)) return preferredMediaUrl(room.current.song);
+  if (room.nextSong && round === room.round + 1) return preferredMediaUrl(room.nextSong);
   if (room.revealSong && (!round || round === room.round) && Date.now() < (room.revealUntil || 0)) {
-    return room.revealSong.videoUrl;
+    return preferredMediaUrl(room.revealSong);
   }
   return null;
 }

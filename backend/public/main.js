@@ -912,6 +912,7 @@ function setupAppUI() {
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-endings-btn').addEventListener('click', runImportEndings);
+  document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
@@ -2772,7 +2773,44 @@ function openAdmin() {
   adminSearch = ''; adminRarity = 'all';
   document.getElementById('admin-backfill-status').textContent = '';
   loadAdminStats();
+  loadR2Status();
   loadAdminChars(1, '');
+}
+
+async function loadR2Status() {
+  const status = document.getElementById('admin-r2-status');
+  try {
+    const r = await api('/api/admin/r2-status');
+    status.textContent = r.connected
+      ? `${r.uploaded}/${r.total} sons sur le CDN · ${r.remaining} restants`
+      : r.configured
+        ? `R2 configuré mais inaccessible : ${r.error || 'vérifie les identifiants'}`
+        : 'R2 non configuré sur Railway';
+  } catch (error) {
+    status.textContent = 'R2 : ' + error.message;
+  }
+}
+
+async function runR2Migration() {
+  const btn = document.getElementById('admin-r2-btn');
+  const status = document.getElementById('admin-r2-status');
+  btn.disabled = true;
+  let uploaded = 0;
+  let failed = 0;
+  try {
+    for (let i = 0; i < 5; i++) {
+      status.textContent = `Envoi vers Cloudflare R2… ${i + 1}/5`;
+      const r = await api('/api/admin/r2-migrate', { method: 'POST', body: JSON.stringify({}) });
+      uploaded += r.uploaded || 0;
+      failed += r.failed || 0;
+      status.textContent = `+${uploaded} sur le CDN · ${r.remaining} restants${failed ? ` · ${failed} source(s) ignorée(s)` : ''}`;
+      if (!r.remaining || !r.processed) break;
+    }
+  } catch (error) {
+    status.textContent = 'Erreur R2 : ' + error.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function loadAdminStats() {

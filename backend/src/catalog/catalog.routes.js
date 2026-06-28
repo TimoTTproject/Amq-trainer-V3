@@ -2,6 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { preferredMediaUrl } = require('../storage/r2');
 const { importUserList } = require('./catalog.service');
 
 const router = express.Router();
@@ -108,10 +109,16 @@ router.get('/list', requireAuth, async (req, res) => {
       orderBy: [{ animeTitle: 'asc' }, { type: 'asc' }, { number: 'asc' }],
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, animeTitle: true, type: true, number: true, title: true, artist: true, videoUrl: true },
+      select: { id: true, animeTitle: true, type: true, number: true, title: true, artist: true, videoUrl: true, audioUrl: true },
     }),
   ]);
-  res.json({ songs, total, page, perPage, pages: Math.ceil(total / perPage) });
+  res.json({
+    songs: songs.map((song) => ({ ...song, videoUrl: preferredMediaUrl(song), audioUrl: undefined })),
+    total,
+    page,
+    perPage,
+    pages: Math.ceil(total / perPage),
+  });
 });
 
 // Stats du catalogue global

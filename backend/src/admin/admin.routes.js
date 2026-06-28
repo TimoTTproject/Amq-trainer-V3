@@ -6,9 +6,24 @@ const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
 const { scanEndingsBatch } = require('../catalog/catalog.service');
+const { migrateOneSongToR2, r2Status } = require('../storage/r2');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+
+router.get('/r2-status', requireAuth, requireAdmin, async (req, res) => {
+  res.json(await r2Status());
+});
+
+// Migre un seul média par requête afin de ne pas saturer Railway ni AnimeThemes.
+// Le client admin enchaîne quelques requêtes et affiche la progression.
+router.post('/r2-migrate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    res.json(await migrateOneSongToR2());
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
 
 // Crédite des tokens au compte courant (test gacha / achats)
 router.post('/tokens', requireAuth, requireAdmin, async (req, res) => {
