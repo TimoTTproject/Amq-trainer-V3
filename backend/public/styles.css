@@ -1374,3 +1374,73 @@ header h1 i { color: var(--accent); }
   .auth-features { grid-template-columns: 1fr; }
   .auth-access-head small { display: none; }
 }
+
+/* ── Recommandations de la playlist ── */
+.playlist-recs { margin: 22px 0 28px; }
+.playlist-recs-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+.playlist-recs-kicker { color: var(--accent-2); font-size: .62rem; font-weight: 800; letter-spacing: .14em; }
+.playlist-recs-head h3 { margin-top: 2px; font-size: 1.45rem; text-transform: uppercase; letter-spacing: .04em; }
+.playlist-recs-head p { color: var(--text-2); font-size: .72rem; }
+.playlist-recs-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.playlist-rec-card {
+  position: relative;
+  min-width: 0;
+  padding: 13px;
+  overflow: hidden;
+  background: #13151a;
+  border: 1px solid #2d323b;
+  border-top: 3px solid var(--accent-2);
+  border-radius: 6px;
+}
+.playlist-rec-card::after {
+  content: '';
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  right: -36px;
+  bottom: -40px;
+  border: 1px solid rgba(56, 214, 255, .13);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.playlist-rec-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.playlist-rec-top > span { color: var(--accent); font: 800 .67rem 'Manrope', sans-serif; letter-spacing: .08em; }
+.playlist-rec-top button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #3a404a;
+  border-radius: 50%;
+  background: #0c0e12;
+  color: var(--accent-2);
+}
+.playlist-rec-top button:hover { color: #081014; background: var(--accent-2); border-color: var(--accent-2); }
+.playlist-rec-card h4 { overflow: hidden; color: var(--text); font-size: .88rem; text-overflow: ellipsis; white-space: nowrap; }
+.playlist-rec-card > p { min-height: 34px; margin: 4px 0 9px; overflow: hidden; color: var(--text-2); font-size: .7rem; line-height: 1.45; }
+.playlist-rec-card small { display: block; min-height: 34px; color: #aeb4bf; font-size: .64rem; line-height: 1.4; }
+.playlist-rec-card small i { color: var(--accent-2); margin-right: 4px; }
+.playlist-rec-add {
+  width: 100%;
+  margin-top: 11px;
+  padding: 7px 9px;
+  border: 1px solid #3a404a;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: .7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.playlist-rec-add:hover { color: #16070b; background: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 850px) {
+  .playlist-recs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 500px) {
+  .playlist-recs-head { display: block; }
+  .playlist-recs-head p { margin-top: 4px; }
+  .playlist-recs-grid { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
+  .playlist-rec-card { flex: 0 0 78%; scroll-snap-align: start; }
+}

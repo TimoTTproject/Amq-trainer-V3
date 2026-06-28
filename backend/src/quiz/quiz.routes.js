@@ -7,6 +7,7 @@ const { isCorrectGuess } = require('./matching');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
+const { rankRecommendations } = require('./recommendations');
 
 const router = express.Router();
 
@@ -221,6 +222,88 @@ router.get('/playlist', requireAuth, async (req, res) => {
       id: s.song.id, animeTitle: s.song.animeTitle, type: s.song.type, number: s.song.number,
       title: s.song.title, artist: s.song.artist, videoUrl: s.song.videoUrl,
     })),
+  });
+});
+
+// Recommandations personnalisées : proximité de contenu + goûts collectifs
+// anonymisés + popularité. Aucun service externe ni profilage nominatif.
+router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 'playlist-recommendations' }), async (req, res) => {
+  const userId = req.user.id;
+  const likedStats = await prisma.userSongStat.findMany({
+    where: { userId, liked: true },
+    include: { song: true },
+    take: 500,
+  });
+  const likedSongs = likedStats.map((stat) => stat.song);
+  const likedIds = likedSongs.map((song) => song.id);
+  const artists = [...new Set(likedSongs.map((song) => song.artist).filter(Boolean))];
+  const anilistIds = [...new Set(likedSongs.map((song) => song.anilistId))];
+
+  let collaborativeCounts = new Map();
+  if (likedIds.length) {
+    const neighbors = await prisma.userSongStat.groupBy({
+      by: ['userId'],
+      where: { liked: true, songId: { in: likedIds }, userId: { not: userId } },
+      _count: { songId: true },
+      orderBy: { _count: { songId: 'desc' } },
+      take: 40,
+    });
+    if (neighbors.length) {
+      const coLikes = await prisma.userSongStat.groupBy({
+        by: ['songId'],
+        where: {
+          liked: true,
+          userId: { in: neighbors.map((row) => row.userId) },
+          songId: { notIn: likedIds },
+        },
+        _count: { userId: true },
+        orderBy: { _count: { userId: 'desc' } },
+        take: 120,
+      });
+      collaborativeCounts = new Map(coLikes.map((row) => [row.songId, row._count.userId]));
+    }
+  }
+
+  const baseWhere = {
+    id: likedIds.length ? { notIn: likedIds } : undefined,
+    videoUrl: { not: null },
+  };
+  const tasteSignals = [];
+  if (artists.length) tasteSignals.push({ artist: { in: artists } });
+  if (anilistIds.length) tasteSignals.push({ anilistId: { in: anilistIds } });
+  if (collaborativeCounts.size) tasteSignals.push({ id: { in: [...collaborativeCounts.keys()] } });
+
+  const select = {
+    id: true, anilistId: true, animeTitle: true, type: true, number: true,
+    title: true, artist: true, videoUrl: true, popularity: true,
+  };
+  const [tasteCandidates, popularCandidates] = await Promise.all([
+    tasteSignals.length
+      ? prisma.song.findMany({
+          where: { ...baseWhere, OR: tasteSignals },
+          select,
+          orderBy: { popularity: 'desc' },
+          take: 250,
+        })
+      : [],
+    prisma.song.findMany({
+      where: baseWhere,
+      select,
+      orderBy: { popularity: 'desc' },
+      take: 80,
+    }),
+  ]);
+
+  const byId = new Map([...tasteCandidates, ...popularCandidates].map((song) => [song.id, song]));
+  const recommendations = rankRecommendations({
+    likedSongs,
+    candidates: [...byId.values()],
+    collaborativeCounts,
+    limit: 8,
+  });
+  res.json({
+    recommendations,
+    personalized: likedSongs.length > 0,
   });
 });
 

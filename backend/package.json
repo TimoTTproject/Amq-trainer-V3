@@ -8,6 +8,7 @@
     "prestart": "prisma db push --skip-generate --accept-data-loss && node scripts/backfill-supply.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "test": "node --test test/recommendations.test.js",
     "db:push": "prisma db push",
     "studio": "prisma studio",
     "import-top": "node scripts/import-top.js"

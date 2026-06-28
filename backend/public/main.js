@@ -2918,6 +2918,7 @@ function openPlaylist() {
 }
 
 let playlistSongs = [];
+let playlistRecommendations = [];
 let playlistTrackId = null;
 
 async function loadPlaylist() {
@@ -2925,12 +2926,18 @@ async function loadPlaylist() {
   tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
   stopPlaylistAudio();
   playlistSongs = [];
+  playlistRecommendations = [];
   playlistTrackId = null;
   updatePlaylistPlayer();
   try {
-    const { songs } = await api('/api/quiz/playlist');
+    const [{ songs }, recommendationData] = await Promise.all([
+      api('/api/quiz/playlist'),
+      api('/api/quiz/playlist/recommendations').catch(() => ({ recommendations: [], personalized: false })),
+    ]);
     playlistSongs = songs;
+    playlistRecommendations = recommendationData.recommendations || [];
     document.getElementById('playlist-total').textContent = `${songs.length} musique${songs.length > 1 ? 's' : ''}`;
+    renderPlaylistRecommendations(recommendationData.personalized);
     if (!songs.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="muted">Ta playlist est vide. Like des sons pendant le quiz ❤</td></tr>';
       updatePlaylistPlayer();
@@ -2940,6 +2947,7 @@ async function loadPlaylist() {
     updatePlaylistPlayer();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeHtml(e.message)}</td></tr>`;
+    renderPlaylistRecommendations(false);
     updatePlaylistPlayer();
   }
 }
@@ -2959,6 +2967,27 @@ function renderPlaylistRows() {
         <td class="cat-play-cell"><button class="btn-play-row pl-remove" data-remove title="Retirer"><i class="fas fa-heart-crack"></i></button></td>
       </tr>`;
     })
+    .join('');
+}
+
+function renderPlaylistRecommendations(personalized = true) {
+  const section = document.getElementById('playlist-recs');
+  const grid = document.getElementById('playlist-recs-grid');
+  section.classList.toggle('hidden', !playlistRecommendations.length);
+  document.getElementById('playlist-recs-caption').textContent = personalized
+    ? 'Selon les morceaux de ta playlist'
+    : 'Une sélection populaire pour démarrer';
+  grid.innerHTML = playlistRecommendations
+    .map((song) => `<article class="playlist-rec-card" data-rec-id="${song.id}">
+      <div class="playlist-rec-top">
+        <span>${song.type}${song.number}</span>
+        <button type="button" data-rec-play data-sid="${song.id}" aria-label="Écouter ${escapeHtml(song.title)}" title="Écouter"><i class="fas fa-play"></i></button>
+      </div>
+      <h4>${escapeHtml(song.title)}</h4>
+      <p>${escapeHtml(song.animeTitle)}${song.artist ? ` · ${escapeHtml(song.artist)}` : ''}</p>
+      <small><i class="fas fa-wand-magic-sparkles"></i> ${escapeHtml(song.reason)}</small>
+      <button type="button" class="playlist-rec-add" data-rec-add data-sid="${song.id}"><i class="fas fa-plus"></i> Ajouter</button>
+    </article>`)
     .join('');
 }
 
@@ -2982,8 +3011,8 @@ function playablePlaylistIndex(direction) {
 function setPlaylistPlaying(playing) {
   const playerIcon = document.querySelector('[data-player-toggle] i');
   if (playerIcon) playerIcon.className = playing ? 'fas fa-pause' : 'fas fa-play';
-  document.querySelectorAll('#playlist-tbody [data-play] i').forEach((icon) => {
-    const sid = parseInt(icon.closest('tr').dataset.sid);
+  document.querySelectorAll('#playlist-tbody [data-play] i, #playlist-recs-grid [data-rec-play] i').forEach((icon) => {
+    const sid = parseInt(icon.closest('[data-sid]')?.dataset.sid || icon.closest('[data-rec-id]')?.dataset.recId);
     icon.className = playing && sid === playlistTrackId ? 'fas fa-pause' : 'fas fa-play';
   });
 }
@@ -2991,15 +3020,17 @@ function setPlaylistPlaying(playing) {
 function updatePlaylistPlayer() {
   const player = document.getElementById('playlist-player');
   if (!player) return;
-  player.classList.toggle('hidden', !playlistSongs.length);
-  const song = playlistSongs.find((s) => s.id === playlistTrackId);
+  const allAvailable = [...playlistSongs, ...playlistRecommendations];
+  player.classList.toggle('hidden', !allAvailable.length);
+  const song = allAvailable.find((s) => s.id === playlistTrackId);
   document.getElementById('playlist-player-title').textContent = song?.title || 'Choisis une musique';
   document.getElementById('playlist-player-meta').textContent = song
     ? `${song.animeTitle} · ${song.type}${song.number}${song.artist ? ` · ${song.artist}` : ''}`
     : '—';
-  document.querySelector('[data-player-toggle]').disabled = !playlistSongs.some((s) => s.videoUrl);
-  document.querySelector('[data-player-prev]').disabled = playablePlaylistIndex(-1) < 0;
-  document.querySelector('[data-player-next]').disabled = playablePlaylistIndex(1) < 0;
+  document.querySelector('[data-player-toggle]').disabled = !allAvailable.some((s) => s.videoUrl);
+  const trackIsInPlaylist = playlistSongs.some((item) => item.id === playlistTrackId);
+  document.querySelector('[data-player-prev]').disabled = !trackIsInPlaylist || playablePlaylistIndex(-1) < 0;
+  document.querySelector('[data-player-next]').disabled = !trackIsInPlaylist || playablePlaylistIndex(1) < 0;
   document.querySelectorAll('#playlist-tbody tr[data-sid]').forEach((tr) => {
     tr.classList.toggle('playing', parseInt(tr.dataset.sid) === playlistTrackId);
   });
@@ -3014,7 +3045,7 @@ function stopPlaylistAudio() {
 
 function playPlaylistSong(songId) {
   const audio = document.getElementById('playlist-audio');
-  const song = playlistSongs.find((s) => s.id === songId && s.videoUrl);
+  const song = [...playlistSongs, ...playlistRecommendations].find((s) => s.id === songId && s.videoUrl);
   if (!song) return;
   if (playlistTrackId === song.id && audio.src) {
     if (audio.paused) audio.play().catch(() => setPlaylistPlaying(false));
@@ -3047,6 +3078,26 @@ function changePlaylistTrack(direction) {
   else if (direction < 0) audio.currentTime = 0;
 }
 
+async function addPlaylistRecommendation(songId, btn) {
+  const song = playlistRecommendations.find((item) => item.id === songId);
+  if (!song) return;
+  btn.disabled = true;
+  try {
+    await api('/api/quiz/like', { method: 'POST', body: JSON.stringify({ songId, liked: true }) });
+    if (currentSong && currentSong.id === songId) { currentLiked = true; setLikeButton(); }
+    playlistSongs.unshift(song);
+    playlistRecommendations = playlistRecommendations.filter((item) => item.id !== songId);
+    document.getElementById('playlist-total').textContent = `${playlistSongs.length} musique${playlistSongs.length > 1 ? 's' : ''}`;
+    renderPlaylistRows();
+    renderPlaylistRecommendations(true);
+    updatePlaylistPlayer();
+    setPlaylistPlaying(!document.getElementById('playlist-audio').paused);
+  } catch (e) {
+    btn.disabled = false;
+    alert(e.message);
+  }
+}
+
 async function removeFromPlaylist(tr) {
   const sid = parseInt(tr.dataset.sid);
   try {
@@ -3076,10 +3127,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const play = e.target.closest('[data-play]');
     if (play) togglePlaylistAudio(play);
   });
+  document.getElementById('playlist-recs-grid').addEventListener('click', (e) => {
+    const add = e.target.closest('[data-rec-add]');
+    if (add) return addPlaylistRecommendation(parseInt(add.dataset.sid), add);
+    const play = e.target.closest('[data-rec-play]');
+    if (play) playPlaylistSong(parseInt(play.dataset.sid));
+  });
   document.querySelector('[data-player-toggle]').addEventListener('click', () => {
     if (playlistTrackId != null) playPlaylistSong(playlistTrackId);
     else {
-      const first = playlistSongs.find((s) => s.videoUrl);
+      const first = [...playlistSongs, ...playlistRecommendations].find((s) => s.videoUrl);
       if (first) playPlaylistSong(first.id);
     }
   });
@@ -3099,6 +3156,11 @@ document.addEventListener('DOMContentLoaded', () => {
   audio.addEventListener('play', () => { setPlaylistPlaying(true); updatePlaylistPlayer(); });
   audio.addEventListener('pause', () => setPlaylistPlaying(false));
   audio.addEventListener('ended', () => {
+    if (!playlistSongs.some((song) => song.id === playlistTrackId)) {
+      audio.currentTime = 0;
+      setPlaylistPlaying(false);
+      return;
+    }
     const next = playablePlaylistIndex(1);
     if (next >= 0) playPlaylistSong(playlistSongs[next].id);
     else {
