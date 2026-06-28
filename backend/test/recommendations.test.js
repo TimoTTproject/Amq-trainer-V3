@@ -1,7 +1,43 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { rankRecommendations } = require('../src/quiz/recommendations');
+const { rankRecommendations, artistTokens, isSideContent } = require('../src/quiz/recommendations');
 const { englishTitleFor } = require('../src/quiz/anime-titles');
+
+test('artistTokens splits collaborations into individual performers', () => {
+  assert.deepEqual(artistTokens('LiSA'), ['lisa']);
+  assert.deepEqual(artistTokens('LiSA feat. Tielle'), ['lisa', 'tielle']);
+  assert.deepEqual(artistTokens('fhána × ClariS'), ['fhána', 'claris']);
+  assert.deepEqual(artistTokens('Aimer & Yuki'), ['aimer', 'yuki']);
+});
+
+test('isSideContent flags movies/OVAs/specials but not the main series', () => {
+  assert.equal(isSideContent('Bleach'), false);
+  assert.equal(isSideContent('Gekijouban Bleach: Memories of Nobody'), true);
+  assert.equal(isSideContent('Bleach: The DiamondDust Rebellion (Movie)'), true);
+  assert.equal(isSideContent('Naruto OVA'), true);
+  assert.equal(isSideContent('Some Anime Specials'), true);
+});
+
+test('prioritizes the main series over a movie/OVA of comparable popularity', () => {
+  const likedSongs = [{ id: 1, anilistId: 10, animeTitle: 'Bleach', artist: 'Shiro Sagisu', type: 'OP' }];
+  const candidates = [
+    { id: 2, anilistId: 20, animeTitle: 'Gekijouban Bleach: Memories of Nobody', artist: 'Shiro Sagisu', type: 'OP', popularity: 100 },
+    { id: 3, anilistId: 30, animeTitle: 'Bleach: Sennen Kessen-hen', artist: 'Shiro Sagisu', type: 'OP', popularity: 100 },
+  ];
+  const ranked = rankRecommendations({ likedSongs, candidates, limit: 2 });
+  assert.equal(ranked[0].id, 3); // la série principale passe devant le film
+});
+
+test('recommends a same-artist track even when credited as a collaboration', () => {
+  const likedSongs = [{ id: 1, anilistId: 10, animeTitle: 'A', artist: 'LiSA', type: 'OP' }];
+  const candidates = [
+    { id: 2, anilistId: 20, animeTitle: 'B', artist: 'LiSA feat. SAWANO', type: 'OP', popularity: 5 },
+    { id: 3, anilistId: 30, animeTitle: 'C', artist: 'Someone Else', type: 'OP', popularity: 9999 },
+  ];
+  const ranked = rankRecommendations({ likedSongs, candidates, limit: 2 });
+  assert.equal(ranked[0].id, 2); // l'artiste partagé prime sur la popularité brute
+  assert.match(ranked[0].reason, /LiSA/);
+});
 
 test('prioritizes related songs and explains the recommendation', () => {
   const likedSongs = [

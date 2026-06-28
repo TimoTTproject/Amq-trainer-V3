@@ -8,7 +8,7 @@ const { englishTitleFor } = require('./anime-titles');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
-const { rankRecommendations } = require('./recommendations');
+const { rankRecommendations, artistTokens } = require('./recommendations');
 const { preferredMediaUrl } = require('../storage/r2');
 
 const router = express.Router();
@@ -305,10 +305,23 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     }
   }
 
+  // Interprètes individuels de la playlist (chanteurs/groupes), par fréquence —
+  // sert à retrouver leurs autres morceaux même crédités différemment (feat., collab…).
+  const tokenFreq = new Map();
+  for (const song of likedSongs) {
+    for (const t of artistTokens(song.artist)) tokenFreq.set(t, (tokenFreq.get(t) || 0) + 1);
+  }
+  const topArtistTokens = [...tokenFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([t]) => t)
+    .filter((t) => t.length >= 3) // évite les sous-chaînes trop courtes/bruyantes
+    .slice(0, 20);
+
   const baseWhere = { videoUrl: { not: null } };
   if (likedIds.length) baseWhere.id = { notIn: likedIds };
   const tasteSignals = [];
   if (artists.length) tasteSignals.push({ artist: { in: artists } });
+  for (const tok of topArtistTokens) tasteSignals.push({ artist: { contains: tok, mode: 'insensitive' } });
   if (anilistIds.length) tasteSignals.push({ anilistId: { in: anilistIds } });
   if (collaborativeCounts.size) tasteSignals.push({ id: { in: [...collaborativeCounts.keys()] } });
 

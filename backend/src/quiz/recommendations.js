@@ -2,6 +2,29 @@ function cleanArtist(value) {
   return String(value || '').trim().toLocaleLowerCase();
 }
 
+// Sépare un crédit d'artiste en interprètes individuels : un même chanteur/groupe
+// doit matcher quelle que soit la façon dont il est crédité (« LiSA », « LiSA feat. X »,
+// « groupe × autre groupe », « A & B »…).
+const ARTIST_SPLIT = /\s*(?:,|&|×|✕|／|\/|\+|、|·|;|\bfeaturing\b|\bfeat\.?|\bft\.?)\s*/i;
+function artistTokens(value) {
+  return [
+    ...new Set(
+      String(value || '')
+        .split(ARTIST_SPLIT)
+        .map((t) => t.trim().toLocaleLowerCase())
+        .filter((t) => t.length >= 2)
+    ),
+  ];
+}
+
+// Détecte les contenus secondaires (films, OAV/OAD, spéciaux, récaps) d'après le
+// titre, pour les déprioriser face à la série principale (TV) à popularité comparable.
+// Heuristique : faute du champ `format` AniList, on s'appuie sur les marqueurs de titre.
+const SIDE_CONTENT = /(?:gekijou(?:ban)?|劇場版|総集編|\bthe movie\b|\bmovie\b|\bfilm\b|\bova\b|\boav\b|\boad\b|\bona\b|\bspecials?\b|\brecap\b|\bpicture drama\b)/i;
+function isSideContent(title) {
+  return SIDE_CONTENT.test(String(title || ''));
+}
+
 function increment(map, key) {
   if (key === null || key === undefined || key === '') return;
   map.set(key, (map.get(key) || 0) + 1);
@@ -13,7 +36,7 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
   const typeLikes = new Map();
 
   for (const song of likedSongs) {
-    increment(artistLikes, cleanArtist(song.artist));
+    for (const token of artistTokens(song.artist)) increment(artistLikes, token);
     increment(seriesLikes, song.anilistId);
     increment(typeLikes, song.type);
   }
@@ -23,18 +46,23 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
   const likedTotal = Math.max(1, likedSongs.length);
 
   const ranked = candidates.map((song) => {
-    const sameArtist = artistLikes.get(cleanArtist(song.artist)) || 0;
+    // Force de la correspondance d'artiste : somme des « likes » des interprètes
+    // de ce morceau présents dans la playlist (gère feat./collabs/groupes).
+    const sameArtist = artistTokens(song.artist).reduce((sum, t) => sum + (artistLikes.get(t) || 0), 0);
     const sameSeries = seriesLikes.get(song.anilistId) || 0;
     const collaborative = collaborativeCounts.get(song.id) || 0;
     const typeAffinity = (typeLikes.get(song.type) || 0) / likedTotal;
     const popularity = Math.log1p(song.popularity || 0) / Math.log1p(maxPopularity);
+    // Film/OAV/spécial → on déprioritise, sauf si c'est exactement un anime déjà aimé.
+    const side = !sameSeries && isSideContent(song.animeTitle);
 
     const score =
       (sameSeries ? 7 + Math.min(3, sameSeries - 1) : 0) +
       (sameArtist ? 6 + Math.min(2, sameArtist - 1) : 0) +
       (collaborative / maxCollaborative) * 5 +
       typeAffinity * 1.5 +
-      popularity * 1.5;
+      popularity * 1.5 -
+      (side ? 4 : 0);
 
     let reason = 'Populaire sur AniList';
     if (collaborative) reason = 'Aimé par des joueurs aux goûts proches';
@@ -68,4 +96,4 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
   return selected.map(({ score, ...song }) => song);
 }
 
-module.exports = { rankRecommendations };
+module.exports = { rankRecommendations, artistTokens, isSideContent };
