@@ -1053,6 +1053,23 @@ function updateVideoButtonVisibility() {
   document.getElementById('reveal-video-btn').classList.toggle('hidden', !allow);
 }
 
+// Les réglages (durée d'écoute, Openings/Endings, départ aléatoire) ne s'appliquent
+// qu'à la manche SUIVANTE. On les verrouille pendant une manche en cours pour éviter
+// la confusion : ils se règlent AVANT « Démarrer » ou entre deux manches.
+function refreshQuizOptionsLock() {
+  const active = !!currentSong && !answered;
+  ['opt-clip', 'opt-random-start'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = active;
+  });
+  const tf = document.getElementById('type-filter');
+  if (tf) {
+    tf.classList.toggle('locked', active);
+    tf.querySelectorAll('.tf-btn').forEach((b) => { b.disabled = active; });
+    tf.title = active ? 'Réglable avant de lancer une manche (ou entre deux manches)' : 'Filtrer openings / endings';
+  }
+}
+
 // ── QUIZ CLASSIQUE vs CENTRE D'ENTRAÎNEMENT ──
 function openQuiz() {
   isTraining = false;
@@ -1062,6 +1079,7 @@ function openQuiz() {
   document.getElementById('quiz-mode-panel').classList.remove('hidden');
   applyGameModeUI();
   refreshCatalogInfo();
+  refreshQuizOptionsLock();
   showView('quiz');
 }
 
@@ -1277,6 +1295,7 @@ async function nextSong() {
   document.getElementById('answer-input').focus();
   document.getElementById('next-btn').innerHTML = '<i class="fas fa-forward"></i> Manche suivante';
   updateVideoButtonVisibility(); // cache la vidéo en classé tant qu'on n'a pas répondu
+  refreshQuizOptionsLock(); // manche en cours → fige les réglages
 
   await startClip(); // applique départ aléatoire + coupure, puis lance
 }
@@ -1416,6 +1435,7 @@ async function guessAnswer(forcedGuess) {
     answered = false;
     document.getElementById('answer-input').disabled = false;
     document.getElementById('reveal-btn').disabled = false;
+    refreshQuizOptionsLock(); // la manche redevient active → re-fige les réglages
     return;
   }
 
@@ -1447,6 +1467,7 @@ function revealAnswerBox(answer) {
   document.getElementById('answer-result').classList.remove('hidden');
   showOverlay(false); // révèle la vidéo
   updateVideoButtonVisibility();
+  refreshQuizOptionsLock(); // manche résolue → réglages de nouveau modifiables
 }
 
 // Mode entraînement : révèle la réponse sans scorer ni gagner de tokens
