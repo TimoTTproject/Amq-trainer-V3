@@ -32,6 +32,27 @@ async function rankedBoard(meId) {
   return { top, me: myRank };
 }
 
+// Solo classé (défi du jour) : classement par MMR solo
+async function soloBoard(meId) {
+  const users = await prisma.user.findMany({
+    where: { soloGames: { gt: 0 } },
+    orderBy: { soloMmr: 'desc' },
+    take: TOP_N,
+    select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, soloMmr: true },
+  });
+  const top = users.map((u, i) => ({
+    rank: i + 1, userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl, frame: frameOf(u),
+    value: u.soloMmr, tier: tierFromMmr(u.soloMmr), isMe: u.id === meId,
+  }));
+  const me = await prisma.user.findUnique({ where: { id: meId }, select: { soloMmr: true, soloGames: true } });
+  let myRank = null;
+  if (me?.soloGames > 0) {
+    const better = await prisma.user.count({ where: { soloGames: { gt: 0 }, soloMmr: { gt: me.soloMmr } } });
+    myRank = { rank: better + 1, value: me.soloMmr, tier: tierFromMmr(me.soloMmr) };
+  }
+  return { top, me: myRank };
+}
+
 // Château : classement par meilleur étage atteint
 async function towerBoard(meId) {
   const users = await prisma.user.findMany({
@@ -111,7 +132,7 @@ async function collectionBoard(meId) {
 }
 
 router.get('/', requireAuth, async (req, res) => {
-  const type = ['tokens', 'collection', 'ranked'].includes(req.query.type) ? req.query.type : 'tower';
+  const type = ['tokens', 'collection', 'ranked', 'solo'].includes(req.query.type) ? req.query.type : 'tower';
   const board =
     type === 'tokens'
       ? await tokensBoard(req.user.id)
@@ -119,6 +140,8 @@ router.get('/', requireAuth, async (req, res) => {
       ? await collectionBoard(req.user.id)
       : type === 'ranked'
       ? await rankedBoard(req.user.id)
+      : type === 'solo'
+      ? await soloBoard(req.user.id)
       : await towerBoard(req.user.id);
   res.json({ type, ...board });
 });

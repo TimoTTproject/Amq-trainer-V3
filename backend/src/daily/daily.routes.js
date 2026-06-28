@@ -1,0 +1,159 @@
+// Défi du jour (solo classé) : même set de chansons pour tous, 1 essai/jour,
+// score vitesse+exactitude autoritaire serveur, conversion en MMR solo.
+const express = require('express');
+const { prisma } = require('../db');
+const { requireAuth } = require('../auth/auth.middleware');
+const { isCorrectGuess } = require('../quiz/matching');
+const { issueRoundToken, verifyRoundToken } = require('../quiz/round-token');
+const { tierFromMmr } = require('../mp/rank');
+const { preferMainContent } = require('../catalog/format');
+const {
+  DAILY_SONG_COUNT, DAILY_DURATION_MS, DAILY_GRACE_MS,
+  todayStr, pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
+} = require('./daily');
+
+const router = express.Router();
+
+// Récupère (ou crée une fois) le défi du jour : un set de chansons commun à tous.
+async function getOrCreateChallenge(day) {
+  const existing = await prisma.dailyChallenge.findUnique({ where: { day } });
+  if (existing) return existing;
+
+  // Candidats : catalogue jouable, priorité série principale (repli si trop peu).
+  let rows = await prisma.song.findMany({
+    where: { videoUrl: { not: null }, ...preferMainContent },
+    select: { id: true },
+    take: 4000,
+  });
+  if (rows.length < DAILY_SONG_COUNT) {
+    rows = await prisma.song.findMany({ where: { videoUrl: { not: null } }, select: { id: true }, take: 4000 });
+  }
+  const songIds = pickDailySongIds(rows.map((r) => r.id), DAILY_SONG_COUNT);
+  // upsert : tolère la course (2 requêtes simultanées le 1er accès du jour).
+  return prisma.dailyChallenge.upsert({
+    where: { day },
+    update: {},
+    create: { day, songIds },
+  });
+}
+
+async function serveCurrentSong(run) {
+  const songId = run.songIds[run.index];
+  const token = issueRoundToken({ userId: run.userId, songId, ranked: false, level: 'cash' });
+  return {
+    index: run.index,
+    total: run.songIds.length,
+    songId,
+    roundToken: token,
+    clipUrl: `/api/quiz/clip/${songId}?rt=${encodeURIComponent(token)}`,
+    durationMs: DAILY_DURATION_MS,
+  };
+}
+
+// État du défi du jour pour l'utilisateur.
+router.get('/status', requireAuth, async (req, res) => {
+  const day = todayStr();
+  const challenge = await getOrCreateChallenge(day);
+  const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
+  const me = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { soloMmr: true, soloGames: true, soloBestScore: true },
+  });
+  res.json({
+    day,
+    total: challenge.songIds.length,
+    played: !!run?.finished,
+    inProgress: !!run && !run.finished,
+    run: run?.finished
+      ? { score: run.score, correct: run.correct, total: run.songIds.length, mmrBefore: run.mmrBefore, mmrAfter: run.mmrAfter }
+      : null,
+    soloMmr: me.soloMmr,
+    soloGames: me.soloGames,
+    soloBestScore: me.soloBestScore,
+    tier: me.soloGames > 0 ? tierFromMmr(me.soloMmr) : null,
+  });
+});
+
+// Démarre (ou reprend) la tentative du jour.
+router.post('/start', requireAuth, async (req, res) => {
+  const day = todayStr();
+  const challenge = await getOrCreateChallenge(day);
+  const existing = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
+  if (existing?.finished) return res.status(409).json({ error: 'Défi déjà terminé pour aujourd\'hui — reviens demain !' });
+
+  let run = existing;
+  if (!run) {
+    run = await prisma.dailyRun.create({
+      data: { userId: req.user.id, day, songIds: challenge.songIds, index: 0, songStartedAt: new Date() },
+    });
+  } else {
+    // Reprise : on relance le chrono de la chanson en cours.
+    run = await prisma.dailyRun.update({ where: { id: run.id }, data: { songStartedAt: new Date() } });
+  }
+  res.json(await serveCurrentSong(run));
+});
+
+// Soumet une réponse pour la chanson en cours (vide = passer). Avance d'une chanson.
+router.post('/guess', requireAuth, async (req, res) => {
+  const day = todayStr();
+  const { roundToken, guess } = req.body || {};
+  const run = await prisma.dailyRun.findUnique({ where: { userId_day: { userId: req.user.id, day } } });
+  if (!run || run.finished) return res.status(400).json({ error: 'Aucune tentative en cours' });
+
+  const songId = run.songIds[run.index];
+  const payload = verifyRoundToken(roundToken, { userId: req.user.id, songId });
+  if (!payload) return res.status(403).json({ error: 'Jeton de manche invalide' });
+
+  const song = await prisma.song.findUnique({
+    where: { id: songId },
+    select: { id: true, animeTitle: true, altTitles: true, title: true, artist: true, type: true, number: true },
+  });
+  if (!song) return res.status(404).json({ error: 'Chanson introuvable' });
+
+  const elapsedMs = run.songStartedAt ? Date.now() - new Date(run.songStartedAt).getTime() : DAILY_DURATION_MS;
+  const tooLate = elapsedMs > DAILY_DURATION_MS + DAILY_GRACE_MS;
+  const correct = !tooLate && isCorrectGuess(String(guess || ''), song);
+  const points = scoreSong({ correct, elapsedMs, durationMs: DAILY_DURATION_MS });
+
+  const nextIndex = run.index + 1;
+  const newScore = run.score + points;
+  const newCorrect = run.correct + (correct ? 1 : 0);
+  const isLast = nextIndex >= run.songIds.length;
+
+  const answer = { animeTitle: song.animeTitle, title: song.title, artist: song.artist, type: song.type, number: song.number };
+
+  if (!isLast) {
+    const updated = await prisma.dailyRun.update({
+      where: { id: run.id },
+      data: { index: nextIndex, score: newScore, correct: newCorrect, songStartedAt: new Date() },
+    });
+    return res.json({ done: false, correct, points, answer, next: await serveCurrentSong(updated) });
+  }
+
+  // Dernière chanson → finalisation + MMR (transaction).
+  const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { soloMmr: true, soloBestScore: true } });
+  const before = user.soloMmr;
+  const delta = computeSoloMmrDelta(before, newScore, maxScore(run.songIds.length));
+  const after = applyMmr(before, delta);
+
+  await prisma.$transaction([
+    prisma.dailyRun.update({
+      where: { id: run.id },
+      data: { index: nextIndex, score: newScore, correct: newCorrect, finished: true, songStartedAt: null, mmrBefore: before, mmrAfter: after },
+    }),
+    prisma.user.update({
+      where: { id: req.user.id },
+      data: { soloMmr: after, soloGames: { increment: 1 }, soloBestScore: Math.max(user.soloBestScore, newScore) },
+    }),
+  ]);
+
+  res.json({
+    done: true, correct, points, answer,
+    result: {
+      score: newScore, correct: newCorrect, total: run.songIds.length,
+      mmrBefore: before, mmrAfter: after, delta, tier: tierFromMmr(after),
+    },
+  });
+});
+
+module.exports = { router };

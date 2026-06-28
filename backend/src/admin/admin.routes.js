@@ -268,10 +268,11 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
     prisma.userCard.deleteMany({ where: { userId } }),
     prisma.towerRun.deleteMany({ where: { userId } }),
     prisma.mpResult.deleteMany({ where: { userId } }),
+    prisma.dailyRun.deleteMany({ where: { userId } }),
     prisma.tokenTransaction.deleteMany({ where: { userId } }),
     prisma.user.update({
       where: { id: userId },
-      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null },
+      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, soloMmr: 1000, soloGames: 0, soloBestScore: 0, claimedLevel: 1, towerLastFreeAt: null },
     }),
   ]);
   res.json({ ok: true });
@@ -287,9 +288,10 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
     prisma.userCard.deleteMany({}),
     prisma.towerRun.deleteMany({}),
     prisma.mpResult.deleteMany({}),
+    prisma.dailyRun.deleteMany({}),
     prisma.tokenTransaction.deleteMany({}),
     prisma.user.updateMany({
-      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },
+      data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, soloMmr: 1000, soloGames: 0, soloBestScore: 0, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },
     }),
   ]);
   const users = await prisma.user.count();

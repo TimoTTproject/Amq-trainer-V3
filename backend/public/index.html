@@ -153,6 +153,11 @@
           <span class="hub-txt"><h3>Multijoueur</h3><p>Affronte d'autres joueurs en temps réel</p></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+        <button class="hub-card" data-nav="daily" style="--c:#ff5d8f">
+          <span class="hub-ico"><i class="fas fa-calendar-day"></i></span>
+          <span class="hub-txt"><h3>Défi du jour</h3><p>Classé solo : mêmes chansons pour tous, 1 essai, MMR</p></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
       </div>
     </div>
 
@@ -704,6 +709,79 @@
       </div>
     </div>
 
+    <!-- VUE DÉFI DU JOUR (solo classé) -->
+    <div id="view-daily" class="hidden">
+      <button class="btn-back" id="back-home-daily"><i class="fas fa-arrow-left"></i> Jouer</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-calendar-day"></i> Défi du jour</h2>
+        <span class="mp-myrank" id="daily-rank"></span>
+      </div>
+
+      <!-- Écran d'accueil -->
+      <div id="daily-intro" class="tower-intro">
+        <p class="tower-rules">
+          🗓️ <b>Mêmes chansons pour tout le monde</b> aujourd'hui, <b>un seul essai</b>.
+          Réponds vite et juste (texte libre, chrono) : ton score fait évoluer ton
+          <b>MMR solo</b> et te classe au ladder. Reviens chaque jour !
+        </p>
+        <div class="tower-intro-stats">
+          <div class="pstat"><span id="daily-mmr">—</span><label>MMR solo</label></div>
+          <div class="pstat"><span id="daily-tier">—</span><label>Palier</label></div>
+          <div class="pstat"><span id="daily-best">0</span><label>Meilleur score</label></div>
+        </div>
+        <div id="daily-done" class="tower-entry-notice free hidden">
+          <i class="fas fa-circle-check"></i>
+          <div>
+            <strong id="daily-done-title">Défi du jour terminé ✅</strong>
+            <span id="daily-done-detail">Reviens demain pour un nouveau défi.</span>
+          </div>
+        </div>
+        <button class="btn-primary btn-lg" id="daily-start"><i class="fas fa-play"></i> Jouer le défi</button>
+        <p id="daily-intro-msg" class="gacha-msg"></p>
+      </div>
+
+      <!-- Run en cours -->
+      <div id="daily-game" class="tower-game hidden">
+        <div class="tower-hud">
+          <span class="tower-floor">Chanson <b id="daily-index">1</b>/<span id="daily-total">10</span></span>
+          <span class="tower-lives" id="daily-score">0 pts</span>
+        </div>
+        <div class="tower-timebar"><div class="tower-timefill" id="daily-timefill"></div></div>
+
+        <div class="media-wrapper tower-media">
+          <video id="daily-video" playsinline preload="auto" disablepictureinpicture></video>
+          <div class="audio-overlay" id="daily-overlay"><i class="fas fa-music"></i></div>
+        </div>
+        <div class="tower-media-controls">
+          <button id="daily-play" class="btn-secondary"><i class="fas fa-play"></i></button>
+          <input type="range" id="daily-volume" min="0" max="1" step="0.01" value="0.8" />
+          <button id="daily-replay" class="btn-secondary" title="Réécouter"><i class="fas fa-rotate-left"></i></button>
+        </div>
+
+        <div class="answer-area">
+          <div class="anime-autocomplete">
+            <input type="text" id="daily-input" placeholder="Nom de l'anime…" autocomplete="off" aria-autocomplete="list" aria-controls="daily-suggestions" />
+            <div id="daily-suggestions" class="anime-suggestions hidden" role="listbox"></div>
+          </div>
+          <button id="daily-submit" class="btn-primary">Valider</button>
+          <button id="daily-skip" class="btn-secondary">Passer</button>
+        </div>
+        <p id="daily-feedback" class="gacha-msg"></p>
+      </div>
+
+      <!-- Résultats -->
+      <div id="daily-over" class="tower-over hidden">
+        <h3 id="daily-over-title">🏁 Défi terminé</h3>
+        <div class="tower-intro-stats">
+          <div class="pstat"><span id="daily-over-score">0</span><label>Score</label></div>
+          <div class="pstat"><span id="daily-over-correct">0</span><label>Bonnes réponses</label></div>
+          <div class="pstat"><span id="daily-over-mmr">0</span><label>MMR</label></div>
+        </div>
+        <p id="daily-over-delta" class="daily-delta"></p>
+        <button class="btn-secondary" id="daily-see-lb"><i class="fas fa-trophy"></i> Voir le classement solo</button>
+      </div>
+    </div>
+
     <!-- VUE CLASSEMENT -->
     <div id="view-leaderboard" class="hidden">
       <button class="btn-back" id="back-home-lb"><i class="fas fa-arrow-left"></i> Communauté</button>
@@ -712,6 +790,7 @@
       </div>
       <div class="lb-tabs">
         <button class="lb-tab active" data-lb="ranked"><i class="fas fa-ranking-star"></i> Classé</button>
+        <button class="lb-tab" data-lb="solo"><i class="fas fa-calendar-day"></i> Solo</button>
         <button class="lb-tab" data-lb="tower"><i class="fas fa-chess-rook"></i> Château</button>
         <button class="lb-tab" data-lb="collection"><i class="fas fa-images"></i> Collection</button>
       </div>
@@ -1111,6 +1190,7 @@
   <script src="tower.js"></script>
   <script src="admin.js"></script>
   <script src="playlist.js"></script>
+  <script src="daily.js"></script>
   <script src="gacha.js"></script>
   <script src="catalog.js"></script>
   <script src="community.js"></script>

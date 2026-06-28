@@ -9,6 +9,7 @@ const LB_UNITS = {
   tokens: (v) => `${v} 🪙`,
   collection: (v) => `${v} cartes`,
   ranked: (v) => `${v} MMR`,
+  solo: (v) => `${v} MMR`,
 };
 
 function openLeaderboard() {

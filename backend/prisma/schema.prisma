@@ -50,6 +50,11 @@ model User {
   rankedGames Int @default(0)
   rankedWins  Int @default(0)
 
+  // Solo classé (défi du jour)
+  soloMmr       Int @default(1000)
+  soloGames     Int @default(0)
+  soloBestScore Int @default(0)
+
   // Plafond quotidien de tokens gagnés en multijoueur (anti-abus)
   mpRewardDay   String? // AAAA-MM-JJ
   mpRewardToday Int     @default(0)
@@ -81,6 +86,7 @@ model User {
   transactions  TokenTransaction[]
   towerRuns     TowerRun[]
   mpResults     MpResult[]
+  dailyRuns     DailyRun[]
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
@@ -188,6 +194,35 @@ model MpResult {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Défi du jour (solo classé) : même set de chansons pour tous, créé 1×/jour.
+model DailyChallenge {
+  id        Int      @id @default(autoincrement())
+  day       String   @unique // AAAA-MM-JJ
+  songIds   Int[] // ids des chansons du défi (ordonnés)
+  createdAt DateTime @default(now())
+}
+
+// Tentative d'un joueur au défi du jour (1 par jour, autoritaire serveur).
+model DailyRun {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  day       String // AAAA-MM-JJ
+  songIds   Int[] // copie du set au démarrage
+  index     Int      @default(0) // chanson en cours (0..n)
+  score     Int      @default(0)
+  correct   Int      @default(0)
+  finished  Boolean  @default(false)
+  songStartedAt DateTime? // début de la chanson courante (chrono serveur)
+  mmrBefore Int?
+  mmrAfter  Int?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([day])
 }
 
 // ─────────────────────────────────────────────

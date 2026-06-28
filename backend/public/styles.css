@@ -731,6 +731,8 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-help-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: .85rem; line-height: 1.55; color: var(--text-2); }
 .mp-help-body b { color: var(--text); }
 .mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
+.daily-delta { font-size: 1.05rem; margin: 6px 0 18px; }
+.daily-delta .gain { color: var(--green); font-weight: 700; } .daily-delta .spend { color: var(--red); font-weight: 700; }
 .mp-reward { font-size: .8rem; font-weight: 700; color: var(--orange); margin-left: 6px; }
 
 /* ── Stats de tirage (chance) ── */

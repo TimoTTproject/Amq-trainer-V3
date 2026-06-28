@@ -203,6 +203,7 @@ function showAuth() {
 function showView(name) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
+  if (name !== 'daily' && typeof stopDailyMedia === 'function') stopDailyMedia();
   if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
@@ -219,6 +220,7 @@ function showView(name) {
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
+  document.getElementById('view-daily').classList.toggle('hidden', name !== 'daily');
   document.getElementById('view-leaderboard').classList.toggle('hidden', name !== 'leaderboard');
   document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
   document.getElementById('view-craft').classList.toggle('hidden', name !== 'craft');
@@ -236,7 +238,7 @@ function showView(name) {
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
 const NAV_GROUP = {
-  quiz: 'play', training: 'play', tower: 'play', mp: 'play',
+  quiz: 'play', training: 'play', tower: 'play', mp: 'play', daily: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
@@ -253,6 +255,7 @@ function navTo(name) {
   if (name === 'shop') return openShop();
   if (name === 'catalog') return openCatalog();
   if (name === 'tower') return openTower();
+  if (name === 'daily') return openDaily();
   if (name === 'leaderboard') return openLeaderboard();
   if (name === 'admin') return openAdmin();
   if (name === 'profile') return openProfile();
