@@ -712,6 +712,23 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-myrank { text-align: center; color: var(--text-2); margin-bottom: 14px; }
 .mp-myrank b { color: var(--text); }
 .mp-mmr { font-size: .8rem; font-weight: 700; }
+
+/* Note « partie classée » dans le salon (réglages figés) */
+.mp-ranked-note {
+  background: linear-gradient(135deg, rgba(255,182,72,.12), rgba(255,93,143,.12));
+  border: 1px solid rgba(255,182,72,.4); border-radius: 10px;
+  padding: 10px 13px; margin-bottom: 12px; font-size: .85rem; line-height: 1.5; color: var(--text-2);
+}
+.mp-ranked-note b { color: var(--text); }
+
+/* Aide repliable « Comment fonctionne le classé ? » */
+.mp-help { text-align: left; margin: 16px auto 0; max-width: 460px; border: 1px solid #2a2f42; border-radius: 12px; background: var(--bg-2); }
+.mp-help summary { cursor: pointer; padding: 12px 14px; font-weight: 600; color: var(--text-2); list-style: none; display: flex; align-items: center; gap: 8px; }
+.mp-help summary::-webkit-details-marker { display: none; }
+.mp-help summary i { color: var(--accent); }
+.mp-help[open] summary { border-bottom: 1px solid #2a2f42; color: var(--text); }
+.mp-help-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: .85rem; line-height: 1.55; color: var(--text-2); }
+.mp-help-body b { color: var(--text); }
 .mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
 .mp-reward { font-size: .8rem; font-weight: 700; color: var(--orange); margin-left: 6px; }
 

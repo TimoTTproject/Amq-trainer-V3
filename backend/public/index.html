@@ -910,6 +910,24 @@
           <button class="btn-secondary" id="mp-join">Rejoindre</button>
         </div>
         <p id="mp-menu-msg" class="gacha-msg"></p>
+
+        <details class="mp-help">
+          <summary><i class="fas fa-circle-info"></i> Comment fonctionne le classé&nbsp;?</summary>
+          <div class="mp-help-body">
+            <p><b>Partie classée</b> : file dédiée, 2 à 8 joueurs, <b>format fixe</b>
+              (10 manches · 25&nbsp;s · Openings + Endings). Les réglages ne sont pas
+              modifiables, pour que tout le monde joue à armes égales.</p>
+            <p><b>MMR</b> (niveau de classement) : tu démarres à <b>1000</b>. À la fin de
+              chaque partie, tu gagnes ou perds des points selon ton <b>classement final</b>
+              et la <b>force des adversaires</b> (système de type ELO) — battre plus fort
+              que toi rapporte davantage, finir devant des joueurs plus faibles rapporte peu.</p>
+            <p><b>Paliers</b> : 🥉 Bronze (0) · 🥈 Argent (900) · 🥇 Or (1200) ·
+              💎 Platine (1500) · 🔷 Diamant (1800) · 👑 Maître (2100).</p>
+            <p><b>Abandon</b> : quitter une partie classée en cours compte comme une
+              <b>défaite</b> (ta place est gardée jusqu'à la fin) — pas d'échappatoire au
+              malus. Les parties classées rapportent aussi des 🪙, comme les autres.</p>
+          </div>
+        </details>
       </div>
 
       <!-- 2. Salon -->
@@ -922,7 +940,8 @@
           <div class="profile-section">
             <h3><i class="fas fa-users"></i> Joueurs (<span id="mp-pcount">0</span>)</h3>
             <div id="mp-room-players" class="mp-players"></div>
-            <div class="mp-settings">
+            <div id="mp-ranked-note" class="mp-ranked-note hidden"></div>
+            <div id="mp-settings" class="mp-settings">
               <label>Mode
                 <select id="mp-set-mode">
                   <option value="classic" selected>Classique</option>

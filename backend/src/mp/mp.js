@@ -591,6 +591,11 @@ function onDisconnect(socket) {
   if (!p || p.socketId !== socket.id) return; // un autre socket a déjà repris ce joueur
   p.connected = false;
   p.socketId = null;
+  // Classé EN COURS : on garde le slot jusqu'à la fin de la partie. Quitter ne
+  // permet donc plus d'échapper à la défaite (le joueur finit avec son score
+  // courant et encaisse sa variation de MMR). La reconnexion reste possible à
+  // tout moment ; le retrait se fait au closeRoom en fin de partie.
+  if (room.ranked && room.status === 'playing') return;
   const grace = room.status === 'playing' ? DC_GRACE_GAME : DC_GRACE_LOBBY;
   p.dcTimer = setTimeout(() => removePlayer(room, socket.data.user.id), grace);
   if (room.status === 'lobby') broadcastRoom(room);

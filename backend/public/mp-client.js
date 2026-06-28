@@ -322,14 +322,26 @@ function renderRoom(d) {
     .map((p) => `<span class="mp-chip${p.isHost ? ' host' : ''}">${otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs')}${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`)
     .join('');
 
-  document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
-  document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
-  document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
-  document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
-  document.getElementById('mp-set-rounds').disabled = !isHost;
-  document.getElementById('mp-set-speed').disabled = !isHost;
-  document.getElementById('mp-set-mode').disabled = !isHost;
-  document.getElementById('mp-set-theme').disabled = !isHost;
+  // Classé : réglages figés côté serveur → on masque le formulaire (sinon il
+  // semble modifiable alors qu'il est ignoré) et on affiche le format fixe.
+  const ranked = !!d.ranked;
+  document.getElementById('mp-settings').classList.toggle('hidden', ranked);
+  const note = document.getElementById('mp-ranked-note');
+  note.classList.toggle('hidden', !ranked);
+  if (ranked) {
+    note.innerHTML = '🏅 <b>Partie classée</b> — format fixe : 10 manches · 25 s · Openings + Endings. '
+      + 'Réglages non modifiables. Ton <b>MMR</b> évolue selon ton classement final.';
+  }
+  if (!ranked) {
+    document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
+    document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
+    document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
+    document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
+    document.getElementById('mp-set-rounds').disabled = !isHost;
+    document.getElementById('mp-set-speed').disabled = !isHost;
+    document.getElementById('mp-set-mode').disabled = !isHost;
+    document.getElementById('mp-set-theme').disabled = !isHost;
+  }
 
   const startBtn = document.getElementById('mp-start');
   const status = document.getElementById('mp-room-status');
