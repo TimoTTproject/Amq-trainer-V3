@@ -1062,6 +1062,11 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="sfx.js"></script>
+  <!-- Vues extraites de main.js (scope global partagé) — chargées avant main.js
+       car setupAppUI() référence leurs openers (ex. openTower) au chargement. -->
+  <script src="tower.js"></script>
+  <script src="admin.js"></script>
+  <script src="playlist.js"></script>
   <script src="main.js"></script>
   <script src="anime-autocomplete.js"></script>
   <script src="mp-client.js"></script>
