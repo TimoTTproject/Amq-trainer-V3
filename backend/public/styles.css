@@ -75,6 +75,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .about-card p { color: var(--text); font-size: .9rem; line-height: 1.5; }
 .about-card ul { margin: 4px 0 4px 18px; }
 .about-card li { font-size: .9rem; line-height: 1.55; }
+.about-card .about-sub { color: var(--text-2); font-size: .85rem; font-weight: 600; margin: 10px 0 2px; }
 .about-card a { color: var(--accent); }
 
 /* ── Tableau de bord admin ── */
