@@ -4,8 +4,8 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const store = require('../util/store');
+const { JWT_SECRET } = require('../util/env');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const ROUND_TTL = '30m'; // une manche doit être validée dans les 30 min
 
 // Émet un jeton liant la manche à l'utilisateur, à la musique, au mode classé

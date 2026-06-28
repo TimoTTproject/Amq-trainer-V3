@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Installe les dépendances (le postinstall lance `prisma generate`,
+      # qui n'a pas besoin de base de données).
+      - run: npm ci
+
+      # Tests de logique pure — pas de base de données requise
+      # (le `prestart` qui fait `prisma db push` n'est PAS déclenché par `npm test`).
+      - run: npm test

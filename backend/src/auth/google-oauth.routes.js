@@ -86,7 +86,7 @@ router.get('/google/callback', async (req, res) => {
       });
     }
 
-    setAuthCookie(res, user.id);
+    setAuthCookie(res, user.id, req);
     res.redirect('/?auth=success');
   } catch (err) {
     console.error('Google OAuth callback error:', err.message);

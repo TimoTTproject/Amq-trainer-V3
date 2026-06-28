@@ -7,6 +7,10 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 
+const { validateEnv } = require('./util/env');
+// Vérifie la configuration avant toute initialisation (arrête le serveur si la prod est dangereuse).
+validateEnv();
+
 const { attachUser } = require('./auth/auth.middleware');
 const authRoutes = require('./auth/auth.routes');
 const anilistOAuthRoutes = require('./auth/anilist-oauth.routes');

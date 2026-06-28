@@ -1,7 +1,7 @@
 // Gestion des JSON Web Tokens stockés dans un cookie httpOnly
 const jwt = require('jsonwebtoken');
+const { JWT_SECRET, isProduction } = require('../util/env');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const COOKIE_NAME = 'amq_token';
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
 
@@ -17,13 +17,15 @@ function verifyToken(token) {
   }
 }
 
-// Pose le cookie d'auth sur la réponse
-function setAuthCookie(res, userId) {
+// Pose le cookie d'auth sur la réponse.
+// `req` (optionnel) permet de marquer le cookie "secure" dès que la requête
+// arrive en HTTPS (via trust proxy), même si NODE_ENV n'est pas défini.
+function setAuthCookie(res, userId, req) {
   const token = signToken({ sub: userId });
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production', // HTTPS en prod
+    secure: isProduction || !!(req && req.secure), // HTTPS en prod / derrière proxy
     maxAge: MAX_AGE_MS,
   });
 }

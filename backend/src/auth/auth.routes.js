@@ -57,7 +57,7 @@ router.post('/register', async (req, res) => {
   const user = await prisma.user.create({
     data: { email, passwordHash, displayName: displayName || email.split('@')[0] },
   });
-  setAuthCookie(res, user.id);
+  setAuthCookie(res, user.id, req);
   res.status(201).json({ user: publicUser(user) });
 });
 
@@ -74,7 +74,7 @@ router.post('/login', async (req, res) => {
   if (!ok) {
     return res.status(401).json({ error: 'Identifiants invalides' });
   }
-  setAuthCookie(res, user.id);
+  setAuthCookie(res, user.id, req);
   res.json({ user: publicUser(user) });
 });
 
