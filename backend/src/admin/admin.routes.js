@@ -269,6 +269,7 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
     prisma.towerRun.deleteMany({ where: { userId } }),
     prisma.mpResult.deleteMany({ where: { userId } }),
     prisma.dailyRun.deleteMany({ where: { userId } }),
+    prisma.seasonClaim.deleteMany({ where: { userId } }),
     prisma.tokenTransaction.deleteMany({ where: { userId } }),
     prisma.user.update({
       where: { id: userId },
@@ -289,6 +290,7 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
     prisma.towerRun.deleteMany({}),
     prisma.mpResult.deleteMany({}),
     prisma.dailyRun.deleteMany({}),
+    prisma.seasonClaim.deleteMany({}),
     prisma.tokenTransaction.deleteMany({}),
     prisma.user.updateMany({
       data: { tokens: 0, dust: 0, pity: 0, towerBestFloor: 0, mmr: 1000, rankedGames: 0, rankedWins: 0, soloMmr: 1000, soloGames: 0, soloBestScore: 0, dailyStreak: 0, dailyStreakBest: 0, dailyLastDay: null, claimedLevel: 1, towerLastFreeAt: null, lastDailyAt: null },

@@ -91,6 +91,7 @@ model User {
   mpResults     MpResult[]
   dailyRuns     DailyRun[]
   pushSubs      PushSubscription[]
+  seasonClaims  SeasonClaim[]
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
@@ -227,6 +228,21 @@ model DailyRun {
 
   @@unique([userId, day])
   @@index([day])
+}
+
+// Récompense de saison réclamée (1 par joueur et par saison ; pas de reset du MMR).
+model SeasonClaim {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  season    String // AAAA-MM
+  tier      String // palier au moment de la réclamation
+  tokens    Int
+  dust      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, season])
 }
 
 // Abonnement aux notifications push (Web Push) — un par navigateur/appareil.

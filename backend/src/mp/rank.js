@@ -34,4 +34,4 @@ function computeMmrDeltas(players) {
   });
 }
 
-module.exports = { tierFromMmr, computeMmrDeltas };
+module.exports = { tierFromMmr, computeMmrDeltas, TIERS };

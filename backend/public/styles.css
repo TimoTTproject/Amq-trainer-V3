@@ -736,6 +736,16 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .daily-streak-line { font-size: .95rem; color: var(--text-2); margin: 0 0 18px; }
 .daily-streak-line .gain { color: var(--green); font-weight: 700; }
 .daily-notif-btn { margin-left: 10px; }
+/* Bannière de récompense de saison (vue Classement) */
+.season-banner { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, rgba(255,182,72,.14), rgba(138,108,255,.14));
+  border: 1px solid #2a2f42; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
+.season-info { display: flex; flex-direction: column; gap: 2px; }
+.season-name { font-weight: 700; }
+.season-tier { font-size: .85rem; color: var(--text-2); }
+.season-tier b { color: var(--text); }
+.season-done { color: var(--green); font-weight: 600; font-size: .9rem; }
+.season-hint { color: var(--text-2); font-size: .82rem; }
 .daily-over-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
 .daily-board { max-width: 460px; margin: 22px auto 0; text-align: left; }
 .daily-board-title { font-size: .95rem; color: var(--text-2); margin-bottom: 10px; text-align: center; }

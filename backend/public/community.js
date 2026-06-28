@@ -16,6 +16,51 @@ function openLeaderboard() {
   showView('leaderboard');
   document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'ranked'));
   loadLeaderboard('ranked');
+  loadSeasonBanner();
+}
+
+// Bannière de récompense de saison (mensuelle, sans reset du MMR).
+async function loadSeasonBanner() {
+  const el = document.getElementById('season-banner');
+  if (!el) return;
+  let d;
+  try { d = await api('/api/season/status'); } catch { el.classList.add('hidden'); return; }
+  renderSeasonBanner(d);
+}
+function renderSeasonBanner(d) {
+  const el = document.getElementById('season-banner');
+  const tierTxt = d.tier ? `${d.tier.icon} ${escapeHtml(d.tier.name)}` : 'Non classé';
+  let action;
+  if (d.claimed) action = '<span class="season-done"><i class="fas fa-circle-check"></i> Récompense réclamée</span>';
+  else if (d.claimable) action = `<button class="btn-primary" id="season-claim-btn">Réclamer ${d.reward.tokens} 🪙${d.reward.dust ? ` + ${d.reward.dust} 🌟` : ''}</button>`;
+  else if (!d.active) action = '<span class="season-hint">Joue une partie classée ou un défi pour débloquer</span>';
+  else action = '<span class="season-hint">Pas encore classé</span>';
+  el.innerHTML = `
+    <div class="season-info">
+      <span class="season-name"><i class="fas fa-medal"></i> Saison ${escapeHtml(d.label)}</span>
+      <span class="season-tier">Ton palier : <b>${tierTxt}</b></span>
+    </div>
+    <div class="season-action">${action}</div>`;
+  el.classList.remove('hidden');
+  const btn = document.getElementById('season-claim-btn');
+  if (btn) btn.addEventListener('click', claimSeason);
+}
+async function claimSeason() {
+  const btn = document.getElementById('season-claim-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api('/api/season/claim', { method: 'POST', body: JSON.stringify({}) });
+    if (typeof currentUser === 'object' && currentUser) {
+      currentUser.tokens = (currentUser.tokens || 0) + (r.tokens || 0);
+      if (r.dust) currentUser.dust = (currentUser.dust || 0) + r.dust;
+      if (typeof renderHeaderUser === 'function') renderHeaderUser();
+    }
+    if (typeof burstConfetti === 'function') burstConfetti(25);
+    loadSeasonBanner();
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    alert(e.message);
+  }
 }
 
 // Petit avatar (image ou initiale colorée) en HTML
