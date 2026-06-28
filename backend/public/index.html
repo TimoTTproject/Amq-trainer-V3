@@ -826,6 +826,23 @@
         <span class="catalog-info" id="playlist-total"></span>
       </div>
       <p class="hint" style="margin-bottom:14px">Like un son pendant le quiz (bouton ❤) pour l'ajouter ici.</p>
+      <div class="playlist-player hidden" id="playlist-player">
+        <div class="playlist-player-icon"><i class="fas fa-music"></i></div>
+        <div class="playlist-player-body">
+          <div class="playlist-player-title" id="playlist-player-title">Choisis une musique</div>
+          <div class="playlist-player-meta" id="playlist-player-meta">—</div>
+          <div class="playlist-player-timeline">
+            <span id="playlist-player-current">0:00</span>
+            <input id="playlist-player-seek" type="range" min="0" max="0" value="0" step="0.1" aria-label="Position dans la musique" />
+            <span id="playlist-player-duration">0:00</span>
+          </div>
+        </div>
+        <div class="playlist-player-controls">
+          <button type="button" data-player-prev title="Précédent" aria-label="Morceau précédent"><i class="fas fa-backward-step"></i></button>
+          <button type="button" class="playlist-player-main" data-player-toggle title="Lecture / pause" aria-label="Lecture ou pause"><i class="fas fa-play"></i></button>
+          <button type="button" data-player-next title="Suivant" aria-label="Morceau suivant"><i class="fas fa-forward-step"></i></button>
+        </div>
+      </div>
       <table class="catalog-table">
         <thead>
           <tr><th></th><th>Anime</th><th>Type</th><th>Opening</th><th>Artiste</th><th></th></tr>

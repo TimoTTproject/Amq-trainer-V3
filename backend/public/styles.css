@@ -397,6 +397,39 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .btn-play-row { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #2a2f42; background: var(--bg); color: var(--accent); cursor: pointer; transition: all .15s; }
 .btn-play-row:hover { background: var(--accent); color: #0b1020; border-color: var(--accent); }
 
+/* ── Playlist : mini lecteur ── */
+.playlist-player {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  background: linear-gradient(135deg, var(--bg-2), #20243a); border: 1px solid #303751;
+  border-radius: 14px; padding: 12px 14px; margin-bottom: 16px;
+  position: sticky; top: 10px; z-index: 20; box-shadow: 0 10px 28px rgba(0, 0, 0, .22);
+}
+.playlist-player-icon {
+  width: 42px; height: 42px; display: grid; place-items: center; flex-shrink: 0;
+  border-radius: 11px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+}
+.playlist-player-body { min-width: 0; }
+.playlist-player-title { overflow: hidden; color: var(--text); font-size: .92rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.playlist-player-meta { overflow: hidden; color: var(--text-2); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.playlist-player-timeline { display: grid; grid-template-columns: 32px minmax(80px, 1fr) 32px; align-items: center; gap: 8px; margin-top: 7px; color: var(--text-2); font-size: .68rem; }
+.playlist-player-timeline span:last-child { text-align: right; }
+.playlist-player-timeline input { width: 100%; height: 4px; accent-color: var(--accent); cursor: pointer; }
+.playlist-player-controls { display: flex; align-items: center; gap: 6px; }
+.playlist-player-controls button {
+  width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-2); font-size: .85rem; transition: background .15s, color .15s, transform .15s;
+}
+.playlist-player-controls button:hover:not(:disabled) { background: var(--bg-3); color: var(--text); }
+.playlist-player-controls button:disabled { cursor: default; opacity: .3; }
+.playlist-player-controls .playlist-player-main { width: 42px; height: 42px; background: var(--accent); color: #fff; font-size: 1rem; }
+.playlist-player-controls .playlist-player-main:hover:not(:disabled) { background: var(--accent-2); color: #fff; transform: scale(1.04); }
+#playlist-tbody tr.playing td { background: rgba(108, 140, 255, .09); }
+#playlist-tbody tr.playing td:nth-child(2) { color: var(--accent); font-weight: 600; }
+@media (max-width: 600px) {
+  .playlist-player { grid-template-columns: auto minmax(0, 1fr); }
+  .playlist-player-controls { grid-column: 1 / -1; justify-content: center; margin-top: -2px; }
+}
+
 /* ── Château de l'Infini ── */
 .tower-intro { text-align: center; max-width: 560px; margin: 0 auto; }
 .tower-rules { color: var(--text-2); line-height: 1.6; margin-bottom: 20px; }
