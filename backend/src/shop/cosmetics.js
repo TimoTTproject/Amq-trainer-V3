@@ -60,6 +60,19 @@ const COSMETICS = [
     css: 'box-shadow:0 0 0 3px #ffd700,0 0 10px rgba(255,215,0,.6)' },
   { id: 'frame-mythic', slot: 'avatarFrame', name: 'Mythique', price: 1500,
     css: '', className: 'cosm-mythic-frame' },
+
+  // ── EXCLUSIFS DE PALIER (débloqués par le rang classé/solo, non achetables) ──
+  // tierReq = index de palier requis (1 Argent · 2 Or · 3 Platine · 4 Diamant · 5 Maître)
+  { id: 'frame-rank-argent', slot: 'avatarFrame', name: 'Rang Argent', exclusive: true, tierReq: 1, icon: 'fa-medal',
+    css: 'box-shadow:0 0 0 3px #b9c4cc,0 0 12px rgba(185,196,204,.7)' },
+  { id: 'border-rank-or', slot: 'cardBorder', name: 'Rang Or', exclusive: true, tierReq: 2,
+    css: 'box-shadow:0 0 0 3px #ffcf33,0 0 16px rgba(255,207,51,.7)' },
+  { id: 'banner-rank-platine', slot: 'profileBanner', name: 'Rang Platine', exclusive: true, tierReq: 3,
+    css: 'background:linear-gradient(120deg,#0aa3a3,#7fffd4,#0aa3a3)' },
+  { id: 'back-rank-diamant', slot: 'cardBack', name: 'Rang Diamant', exclusive: true, tierReq: 4, icon: 'fa-gem',
+    css: 'background:linear-gradient(135deg,#3a8dde,#7fd2ff,#dff6ff,#3a8dde)', className: 'cb-shine' },
+  { id: 'frame-rank-maitre', slot: 'avatarFrame', name: 'Rang Maître', exclusive: true, tierReq: 5, icon: 'fa-crown',
+    css: '', className: 'cosm-mythic-frame' },
 ];
 
 const SLOTS = ['cardBack', 'cardBorder', 'profileBanner', 'avatarFrame'];
@@ -83,7 +96,10 @@ function byId(id) {
 // Forme transmise au front pour appliquer un cosmétique
 function publicCosmetic(c) {
   if (!c) return null;
-  return { id: c.id, slot: c.slot, name: c.name, css: c.css || '', className: c.className || '', icon: c.icon || null };
+  return {
+    id: c.id, slot: c.slot, name: c.name, css: c.css || '', className: c.className || '', icon: c.icon || null,
+    ...(c.exclusive ? { exclusive: true, tierReq: c.tierReq } : {}),
+  };
 }
 
 // Résout les cosmétiques équipés d'un utilisateur en objets prêts à appliquer.

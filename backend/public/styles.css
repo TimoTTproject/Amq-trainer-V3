@@ -1152,6 +1152,9 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .shop-btn b { color: var(--orange); }
 .shop-item .btn-primary b { color: #fff; }
 .shop-tag.equipped { font-size: .8rem; color: var(--green); font-weight: 700; padding: 7px 0; }
+.shop-tag.locked { font-size: .78rem; color: var(--text-2); font-weight: 600; padding: 7px 0; }
+.shop-item.is-locked { opacity: .72; }
+.shop-excl { color: var(--orange); font-size: .72rem; }
 
 /* Aperçus */
 .shop-prev { display: flex; align-items: center; justify-content: center; }

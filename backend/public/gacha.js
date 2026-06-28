@@ -294,10 +294,11 @@ function renderShop() {
           let action;
           if (equipped) action = '<span class="shop-tag equipped">Équipé</span>';
           else if (owned) action = `<button class="btn-secondary shop-btn" data-act="equip" data-id="${item.id}">Équiper</button>`;
+          else if (item.locked) action = `<span class="shop-tag locked"><i class="fas fa-lock"></i> Palier ${escapeHtml(item.tierReqName || '')}</span>`;
           else action = `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
-          return `<div class="shop-item${equipped ? ' is-equipped' : ''}">
+          return `<div class="shop-item${equipped ? ' is-equipped' : ''}${item.locked ? ' is-locked' : ''}">
             ${shopPreview(g.slot, item)}
-            <div class="shop-name">${escapeHtml(item.name)}</div>
+            <div class="shop-name">${escapeHtml(item.name)}${item.exclusive ? ' <i class="fas fa-star shop-excl" title="Exclusif de palier"></i>' : ''}</div>
             ${action}
           </div>`;
         }).join('')}
