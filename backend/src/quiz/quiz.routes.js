@@ -370,7 +370,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
       update: { played: { increment: 1 }, ...(correct ? { correct: { increment: 1 } } : {}) },
       create: { userId, day, played: 1, correct: correct ? 1 : 0 },
     });
-    let tokens = req.user.tokens;
+    let tokens = null;
     if (reward > 0) {
       const u = await tx.user.update({
         where: { id: userId },
@@ -389,7 +389,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
   res.json({
     correct,
     reward,
-    tokens: result.tokens,
+    ...(result.tokens !== null ? { tokens: result.tokens } : {}),
     answer: {
       animeTitle: song.animeTitle,
       title: song.title,

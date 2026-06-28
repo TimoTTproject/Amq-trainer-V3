@@ -47,6 +47,17 @@ router.post('/daily', requireAuth, async (req, res) => {
   res.json({ granted: DAILY_BONUS, tokens: user.tokens });
 });
 
+// Solde autoritaire. Utilisé après les gains asynchrones (notamment le
+// multijoueur) pour éviter toute dérive d'affichage côté client.
+router.get('/balance', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { tokens: true, dust: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+  res.json(user);
+});
+
 router.get('/transactions', requireAuth, async (req, res) => {
   const tx = await prisma.tokenTransaction.findMany({
     where: { userId: req.user.id },

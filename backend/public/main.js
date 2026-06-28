@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupAuthUI();
   setupAppUI();
   pingVisit();
+  window.addEventListener('focus', () => { if (currentUser) syncTokenBalance(); });
 
   // Retour d'OAuth AniList
   const params = new URLSearchParams(location.search);
@@ -321,6 +322,23 @@ function renderHeaderUser() {
     rk.classList.remove('hidden');
   } else rk.classList.add('hidden');
   document.getElementById('daily-btn').classList.toggle('hidden', !currentUser.dailyAvailable);
+}
+
+let tokenBalanceSync = null;
+function syncTokenBalance() {
+  if (!currentUser) return Promise.resolve(null);
+  if (tokenBalanceSync) return tokenBalanceSync;
+  tokenBalanceSync = api('/api/economy/balance')
+    .then((balance) => {
+      if (!currentUser) return balance;
+      currentUser.tokens = balance.tokens;
+      if (typeof balance.dust === 'number') currentUser.dust = balance.dust;
+      renderHeaderUser();
+      return balance;
+    })
+    .catch(() => null)
+    .finally(() => { tokenBalanceSync = null; });
+  return tokenBalanceSync;
 }
 
 async function claimDaily() {

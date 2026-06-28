@@ -237,11 +237,11 @@ function connectMp() {
       })
       .join('');
 
-    // Crédite mon solde des tokens gagnés
+    // Le serveur a déjà crédité le gain : relire le solde autoritaire évite
+    // les doubles ajouts visuels et les corrections au prochain écran.
     const mine = d.ranking.find((p) => (p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName));
-    if (mine && mine.tokenReward && typeof renderHeaderUser === 'function') {
-      currentUser.tokens = (currentUser.tokens || 0) + mine.tokenReward;
-      renderHeaderUser();
+    if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') {
+      syncTokenBalance();
     }
   });
 }
