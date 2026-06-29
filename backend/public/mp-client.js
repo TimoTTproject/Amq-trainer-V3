@@ -612,6 +612,11 @@ function initMpUI() {
     mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());
   });
+  // Crée directement un salon privé en mode Coop (Tour en équipe).
+  document.getElementById('mp-coop').addEventListener('click', () => {
+    mpLeft = false; mpEngaged = true;
+    connectMp(); mpSocket && mpSocket.emit('mp:create', { ...mpSettingsPayload(), mode: 'coop' });
+  });
   document.getElementById('mp-join').addEventListener('click', () => {
     const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
     if (!code) return;
