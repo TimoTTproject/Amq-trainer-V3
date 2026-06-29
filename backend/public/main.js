@@ -291,6 +291,7 @@ function showApp(user) {
   refreshStats();
   if (typeof connectMp === 'function') connectMp(); // socket prêt → reconnexion auto si partie en cours
   if (typeof loadTradesBadge === 'function') loadTradesBadge();
+  loadQuestsBadge();
   maybeOnboard();
 }
 
@@ -1561,11 +1562,23 @@ function toggleVideo() {
 }
 
 // ── QUÊTES QUOTIDIENNES ──
+// Pastille « quêtes à réclamer » sur l'onglet Accueil (visible hors page d'accueil).
+function updateQuestsBadge(n) {
+  const el = document.getElementById('quests-nav-badge');
+  if (!el) return;
+  el.textContent = n || '';
+  el.classList.toggle('hidden', !n);
+}
+async function loadQuestsBadge() {
+  try { const { quests } = await api('/api/quests'); updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length); } catch {}
+}
+
 async function loadQuests() {
   const box = document.getElementById('home-quests');
   if (!box) return;
   try {
     const { quests } = await api('/api/quests');
+    updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length);
     if (!quests || !quests.length) { box.innerHTML = ''; return; }
     const claimable = quests.filter((q) => q.done && !q.claimed).length;
     const claimedAll = quests.every((q) => q.claimed);
