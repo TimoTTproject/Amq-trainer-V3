@@ -1257,6 +1257,17 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
   padding-left: 10px; border-left: 4px solid var(--lic-color, var(--accent));
 }
 
+/* ── Boutique : section Personnages (catalogue paginé) ── */
+.shop-char-controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 16px; }
+.shop-char-controls #char-search { flex: 1; min-width: 200px; }
+.shop-char-controls input, .shop-char-controls select {
+  background: var(--bg); border: 1px solid #2a2f42; color: var(--text);
+  border-radius: 8px; padding: 9px 12px; font-size: .95rem;
+}
+.shop-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 20px 0 4px; }
+.shop-pager .shop-page { padding: 8px 14px; }
+.shop-page-info { color: var(--text-2); font-size: .85rem; }
+
 /* Aperçus */
 .shop-prev { display: flex; align-items: center; justify-content: center; }
 .shop-prev-back {

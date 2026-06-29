@@ -185,8 +185,18 @@ const DEFAULT_BY_SLOT = Object.fromEntries(
   SLOTS.map((s) => [s, COSMETICS.find((c) => c.slot === s && c.price === 0)])
 );
 
+// Résolveur dynamique (cosmétiques générés depuis la BDD, ex. personnages).
+// Branché à l'exécution par character-cosmetics.js pour que byId() — et donc
+// resolveEquipped(), l'achat et l'équipement — fonctionnent sur ces ids sans
+// que ce module touche à la base de données.
+let dynamicResolver = null;
+function registerDynamicResolver(fn) {
+  dynamicResolver = fn;
+}
+
 function byId(id) {
-  return id ? BY_ID[id] || null : null;
+  if (!id) return null;
+  return BY_ID[id] || (dynamicResolver ? dynamicResolver(id) : null) || null;
 }
 
 // Forme transmise au front pour appliquer un cosmétique
@@ -218,6 +228,7 @@ module.exports = {
   LICENSES,
   LICENSE_COLORS,
   byId,
+  registerDynamicResolver,
   publicCosmetic,
   resolveEquipped,
   DEFAULT_BY_SLOT,

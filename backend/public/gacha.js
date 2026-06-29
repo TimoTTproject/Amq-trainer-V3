@@ -297,6 +297,10 @@ function renderCollection() {
 
 // ── Boutique de cosmétiques ─────────────────────────────────
 let shopData = null;
+// État de la section « Personnages » (catalogue paginé, filtrable)
+let charShop = { series: '', q: '', page: 1, total: 0, pageSize: 24, items: [], seriesList: [] };
+let charShellRendered = false;
+let charSearchTimer = null;
 
 async function openShop() {
   showView('shop');
@@ -304,9 +308,13 @@ async function openShop() {
   document.getElementById('shop-msg').textContent = '';
   const wrap = document.getElementById('shop-groups');
   wrap.innerHTML = '<p class="muted">Chargement…</p>';
+  charShellRendered = false;
+  charShop = { series: '', q: '', page: 1, total: 0, pageSize: 24, items: [], seriesList: [] };
+  document.getElementById('shop-characters').innerHTML = '';
   try {
     shopData = await api('/api/shop');
     renderShop();
+    loadCharShop(1); // section Personnages (chargée en parallèle, non bloquante)
   } catch (e) {
     wrap.innerHTML = `<p class="muted">${e.message}</p>`;
   }
@@ -402,6 +410,7 @@ async function buyCosmetic(id) {
     markOwned(id);
     shopData.tokens = r.tokens;
     renderShop();
+    if (charShop.items.length) renderCharGrid();
   } catch (err) {
     msg.textContent = err.message;
   }
@@ -420,6 +429,7 @@ async function equipCosmetic(id) {
     }
     setEquipped(r.slot, r.equipped);
     renderShop();
+    if (charShop.items.length) renderCharGrid();
     renderHeaderUser();
     msg.textContent = 'Équipé ✓';
   } catch (err) {
@@ -427,9 +437,87 @@ async function equipCosmetic(id) {
   }
 }
 
-// Tous les groupes porteurs d'items (slots + licences)
+// ── Section « Personnages » (catalogue paginé) ──────────────
+async function loadCharShop(page) {
+  charShop.page = page || charShop.page || 1;
+  try {
+    const qs = new URLSearchParams({ series: charShop.series || '', q: charShop.q || '', page: String(charShop.page) });
+    const r = await api('/api/shop/characters?' + qs.toString());
+    charShop.items = r.items;
+    charShop.total = r.total;
+    charShop.pageSize = r.pageSize;
+    charShop.page = r.page;
+    if (!charShellRendered) { charShop.seriesList = r.series || []; renderCharShell(); charShellRendered = true; }
+    renderCharGrid();
+    renderCharPager();
+  } catch (e) {
+    const grid = document.getElementById('char-grid');
+    if (grid) grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// Construit une fois l'en-tête + les contrôles (recherche / filtre série).
+function renderCharShell() {
+  const opts = ['<option value="">Toutes les séries</option>']
+    .concat((charShop.seriesList || []).map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`))
+    .join('');
+  document.getElementById('shop-characters').innerHTML = `
+    <div class="shop-licenses shop-characters-head">
+      <div class="shop-licenses-head">
+        <h2><i class="fas fa-user-astronaut"></i> Personnages</h2>
+        <p class="muted">Mets ton perso préféré en dos de carte ou en bannière de profil.</p>
+      </div>
+      <div class="shop-char-controls">
+        <input id="char-search" type="search" placeholder="Rechercher un personnage…" autocomplete="off">
+        <select id="char-series">${opts}</select>
+      </div>
+      <div id="char-grid" class="shop-grid"></div>
+      <div id="char-pager" class="shop-pager"></div>
+    </div>`;
+  document.getElementById('char-search').addEventListener('input', (e) => {
+    clearTimeout(charSearchTimer);
+    const v = e.target.value;
+    charSearchTimer = setTimeout(() => { charShop.q = v.trim(); loadCharShop(1); }, 300);
+  });
+  document.getElementById('char-series').addEventListener('change', (e) => {
+    charShop.series = e.target.value;
+    loadCharShop(1);
+  });
+}
+
+function renderCharGrid() {
+  const grid = document.getElementById('char-grid');
+  if (!grid) return;
+  if (!charShop.items.length) { grid.innerHTML = '<p class="muted">Aucun personnage pour ce filtre.</p>'; return; }
+  grid.innerHTML = charShop.items
+    .map((item) => shopItemHtml(item, `${item.character ? item.character.name : item.name} · ${SLOT_SHORT[item.slot] || ''}`))
+    .join('');
+}
+
+function renderCharPager() {
+  const el = document.getElementById('char-pager');
+  if (!el) return;
+  const pages = Math.max(1, Math.ceil(charShop.total / charShop.pageSize));
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  const p = charShop.page;
+  el.innerHTML = `
+    <button class="btn-secondary shop-page" data-page="${p - 1}"${p <= 1 ? ' disabled' : ''}><i class="fas fa-chevron-left"></i></button>
+    <span class="shop-page-info">Page ${p} / ${pages} · ${charShop.total} items</span>
+    <button class="btn-secondary shop-page" data-page="${p + 1}"${p >= pages ? ' disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
+}
+
+function onCharShopClick(e) {
+  const pg = e.target.closest('.shop-page');
+  if (pg) { if (!pg.disabled) loadCharShop(parseInt(pg.dataset.page, 10)); return; }
+  const btn = e.target.closest('.shop-btn');
+  if (!btn) return;
+  if (btn.dataset.act === 'buy') buyCosmetic(btn.dataset.id);
+  else equipCosmetic(btn.dataset.id);
+}
+
+// Tous les groupes porteurs d'items (slots + licences + personnages chargés)
 function allShopGroups() {
-  return [...(shopData.groups || []), ...(shopData.licenses || [])];
+  return [...(shopData.groups || []), ...(shopData.licenses || []), { items: charShop.items }];
 }
 // Le slot revient au défaut : on garde l'item gratuit (price 0) du slot
 function defaultCosmetic(slot) {

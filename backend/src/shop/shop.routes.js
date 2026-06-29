@@ -3,11 +3,23 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { COSMETICS, SLOTS, SLOT_LABELS, LICENSES, LICENSE_COLORS, byId, publicCosmetic } = require('./cosmetics');
+const charCos = require('./character-cosmetics');
 const { tierFromMmr, TIERS } = require('../mp/rank');
 
 const router = express.Router();
 
 const tierIdx = (name) => TIERS.findIndex((t) => t.name === name);
+
+// Résout un cosmétique par id, y compris les cosmétiques « personnages » servis
+// depuis le cache mémoire (qu'on s'assure d'avoir chargé pour ces ids).
+async function resolveCosmetic(id) {
+  let item = byId(id);
+  if (!item && typeof id === 'string' && id.startsWith('char:')) {
+    await charCos.ensureFresh();
+    item = byId(id);
+  }
+  return item;
+}
 
 // Meilleur palier atteint (solo OU multi), index -1 si non classé.
 function bestTierIndex(user) {
@@ -69,9 +81,36 @@ router.get('/', requireAuth, async (req, res) => {
   res.json({ tokens: req.user.tokens, tier: bestIdx >= 0 ? TIERS[bestIdx].name : null, groups, licenses });
 });
 
+// Catalogue « personnages » : volumineux → paginé + filtre série + recherche.
+router.get('/characters', requireAuth, async (req, res) => {
+  await charCos.ensureFresh();
+  const { items, total, page, pageSize, series } = charCos.query({
+    series: req.query.series || '',
+    q: (req.query.q || '').trim(),
+    page: req.query.page,
+  });
+  const owned = items.length
+    ? await prisma.userCosmetic.findMany({
+        where: { userId: req.user.id, cosmeticId: { in: items.map((i) => i.id) } },
+        select: { cosmeticId: true },
+      })
+    : [];
+  const ownedIds = new Set(owned.map((o) => o.cosmeticId));
+  const out = items.map((c) => ({
+    ...publicCosmetic(c),
+    price: c.price ?? null,
+    owned: ownedIds.has(c.id),
+    equipped: (req.user[c.slot] || null) === c.id,
+    locked: false,
+    tierReqName: null,
+    character: { name: c.charName, series: c.charSeries, rarity: c.charRarity },
+  }));
+  res.json({ items: out, total, page, pageSize, series });
+});
+
 // Achat d'un cosmétique avec des tokens.
 router.post('/buy', requireAuth, async (req, res) => {
-  const item = byId(req.body?.cosmeticId);
+  const item = await resolveCosmetic(req.body?.cosmeticId);
   if (!item) return res.status(404).json({ error: 'Cosmétique introuvable' });
   if (item.exclusive) return res.status(403).json({ error: 'Exclusif de palier : se débloque en grimpant au classement, pas à l\'achat.' });
   if (item.price === 0) return res.status(400).json({ error: 'Cet article est déjà disponible' });
@@ -100,7 +139,7 @@ router.post('/equip', requireAuth, async (req, res) => {
   const id = req.body?.cosmeticId || null;
   // Revenir au défaut : on accepte null ou l'id de l'item gratuit du slot.
   if (id) {
-    const item = byId(id);
+    const item = await resolveCosmetic(id);
     if (!item) return res.status(404).json({ error: 'Cosmétique introuvable' });
     // Tout sauf l'item gratuit par défaut (price 0) exige la possession — y compris
     // les exclusifs de palier (price null).
