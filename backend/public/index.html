@@ -284,6 +284,7 @@
 
     <!-- VUE PROFIL (page pleine largeur) -->
     <div id="view-profile" class="hidden">
+      <button class="btn-back hidden" id="profile-back"><i class="fas fa-arrow-left"></i> Retour</button>
       <div class="profile-banner">
         <div class="profile-banner-main">
           <span class="avatar avatar-xl" id="profile-avatar"></span>
@@ -301,6 +302,7 @@
         <div class="profile-banner-actions">
           <button class="btn-primary level-claim hidden" id="profile-claim"><i class="fas fa-gift"></i> Réclamer</button>
           <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
+          <button class="btn-primary hidden" id="profile-trade-btn"><i class="fas fa-right-left"></i> Proposer un échange</button>
         </div>
       </div>
 
@@ -311,7 +313,7 @@
         <div class="pstat"><span id="profile-tower">0</span><label>Étage max</label></div>
         <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
         <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
-        <div class="pstat"><span id="profile-dust">0</span><label>Poussière 🌟</label></div>
+        <div class="pstat" id="pstat-dust"><span id="profile-dust">0</span><label>Poussière 🌟</label></div>
       </div>
 
       <div class="profile-grid">

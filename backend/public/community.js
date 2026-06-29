@@ -315,6 +315,8 @@ async function loadTradesBadge() {
 
 // ── PROFIL JOUEUR (public, depuis le classement) ──
 async function openPlayer(userId) {
+  // Affiche la fiche joueur via la vue profil complète (plus jolie que la modale).
+  if (typeof openPublicProfile === 'function') return openPublicProfile(userId);
   const modal = document.getElementById('player-modal');
   const body = document.getElementById('player-body');
   body.innerHTML = '<p class="muted">Chargement…</p>';

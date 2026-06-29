@@ -417,6 +417,7 @@ async function devGrantTokens() {
 function setupProfileUI() {
   document.getElementById('profile-btn').addEventListener('click', openProfile);
   document.getElementById('profile-share').addEventListener('click', shareProfile);
+  document.getElementById('profile-back').addEventListener('click', () => navTo('community'));
   document.getElementById('profile-claim').addEventListener('click', claimLevels);
   document.getElementById('avatar-upload-btn').addEventListener('click', () =>
     document.getElementById('avatar-input').click()
@@ -457,8 +458,23 @@ function renderProfileAvatar() {
 
 let profileData = null; // réponse riche de /api/profile/:id
 
+// Profil public d'un autre joueur : même vue complète que la nôtre (plus jolie
+// que l'ancienne modale), en lecture seule + bouton d'échange.
+async function openPublicProfile(userId) {
+  if (!userId || (currentUser && userId === currentUser.id)) return openProfile();
+  showView('profile');
+  let d;
+  try { d = await api(`/api/profile/${userId}`); } catch { return; }
+  profileData = d;
+  document.getElementById('profile-tokens').textContent = d.user.tokens;
+  renderProfile(d, false);
+}
+
 async function openProfile() {
   showView('profile');
+  document.body.classList.remove('profile-public'); // mode perso (édition visible)
+  document.getElementById('profile-back').classList.add('hidden');
+  document.getElementById('profile-trade-btn').classList.add('hidden');
   pendingAvatar = undefined;
   setProfileError('');
   document.getElementById('profile-name').value = currentUser.displayName;
@@ -477,8 +493,25 @@ async function openProfile() {
   renderProfile(profileData);
 }
 
-// Rendu commun (utilisé pour le profil perso et la fiche publique)
-function renderProfile(d) {
+// Rendu commun (profil perso ET fiche publique d'un autre joueur).
+function renderProfile(d, isSelf = true) {
+  document.body.classList.toggle('profile-public', !isSelf);
+  document.getElementById('profile-back').classList.toggle('hidden', isSelf);
+  document.getElementById('profile-hero-name').textContent = d.user.displayName;
+  // Avatar : en public, depuis les données du joueur consulté (avec cadre).
+  if (!isSelf) {
+    const av = document.getElementById('profile-avatar');
+    const fr = d.cosmetics && d.cosmetics.avatarFrame;
+    av.className = 'avatar avatar-xl' + (fr && fr.className ? ' ' + fr.className : '');
+    av.style.cssText = (d.user.avatarUrl ? `background-image:url('${d.user.avatarUrl}');` : '') + (fr && fr.css ? fr.css : '');
+    av.textContent = d.user.avatarUrl ? '' : (d.user.displayName || '?').charAt(0).toUpperCase();
+    // Bouton « Proposer un échange » vers ce joueur
+    const tb = document.getElementById('profile-trade-btn');
+    tb.classList.remove('hidden');
+    tb.onclick = () => { if (typeof openTradeBuilder === 'function') openTradeBuilder(d.user.id, d.user.displayName); };
+  } else {
+    document.getElementById('profile-trade-btn').classList.add('hidden');
+  }
   applyBackgroundCosmetic(
     document.querySelector('#view-profile .profile-banner'),
     d.cosmetics && d.cosmetics.profileBanner
@@ -491,7 +524,7 @@ function renderProfile(d) {
   document.getElementById('profile-cards-count').textContent = d.cardsCount || 0;
   document.getElementById('profile-tokens').textContent = d.user.tokens;
   const dustEl = document.getElementById('profile-dust');
-  if (dustEl) dustEl.textContent = currentUser.dust || 0;
+  if (dustEl && isSelf) dustEl.textContent = currentUser.dust || 0;
   const since = d.user.createdAt
     ? new Date(d.user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     : '—';
