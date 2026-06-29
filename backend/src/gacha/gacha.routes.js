@@ -20,8 +20,23 @@ function seededIndex(wk, salt, mod) {
   return h % mod;
 }
 
+function currentWeek() {
+  return Math.floor(Date.now() / WEEK_MS);
+}
+
+// Personnage le plus voté pour une semaine donnée (null si aucun vote).
+async function topVotedCharacterId(week) {
+  const g = await prisma.featuredVote.groupBy({
+    by: ['characterId'], where: { week },
+    _count: { characterId: true },
+    orderBy: { _count: { characterId: 'desc' } },
+    take: 1,
+  });
+  return g.length ? g[0].characterId : null;
+}
+
 async function getWeeklyFeatured() {
-  const wk = Math.floor(Date.now() / WEEK_MS);
+  const wk = currentWeek();
   if (weeklyCache.week === wk) return weeklyCache;
   const chars = [];
   const byRarity = {};
@@ -36,6 +51,23 @@ async function getWeeklyFeatured() {
     });
     if (c) { chars.push(c); byRarity[r] = c.id; }
   }
+  // Vedette élue par les votes de la semaine PRÉCÉDENTE : remplace le slot de sa
+  // rareté (ou s'ajoute), avec le même rate-up. Repli sur le déterministe sinon.
+  try {
+    const winnerId = await topVotedCharacterId(wk - 1);
+    if (winnerId) {
+      const w = await prisma.character.findUnique({
+        where: { id: winnerId }, select: { id: true, name: true, imageUrl: true, rarity: true },
+      });
+      if (w) {
+        byRarity[w.rarity] = w.id;
+        const i = chars.findIndex((c) => c.rarity === w.rarity);
+        const entry = { ...w, voted: true };
+        if (i >= 0) chars[i] = entry; else chars.push(entry);
+      }
+    }
+  } catch (e) { console.warn('weekly vote winner unavailable:', e.message); }
+
   weeklyCache = { week: wk, byRarity, chars, resetAt: (wk + 1) * WEEK_MS };
   return weeklyCache;
 }
@@ -513,6 +545,53 @@ router.get('/collection', requireAuth, async (req, res) => {
     ownedByRarity,
     labels: RARITY_LABELS,
   });
+});
+
+// ── Vote pour la vedette de la semaine prochaine ──
+// Statut : mon vote, classement en cours, échéance, et la vedette élue en cours.
+router.get('/vote', requireAuth, async (req, res) => {
+  const wk = currentWeek();
+  const mine = await prisma.featuredVote.findUnique({
+    where: { userId_week: { userId: req.user.id, week: wk } },
+    select: { characterId: true },
+  });
+  const grouped = await prisma.featuredVote.groupBy({
+    by: ['characterId'], where: { week: wk },
+    _count: { characterId: true },
+    orderBy: { _count: { characterId: 'desc' } },
+    take: 8,
+  });
+  const chars = await prisma.character.findMany({
+    where: { id: { in: grouped.map((g) => g.characterId) } },
+    select: { id: true, name: true, imageUrl: true, rarity: true },
+  });
+  const byId = Object.fromEntries(chars.map((c) => [c.id, c]));
+  const standings = grouped
+    .filter((g) => byId[g.characterId])
+    .map((g) => ({ ...byId[g.characterId], votes: g._count.characterId }));
+  const weekly = await getWeeklyFeatured();
+  res.json({
+    week: wk,
+    closesAt: (wk + 1) * WEEK_MS,
+    myVote: mine?.characterId || null,
+    standings,
+    current: weekly.chars, // vedettes en cours (dont le gagnant du vote précédent)
+  });
+});
+
+// Émet/modifie mon vote pour la semaine en cours (décide la vedette de la suivante).
+router.post('/vote', requireAuth, rateLimit({ max: 30, name: 'gacha-vote' }), async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  const c = await prisma.character.findUnique({ where: { id: characterId }, select: { id: true } });
+  if (!c) return res.status(404).json({ error: 'Personnage introuvable' });
+  const wk = currentWeek();
+  await prisma.featuredVote.upsert({
+    where: { userId_week: { userId: req.user.id, week: wk } },
+    update: { characterId },
+    create: { userId: req.user.id, week: wk, characterId },
+  });
+  res.json({ ok: true, characterId });
 });
 
 module.exports = { router };

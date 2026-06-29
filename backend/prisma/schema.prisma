@@ -92,6 +92,7 @@ model User {
   dailyRuns     DailyRun[]
   pushSubs      PushSubscription[]
   seasonClaims  SeasonClaim[]
+  featuredVotes FeaturedVote[]
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
@@ -245,6 +246,22 @@ model SeasonClaim {
   @@unique([userId, season])
 }
 
+// Vote pour la vedette de la semaine suivante (1 vote par joueur et par semaine).
+// `week` = n° de semaine où le vote est émis ; il décide de la semaine `week+1`.
+model FeaturedVote {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  week        Int
+  characterId Int
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, week])
+  @@index([week])
+}
+
 // Abonnement aux notifications push (Web Push) — un par navigateur/appareil.
 model PushSubscription {
   id        Int      @id @default(autoincrement())
@@ -384,6 +401,7 @@ model Character {
 
   cards     UserCard[]
   instances CardInstance[]
+  votes     FeaturedVote[]
 
   @@index([rarity])
   @@index([series])

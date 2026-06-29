@@ -865,6 +865,20 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .weekly-boost { font-size: .75rem; background: rgba(0,0,0,.3); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
 .weekly-timer { font-size: .85rem; background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 999px; }
 
+/* Panneau de vote « vedette de la semaine prochaine » */
+.gacha-vote { margin: 14px 0; }
+.gacha-vote:empty { display: none; }
+.vote-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; padding: 9px 13px; border-radius: 10px; background: var(--bg-2); border: 1px solid #2a2f42; font-weight: 700; }
+.vote-list { display: flex; flex-direction: column; gap: 6px; }
+.vote-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid #242a3d; border-radius: 10px; padding: 6px 10px; color: var(--text); cursor: pointer; transition: border-color .15s, transform .05s; }
+.vote-row:hover { border-color: var(--accent); }
+.vote-row.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.vote-rank { width: 18px; text-align: center; color: var(--text-2); font-weight: 700; font-size: .85rem; }
+.vote-name { flex: 1; font-size: .9rem; }
+.vote-name small { font-size: .72rem; }
+.vote-count { font-weight: 700; font-size: .85rem; color: var(--accent); }
+.vote-mine { font-size: .82rem; color: var(--text-2); margin-top: 8px; }
+
 /* ── Filtre OP/ED ── */
 .type-filter { display: inline-flex; gap: 4px; margin-left: auto; background: var(--bg-3); border-radius: 999px; padding: 3px; }
 .tf-btn { background: none; border: none; color: var(--text-2); font-size: .8rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }

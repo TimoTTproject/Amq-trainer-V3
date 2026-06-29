@@ -28,7 +28,53 @@ async function openGacha() {
       : '';
     renderWeeklyBanner(info);
   } catch {}
+  loadVotePanel();
   loadCollection();
+}
+
+// Panneau de vote : classement des votes pour la vedette de la semaine prochaine.
+let voteMyChoice = null;
+async function loadVotePanel() {
+  const el = document.getElementById('gacha-vote');
+  if (!el) return;
+  let d;
+  try { d = await api('/api/gacha/vote'); } catch { el.innerHTML = ''; return; }
+  voteMyChoice = d.myVote;
+  const left = Math.max(0, (d.closesAt || 0) - Date.now());
+  const days = Math.floor(left / 86400000);
+  const hours = Math.floor((left % 86400000) / 3600000);
+  const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
+  const rows = d.standings.length
+    ? d.standings.map((c, i) => `
+        <button class="vote-row${c.id === d.myVote ? ' mine' : ''}" data-vote-id="${c.id}">
+          <span class="vote-rank">${i + 1}</span>
+          <span class="avatar avatar-xs" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></span>
+          <span class="vote-name">${escapeHtml(c.name)} <small class="r-${c.rarity}">${RARITY_LABELS[c.rarity] || c.rarity}</small></span>
+          <span class="vote-count">${c.votes} ✋</span>
+        </button>`).join('')
+    : '<p class="muted">Aucun vote pour l\'instant — ouvre un personnage et vote pour lui !</p>';
+  const mine = d.myVote
+    ? `Ton vote : <b>${escapeHtml((d.standings.find((c) => c.id === d.myVote) || {}).name || 'enregistré')}</b>`
+    : 'Tu n\'as pas encore voté. Ouvre la fiche d\'un perso → « Voter ».';
+  el.innerHTML = `
+    <div class="vote-head">
+      <span><i class="fas fa-check-to-slot"></i> Vote : vedette de la semaine prochaine</span>
+      <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
+    </div>
+    <div class="vote-list">${rows}</div>
+    <p class="vote-mine">${mine}</p>`;
+  el.querySelectorAll('[data-vote-id]').forEach((b) =>
+    b.addEventListener('click', () => castVote(parseInt(b.dataset.voteId)))
+  );
+}
+
+async function castVote(characterId) {
+  try {
+    await api('/api/gacha/vote', { method: 'POST', body: JSON.stringify({ characterId }) });
+    voteMyChoice = characterId;
+    if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+    loadVotePanel();
+  } catch (e) { alert(e.message); }
 }
 
 // Bannière « vedettes de la semaine » + compte à rebours
@@ -452,6 +498,9 @@ async function openCharacter(id) {
       ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}">
         <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Mettre en favori'}
       </button>` : ''}
+      <button class="btn-secondary char-vote" id="char-vote-btn" data-cid="${c.id}">
+        <i class="fas fa-check-to-slot"></i> ${voteMyChoice === c.id ? 'Vedette : voté ✓' : 'Voter vedette (sem. +1)'}
+      </button>
       ${d.soldOut
         ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Épuisé — échange seulement</button>`
         : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
@@ -493,6 +542,18 @@ async function openCharacter(id) {
           openCharacter(c.id); // recharge la fiche (copies + poussière à jour)
           loadCollection();
         } catch (e) { alert(e.message); recycleBtn.disabled = false; }
+      });
+    }
+    const voteBtn = document.getElementById('char-vote-btn');
+    if (voteBtn) {
+      voteBtn.addEventListener('click', async () => {
+        voteBtn.disabled = true;
+        try {
+          await api('/api/gacha/vote', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+          voteMyChoice = c.id;
+          voteBtn.innerHTML = '<i class="fas fa-check-to-slot"></i> Vedette : voté ✓';
+          if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+        } catch (e) { alert(e.message); voteBtn.disabled = false; }
       });
     }
     const ascendBtn = document.getElementById('char-ascend-btn');
