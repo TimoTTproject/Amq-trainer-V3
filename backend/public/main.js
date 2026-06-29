@@ -1566,8 +1566,17 @@ async function loadQuests() {
   if (!box) return;
   try {
     const { quests } = await api('/api/quests');
+    if (!quests || !quests.length) { box.innerHTML = ''; return; }
+    const claimable = quests.filter((q) => q.done && !q.claimed).length;
+    const claimedAll = quests.every((q) => q.claimed);
+    const badge = claimable
+      ? `<span class="quests-badge ready">${claimable} à réclamer ✨</span>`
+      : claimedAll
+      ? '<span class="quests-badge done">Tout réclamé ✓</span>'
+      : '<span class="quests-badge">+🪙 chaque jour</span>';
+    box.classList.toggle('has-claim', claimable > 0);
     box.innerHTML =
-      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour</h3><div class="quests-list">` +
+      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour ${badge}</h3><div class="quests-list">` +
       quests.map((q) => {
         const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
         const right = q.claimed

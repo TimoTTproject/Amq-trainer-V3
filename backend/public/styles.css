@@ -1118,9 +1118,17 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .onboard-actions button { flex: 1; justify-content: center; min-width: 150px; }
 
 /* Quêtes du jour (accueil) */
-.home-quests { margin-top: 28px; }
-.quests-title { font-size: 1.05rem; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.home-quests { margin: 18px 0 26px; padding: 18px; border-radius: 16px;
+  background: linear-gradient(160deg, var(--bg-2), var(--bg));
+  border: 1px solid #2a2f42; border-left: 4px solid var(--accent); }
+.home-quests:empty { display: none; }
+.home-quests.has-claim { border-left-color: var(--green); box-shadow: 0 0 0 1px rgba(62,201,138,.25); }
+.quests-title { font-size: 1.15rem; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .quests-title i { color: var(--accent); }
+.quests-badge { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--bg-3); color: var(--text-2); }
+.quests-badge.ready { background: var(--green); color: #06281a; animation: questPulse 1.6s ease-in-out infinite; }
+.quests-badge.done { color: var(--green); }
+@keyframes questPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); filter: brightness(1.1); } }
 .quests-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .quest-item { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; }
 .quest-item.ready { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
