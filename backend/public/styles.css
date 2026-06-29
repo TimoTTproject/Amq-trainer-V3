@@ -1134,17 +1134,21 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .daily-btn { font-size: .82rem; padding: 7px 12px; animation: claimPulse 1.8s ease-in-out infinite; }
 .header-rank { display: inline-flex; align-items: center; } /* la pastille tier-badge fournit le style */
 
-/* Pastilles de palier (rang) — une couleur par tier */
-.tier-badge { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; line-height: 1.5; white-space: nowrap; border: 1px solid transparent; letter-spacing: .02em; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
-.tier-badge.big { font-size: 1rem; padding: 5px 15px; }
-.t-bronze { background: linear-gradient(135deg,#7a4a22,#cd7f32); color: #fff2e0; }
-.t-silver { background: linear-gradient(135deg,#8a929c,#d3dbe3); color: #1a1d24; }
-.t-gold { background: linear-gradient(135deg,#b8860b,#ffd700); color: #3a2c00; }
-.t-platine { background: linear-gradient(135deg,#0aa3a3,#8af7e4); color: #06302b; }
-.t-diamant { background: linear-gradient(135deg,#2b8de0,#8fd6ff); color: #06223a; }
-.t-maitre { background: linear-gradient(135deg,#7b2ff7,#ff5d8f,#ffd700); background-size: 200% auto; color: #fff; border-color: rgba(255,255,255,.4); animation: cosmHolo 6s linear infinite; }
-/* Valeur MMR mise en évidence à côté de la pastille */
-.tier-div { display: inline-flex; align-items: center; justify-content: center; min-width: 1.3em; padding: 0 .25em; border-radius: 5px; background: rgba(0,0,0,.28); font-weight: 800; }
+/* Rang : blason (emblème SVG) + nom coloré + sous-palier (I/II/III) */
+.tier-badge { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; white-space: nowrap; font-weight: 700; }
+.tier-emblem { flex-shrink: 0; display: block; }
+.tier-badge .tier-name { text-transform: uppercase; letter-spacing: .5px; font-size: .8rem; }
+.tier-badge.big { gap: 10px; }
+.tier-badge.big .tier-name { font-size: 1.1rem; letter-spacing: 1px; }
+.tier-div { font-weight: 800; opacity: .9; }
+/* Couleur du nom/sous-palier selon le grade (teinte claire = lisible sur fond sombre) */
+.t-bronze .tier-name, .t-bronze .tier-div { color: #E6A572; }
+.t-silver .tier-name, .t-silver .tier-div { color: #DCE4EE; }
+.t-gold .tier-name, .t-gold .tier-div { color: #FFE08C; }
+.t-platine .tier-name, .t-platine .tier-div { color: #A6F7EC; }
+.t-diamant .tier-name, .t-diamant .tier-div { color: #A8E2FF; }
+.t-maitre .tier-name, .t-maitre .tier-div { color: #DCB8FF; }
+/* Valeur MMR mise en évidence à côté du rang */
 .mmr-value { color: var(--accent); font-weight: 800; font-size: 1.15em; }
 .mmr-unit { color: var(--text-2); font-size: .8em; font-weight: 700; }
 

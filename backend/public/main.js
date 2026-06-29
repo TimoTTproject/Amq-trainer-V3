@@ -314,15 +314,42 @@ function renderAvatar(el, user) {
   applyAvatarFrame(el, currentUser && currentUser.cosmetics && currentUser.cosmetics.avatarFrame);
 }
 
-// Pastille de palier (rang) colorée — utilisée partout où un tier s'affiche.
+// Système de grades (blasons SVG) — d'après le handoff design « Système de rang »
+// (Direction 01 PRISME : gemme facettée néon). Palette par grade.
 function tierSlug(name) {
   return { 'Bronze': 'bronze', 'Argent': 'silver', 'Or': 'gold', 'Platine': 'platine', 'Diamant': 'diamant', 'Maître': 'maitre' }[name] || 'bronze';
 }
 const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
+const TIER_PALETTE = {
+  'Bronze': { color: '#C77B43', light: '#E6A572', dark: '#8A4F26', glow: '#E08A4A' },
+  'Argent': { color: '#AEB9C6', light: '#DCE4EE', dark: '#7C8896', glow: '#C6D2E0' },
+  'Or': { color: '#F2C14E', light: '#FFE08C', dark: '#C2901F', glow: '#FFD45C' },
+  'Platine': { color: '#4FE0CB', light: '#A6F7EC', dark: '#1FA593', glow: '#4FE0CB' },
+  'Diamant': { color: '#5CC8FF', light: '#A8E2FF', dark: '#2B8FD6', glow: '#5CC8FF' },
+  'Maître': { color: '#B36BFF', light: '#DCB8FF', dark: '#7E36C8', glow: '#B36BFF' },
+};
+let _emblemSeq = 0;
+// Blason PRISME (gemme facettée) coloré selon le grade. `size` = largeur px.
+function tierEmblem(name, size = 24) {
+  const p = TIER_PALETTE[name] || TIER_PALETTE.Bronze;
+  const id = 'emb' + (++_emblemSeq);
+  const SIL = 'M50 6 L90 22 L90 60 Q90 96 50 116 Q10 96 10 60 L10 22 Z';
+  const facets = [
+    ['50,6 90,22 50,56', p.light], ['90,22 90,60 50,56', p.color], ['90,60 50,116 50,56', p.dark],
+    ['50,116 10,60 50,56', p.color], ['10,60 10,22 50,56', p.light], ['10,22 50,6 50,56', p.dark],
+  ].map(([pts, c]) => `<polygon points="${pts}" fill="${c}"/>`).join('');
+  return `<svg class="tier-emblem" viewBox="0 0 100 122" width="${size}" height="${Math.round(size * 1.22)}" style="filter:drop-shadow(0 0 5px ${p.glow});overflow:visible" aria-hidden="true">`
+    + `<defs><clipPath id="${id}"><path d="${SIL}"/></clipPath></defs>`
+    + `<g clip-path="url(#${id})">${facets}</g>`
+    + `<path d="${SIL}" fill="none" stroke="${p.color}" stroke-width="3" stroke-linejoin="round"/>`
+    + `<polygon points="50,45 58,56 50,67 42,56" fill="${p.light}"/></svg>`;
+}
 function tierBadge(tier, extra) {
   if (!tier || !tier.name) return '';
-  const div = tier.division ? ` <span class="tier-div">${ROMAN[tier.division] || tier.division}</span>` : '';
-  return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">${tier.icon || ''} ${escapeHtml(tier.name)}${div}</span>`;
+  const div = tier.division ? `<span class="tier-div">${ROMAN[tier.division] || tier.division}</span>` : '';
+  const big = extra && extra.indexOf('big') >= 0;
+  return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">`
+    + `${tierEmblem(tier.name, big ? 40 : 22)}<span class="tier-name">${escapeHtml(tier.name)}</span>${div}</span>`;
 }
 
 // ── Cosmétiques : helpers d'application ─────────────────────
@@ -374,7 +401,10 @@ function renderHeaderUser() {
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
   const rk = document.getElementById('header-rank');
-  if (rk) rk.classList.add('hidden'); // badge de rang retiré de l'en-tête (visible au profil/classement)
+  if (rk) {
+    if (currentUser.rankTier) { rk.innerHTML = tierBadge(currentUser.rankTier); rk.classList.remove('hidden'); }
+    else rk.classList.add('hidden');
+  }
   document.getElementById('daily-btn').classList.toggle('hidden', !currentUser.dailyAvailable);
 }
 
@@ -607,6 +637,7 @@ function renderProfileRanked(r, recent, solo) {
     ? '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>'
     : `<div class="ranked-card">
         <span class="ranked-label">🏅 Multi</span>
+        ${tierBadge(r.tier, 'big')}
         <span class="ranked-mmr">${r.mmr} MMR</span>
         <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
       </div>`;
@@ -614,6 +645,7 @@ function renderProfileRanked(r, recent, solo) {
     ? ''
     : `<div class="ranked-card">
         <span class="ranked-label">🗓️ Solo</span>
+        ${tierBadge(solo.tier, 'big')}
         <span class="ranked-mmr">${solo.mmr} MMR</span>
         <span class="hint">${solo.games} défi(s) · meilleur score ${solo.bestScore}</span>
       </div>`;
