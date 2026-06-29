@@ -314,6 +314,15 @@ function renderAvatar(el, user) {
   applyAvatarFrame(el, currentUser && currentUser.cosmetics && currentUser.cosmetics.avatarFrame);
 }
 
+// Pastille de palier (rang) colorée — utilisée partout où un tier s'affiche.
+function tierSlug(name) {
+  return { 'Bronze': 'bronze', 'Argent': 'silver', 'Or': 'gold', 'Platine': 'platine', 'Diamant': 'diamant', 'Maître': 'maitre' }[name] || 'bronze';
+}
+function tierBadge(tier, extra) {
+  if (!tier || !tier.name) return '';
+  return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">${tier.icon || ''} ${escapeHtml(tier.name)}</span>`;
+}
+
 // ── Cosmétiques : helpers d'application ─────────────────────
 // Classes animées définies dans styles.css (à retirer avant ré-application).
 const COSM_CLASSES = ['cb-neon', 'cb-shine', 'cosm-rainbow-border', 'cosm-holo-banner', 'cosm-mythic-frame'];
@@ -364,7 +373,7 @@ function renderHeaderUser() {
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
   const rk = document.getElementById('header-rank');
   if (currentUser.rankTier) {
-    rk.innerHTML = `${currentUser.rankTier.icon} ${escapeHtml(currentUser.rankTier.name)}`;
+    rk.innerHTML = tierBadge(currentUser.rankTier);
     rk.classList.remove('hidden');
   } else rk.classList.add('hidden');
   document.getElementById('daily-btn').classList.toggle('hidden', !currentUser.dailyAvailable);
@@ -599,7 +608,7 @@ function renderProfileRanked(r, recent, solo) {
     ? '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>'
     : `<div class="ranked-card">
         <span class="ranked-label">🏅 Multi</span>
-        <span class="ranked-tier">${r.tier.icon} ${escapeHtml(r.tier.name)}</span>
+        ${tierBadge(r.tier, 'big')}
         <span class="ranked-mmr">${r.mmr} MMR</span>
         <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
       </div>`;
@@ -607,7 +616,7 @@ function renderProfileRanked(r, recent, solo) {
     ? ''
     : `<div class="ranked-card">
         <span class="ranked-label">🗓️ Solo</span>
-        <span class="ranked-tier">${solo.tier.icon} ${escapeHtml(solo.tier.name)}</span>
+        ${tierBadge(solo.tier, 'big')}
         <span class="ranked-mmr">${solo.mmr} MMR</span>
         <span class="hint">${solo.games} défi(s) · meilleur score ${solo.bestScore}</span>
       </div>`;

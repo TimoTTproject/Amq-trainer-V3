@@ -127,11 +127,11 @@ function renderDailyIntro(d) {
   dailyTotal = d.total;
   document.getElementById('daily-total').textContent = d.total;
   document.getElementById('daily-mmr').textContent = d.soloGames > 0 ? d.soloMmr : '—';
-  document.getElementById('daily-tier').textContent = d.tier ? `${d.tier.icon} ${d.tier.name}` : 'Non classé';
+  document.getElementById('daily-tier').innerHTML = d.tier ? tierBadge(d.tier) : 'Non classé';
   document.getElementById('daily-best').textContent = d.soloBestScore || 0;
   document.getElementById('daily-streak').textContent = d.streak || 0;
   const rank = document.getElementById('daily-rank');
-  rank.innerHTML = d.tier ? `${d.tier.icon} <b>${escapeHtml(d.tier.name)}</b> · ${d.soloMmr} MMR` : 'Pas encore classé';
+  rank.innerHTML = d.tier ? `${tierBadge(d.tier)} · ${d.soloMmr} MMR` : 'Pas encore classé';
 
   const done = document.getElementById('daily-done');
   const start = document.getElementById('daily-start');

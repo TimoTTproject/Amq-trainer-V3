@@ -29,7 +29,7 @@ async function loadSeasonBanner() {
 }
 function renderSeasonBanner(d) {
   const el = document.getElementById('season-banner');
-  const tierTxt = d.tier ? `${d.tier.icon} ${escapeHtml(d.tier.name)}` : 'Non classé';
+  const tierTxt = d.tier ? tierBadge(d.tier) : 'Non classé';
   let action;
   if (d.claimed) action = '<span class="season-done"><i class="fas fa-circle-check"></i> Récompense réclamée</span>';
   else if (d.claimable) action = `<button class="btn-primary" id="season-claim-btn">Réclamer ${d.reward.tokens} 🪙${d.reward.dust ? ` + ${d.reward.dust} 🌟` : ''}</button>`;
@@ -101,7 +101,7 @@ async function loadLeaderboard(type) {
         (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
           <span class="lb-rank">${medal(e.rank)}</span>
           ${lbAvatar(e)}
-          <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ` <span class="lb-tier">${e.tier.icon} ${escapeHtml(e.tier.name)}</span>` : ''}</span>
+          <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ' ' + tierBadge(e.tier) : ''}</span>
           <span class="lb-value">${unit(e.value)}</span>
         </li>`
       )
@@ -133,7 +133,7 @@ async function loadPlayers(page) {
       list.innerHTML = '<p class="muted">Aucun joueur trouvé.</p>';
     } else {
       list.innerHTML = r.players.map((p) => {
-        const tier = p.tier ? `<span class="lb-tier">${p.tier.icon} ${escapeHtml(p.tier.name)}</span>` : '';
+        const tier = p.tier ? tierBadge(p.tier) : '';
         const floor = p.towerBestFloor ? `<span class="pl-floor"><i class="fas fa-chess-rook"></i> ${p.towerBestFloor}</span>` : '';
         return `<div class="pl-row${p.isMe ? ' me' : ''}" data-userid="${p.userId}">
           ${otherAvatar(p, 'avatar-sm')}

@@ -79,7 +79,7 @@ function openMultiplayer() {
   api(`/api/profile/${currentUser.id}`).then((d) => {
     const el = document.getElementById('mp-myrank');
     if (d.ranked && d.ranked.games) {
-      el.innerHTML = `Ton rang : <b>${d.ranked.tier.icon} ${escapeHtml(d.ranked.tier.name)}</b> · ${d.ranked.mmr} MMR`;
+      el.innerHTML = `Ton rang : ${(typeof tierBadge === 'function' ? tierBadge(d.ranked.tier) : escapeHtml(d.ranked.tier.name))} · ${d.ranked.mmr} MMR`;
       el.classList.remove('hidden');
     } else {
       el.innerHTML = 'Pas encore classé — joue une partie classée !';
