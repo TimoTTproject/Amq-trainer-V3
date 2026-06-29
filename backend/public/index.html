@@ -1127,6 +1127,7 @@
                   <option value="classic" selected>Classique</option>
                   <option value="teams">Équipes (Rouge/Bleu)</option>
                   <option value="elim">Élimination (3 vies)</option>
+                  <option value="coop">Coop · Tour en équipe (vies partagées)</option>
                 </select>
               </label>
               <label>Manches
@@ -1167,7 +1168,8 @@
       <!-- 3. Partie -->
       <div id="mp-game" class="mp-game hidden">
         <div class="tower-hud">
-          <span>Manche <b id="mp-round">1</b>/<b id="mp-total">10</b></span>
+          <span><span id="mp-round-word">Manche</span> <b id="mp-round">1</b><span id="mp-total-sep">/<b id="mp-total">10</b></span></span>
+          <span id="mp-coop-lives" class="mp-coop-lives hidden"></span>
           <span id="mp-progress"></span>
         </div>
         <div class="tower-timebar"><div class="tower-timefill" id="mp-timefill"></div></div>

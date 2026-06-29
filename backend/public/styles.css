@@ -786,6 +786,13 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .mp-teams { display: flex; gap: 16px; justify-content: center; margin-top: 10px; font-size: .95rem; }
 .mp-teams.big { font-size: 1.1rem; margin-bottom: 14px; }
 .mp-team.t0 { color: #ff6b6b; } .mp-team.t1 { color: #3aa0ff; }
+.mp-coop-lives { color: var(--red); font-weight: 700; }
+.mp-coop-lives small { color: var(--text-2); font-weight: 500; }
+.mp-coop-banner { margin: 10px 0 4px; padding: 8px 12px; border-radius: 8px; font-weight: 700; text-align: center; }
+.mp-coop-banner.ok { background: rgba(62,201,138,.15); color: var(--green); border: 1px solid var(--green); }
+.mp-coop-banner.ko { background: rgba(255,107,107,.13); color: var(--red); border: 1px solid var(--red); }
+.mp-coop-recap { text-align: center; font-size: 1.05rem; margin-bottom: 14px; }
+.mp-record { color: var(--orange); font-weight: 800; font-size: .8rem; }
 .mp-pts { color: var(--green); font-weight: 700; }
 .mp-total { color: var(--accent); font-weight: 700; text-align: right; }
 

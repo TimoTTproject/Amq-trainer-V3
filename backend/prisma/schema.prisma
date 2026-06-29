@@ -16,16 +16,16 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
+  id              String  @id @default(cuid())
   // Auth email/mot de passe (optionnels si compte créé via AniList OAuth)
-  email        String?  @unique
-  passwordHash String?
+  email           String? @unique
+  passwordHash    String?
   // Auth AniList OAuth (optionnels si compte email)
-  anilistId    Int?     @unique
-  anilistName  String?
-  anilistToken String? // access token AniList (chiffré idéalement plus tard)
+  anilistId       Int?    @unique
+  anilistName     String?
+  anilistToken    String? // access token AniList (chiffré idéalement plus tard)
   // Auth Google OAuth
-  googleId     String?  @unique
+  googleId        String? @unique
   // Pseudo AniList dont la liste est chargée dans « Ma liste »
   anilistListName String?
 
@@ -39,11 +39,12 @@ model User {
   // Château de l'Infini
   towerLastFreeAt DateTime? // dernière entrée gratuite (1/jour)
   towerBestFloor  Int       @default(0) // meilleur étage atteint (record)
+  coopBestFloor   Int       @default(0) // meilleur étage atteint en coop (Tour en équipe)
 
   // Niveau : dernier niveau dont la récompense a été réclamée
-  claimedLevel    Int       @default(1)
+  claimedLevel Int       @default(1)
   // Bonus de connexion quotidien
-  lastDailyAt     DateTime?
+  lastDailyAt  DateTime?
 
   // Multijoueur classé
   mmr         Int @default(1000)
@@ -51,9 +52,9 @@ model User {
   rankedWins  Int @default(0)
 
   // Solo classé (défi du jour)
-  soloMmr       Int @default(1000)
-  soloGames     Int @default(0)
-  soloBestScore Int @default(0)
+  soloMmr         Int     @default(1000)
+  soloGames       Int     @default(0)
+  soloBestScore   Int     @default(0)
   dailyStreak     Int     @default(0) // jours consécutifs avec défi terminé
   dailyStreakBest Int     @default(0)
   dailyLastDay    String? // AAAA-MM-JJ du dernier défi terminé
@@ -82,25 +83,25 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  songStats     UserSongStat[]
-  catalogEntries UserCatalogEntry[]
-  cards         UserCard[]
-  cardInstances CardInstance[]
-  transactions  TokenTransaction[]
-  towerRuns     TowerRun[]
-  mpResults     MpResult[]
-  dailyRuns     DailyRun[]
-  pushSubs      PushSubscription[]
-  seasonClaims  SeasonClaim[]
-  featuredVotes FeaturedVote[]
-  wishlist      Wishlist[]
-  quests        Quest[]
-  dailyStats    DailyStat[]
-  cosmetics     UserCosmetic[]
-  tradesSent      Trade[] @relation("TradeFrom")
-  tradesReceived  Trade[] @relation("TradeTo")
-  friendsSent     Friendship[] @relation("FriendReq")
-  friendsReceived Friendship[] @relation("FriendAdr")
+  songStats       UserSongStat[]
+  catalogEntries  UserCatalogEntry[]
+  cards           UserCard[]
+  cardInstances   CardInstance[]
+  transactions    TokenTransaction[]
+  towerRuns       TowerRun[]
+  mpResults       MpResult[]
+  dailyRuns       DailyRun[]
+  pushSubs        PushSubscription[]
+  seasonClaims    SeasonClaim[]
+  featuredVotes   FeaturedVote[]
+  wishlist        Wishlist[]
+  quests          Quest[]
+  dailyStats      DailyStat[]
+  cosmetics       UserCosmetic[]
+  tradesSent      Trade[]              @relation("TradeFrom")
+  tradesReceived  Trade[]              @relation("TradeTo")
+  friendsSent     Friendship[]         @relation("FriendReq")
+  friendsReceived Friendship[]         @relation("FriendAdr")
   passwordResets  PasswordResetToken[]
 }
 
@@ -228,18 +229,18 @@ model DailyChallenge {
 
 // Tentative d'un joueur au défi du jour (1 par jour, autoritaire serveur).
 model DailyRun {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  day       String // AAAA-MM-JJ
-  songIds   Int[] // copie du set au démarrage
-  index     Int      @default(0) // chanson en cours (0..n)
-  score     Int      @default(0)
-  correct   Int      @default(0)
-  finished  Boolean  @default(false)
+  id            Int       @id @default(autoincrement())
+  userId        String
+  day           String // AAAA-MM-JJ
+  songIds       Int[] // copie du set au démarrage
+  index         Int       @default(0) // chanson en cours (0..n)
+  score         Int       @default(0)
+  correct       Int       @default(0)
+  finished      Boolean   @default(false)
   songStartedAt DateTime? // début de la chanson courante (chrono serveur)
-  mmrBefore Int?
-  mmrAfter  Int?
-  createdAt DateTime @default(now())
+  mmrBefore     Int?
+  mmrAfter      Int?
+  createdAt     DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -312,27 +313,27 @@ model PushSubscription {
 // ─────────────────────────────────────────────
 
 model Song {
-  id          Int    @id @default(autoincrement())
-  anilistId   Int // id AniList de l'anime source
-  animeTitle  String
-  type        String // "OP" | "ED"
-  number      Int // séquence (OP1, OP2…)
-  title       String
-  artist      String?
-  videoUrl    String?
-  audioUrl    String?
-  format      String? // format AniList : TV, TV_SHORT, MOVIE, OVA, ONA, SPECIAL, MUSIC (null = inconnu)
-  popularity  Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
-  altTitles   String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
+  id         Int      @id @default(autoincrement())
+  anilistId  Int // id AniList de l'anime source
+  animeTitle String
+  type       String // "OP" | "ED"
+  number     Int // séquence (OP1, OP2…)
+  title      String
+  artist     String?
+  videoUrl   String?
+  audioUrl   String?
+  format     String? // format AniList : TV, TV_SHORT, MOVIE, OVA, ONA, SPECIAL, MUSIC (null = inconnu)
+  popularity Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
+  altTitles  String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
 
   createdAt DateTime @default(now())
+
+  stats          UserSongStat[]
+  catalogEntries UserCatalogEntry[]
 
   // Un même opening n'existe qu'une fois dans le catalogue global
   @@unique([anilistId, type, number, title])
   @@index([anilistId])
-
-  stats          UserSongStat[]
-  catalogEntries UserCatalogEntry[]
 }
 
 // Analytics léger : 1 ligne par visiteur (id anonyme localStorage) et par jour.
@@ -360,20 +361,20 @@ model ScannedAnime {
 
 // Stats par utilisateur × musique (remplace localStorage)
 model UserSongStat {
-  id           Int     @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   userId       String
   songId       Int
-  easyCount    Int     @default(0)
-  hardCount    Int     @default(0)
-  againCount   Int     @default(0)
-  playCount    Int     @default(0)
-  correctCount Int     @default(0)
+  easyCount    Int       @default(0)
+  hardCount    Int       @default(0)
+  againCount   Int       @default(0)
+  playCount    Int       @default(0)
+  correctCount Int       @default(0)
   rating       Int? // note 1-5 donnée par l'utilisateur
-  liked        Boolean @default(false) // ajouté à la playlist perso
-  recHidden    Boolean @default(false) // « pas intéressé » : exclu des recommandations
+  liked        Boolean   @default(false) // ajouté à la playlist perso
+  recHidden    Boolean   @default(false) // « pas intéressé » : exclu des recommandations
   // Répétition espacée (SRS)
-  srsStreak    Int      @default(0) // bonnes réponses consécutives
-  srsInterval  Int      @default(0) // jours jusqu'à la prochaine révision
+  srsStreak    Int       @default(0) // bonnes réponses consécutives
+  srsInterval  Int       @default(0) // jours jusqu'à la prochaine révision
   srsDueAt     DateTime? // prochaine échéance de révision
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -384,10 +385,10 @@ model UserSongStat {
 
 // Mode « ma liste » : songs rattachées à un utilisateur (import AniList)
 model UserCatalogEntry {
-  id        Int      @id @default(autoincrement())
-  userId    String
-  songId    Int
-  addedAt   DateTime @default(now())
+  id      Int      @id @default(autoincrement())
+  userId  String
+  songId  Int
+  addedAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
@@ -414,12 +415,12 @@ model TokenTransaction {
 // ─────────────────────────────────────────────
 
 model Character {
-  id         Int    @id @default(autoincrement())
-  anilistId  Int    @unique
+  id         Int     @id @default(autoincrement())
+  anilistId  Int     @unique
   name       String
   imageUrl   String?
-  favourites Int    @default(0) // popularité AniList → détermine la rareté
-  rarity     String @default("common") // common|rare|epic|legendary|mythic
+  favourites Int     @default(0) // popularité AniList → détermine la rareté
+  rarity     String  @default("common") // common|rare|epic|legendary|mythic
   fromManga  Boolean @default(false)
   series     String? // anime principal du personnage (pour filtrer « par série »)
   seriesId   Int? // id AniList de cet anime
@@ -474,10 +475,10 @@ model UserCard {
 }
 
 model Pack {
-  id        Int    @id @default(autoincrement())
-  name      String
+  id         Int    @id @default(autoincrement())
+  name       String
   costTokens Int
-  cardCount Int    @default(5)
+  cardCount  Int    @default(5)
 }
 
 // ─────────────────────────────────────────────

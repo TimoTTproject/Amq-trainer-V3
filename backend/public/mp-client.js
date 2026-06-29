@@ -10,9 +10,19 @@ let mpPreparedUrl = null;
 let mpActiveRound = 0;
 let mpPlaybackSequence = 0;
 let mpRoom = null; // dernier snapshot de salon
-let mpMode = 'classic'; // classic | teams | elim
+let mpMode = 'classic'; // classic | teams | elim | coop
 let mpTeamNames = ['Rouge', 'Bleu'];
 let mpEliminated = false; // moi, en mode élimination
+let mpCoop = false; // mode coop (Tour en équipe)
+let mpTeamLives = 0; // vies partagées en coop
+
+// Affiche les vies partagées de l'équipe (coop) dans le HUD.
+function updateCoopLives() {
+  const el = document.getElementById('mp-coop-lives');
+  if (!el) return;
+  el.classList.toggle('hidden', !mpCoop);
+  if (mpCoop) el.innerHTML = `<i class="fas fa-heart"></i> × ${Math.max(0, mpTeamLives)} <small>(équipe)</small>`;
+}
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
 const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
@@ -147,13 +157,18 @@ function connectMp() {
     mpMode = d.mode || 'classic';
     mpTeamNames = d.teamNames || ['Rouge', 'Bleu'];
     mpEliminated = false;
+    mpCoop = !!d.coop;
+    mpTeamLives = d.teamLives || 0;
     const myTeam = (d.players.find((p) => p.name === currentUser.displayName) || {}).team;
     document.getElementById('mp-total').textContent = d.totalRounds;
     document.getElementById('mp-round').textContent = '—';
+    document.getElementById('mp-round-word').textContent = mpCoop ? 'Étage' : 'Manche';
+    document.getElementById('mp-total-sep').classList.toggle('hidden', mpCoop || d.totalRounds == null);
+    updateCoopLives();
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-scores').innerHTML = '';
     document.getElementById('mp-progress').textContent = '';
-    const modeTxt = mpMode === 'teams' ? `Équipes — tu es ${mpTeamNames[myTeam] || '?'}` : mpMode === 'elim' ? `Élimination — ${d.elimLives} vies` : '';
+    const modeTxt = mpCoop ? 'Coop · Tour en équipe' : mpMode === 'teams' ? `Équipes — tu es ${mpTeamNames[myTeam] || '?'}` : mpMode === 'elim' ? `Élimination — ${d.elimLives} vies` : '';
     document.getElementById('mp-feedback').textContent = (d.ranked ? '🏅 Classé — ' : '') + (modeTxt ? modeTxt + ' — ' : '') + `c'est parti ! ${d.players.length} joueur(s) 🎮`;
     renderEmotesBar();
   });
@@ -163,7 +178,8 @@ function connectMp() {
     mpActiveRound = d.round;
     clearTimeout(mpPreloadTimer);
     document.getElementById('mp-round').textContent = d.round;
-    document.getElementById('mp-total').textContent = d.total;
+    if (d.total != null) document.getElementById('mp-total').textContent = d.total;
+    if (d.coop) { mpCoop = true; if (typeof d.teamLives === 'number') mpTeamLives = d.teamLives; updateCoopLives(); }
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
@@ -222,13 +238,23 @@ function connectMp() {
       : '';
     res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
+    if (d.coop) {
+      mpCoop = true;
+      if (typeof d.teamLives === 'number') mpTeamLives = d.teamLives;
+      updateCoopLives();
+      const banner = d.floorCleared
+        ? `<div class="mp-coop-banner ok">🏯 Étage ${d.round} franchi !</div>`
+        : `<div class="mp-coop-banner ko">💥 Personne n'a trouvé — −1 vie (❤ × ${Math.max(0, mpTeamLives)})</div>`;
+      res.insertAdjacentHTML('beforeend', banner);
+      d.floorCleared ? sfx.correct() : sfx.wrong();
+    }
     renderMpScores(d.results, true);
     if (d.teams) {
       document.getElementById('mp-result').insertAdjacentHTML('beforeend',
         `<div class="mp-teams">${d.teams.map((t, i) => `<span class="mp-team t${i}">${escapeHtml(mpTeamNames[i])} : <b>${t}</b></span>`).join('')}</div>`);
     }
     const me = d.results.find((p) => p.name === currentUser.displayName);
-    if (me) {
+    if (me && !d.coop) { // en coop, le son est joué par la bannière d'étage
       mpEliminated = !!me.eliminated;
       me.correct ? sfx.correct() : sfx.wrong();
       if (mpEliminated) { sfx.lose(); document.getElementById('mp-feedback').textContent = '💀 Tu es éliminé !'; }
@@ -241,6 +267,29 @@ function connectMp() {
     mpStopClip();
     showView('mp');
     mpShow('over');
+
+    // ── Coop : Tour en équipe — étage atteint + contributions ──
+    if (d.coop) {
+      const floor = d.floor || 0;
+      const iRecord = (d.ranking || []).some((p) => p.isRecord && (p.name === currentUser.displayName));
+      if (floor > 0) { sfx.win(); burstConfetti(floor >= 10 ? 60 : 30); } else { sfx.lose(); }
+      document.querySelector('#mp-over h3').textContent = `🏯 Tour en équipe — Étage ${floor}`;
+      const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+      document.getElementById('mp-ranking').innerHTML =
+        `<p class="mp-coop-recap">Votre équipe a franchi <b>${floor}</b> étage${floor > 1 ? 's' : ''} ensemble !${iRecord ? ' <span class="mp-record">🎉 Nouveau record perso</span>' : ''}</p>`
+        + (d.ranking || []).map((p, i) => {
+          const isMe = p.name === currentUser.displayName;
+          const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
+          const rec = p.isRecord ? ' <span class="mp-record">record</span>' : '';
+          return `<li class="lb-row${isMe ? ' me' : ''}">
+            <span class="lb-rank">${medal(i + 1)}</span>${av}
+            <span class="lb-name">${escapeHtml(p.name)}${rec}</span>
+            <span class="lb-value">${p.correct || 0} bonne${(p.correct || 0) > 1 ? 's' : ''}</span>
+          </li>`;
+        }).join('');
+      return;
+    }
+
     const iWon = d.ranking[0] && d.ranking[0].name === currentUser.displayName;
     if (iWon) { sfx.win(); burstConfetti(40); } else { sfx.lose(); }
     let title = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
@@ -336,12 +385,14 @@ function renderRoom(d) {
       + 'Réglages non modifiables. Ton <b>MMR</b> évolue selon ton classement final.';
   }
   if (!ranked) {
+    const isCoop = (d.settings.mode || 'classic') === 'coop';
     document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
     document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
     document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
-    document.getElementById('mp-set-rounds').disabled = !isHost;
-    document.getElementById('mp-set-speed').disabled = !isHost;
+    // Coop : étages infinis + temps automatique → Manches/Temps non applicables.
+    document.getElementById('mp-set-rounds').disabled = !isHost || isCoop;
+    document.getElementById('mp-set-speed').disabled = !isHost || isCoop;
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
   }

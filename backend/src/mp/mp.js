@@ -20,10 +20,21 @@ const DC_GRACE_LOBBY = 25000; // délai avant retrait après déconnexion (lobby
 const DC_GRACE_GAME = 120000; // ... en partie (reconnexion possible)
 const VALID_ROUNDS = [5, 10, 15, 20];
 const VALID_ROUNDMS = [15000, 25000, 40000];
-const VALID_MODES = ['classic', 'teams', 'elim'];
+const VALID_MODES = ['classic', 'teams', 'elim', 'coop'];
 const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
+// Coop (Tour en équipe) : vies partagées, étages infinis, l'étage est validé si
+// AU MOINS un joueur trouve ; sinon −1 vie commune. Le temps se réduit avec les étages.
+const COOP_START_LIVES = 3;
+const COOP_MAX_FLOORS = 100; // garde-fou
+function coopRoundMs(floor) {
+  return Math.max(12000, 25000 - (floor - 1) * 500); // 25s -> plancher 12s vers l'étage 27
+}
+// Durée d'une manche selon le mode (coop = décroissante par étage).
+function roundDurationMs(room) {
+  return room.mode === 'coop' ? coopRoundMs(room.round) : room.settings.roundMs;
+}
 const TEAM_NAMES = ['Rouge', 'Bleu'];
 const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
@@ -235,9 +246,13 @@ function startGame(room) {
   const arr = [...room.players.values()];
   arr.forEach((p) => { p.score = 0; p.correct = 0; p.team = null; p.lives = ELIM_LIVES; p.eliminated = false; });
   if (room.mode === 'teams') shuffle(arr).forEach((p, i) => { p.team = i % 2; });
+  // Coop : pool de vies commun + compteur d'étages franchis.
+  room.teamLives = room.mode === 'coop' ? COOP_START_LIVES : 0;
+  room.coopCleared = 0;
 
   io.to(room.id).emit('mp:game:start', {
-    totalRounds: room.settings.rounds, ranked: room.ranked, mode: room.mode, elimLives: ELIM_LIVES,
+    totalRounds: room.mode === 'coop' ? null : room.settings.rounds, ranked: room.ranked, mode: room.mode,
+    elimLives: ELIM_LIVES, coop: room.mode === 'coop', teamLives: room.teamLives,
     teamNames: TEAM_NAMES,
     players: arr.map((p) => ({ name: p.name, avatarUrl: p.avatarUrl, team: p.team })),
   });
@@ -294,14 +309,16 @@ async function startRound(room) {
   if (!song) song = await pickSong(room);
   if (!song) return endGame(room);
   const prepMs = room.round === 1 ? FIRST_ROUND_PREP_MS : PRELOADED_ROUND_PREP_MS;
+  const durationMs = roundDurationMs(room);
   const startAt = Date.now() + prepMs;
-  const endsAt = startAt + room.settings.roundMs;
+  const endsAt = startAt + durationMs;
   room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set() };
   io.to(room.id).emit('mp:round:start', {
-    round: room.round, total: room.settings.rounds,
-    clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: room.settings.roundMs,
+    round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
+    coop: room.mode === 'coop', teamLives: room.teamLives,
+    clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: durationMs,
   });
-  room.timer = setTimeout(() => endRound(room), prepMs + room.settings.roundMs);
+  room.timer = setTimeout(() => endRound(room), prepMs + durationMs);
 }
 
 async function prepareNextRound(room) {
@@ -352,7 +369,7 @@ function onGuess(socket, text) {
   if (cur.answers.has(uid) || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   const correct = isCorrectGuess(text, cur.song);
   const timeLeft = correct ? Math.max(0, cur.endsAt - Date.now()) : 0;
-  const points = correct ? 300 + Math.round((timeLeft / room.settings.roundMs) * 700) : 0;
+  const points = correct ? 300 + Math.round((timeLeft / roundDurationMs(room)) * 700) : 0;
   cur.answers.set(uid, { correct, points, guess: text });
   if (correct) {
     player.score += points;
@@ -404,6 +421,14 @@ function endRound(room) {
     }
   }
 
+  // Coop : l'étage est franchi si AU MOINS un joueur a trouvé ; sinon −1 vie commune.
+  let floorCleared = false;
+  if (room.mode === 'coop') {
+    floorCleared = [...cur.answers.values()].some((a) => a.correct);
+    if (floorCleared) room.coopCleared = (room.coopCleared || 0) + 1;
+    else room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
+  }
+
   // Émission du résultat protégée : une erreur ici ne doit pas empêcher la
   // programmation de la transition ci-dessous (sinon la partie se fige).
   try {
@@ -420,7 +445,8 @@ function endRound(room) {
       .sort((a, b) => b.score - a.score);
 
     io.to(room.id).emit('mp:round:result', {
-      round: room.round, total: room.settings.rounds, mode: room.mode,
+      round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds, mode: room.mode,
+      coop: room.mode === 'coop', teamLives: room.teamLives, floorCleared,
       answer: {
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
         title: s.title, artist: s.artist, type: s.type, number: s.number,
@@ -434,7 +460,9 @@ function endRound(room) {
   room.revealSong = s;
   room.revealUntil = Date.now() + RESULT_MS;
   const elimOver = room.mode === 'elim' && aliveCount(room) <= 1;
-  const matchOver = elimOver || room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS;
+  const coopOver = room.mode === 'coop' && (room.teamLives <= 0 || room.round >= COOP_MAX_FLOORS);
+  const matchOver = coopOver || elimOver
+    || (room.mode !== 'coop' && (room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS));
   if (!matchOver) prepareNextRound(room).catch((e) => console.error('mp: échec préparation manche suivante:', e && e.message));
   room.timer = setTimeout(() => {
     room.revealSong = null;
@@ -520,9 +548,46 @@ async function persistResults(room, ordered) {
   return { deltaById, rewardById };
 }
 
+// Fin de la Tour en équipe (coop) : pas de MMR/récompense, on retient l'étage et
+// le record perso, puis retour au lobby (le salon coop est toujours privé).
+async function endCoopGame(room) {
+  const floor = room.coopCleared || 0;
+  let ranking = [];
+  try {
+    const ordered = [...room.players.values()]
+      .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), correct: p.correct || 0, score: p.score }))
+      .sort((a, b) => b.correct - a.correct || b.score - a.score);
+    let bestBy = {};
+    try {
+      const ids = ordered.map((p) => p.userId);
+      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, coopBestFloor: true } });
+      bestBy = Object.fromEntries(users.map((u) => [u.id, u.coopBestFloor || 0]));
+      if (floor > 0) await prisma.user.updateMany({ where: { id: { in: ids }, coopBestFloor: { lt: floor } }, data: { coopBestFloor: floor } });
+    } catch (e) { console.error('coop best update:', e && e.message); }
+    for (const p of ordered) progressQuests(p.userId, 'mp', 1);
+    ranking = ordered.map((p) => ({ ...p, isRecord: floor > 0 && floor > (bestBy[p.userId] || 0) }));
+  } catch (e) {
+    console.error('mp endCoopGame prep error:', e && (e.stack || e.message) || e);
+  }
+  try {
+    io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, ranking });
+  } catch (e) {
+    console.error('coop game:over emit error:', e && (e.stack || e.message) || e);
+    try { io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, ranking: [] }); } catch {}
+  }
+  // Coop = toujours privé → retour au lobby pour rejouer
+  room.status = 'lobby';
+  room.round = 0; room.current = null; room.teamLives = 0; room.coopCleared = 0;
+  room.usedSongIds = new Set(); room.usedAnilistIds = new Set();
+  room.nextSong = null; room.nextSongPromise = null;
+  sysChat(room, `Tour en équipe terminée — étage ${floor} ! Prêts pour une autre ?`);
+  setTimeout(() => { if (rooms.has(room.id)) broadcastRoom(room); }, 8000);
+}
+
 async function endGame(room) {
   room.status = 'over';
   clearTimeout(room.timer);
+  if (room.mode === 'coop') return endCoopGame(room);
 
   let ordered = [];
   let deltaById = {}, rewardById = {};
@@ -660,13 +725,15 @@ function reattach(socket) {
     broadcastRoom(room);
   } else if (room.status === 'playing') {
     socket.emit('mp:game:start', {
-      totalRounds: room.settings.rounds, ranked: room.ranked, mode: room.mode, elimLives: ELIM_LIVES, teamNames: TEAM_NAMES,
+      totalRounds: room.mode === 'coop' ? null : room.settings.rounds, ranked: room.ranked, mode: room.mode,
+      elimLives: ELIM_LIVES, coop: room.mode === 'coop', teamLives: room.teamLives, teamNames: TEAM_NAMES,
       players: [...room.players.values()].map((pp) => ({ name: pp.name, avatarUrl: pp.avatarUrl, team: pp.team })),
     });
     if (room.current && !p.eliminated) {
       const remaining = Math.max(1500, room.current.endsAt - Date.now());
       socket.emit('mp:round:start', {
-        round: room.round, total: room.settings.rounds,
+        round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
+        coop: room.mode === 'coop', teamLives: room.teamLives,
         clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt: Date.now(),
         duration: remaining, resumed: true,
         alreadyAnswered: !!room.current.answers.get(uid)?.correct,
