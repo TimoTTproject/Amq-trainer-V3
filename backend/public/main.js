@@ -663,9 +663,13 @@ function renderProfileBadges(d) {
     `<div class="badges-count">${earned}/${defs.length} débloqués</div>` +
     defs
       .map(
-        (b) => `<div class="badge-item${b.got ? ' got' : ''}" title="${escapeHtml(b.desc)}">
+        (b) => `<div class="badge-item${b.got ? ' got' : ''}">
           <span class="badge-ic">${b.ic}</span>
-          <span class="badge-nm">${escapeHtml(b.nm)}</span>
+          <span class="badge-txt">
+            <span class="badge-nm">${escapeHtml(b.nm)}</span>
+            <span class="badge-desc">${escapeHtml(b.desc)}</span>
+          </span>
+          ${b.got ? '<span class="badge-check"><i class="fas fa-circle-check"></i></span>' : '<span class="badge-lock"><i class="fas fa-lock"></i></span>'}
         </div>`
       )
       .join('');

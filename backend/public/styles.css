@@ -994,14 +994,17 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 
 /* Hauts faits / badges */
 .badges-count { font-size: .78rem; color: var(--text-2); margin-bottom: 12px; }
-.badges-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
-.badge-item { display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; padding: 12px 6px; background: var(--bg-3); border: 1px solid #2a2f42; border-radius: 10px; opacity: .45; transition: transform .15s; }
+.badges-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.badge-item { display: flex; align-items: center; gap: 11px; text-align: left; padding: 11px 13px; background: var(--bg-3); border: 1px solid #2a2f42; border-radius: 10px; opacity: .6; transition: transform .15s; }
 .badge-item.got { opacity: 1; border-color: var(--accent); background: linear-gradient(160deg, var(--bg-3), rgba(108,140,255,.12)); }
 .badge-item.got:hover { transform: translateY(-2px); }
 .badge-item:not(.got) .badge-ic { filter: grayscale(1); }
-.badge-ic { font-size: 1.6rem; line-height: 1; }
-.badge-nm { font-size: .66rem; color: var(--text-2); line-height: 1.2; }
-.badge-item.got .badge-nm { color: var(--text); }
+.badge-ic { font-size: 1.7rem; line-height: 1; flex-shrink: 0; }
+.badge-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.badge-nm { font-size: .85rem; font-weight: 700; color: var(--text); line-height: 1.2; }
+.badge-desc { font-size: .72rem; color: var(--text-2); line-height: 1.25; }
+.badge-check { color: var(--green); font-size: .95rem; flex-shrink: 0; }
+.badge-lock { color: var(--text-2); opacity: .6; font-size: .85rem; flex-shrink: 0; }
 
 /* Répartition par rareté */
 .rarity-breakdown { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
