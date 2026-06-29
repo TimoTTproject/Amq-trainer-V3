@@ -294,7 +294,7 @@ function replayDaily() {
   setDailyPlayIcon();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initDailyUI() {
   document.getElementById('daily-start').addEventListener('click', startDaily);
   document.getElementById('daily-submit').addEventListener('click', () => submitDaily());
   document.getElementById('daily-skip').addEventListener('click', () => submitDaily(''));
@@ -315,4 +315,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof setupAnimeAutocomplete === 'function') {
     setupAnimeAutocomplete({ inputId: 'daily-input', listId: 'daily-suggestions', onSubmit: () => submitDaily() });
   }
-});
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDailyUI);

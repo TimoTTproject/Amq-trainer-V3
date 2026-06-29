@@ -351,7 +351,7 @@ async function removeFromPlaylist(tr) {
   } catch (e) { alert(e.message); }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initPlaylistUI() {
   const audio = document.getElementById('playlist-audio');
   const seek = document.getElementById('playlist-player-seek');
   document.getElementById('playlist-tbody').addEventListener('click', (e) => {
@@ -429,4 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
       setPlaylistPlaying(false);
     }
   });
-});
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPlaylistUI);

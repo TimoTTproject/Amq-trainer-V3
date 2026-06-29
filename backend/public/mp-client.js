@@ -545,7 +545,7 @@ function mpSettingsPayload() {
   };
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initMpUI() {
   document.getElementById('mp-quick').addEventListener('click', () => {
     const sel = document.getElementById('mp-quick-rounds');
     const rounds = sel ? parseInt(sel.value, 10) : 10;
@@ -587,7 +587,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }
     else { mpRoom = null; mpShow('menu'); }
   });
-});
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMpUI);
 
 function mpSendChat() {
   const inp = document.getElementById('mp-chat-text');

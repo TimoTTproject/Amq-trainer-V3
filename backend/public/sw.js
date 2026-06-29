@@ -1,13 +1,12 @@
 // Service worker : network-first (évite le contenu périmé après déploiement),
 // repli sur le cache hors-ligne, et précache de la coquille applicative pour un
 // démarrage instantané / hors-ligne. N'intercepte ni l'API, ni les flux, ni Socket.io.
-const CACHE = 'amq-v3';
+const CACHE = 'amq-v4';
 
 // Coquille applicative : tout le statique nécessaire au 1er rendu.
 const SHELL = [
   '/', '/index.html', '/styles.css', '/manifest.webmanifest', '/icon.svg',
-  '/sfx.js', '/tower.js', '/admin.js', '/playlist.js', '/daily.js', '/gacha.js',
-  '/catalog.js', '/community.js', '/main.js', '/anime-autocomplete.js', '/mp-client.js',
+  '/i18n.js', '/sfx.js', '/main.js',
 ];
 
 self.addEventListener('install', (e) => {

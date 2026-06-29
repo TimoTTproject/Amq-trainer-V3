@@ -452,6 +452,93 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
   .playlist-player-controls { grid-column: 1 / -1; justify-content: center; margin-top: -2px; }
 }
 
+/* Accessibilité, chargement de session et navigation compacte */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+body.session-pending #auth-screen,
+body.session-pending #app { visibility: hidden; }
+.session-loader {
+  position: fixed; inset: 0; z-index: 500;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: var(--bg); color: var(--text-2); font-weight: 700;
+}
+.session-loader i { color: var(--accent); font-size: 2rem; animation: tokenBump 1.2s ease infinite; }
+body:not(.session-pending) .session-loader { display: none; }
+
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 3px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--accent-2) !important;
+  outline-offset: 2px;
+}
+.auth-form-copy { color: var(--text-2); font-size: .86rem; line-height: 1.5; }
+.auth-forgot, .auth-back-login { align-self: center; padding: 5px; color: var(--text-2); }
+.auth-guest { width: 100%; min-height: 44px; justify-content: center; margin-top: 12px; }
+.auth-guest-note { margin-top: 7px; color: var(--text-2); text-align: center; font-size: .72rem; }
+.auth-context-hidden { display: none !important; }
+.auth-form [aria-busy="true"] { cursor: progress; }
+
+.user-section { position: relative; }
+.header-menu-btn { width: 38px; height: 38px; padding: 0; justify-content: center; }
+.header-more-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  display: grid; grid-template-columns: auto minmax(100px, 1fr); align-items: center; gap: 10px;
+  min-width: 250px; padding: 12px;
+  background: #101217; border: 1px solid #343943; border-radius: 7px;
+  box-shadow: 8px 8px 0 rgba(5, 6, 9, .8);
+}
+.header-more-menu > label { color: var(--text-2); font-size: .78rem; }
+.header-more-menu .header-volume { width: 100%; }
+.header-more-menu > button { grid-column: 1 / -1; justify-content: center; }
+.header-more-menu #lang-toggle { min-width: 100%; }
+.header-more-menu #logout-btn { width: 100%; height: auto; min-height: 44px; padding: 10px 14px; }
+.header-more-menu #logout-btn span { display: inline; }
+
+body.guest-mode .navbar .nav-item:not([data-nav="play"]),
+body.guest-mode .token-badge,
+body.guest-mode #profile-btn,
+body.guest-mode #daily-btn,
+body.guest-mode #header-rank { display: none !important; }
+body.guest-mode #view-play .hub-card:not([data-nav="quiz"]) { display: none; }
+body.guest-mode #view-play .hub-grid { grid-template-columns: minmax(0, 540px); justify-content: center; }
+.guest-banner {
+  display: none; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 16px; padding: 10px 12px;
+  background: rgba(56, 214, 255, .08); border: 1px solid rgba(56, 214, 255, .35); border-radius: 6px;
+  color: var(--text-2); font-size: .85rem;
+}
+body.guest-mode .guest-banner { display: flex; }
+body.guest-mode #quiz-mode-panel .mode-switch,
+body.guest-mode #import-row,
+body.guest-mode #import-hint,
+body.guest-mode #import-linked,
+body.guest-mode .stats-panel,
+body.guest-mode #like-btn,
+body.guest-mode .feedback-buttons { display: none !important; }
+
+@media (max-width: 600px) {
+  header { flex-wrap: nowrap; align-items: center; }
+  header h1 { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .user-section { flex-wrap: nowrap; gap: 6px; }
+  .profile-chip { max-width: 44px; width: 44px; height: 44px; padding: 6px; justify-content: center; }
+  .profile-chip .user-name { display: none; }
+  .token-badge { padding: 7px 9px; }
+  .dust-badge { display: none; }
+  .navbar { margin-bottom: 24px; flex-wrap: nowrap; }
+  .nav-item { flex: 1; justify-content: center; padding-inline: 8px; }
+  .header-menu-btn { width: 44px; height: 44px; }
+  .header-more-menu { position: fixed; top: max(68px, env(safe-area-inset-top)); left: 12px; right: 12px; min-width: 0; }
+  .guest-banner { align-items: stretch; flex-direction: column; }
+  .guest-banner .btn-primary { justify-content: center; }
+}
+
 /* ── Château de l'Infini ── */
 .tower-intro { text-align: center; max-width: 560px; margin: 0 auto; }
 .tower-rules { color: var(--text-2); line-height: 1.6; margin-bottom: 20px; }

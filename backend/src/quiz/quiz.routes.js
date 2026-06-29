@@ -1,7 +1,7 @@
 // Routes quiz : tirage, validation de réponse (+ tokens), feedback, notation
 const express = require('express');
 const { prisma } = require('../db');
-const { requireAuth } = require('../auth/auth.middleware');
+const { requireAuth, requirePlayer } = require('../auth/auth.middleware');
 const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-token');
 const { isCorrectGuess } = require('./matching');
 const { englishTitleFor } = require('./anime-titles');
@@ -99,11 +99,12 @@ function maxRewardFor(song, firstCorrect, level) {
 // Tire une musique au hasard. La réponse n'est PAS renvoyée (anti-triche).
 // ?mode=mine (catalogue perso, défaut) | global (catalogue partagé)
 // ?ranked=true|false : fige le mode classé côté serveur (jeton de manche).
-router.get('/random', requireAuth, async (req, res) => {
-  const mode = req.query.mode === 'global' ? 'global' : 'mine';
-  const ranked = req.query.ranked !== 'false'; // défaut : classé
+router.get('/random', requirePlayer, async (req, res) => {
+  const guest = !!req.user.isGuest;
+  const mode = guest || req.query.mode === 'global' ? 'global' : 'mine';
+  const ranked = !guest && req.query.ranked !== 'false'; // les invités jouent sans gains
   // Sources d'entraînement (toujours hors classé)
-  const source = ['review', 'missed', 'liked', 'due', 'series'].includes(req.query.source) ? req.query.source : null;
+  const source = !guest && ['review', 'missed', 'liked', 'due', 'series'].includes(req.query.source) ? req.query.source : null;
   // Filtre type de thème : 'OP' | 'ED' | (rien = les deux)
   const typeFilter = ['OP', 'ED'].includes(req.query.type) ? req.query.type : null;
 
@@ -161,10 +162,12 @@ router.get('/random', requireAuth, async (req, res) => {
   if (!song) return res.status(404).json({ error: 'Aucune musique disponible' });
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
   const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash' });
-  const stat = await prisma.userSongStat.findUnique({
-    where: { userId_songId: { userId: req.user.id, songId: song.id } },
-    select: { liked: true, correctCount: true },
-  });
+  const stat = guest
+    ? null
+    : await prisma.userSongStat.findUnique({
+        where: { userId_songId: { userId: req.user.id, songId: song.id } },
+        select: { liked: true, correctCount: true },
+      });
   const firstCorrect = !stat || stat.correctCount === 0;
   // Infos pour la jauge « tokens en jeu » : récompense max au niveau cash, et la
   // courbe de vitesse. `timed` = false en entraînement/rejeu (gain figé, sans chrono).
@@ -179,7 +182,7 @@ router.get('/random', requireAuth, async (req, res) => {
 
 // Flux vidéo de la manche, proxifié (le titre ne fuite pas par l'URL). Le jeton
 // de manche doit correspondre à cet utilisateur et cette musique.
-router.get('/clip/:songId', requireAuth, async (req, res) => {
+router.get('/clip/:songId', requirePlayer, async (req, res) => {
   const songId = parseInt(req.params.songId);
   const round = verifyRoundToken(req.query.rt, { userId: req.user.id, songId });
   if (!round) return res.status(403).end();
@@ -192,7 +195,7 @@ router.get('/clip/:songId', requireAuth, async (req, res) => {
 // Passe en Carré (4) ou Duo (2) : verrouille le niveau (gain réduit) dans un
 // nouveau jeton et renvoie les propositions. L'ancien jeton est consommé pour
 // empêcher de revenir au gain « cash » après avoir vu les propositions.
-router.post('/choices', requireAuth, rateLimit({ max: 120, name: 'choices' }), async (req, res) => {
+router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }), async (req, res) => {
   const level = req.body?.level === 'duo' ? 'duo' : 'carre';
   const round = verifyRoundToken(req.body?.roundToken, { userId: req.user.id });
   if (!round) return res.status(400).json({ error: 'Manche invalide' });
@@ -246,7 +249,7 @@ router.get('/training-stats', requireAuth, async (req, res) => {
 });
 
 // Recherche de séries (animes) pour l'entraînement ciblé
-router.get('/series', requireAuth, async (req, res) => {
+router.get('/series', requirePlayer, async (req, res) => {
   const q = (req.query.q || '').trim();
   if (q.length < 1) return res.json({ series: [], suggestions: [] });
   if (seriesSearchCache.expiresAt < Date.now()) {
@@ -439,7 +442,7 @@ router.post('/playlist/recommendations/dismiss', requireAuth, async (req, res) =
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.
-router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async (req, res) => {
+router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), async (req, res) => {
   const { songId, guess } = req.body || {};
   if (!songId) return res.status(400).json({ error: 'songId requis' });
 
@@ -453,6 +456,23 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
   // client. Sans jeton valide et non rejoué pour CETTE manche → aucun token.
   const round = verifyRoundToken(req.body?.roundToken, { userId, songId });
   const ranked = !!(round && round.ranked && (await consumeRound(round)));
+
+  if (req.user.isGuest) {
+    if (!round || !(await consumeRound(round))) {
+      return res.status(409).json({ error: 'Manche invalide ou déjà jouée' });
+    }
+    return res.json({
+      correct,
+      reward: 0,
+      answer: {
+        animeTitle: song.animeTitle,
+        title: song.title,
+        artist: song.artist,
+        type: song.type,
+        number: song.number,
+      },
+    });
+  }
 
   const prev = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId, songId } },
@@ -528,7 +548,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
 
 // Révèle la réponse sans scorer (mode entraînement uniquement).
 // Exige un jeton de manche d'entraînement : impossible de révéler une manche classée.
-router.get('/answer/:songId', requireAuth, async (req, res) => {
+router.get('/answer/:songId', requirePlayer, async (req, res) => {
   const songId = parseInt(req.params.songId);
   const round = verifyRoundToken(req.query.roundToken, { userId: req.user.id, songId });
   if (!round || round.ranked) {

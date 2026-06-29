@@ -22,11 +22,21 @@ function verifyToken(token) {
 // arrive en HTTPS (via trust proxy), même si NODE_ENV n'est pas défini.
 function setAuthCookie(res, userId, req) {
   const token = signToken({ sub: userId });
+  setCookie(res, token, req, MAX_AGE_MS);
+}
+
+function setGuestCookie(res, guestId, req) {
+  const maxAge = 24 * 60 * 60 * 1000;
+  const token = jwt.sign({ sub: guestId, guest: true }, JWT_SECRET, { expiresIn: '1d' });
+  setCookie(res, token, req, maxAge);
+}
+
+function setCookie(res, token, req, maxAge) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: isProduction || !!(req && req.secure), // HTTPS en prod / derrière proxy
-    maxAge: MAX_AGE_MS,
+    maxAge,
   });
 }
 
@@ -34,4 +44,4 @@ function clearAuthCookie(res) {
   res.clearCookie(COOKIE_NAME);
 }
 
-module.exports = { signToken, verifyToken, setAuthCookie, clearAuthCookie, COOKIE_NAME };
+module.exports = { signToken, verifyToken, setAuthCookie, setGuestCookie, clearAuthCookie, COOKIE_NAME };

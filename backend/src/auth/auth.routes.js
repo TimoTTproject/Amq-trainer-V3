@@ -1,12 +1,15 @@
 // Routes d'authentification email/mot de passe
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { prisma } = require('../db');
-const { setAuthCookie, clearAuthCookie } = require('./jwt');
-const { requireAuth } = require('./auth.middleware');
+const { setAuthCookie, setGuestCookie, clearAuthCookie } = require('./jwt');
+const { requirePlayer } = require('./auth.middleware');
 const { isAdmin } = require('../admin/admin');
 const { tierFromMmr } = require('../mp/rank');
 const { resolveEquipped } = require('../shop/cosmetics');
+const { rateLimit } = require('../util/ratelimit');
+const { sendPasswordResetEmail } = require('./email');
 
 const router = express.Router();
 
@@ -20,6 +23,18 @@ function dailyAvailable(last) {
 // Renvoie une version sûre de l'utilisateur (sans secrets)
 function publicUser(u) {
   if (!u) return null;
+  if (u.isGuest) {
+    return {
+      id: u.id,
+      displayName: 'Invité',
+      tokens: 0,
+      dust: 0,
+      isGuest: true,
+      isAdmin: false,
+      dailyAvailable: false,
+      cosmetics: {},
+    };
+  }
   return {
     id: u.id,
     email: u.email,
@@ -42,7 +57,8 @@ function publicUser(u) {
 }
 
 router.post('/register', async (req, res) => {
-  const { email, password, displayName } = req.body || {};
+  const { password, displayName } = req.body || {};
+  const email = String(req.body?.email || '').trim().toLowerCase();
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
@@ -62,7 +78,8 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body || {};
+  const password = req.body?.password;
+  const email = String(req.body?.email || '').trim().toLowerCase();
   if (!email || !password) {
     return res.status(400).json({ error: 'Email et mot de passe requis' });
   }
@@ -83,7 +100,71 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
-router.get('/me', requireAuth, (req, res) => {
+router.post('/guest', rateLimit({ windowMs: 60000, max: 10, name: 'guest-session' }), (req, res) => {
+  const guestId = `guest:${crypto.randomUUID()}`;
+  setGuestCookie(res, guestId, req);
+  res.status(201).json({ user: publicUser({ id: guestId, isGuest: true }) });
+});
+
+router.post(
+  '/forgot-password',
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 5, name: 'forgot-password' }),
+  async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const result = { message: 'Si un compte correspond à cet e-mail, un lien vient d’être envoyé.' };
+    if (!email) return res.status(400).json({ error: 'Email requis' });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) return res.json(result);
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await prisma.$transaction([
+      prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
+      prisma.passwordResetToken.create({
+        data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 30 * 60 * 1000) },
+      }),
+    ]);
+
+    const origin = (process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const resetUrl = `${origin}/?reset=${encodeURIComponent(token)}`;
+    try {
+      const delivery = await sendPasswordResetEmail({ to: email, resetUrl });
+      if (!delivery.sent && process.env.NODE_ENV !== 'production') {
+        console.log(`Lien de réinitialisation (dev) : ${resetUrl}`);
+        result.devResetUrl = resetUrl;
+      }
+    } catch (err) {
+      console.error('Envoi du lien de réinitialisation échoué :', err.message);
+    }
+    res.json(result);
+  }
+);
+
+router.post(
+  '/reset-password',
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: 'reset-password' }),
+  async (req, res) => {
+    const token = String(req.body?.token || '');
+    const password = String(req.body?.password || '');
+    if (!token || password.length < 6) {
+      return res.status(400).json({ error: 'Lien invalide ou mot de passe trop court (min. 6 caractères)' });
+    }
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const reset = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!reset || reset.usedAt || reset.expiresAt <= new Date()) {
+      return res.status(400).json({ error: 'Ce lien est invalide ou a expiré.' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: reset.userId }, data: { passwordHash } }),
+      prisma.passwordResetToken.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+    ]);
+    res.json({ message: 'Mot de passe modifié. Tu peux maintenant te connecter.' });
+  }
+);
+
+router.get('/me', requirePlayer, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 

@@ -33,7 +33,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="session-pending">
+  <div id="session-loader" class="session-loader" role="status" aria-live="polite">
+    <i class="fas fa-wave-square" aria-hidden="true"></i>
+    <span>Chargement d’AMQ Trainer…</span>
+  </div>
   <!-- ÉCRAN AUTH (non connecté) -->
   <div id="auth-screen" class="auth-screen">
     <div class="auth-card">
@@ -57,22 +61,44 @@
           <span data-i18n="ESPACE JOUEUR">ESPACE JOUEUR</span>
           <small data-i18n="Connexion sécurisée">Connexion sécurisée</small>
         </div>
-        <div class="auth-tabs">
-          <button class="auth-tab active" data-tab="login" data-i18n="Connexion">Connexion</button>
-          <button class="auth-tab" data-tab="register" data-i18n="Inscription">Inscription</button>
+        <div class="auth-tabs" role="tablist" aria-label="Accès au compte">
+          <button class="auth-tab active" data-tab="login" role="tab" aria-selected="true" aria-controls="login-form" data-i18n="Connexion">Connexion</button>
+          <button class="auth-tab" data-tab="register" role="tab" aria-selected="false" aria-controls="register-form" data-i18n="Inscription">Inscription</button>
         </div>
 
         <form id="login-form" class="auth-form">
-          <input type="email" id="login-email" placeholder="Email" data-i18n-ph="Email" required />
-          <input type="password" id="login-password" placeholder="Mot de passe" data-i18n-ph="Mot de passe" required />
+          <label class="sr-only" for="login-email">Adresse e-mail</label>
+          <input type="email" id="login-email" placeholder="Email" data-i18n-ph="Email" autocomplete="email" required />
+          <label class="sr-only" for="login-password">Mot de passe</label>
+          <input type="password" id="login-password" placeholder="Mot de passe" data-i18n-ph="Mot de passe" autocomplete="current-password" required />
           <button type="submit" class="btn-primary"><i class="fas fa-arrow-right-to-bracket"></i> <span data-i18n="Entrer dans le jeu">Entrer dans le jeu</span></button>
+          <button type="button" class="btn-link auth-forgot" id="forgot-password-btn">Mot de passe oublié ?</button>
         </form>
 
         <form id="register-form" class="auth-form hidden">
-          <input type="text" id="register-name" placeholder="Pseudo (optionnel)" data-i18n-ph="Pseudo (optionnel)" />
-          <input type="email" id="register-email" placeholder="Email" data-i18n-ph="Email" required />
-          <input type="password" id="register-password" placeholder="Mot de passe (min. 6)" data-i18n-ph="Mot de passe (min. 6)" required />
+          <label class="sr-only" for="register-name">Pseudo facultatif</label>
+          <input type="text" id="register-name" placeholder="Pseudo (optionnel)" data-i18n-ph="Pseudo (optionnel)" autocomplete="nickname" />
+          <label class="sr-only" for="register-email">Adresse e-mail</label>
+          <input type="email" id="register-email" placeholder="Email" data-i18n-ph="Email" autocomplete="email" required />
+          <label class="sr-only" for="register-password">Mot de passe, 6 caractères minimum</label>
+          <input type="password" id="register-password" placeholder="Mot de passe (min. 6)" data-i18n-ph="Mot de passe (min. 6)" autocomplete="new-password" minlength="6" required />
           <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> <span data-i18n="Créer un compte">Créer un compte</span></button>
+        </form>
+
+        <form id="forgot-password-form" class="auth-form hidden">
+          <p class="auth-form-copy">Saisis ton e-mail. Le lien reçu restera valable 30 minutes.</p>
+          <label class="sr-only" for="forgot-email">Adresse e-mail</label>
+          <input type="email" id="forgot-email" placeholder="Email" autocomplete="email" required />
+          <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i> Envoyer le lien</button>
+          <button type="button" class="btn-link auth-back-login">Retour à la connexion</button>
+        </form>
+
+        <form id="reset-password-form" class="auth-form hidden">
+          <p class="auth-form-copy">Choisis ton nouveau mot de passe.</p>
+          <label class="sr-only" for="reset-password">Nouveau mot de passe, 6 caractères minimum</label>
+          <input type="password" id="reset-password" placeholder="Nouveau mot de passe (min. 6)" autocomplete="new-password" minlength="6" required />
+          <button type="submit" class="btn-primary"><i class="fas fa-key"></i> Modifier le mot de passe</button>
+          <button type="button" class="btn-link auth-back-login">Retour à la connexion</button>
         </form>
 
         <div class="auth-sep" id="oauth-sep"><span data-i18n="ou continuer avec">ou continuer avec</span></div>
@@ -92,7 +118,9 @@
           Connexion externe non configurée (voir <code>.env</code>).
         </p>
 
-        <p id="auth-error" class="auth-error"></p>
+        <button id="guest-login-btn" class="btn-secondary auth-guest"><i class="fas fa-headphones"></i> Essayer sans compte</button>
+        <p class="auth-guest-note">Quiz global uniquement · progression non sauvegardée</p>
+        <p id="auth-error" class="auth-error" role="alert" aria-live="assertive"></p>
       </section>
     </div>
   </div>
@@ -112,16 +140,19 @@
           <span class="avatar avatar-sm" id="header-avatar"></span>
           <span class="user-name" id="user-name"></span>
         </button>
-        <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" />
-        <button id="mute-btn" class="btn-secondary" title="Activer/couper les effets sonores"><i class="fas fa-volume-high"></i></button>
-        <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language">EN</button>
-        <button id="logout-btn" class="btn-secondary"><i class="fas fa-sign-out-alt"></i></button>
+        <button id="header-menu-btn" class="btn-secondary header-menu-btn" aria-label="Ouvrir les réglages" aria-expanded="false" aria-controls="header-more-menu"><i class="fas fa-ellipsis-vertical"></i></button>
+        <div id="header-more-menu" class="header-more-menu hidden">
+          <label for="header-volume">Volume</label>
+          <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" aria-label="Volume de la musique" />
+          <button id="mute-btn" class="btn-secondary" title="Activer ou couper les effets sonores" aria-label="Activer ou couper les effets sonores"><i class="fas fa-volume-high"></i></button>
+          <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language" aria-label="Changer de langue">EN</button>
+          <button id="logout-btn" class="btn-secondary" aria-label="Se déconnecter"><i class="fas fa-sign-out-alt"></i><span>Déconnexion</span></button>
+        </div>
       </div>
     </header>
 
     <!-- Barre de navigation -->
     <nav class="navbar" id="navbar">
-      <button class="nav-item" data-nav="home"><i class="fas fa-house"></i><span data-i18n="Accueil">Accueil</span><span id="quests-nav-badge" class="nav-badge hidden"></span></button>
       <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span data-i18n="Jouer">Jouer</span></button>
       <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span data-i18n="Collection">Collection</span></button>
       <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span data-i18n="Communauté">Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
@@ -441,6 +472,10 @@
     <!-- VUE QUIZ -->
     <div id="view-quiz" class="hidden">
       <button class="btn-back" id="back-home"><i class="fas fa-arrow-left"></i> Jouer</button>
+      <div id="guest-banner" class="guest-banner">
+        <span><i class="fas fa-headphones"></i> Mode invité : aucun score ni progrès n’est sauvegardé.</span>
+        <button class="btn-primary" id="guest-create-account">Créer un compte</button>
+      </div>
 
       <div id="training-banner" class="training-banner hidden">
         <span id="training-label"></span>
@@ -642,17 +677,17 @@
     </div>
 
     <!-- Modale stats de tirage -->
-    <div id="gacha-stats-modal" class="modal-overlay hidden">
+    <div id="gacha-stats-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Statistiques de tirage">
       <div class="modal-card">
-        <button class="modal-close" id="gacha-stats-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <button class="modal-close" id="gacha-stats-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <div id="gacha-stats-body" class="gacha-stats-body"></div>
       </div>
     </div>
 
     <!-- Modale détail personnage -->
-    <div id="character-modal" class="modal-overlay hidden">
+    <div id="character-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Détail du personnage">
       <div class="modal-card char-card">
-        <button class="modal-close" id="character-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <button class="modal-close" id="character-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <div id="character-body" class="char-body"></div>
       </div>
     </div>
@@ -1164,17 +1199,17 @@
     </div>
 
     <!-- Modale profil joueur (depuis le classement) -->
-    <div id="player-modal" class="modal-overlay hidden">
+    <div id="player-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Profil du joueur">
       <div class="modal-card">
-        <button class="modal-close" id="player-close" title="Fermer"><i class="fas fa-times"></i></button>
+        <button class="modal-close" id="player-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <div id="player-body"></div>
       </div>
     </div>
 
     <!-- Onboarding (première connexion) -->
-    <div id="onboard-modal" class="modal-overlay hidden">
+    <div id="onboard-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
       <div class="modal-card">
-        <h2><i class="fas fa-music"></i> Bienvenue sur AMQ !</h2>
+        <h2 id="onboard-title"><i class="fas fa-music"></i> Bienvenue sur AMQ !</h2>
         <p class="onboard-lead">Devine l'anime à partir de son opening. Pour démarrer :</p>
         <ul class="onboard-list">
           <li>🎧 <b>Joue</b> en mode classique pour gagner des <b>tokens</b> (Duo / Carré / Cash).</li>
@@ -1192,10 +1227,10 @@
   </div>
 
   <!-- Modale À propos / Règles (accessible connecté ou non) -->
-  <div id="about-modal" class="modal-overlay hidden">
+  <div id="about-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div class="modal-card about-card">
-      <button class="modal-close" id="about-close" title="Fermer"><i class="fas fa-times"></i></button>
-      <h2 class="about-title"><i class="fas fa-music"></i> Anime Music Quiz — Règles</h2>
+      <button class="modal-close" id="about-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+      <h2 class="about-title" id="about-title"><i class="fas fa-music"></i> Anime Music Quiz — Règles</h2>
 
       <h3>🎯 Le principe</h3>
       <p>Un extrait d'<b>opening</b> (ou d'<b>ending</b>) d'anime est joué : devine de quel anime il s'agit en tapant son titre. L'orthographe approximative et les titres alternatifs (romaji, anglais…) sont acceptés.</p>
@@ -1244,21 +1279,8 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script src="i18n.js"></script>
   <script src="sfx.js"></script>
-  <!-- Vues extraites de main.js (scope global partagé) — chargées avant main.js
-       car setupAppUI() référence leurs openers (ex. openTower) au chargement.
-       gacha.js avant community.js (définit RARITY_LABELS/ORDER réutilisés). -->
-  <script src="tower.js"></script>
-  <script src="admin.js"></script>
-  <script src="playlist.js"></script>
-  <script src="daily.js"></script>
-  <script src="gacha.js"></script>
-  <script src="catalog.js"></script>
-  <script src="community.js"></script>
   <script src="main.js"></script>
-  <script src="anime-autocomplete.js"></script>
-  <script src="mp-client.js"></script>
 </body>
 </html>

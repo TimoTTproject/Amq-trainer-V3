@@ -23,7 +23,58 @@ let importRowForced = false; // « Changer de liste » : force l'affichage de l'
 let gameMode = 'ranked'; // « Jouer » = mode classique (tokens). L'entraînement passe par isTraining.
 let quizType = localStorage.getItem('amq_quiz_type') || 'all'; // 'all' | 'OP' | 'ED'
 let clipTimer = null; // coupe l'extrait après la durée choisie
+let clipEndsAt = 0; // horodatage de coupure de l'extrait (pour geler/reprendre en alt-tab)
+let clipRemainingMs = 0; // temps d'extrait restant mémorisé pendant l'arrière-plan
+let clipResumeOnShow = false; // l'extrait jouait quand on a quitté l'onglet → reprendre au retour
+let appReadyPromise = null;
+let appUiReady = false;
+let currentView = null;
+let suppressHistory = false;
 const video = () => document.getElementById('quiz-video');
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-lazy-src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === 'true') return resolve();
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.dataset.lazySrc = src;
+    script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, { once: true });
+    script.addEventListener('error', () => reject(new Error(`Impossible de charger ${src}`)), { once: true });
+    document.body.appendChild(script);
+  });
+}
+
+function ensureAppReady() {
+  if (appReadyPromise) return appReadyPromise;
+  appReadyPromise = (async () => {
+    await Promise.all([
+      'tower.js', 'admin.js', 'playlist.js', 'daily.js', 'gacha.js',
+      'catalog.js', 'community.js', 'anime-autocomplete.js',
+    ].map(loadScript));
+    await loadScript('/socket.io/socket.io.js');
+    await loadScript('mp-client.js');
+    if (typeof initPlaylistUI === 'function') initPlaylistUI();
+    if (typeof initDailyUI === 'function') initDailyUI();
+    if (typeof initAnimeAutocompleteUI === 'function') initAnimeAutocompleteUI();
+    if (typeof initMpUI === 'function') initMpUI();
+    if (!appUiReady) {
+      setupAppUI();
+      appUiReady = true;
+    }
+  })();
+  return appReadyPromise;
+}
+
+async function enterApp(user) {
+  await ensureAppReady();
+  showApp(user);
+}
 
 async function closePictureInPictureFor(media) {
   if (!media) return;
@@ -115,19 +166,26 @@ function pingVisit() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupAuthUI();
-  setupAppUI();
+  setupGlobalAccessibility();
   pingVisit();
   window.addEventListener('focus', () => { if (currentUser) syncTokenBalance(); });
 
   // Retour d'OAuth AniList
   const params = new URLSearchParams(location.search);
+  if (params.get('reset')) {
+    showAuth();
+    showAuthPanel('reset');
+    document.body.classList.remove('session-pending');
+    return;
+  }
+  const sessionPromise = api('/api/auth/me');
   if (params.get('auth')) {
     history.replaceState({}, '', location.pathname);
     if (params.get('auth') === 'error') showAuthError("La connexion AniList a échoué.");
   }
 
   // Boutons OAuth visibles seulement si configurés côté serveur
-  try {
+  (async () => { try {
     const [anilist, google] = await Promise.all([
       api('/api/auth/anilist/status').catch(() => ({ configured: false })),
       api('/api/auth/google/status').catch(() => ({ configured: false })),
@@ -137,14 +195,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const any = anilist.configured || google.configured;
     document.getElementById('oauth-sep').classList.toggle('hidden', !any);
     document.getElementById('oauth-disabled').classList.toggle('hidden', any);
-  } catch {}
+  } catch {} })();
 
   // Déjà connecté ?
   try {
-    const { user } = await api('/api/auth/me');
-    showApp(user);
+    const { user } = await sessionPromise;
+    await enterApp(user);
     // Lien de profil partagé (?u=<id>) → ouvre la fiche du joueur
-    const shared = params.get('u');
+    const shared = !user.isGuest && params.get('u');
     if (shared) {
       history.replaceState({}, '', location.pathname);
       openPlayer(shared);
@@ -157,6 +215,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch {
     showAuth();
+    if (params.get('register')) showAuthPanel('register');
+  } finally {
+    document.body.classList.remove('session-pending');
   }
 });
 
@@ -164,17 +225,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupAuthUI() {
   document.querySelectorAll('.auth-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.auth-tab').forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-      const isLogin = tab.dataset.tab === 'login';
-      document.getElementById('login-form').classList.toggle('hidden', !isLogin);
-      document.getElementById('register-form').classList.toggle('hidden', isLogin);
-      showAuthError('');
+      showAuthPanel(tab.dataset.tab);
     });
   });
 
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    setAuthBusy(e.currentTarget, true);
     try {
       const { user } = await api('/api/auth/login', {
         method: 'POST',
@@ -183,12 +240,17 @@ function setupAuthUI() {
           password: document.getElementById('login-password').value,
         }),
       });
-      showApp(user);
-    } catch (err) { showAuthError(err.message); }
+      await enterApp(user);
+    } catch (err) {
+      showAuthError(err.message);
+    } finally {
+      setAuthBusy(e.currentTarget, false);
+    }
   });
 
   document.getElementById('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    setAuthBusy(e.currentTarget, true);
     try {
       const { user } = await api('/api/auth/register', {
         method: 'POST',
@@ -198,8 +260,72 @@ function setupAuthUI() {
           password: document.getElementById('register-password').value,
         }),
       });
-      showApp(user);
-    } catch (err) { showAuthError(err.message); }
+      await enterApp(user);
+    } catch (err) {
+      showAuthError(err.message);
+    } finally {
+      setAuthBusy(e.currentTarget, false);
+    }
+  });
+
+  document.getElementById('forgot-password-btn').addEventListener('click', () => {
+    document.getElementById('forgot-email').value = document.getElementById('login-email').value;
+    showAuthPanel('forgot');
+  });
+  document.querySelectorAll('.auth-back-login').forEach((button) =>
+    button.addEventListener('click', () => showAuthPanel('login'))
+  );
+
+  document.getElementById('forgot-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setAuthBusy(e.currentTarget, true);
+    try {
+      const result = await api('/api/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: document.getElementById('forgot-email').value }),
+      });
+      showAuthError(result.message);
+      if (result.devResetUrl) console.info('Lien de réinitialisation local :', result.devResetUrl);
+    } catch (err) {
+      showAuthError(err.message);
+    } finally {
+      setAuthBusy(e.currentTarget, false);
+    }
+  });
+
+  document.getElementById('reset-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setAuthBusy(e.currentTarget, true);
+    try {
+      const token = new URLSearchParams(location.search).get('reset');
+      const result = await api('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, password: document.getElementById('reset-password').value }),
+      });
+      history.replaceState({}, '', location.pathname);
+      showAuthPanel('login');
+      showAuthError(result.message);
+    } catch (err) {
+      showAuthError(err.message);
+    } finally {
+      setAuthBusy(e.currentTarget, false);
+    }
+  });
+
+  document.getElementById('guest-login-btn').addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    showAuthError('');
+    try {
+      const { user } = await api('/api/auth/guest', { method: 'POST' });
+      await enterApp(user);
+    } catch (err) {
+      showAuthError(err.message);
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
   });
 
   document.getElementById('anilist-login-btn').addEventListener('click', () => {
@@ -210,12 +336,146 @@ function setupAuthUI() {
   });
 }
 
+function showAuthPanel(panel) {
+  const forms = {
+    login: 'login-form',
+    register: 'register-form',
+    forgot: 'forgot-password-form',
+    reset: 'reset-password-form',
+  };
+  Object.entries(forms).forEach(([name, id]) =>
+    document.getElementById(id).classList.toggle('hidden', name !== panel)
+  );
+  const regular = panel === 'login' || panel === 'register';
+  document.querySelector('.auth-tabs').classList.toggle('hidden', !regular);
+  document.querySelectorAll('.auth-tab').forEach((tab) => {
+    const active = tab.dataset.tab === panel;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  });
+  document.getElementById('oauth-sep').classList.toggle('auth-context-hidden', !regular);
+  document.getElementById('google-login-btn').classList.toggle('auth-context-hidden', !regular);
+  document.getElementById('anilist-login-btn').classList.toggle('auth-context-hidden', !regular);
+  document.getElementById('oauth-disabled').classList.toggle('auth-context-hidden', !regular);
+  document.getElementById('guest-login-btn').classList.toggle('auth-context-hidden', !regular);
+  document.querySelector('.auth-guest-note').classList.toggle('auth-context-hidden', !regular);
+  showAuthError('');
+  requestAnimationFrame(() => document.querySelector(`#${forms[panel]} input`)?.focus());
+}
+
+function setAuthBusy(form, busy) {
+  form.setAttribute('aria-busy', String(busy));
+  form.querySelectorAll('button, input').forEach((control) => { control.disabled = busy; });
+  const submit = form.querySelector('button[type="submit"]');
+  if (!submit) return;
+  if (busy) {
+    submit.dataset.label = submit.innerHTML;
+    submit.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Patiente…';
+  } else if (submit.dataset.label) {
+    submit.innerHTML = submit.dataset.label;
+    delete submit.dataset.label;
+  }
+}
+
 function showAuthError(msg) { document.getElementById('auth-error').textContent = msg || ''; }
 function showAuth() {
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
 }
-function showView(name) {
+
+function setupGlobalAccessibility() {
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-about]')) {
+      event.preventDefault();
+      document.getElementById('about-modal').classList.remove('hidden');
+    }
+  });
+  document.getElementById('about-close').addEventListener('click', () =>
+    document.getElementById('about-modal').classList.add('hidden')
+  );
+  document.getElementById('about-modal').addEventListener('click', (event) => {
+    if (event.target.id === 'about-modal') event.currentTarget.classList.add('hidden');
+  });
+
+  const iconLabels = {
+    'players-prev': 'Page précédente', 'players-next': 'Page suivante',
+    'cat-prev': 'Page précédente', 'cat-next': 'Page suivante',
+    'chars-prev': 'Page précédente', 'chars-next': 'Page suivante',
+    'craft-prev': 'Page précédente', 'craft-next': 'Page suivante',
+    'admin-prev': 'Page précédente', 'admin-next': 'Page suivante',
+    'play-btn': 'Lire ou mettre en pause', 'replay-btn': 'Réécouter',
+    'tower-play': 'Lire ou mettre en pause', 'tower-replay': 'Réécouter',
+    'daily-play': 'Lire ou mettre en pause', 'daily-replay': 'Réécouter',
+    'mp-chat-send': 'Envoyer le message',
+  };
+  Object.entries(iconLabels).forEach(([id, label]) => {
+    const element = document.getElementById(id);
+    if (element && !element.getAttribute('aria-label')) element.setAttribute('aria-label', label);
+  });
+
+  document.querySelectorAll('.lb-tabs, .shop-tabs, .mode-switch, .type-filter').forEach((list) => {
+    list.setAttribute('role', 'tablist');
+    const syncTabs = () => list.querySelectorAll('button').forEach((tab) => {
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(tab.classList.contains('active')));
+    });
+    syncTabs();
+    new MutationObserver(syncTabs).observe(list, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+
+  const previousFocus = new WeakMap();
+  const modals = [...document.querySelectorAll('.modal-overlay')];
+  const onModalChange = (modal) => {
+    const open = !modal.classList.contains('hidden');
+    if (open) {
+      previousFocus.set(modal, document.activeElement);
+      requestAnimationFrame(() => {
+        const target = modal.querySelector('.modal-close, button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        target?.focus();
+      });
+    } else {
+      const target = previousFocus.get(modal);
+      if (target && document.contains(target)) target.focus();
+    }
+  };
+  modals.forEach((modal) => {
+    new MutationObserver(() => onModalChange(modal)).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const modal = modals.find((candidate) => !candidate.classList.contains('hidden'));
+    if (!modal) return;
+    if (event.key === 'Escape') {
+      const close = modal.querySelector('.modal-close');
+      if (close) {
+        event.preventDefault();
+        close.click();
+      }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = [...modal.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.closest('.hidden'));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  });
+
+  window.addEventListener('popstate', (event) => {
+    if (!currentUser) return;
+    const target = event.state?.view || location.hash.replace(/^#/, '') || 'play';
+    suppressHistory = true;
+    try { navTo(target); } finally { suppressHistory = false; }
+  });
+}
+
+function showView(name, options = {}) {
   if (name !== 'catalog' && typeof stopCatalogAudio === 'function') stopCatalogAudio();
   if (name !== 'tower' && typeof stopTowerMedia === 'function') stopTowerMedia();
   if (name !== 'daily' && typeof stopDailyMedia === 'function') stopDailyMedia();
@@ -252,7 +512,23 @@ function showView(name) {
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
   // Les sous-vues gardent leur hub parent en surbrillance dans la navbar
   const navActive = NAV_GROUP[name] || name;
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.nav === navActive));
+  document.querySelectorAll('.nav-item').forEach((b) => {
+    const active = b.dataset.nav === navActive;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  currentView = name;
+  if (!suppressHistory) {
+    const url = new URL(location.href);
+    url.searchParams.delete('nav');
+    url.searchParams.delete('auth');
+    url.searchParams.delete('reset');
+    url.searchParams.delete('register');
+    url.hash = name;
+    const method = options.replace ? 'replaceState' : 'pushState';
+    history[method]({ view: name }, '', url);
+  }
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
 }
 
@@ -289,23 +565,42 @@ function navTo(name) {
 
 function showApp(user) {
   currentUser = user;
+  const guest = !!user.isGuest;
+  const requestedHash = location.hash.replace(/^#/, '');
+  const requested = requestedHash === 'home' ? 'play' : requestedHash;
+  document.body.classList.toggle('guest-mode', guest);
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('home-name').textContent = user.displayName;
-  showView('home');
+  if (guest) {
+    mode = 'global';
+    gameMode = 'casual';
+    document.querySelector('#logout-btn span').textContent = 'Quitter l’essai';
+    document.querySelector('#view-play [data-nav="quiz"] p').textContent = 'Teste le catalogue global sans créer de compte';
+  }
+  showView('play', { replace: true });
   applyGameModeUI();
   renderHeaderUser();
   const linked = user.anilistListName || user.anilistName;
   if (linked) document.getElementById('anilist-username').value = linked;
-  chooseInitialMode().then(() => {
+  (guest ? Promise.resolve() : chooseInitialMode()).then(() => {
     applyModeUI();
     refreshCatalogInfo();
   });
-  refreshStats();
-  if (typeof connectMp === 'function') connectMp(); // socket prêt → reconnexion auto si partie en cours
-  if (typeof loadTradesBadge === 'function') loadTradesBadge();
-  loadQuestsBadge();
-  maybeOnboard();
+  if (!guest) {
+    refreshStats();
+    if (typeof connectMp === 'function') connectMp();
+    if (typeof loadTradesBadge === 'function') loadTradesBadge();
+    loadQuestsBadge();
+    maybeOnboard();
+  }
+  if (requested && requested !== 'play' && (!guest || requested === 'quiz')) {
+    suppressHistory = true;
+    try { navTo(requested); } finally { suppressHistory = false; }
+    const restoredUrl = new URL(location.href);
+    restoredUrl.hash = requested;
+    history.replaceState({ view: requested }, '', restoredUrl);
+  }
 }
 
 // Affiche un avatar : image si dispo, sinon initiale colorée.
@@ -418,7 +713,7 @@ function renderHeaderUser() {
 
 let tokenBalanceSync = null;
 function syncTokenBalance() {
-  if (!currentUser) return Promise.resolve(null);
+  if (!currentUser || currentUser.isGuest) return Promise.resolve(null);
   if (tokenBalanceSync) return tokenBalanceSync;
   tokenBalanceSync = api('/api/economy/balance')
     .then((balance) => {
@@ -877,10 +1172,35 @@ function setupAppUI() {
     await api('/api/auth/logout', { method: 'POST' });
     location.reload();
   });
+  document.getElementById('guest-create-account').addEventListener('click', async () => {
+    await api('/api/auth/logout', { method: 'POST' });
+    location.href = '/?register=1';
+  });
+  const headerMenuButton = document.getElementById('header-menu-btn');
+  const headerMenu = document.getElementById('header-more-menu');
+  const setHeaderMenu = (open) => {
+    headerMenu.classList.toggle('hidden', !open);
+    headerMenuButton.setAttribute('aria-expanded', String(open));
+    if (open) headerMenu.querySelector('input, button')?.focus();
+  };
+  headerMenuButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setHeaderMenu(headerMenu.classList.contains('hidden'));
+  });
+  document.addEventListener('click', (event) => {
+    if (!headerMenu.classList.contains('hidden') && !event.target.closest('.user-section')) setHeaderMenu(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !headerMenu.classList.contains('hidden')) {
+      setHeaderMenu(false);
+      headerMenuButton.focus();
+    }
+  });
   document.getElementById('dev-tokens-btn').addEventListener('click', devGrantTokens);
   const muteBtn = document.getElementById('mute-btn');
   const updateMuteIcon = () => {
     muteBtn.querySelector('i').className = sfx.isMuted() ? 'fas fa-volume-xmark' : 'fas fa-volume-high';
+    muteBtn.setAttribute('aria-pressed', String(sfx.isMuted()));
   };
   updateMuteIcon();
   muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
@@ -898,13 +1218,6 @@ function setupAppUI() {
   });
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
   document.getElementById('share-btn').addEventListener('click', shareGame);
-  // Modale À propos / Règles (déclencheurs [data-about], dispo connecté ou non)
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-about]')) { e.preventDefault(); document.getElementById('about-modal').classList.remove('hidden'); }
-  });
-  document.getElementById('about-close').addEventListener('click', () => document.getElementById('about-modal').classList.add('hidden'));
-  document.getElementById('about-modal').addEventListener('click', (e) => { if (e.target.id === 'about-modal') e.currentTarget.classList.add('hidden'); });
-
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       mode = btn.dataset.mode;
@@ -1037,7 +1350,7 @@ function setupAppUI() {
     if (btn) craftFromAtelier(btn);
   });
   // Admin personnages
-  document.getElementById('back-home-admin').addEventListener('click', () => showView('home'));
+  document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
   let adminSearchTimer;
   document.getElementById('admin-search').addEventListener('input', (e) => {
     clearTimeout(adminSearchTimer);
@@ -1157,11 +1470,28 @@ function setupAppUI() {
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
 
-  // Pause la lecture quand on quitte l'onglet
+  // Alt-tab : on gèle l'extrait (audio + minuteur de coupure + barre) quand on
+  // quitte l'onglet, et on le REPREND au retour là où il s'était arrêté — au lieu
+  // de couper le son jusqu'à la fin de l'extrait.
   document.addEventListener('visibilitychange', () => {
+    const v = video();
+    const quizActive = currentSong && !answered &&
+      !document.getElementById('view-quiz').classList.contains('hidden');
     if (document.hidden) {
-      const v = video();
-      if (v && !v.paused) { v.pause(); setPlayIcon(); }
+      const wasPlaying = v && !v.paused;
+      if (wasPlaying) { v.pause(); setPlayIcon(); }
+      clipResumeOnShow = wasPlaying && quizActive;
+      if (clipResumeOnShow && clipTimer && clipEndsAt) {
+        clearTimeout(clipTimer); clipTimer = null;
+        clipRemainingMs = Math.max(0, clipEndsAt - Date.now());
+        pauseQuizTimebar();
+      }
+    } else if (clipResumeOnShow && quizActive) {
+      if (v) v.play().catch(() => {});
+      setPlayIcon();
+      if (clipRemainingMs > 0) { armClipCutoff(clipRemainingMs); resumeQuizTimebar(clipRemainingMs); }
+      clipRemainingMs = 0;
+      clipResumeOnShow = false;
     }
   });
 
@@ -1269,6 +1599,7 @@ function resetQuizToStart() {
   clearTimeout(chronoTimer);
   clearTimeout(autoNextTimer);
   stopRewardGauge();
+  clipResumeOnShow = false; clipRemainingMs = 0; clipEndsAt = 0;
   answered = false;
   currentSong = null;
   currentRoundToken = null;
@@ -1576,14 +1907,13 @@ async function startClip() {
   setPlayIcon();
 
   // Coupure après la durée choisie (sauf "Illimitée" ou si la vidéo est révélée)
+  clipResumeOnShow = false; clipRemainingMs = 0;
   if (settings.clipSeconds > 0) {
     startQuizTimebar(settings.clipSeconds);
-    clipTimer = setTimeout(() => {
-      if (!answered) { v.pause(); setOverlayEnded(true); } // extrait fini → invite à répondre/passer
-      setPlayIcon();
-    }, settings.clipSeconds * 1000);
+    armClipCutoff(settings.clipSeconds * 1000);
   } else {
     stopQuizTimebar(); // illimité : pas de barre
+    clipEndsAt = 0;
   }
 
   // Mode chrono (entraînement) : auto-révélation un peu après la fin de l'extrait
@@ -1594,6 +1924,17 @@ async function startClip() {
       if (!answered) { setHint('⏱ Temps écoulé !'); showAnswerCasual(); }
     }, limitMs);
   }
+}
+
+// Programme (ou reprogramme) la coupure de l'extrait dans `ms` millisecondes.
+function armClipCutoff(ms) {
+  clearTimeout(clipTimer);
+  clipEndsAt = Date.now() + ms;
+  clipTimer = setTimeout(() => {
+    const v = video();
+    if (!answered && v) { v.pause(); setOverlayEnded(true); } // extrait fini → invite à répondre/passer
+    setPlayIcon();
+  }, ms);
 }
 
 function replayClip() {
@@ -1619,6 +1960,22 @@ function stopQuizTimebar() {
   const fill = document.getElementById('quiz-timefill');
   if (fill) { fill.style.transition = 'none'; }
   if (bar) bar.classList.add('hidden');
+}
+// Fige la barre à sa position actuelle (arrière-plan / alt-tab).
+function pauseQuizTimebar() {
+  const fill = document.getElementById('quiz-timefill');
+  if (!fill || fill.parentElement.classList.contains('hidden')) return;
+  const w = getComputedStyle(fill).width;
+  fill.style.transition = 'none';
+  fill.style.width = w; // gèle à la largeur courante
+}
+// Reprend la vidange de la barre sur le temps restant.
+function resumeQuizTimebar(remainingMs) {
+  const fill = document.getElementById('quiz-timefill');
+  if (!fill || remainingMs <= 0) return;
+  void fill.offsetWidth; // reflow
+  fill.style.transition = `width ${remainingMs}ms linear`;
+  fill.style.width = '0%';
 }
 
 // Multiplicateur de vitesse — DOIT rester aligné avec speedMultiplier() côté serveur

@@ -97,7 +97,9 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function initAnimeAutocompleteUI() {
   setupAnimeAutocomplete({ inputId: 'answer-input', listId: 'answer-suggestions', onSubmit: () => guessAnswer() });
   setupAnimeAutocomplete({ inputId: 'mp-input', listId: 'mp-suggestions', onSubmit: () => mpSubmitGuess() });
-});
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAnimeAutocompleteUI);

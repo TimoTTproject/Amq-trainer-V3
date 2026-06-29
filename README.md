@@ -46,6 +46,7 @@ un Postgres local ou l'URL publique du Postgres Railway.
 | `NODE_ENV` | recommandé | Mettre `production` en déploiement → cookies marqués `secure`. |
 | `PORT` | non | Port HTTP (défaut 3000). |
 | `FRONTEND_URL` | non | Origine du front pour CORS/redirections OAuth. |
+| `RESEND_API_KEY` / `AUTH_FROM_EMAIL` | non | Envoi des liens « mot de passe oublié » via Resend. En développement sans clé, le lien est écrit dans les logs. |
 | `REDIS_URL` | non | Active Redis (jetons de manche + rate-limit multi-instance). Sinon repli mémoire. |
 | `ANILIST_CLIENT_ID` / `ANILIST_CLIENT_SECRET` / `ANILIST_REDIRECT_URI` | non | Active le bouton OAuth AniList. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | non | Active le bouton OAuth Google. |
