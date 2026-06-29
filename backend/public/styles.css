@@ -1004,7 +1004,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .badge-nm { font-size: .85rem; font-weight: 700; color: var(--text); line-height: 1.2; }
 .badge-desc { font-size: .72rem; color: var(--text-2); line-height: 1.25; }
 .badge-check { color: var(--green); font-size: .95rem; flex-shrink: 0; }
-.badge-lock { color: var(--text-2); opacity: .6; font-size: .85rem; flex-shrink: 0; }
+.badge-prog { font-size: .72rem; font-weight: 700; color: var(--text-2); flex-shrink: 0; white-space: nowrap; }
+.badge-bar { display: block; height: 5px; background: var(--bg); border-radius: 4px; overflow: hidden; margin-top: 5px; }
+.badge-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; }
 
 /* Répartition par rareté */
 .rarity-breakdown { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }

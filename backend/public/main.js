@@ -647,31 +647,51 @@ function renderProfileBadges(d) {
   const cards = d?.cardsCount || 0;
   const owned = d?.ownedByRarity || {};
   const tokens = d?.user?.tokens || 0;
+  const rankedGames = d?.user?.rankedGames || 0;
+  const rankedWins = d?.user?.rankedWins || 0;
+  const soloGames = d?.user?.soloGames || 0;
+  const streak = d?.user?.dailyStreakBest || 0;
+  const maxStars = d?.maxStars || 0;
+  // value = progression actuelle, target = objectif. La barre = value/target.
   const defs = [
-    { ic: '🌟', nm: 'Premier pas', desc: 'Jouer 1 musique', got: played >= 1 },
-    { ic: '🎵', nm: 'Mélomane', desc: '100 musiques jouées', got: played >= 100 },
-    { ic: '🎯', nm: 'Oreille affûtée', desc: '80% de réussite (20+ parties)', got: rate >= 80 && played >= 20 },
-    { ic: '🏰', nm: 'Grimpeur', desc: 'Atteindre l\'étage 10 au Château', got: tower >= 10 },
-    { ic: '👑', nm: 'Maître du Château', desc: 'Atteindre l\'étage 25', got: tower >= 25 },
-    { ic: '🎴', nm: 'Collectionneur', desc: 'Posséder 50 cartes', got: cards >= 50 },
-    { ic: '✨', nm: 'Chasseur de légendes', desc: 'Obtenir un Légendaire', got: (owned.legendary || 0) > 0 },
-    { ic: '💖', nm: 'Mythique !', desc: 'Obtenir un Mythique', got: (owned.mythic || 0) > 0 },
-    { ic: '💰', nm: 'Fortune', desc: 'Avoir 1000 tokens', got: tokens >= 1000 },
-  ];
+    { ic: '🌟', nm: 'Premier pas', desc: 'Jouer 1 musique', value: played, target: 1, unit: '' },
+    { ic: '🎵', nm: 'Mélomane', desc: '100 musiques jouées', value: played, target: 100 },
+    { ic: '🎯', nm: 'Oreille affûtée', desc: '80% de réussite (20+ parties)', value: played >= 20 ? rate : 0, target: 80, unit: '%' },
+    { ic: '🏰', nm: 'Grimpeur', desc: 'Étage 10 au Château', value: tower, target: 10 },
+    { ic: '👑', nm: 'Maître du Château', desc: 'Étage 25 au Château', value: tower, target: 25 },
+    { ic: '🎴', nm: 'Collectionneur', desc: 'Posséder 50 cartes', value: cards, target: 50 },
+    { ic: '✨', nm: 'Chasseur de légendes', desc: 'Obtenir un Légendaire', value: owned.legendary || 0, target: 1 },
+    { ic: '💖', nm: 'Mythique !', desc: 'Obtenir un Mythique', value: owned.mythic || 0, target: 1 },
+    { ic: '💰', nm: 'Fortune', desc: 'Avoir 1000 tokens', value: tokens, target: 1000 },
+    // Nouveaux : classé, défi du jour, ascension
+    { ic: '⚔️', nm: 'Compétiteur', desc: '5 parties classées (multi)', value: rankedGames, target: 5 },
+    { ic: '🏅', nm: 'Champion', desc: '10 victoires en classé', value: rankedWins, target: 10 },
+    { ic: '🗓️', nm: 'Quotidien', desc: 'Terminer un défi du jour', value: soloGames, target: 1 },
+    { ic: '🔥', nm: 'Assidu', desc: 'Série de 7 jours au défi', value: streak, target: 7 },
+    { ic: '⭐', nm: 'Ascension', desc: 'Monter une carte en ★5', value: maxStars, target: 5 },
+  ].map((b) => ({ ...b, got: b.value >= b.target }));
+
   const earned = defs.filter((b) => b.got).length;
+  // Débloqués d'abord, puis par progression décroissante (les plus proches en tête).
+  defs.sort((a, b) => (b.got - a.got) || (b.value / b.target - a.value / a.target));
+
   document.getElementById('profile-badges').innerHTML =
     `<div class="badges-count">${earned}/${defs.length} débloqués</div>` +
     defs
-      .map(
-        (b) => `<div class="badge-item${b.got ? ' got' : ''}">
+      .map((b) => {
+        const pct = Math.min(100, Math.round((b.value / b.target) * 100));
+        const cur = Math.min(b.value, b.target);
+        const prog = b.got ? '' : `<span class="badge-prog">${cur}/${b.target}${b.unit || ''}</span>`;
+        return `<div class="badge-item${b.got ? ' got' : ''}">
           <span class="badge-ic">${b.ic}</span>
           <span class="badge-txt">
             <span class="badge-nm">${escapeHtml(b.nm)}</span>
             <span class="badge-desc">${escapeHtml(b.desc)}</span>
+            ${b.got ? '' : `<span class="badge-bar"><span class="badge-fill" style="width:${pct}%"></span></span>`}
           </span>
-          ${b.got ? '<span class="badge-check"><i class="fas fa-circle-check"></i></span>' : '<span class="badge-lock"><i class="fas fa-lock"></i></span>'}
-        </div>`
-      )
+          ${b.got ? '<span class="badge-check"><i class="fas fa-circle-check"></i></span>' : prog}
+        </div>`;
+      })
       .join('');
 }
 
