@@ -222,7 +222,12 @@ function showView(name) {
   if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
-  if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } clearTimeout(autoNextTimer); }
+  if (name !== 'quiz') {
+    const qv = document.getElementById('quiz-video');
+    if (qv && !qv.paused) qv.pause();
+    clearTimeout(clipTimer); clearTimeout(chronoTimer); clearTimeout(autoNextTimer);
+    if (typeof stopRewardGauge === 'function') stopRewardGauge();
+  }
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-play').classList.toggle('hidden', name !== 'play');
   document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
@@ -1256,6 +1261,30 @@ function refreshQuizOptionsLock() {
 }
 
 // ── QUIZ CLASSIQUE vs CENTRE D'ENTRAÎNEMENT ──
+// Remet le quiz dans un état « prêt à démarrer » propre. Indispensable quand on
+// revient sur la page après l'avoir quittée en pleine manche (sinon la manche
+// reste figée et « Manche suivante » désactivé → impossible de relancer un son).
+function resetQuizToStart() {
+  clearTimeout(clipTimer);
+  clearTimeout(chronoTimer);
+  clearTimeout(autoNextTimer);
+  stopRewardGauge();
+  answered = false;
+  currentSong = null;
+  currentRoundToken = null;
+  currentLevel = 'cash';
+  roundReward = null;
+  const v = video();
+  if (v) { try { v.pause(); } catch {} v.removeAttribute('src'); try { v.load(); } catch {} delete v.dataset.clipUrl; }
+  resetQuizUI();
+  document.getElementById('answer-input').disabled = true;
+  document.getElementById('reveal-btn').disabled = true;
+  const next = document.getElementById('next-btn');
+  next.disabled = false;
+  next.innerHTML = '<i class="fas fa-play"></i> Démarrer';
+  setHint('Clique sur « Démarrer » pour lancer une manche.');
+}
+
 function openQuiz() {
   isTraining = false;
   trainingSource = null;
@@ -1264,6 +1293,7 @@ function openQuiz() {
   document.getElementById('quiz-mode-panel').classList.remove('hidden');
   applyGameModeUI();
   refreshCatalogInfo();
+  resetQuizToStart(); // état propre (au cas où on a quitté en pleine manche)
   refreshQuizOptionsLock();
   quizSessionEnded = true; // la 1re manche démarre une session propre
   showView('quiz');
