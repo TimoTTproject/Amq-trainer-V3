@@ -736,6 +736,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .daily-streak-line { font-size: .95rem; color: var(--text-2); margin: 0 0 18px; }
 .daily-streak-line .gain { color: var(--green); font-weight: 700; }
 .daily-notif-btn { margin-left: 10px; }
+.lang-toggle { font-weight: 700; font-size: .8rem; min-width: 38px; }
+.auth-card { position: relative; }
+.auth-lang { position: absolute; top: 14px; right: 14px; padding: 5px 10px; z-index: 2; }
 /* Bannière de récompense de saison (vue Classement) */
 .season-banner { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
   background: linear-gradient(135deg, rgba(255,182,72,.14), rgba(138,108,255,.14));
