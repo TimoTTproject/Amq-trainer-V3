@@ -1644,6 +1644,46 @@ header h1 i { color: var(--accent); }
   -webkit-text-fill-color: currentColor;
 }
 
+/* ── Accueil : polish (identité couleur par mode, pastilles d'icône, hero) ── */
+/* Couleur d'identité par carte → barre latérale + icône + accent au survol */
+#card-play { --c: #6c8cff; }
+#card-training { --c: #3ec98a; }
+#card-profile { --c: #8a6cff; }
+#card-gacha { --c: #ff8fab; }
+#card-tower { --c: #38d6d6; }
+#card-catalog { --c: #7d8bb0; }
+#card-mp { --c: #ff6b6b; }
+#card-shop { --c: #ffb648; }
+
+.home-card { position: relative; }
+.home-card i {
+  display: inline-grid; place-items: center; width: 48px; height: 48px;
+  border-radius: 13px; font-size: 1.5rem;
+  color: var(--c, var(--accent)); -webkit-text-fill-color: var(--c, var(--accent));
+  background: rgba(255, 255, 255, .045); border: 1px solid #2a2f3a;
+  transition: transform .18s ease, background .18s, box-shadow .18s;
+}
+.home-card:not(.disabled):hover i {
+  transform: scale(1.08) rotate(-3deg);
+  background: rgba(255, 255, 255, .08);
+  box-shadow: 0 0 0 1px var(--c, var(--accent));
+}
+.home-card h3 { letter-spacing: .2px; }
+
+/* Hero d'accueil : panneau dégradé + lueur d'angle */
+.home-hero {
+  position: relative; overflow: hidden;
+  padding: 22px 24px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(108, 140, 255, .14), rgba(138, 108, 255, .05) 55%, transparent);
+  border: 1px solid #2a2f42;
+}
+.home-hero::after {
+  content: ''; position: absolute; top: -45px; right: -25px; width: 170px; height: 170px;
+  background: radial-gradient(circle, rgba(138, 108, 255, .22), transparent 70%); pointer-events: none;
+}
+.home-hero h2 { font-size: 2rem; letter-spacing: .2px; }
+.home-hero > * { position: relative; z-index: 1; }
+
 .panel, .quiz-panel, .stats-panel, .modal-card, .quest-item, .srs-stat {
   background: #13151a;
   border-color: #2c3038;
