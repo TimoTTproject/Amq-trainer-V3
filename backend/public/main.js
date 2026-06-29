@@ -320,7 +320,8 @@ function tierSlug(name) {
 }
 function tierBadge(tier, extra) {
   if (!tier || !tier.name) return '';
-  return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">${tier.icon || ''} ${escapeHtml(tier.name)}</span>`;
+  const div = tier.division ? ` <span class="tier-div">${tier.division}</span>` : '';
+  return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">${tier.icon || ''} ${escapeHtml(tier.name)}${div}</span>`;
 }
 
 // ── Cosmétiques : helpers d'application ─────────────────────

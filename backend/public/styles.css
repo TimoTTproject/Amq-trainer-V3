@@ -1144,6 +1144,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .t-diamant { background: linear-gradient(135deg,#2b8de0,#8fd6ff); color: #06223a; }
 .t-maitre { background: linear-gradient(135deg,#7b2ff7,#ff5d8f,#ffd700); background-size: 200% auto; color: #fff; border-color: rgba(255,255,255,.4); animation: cosmHolo 6s linear infinite; }
 /* Valeur MMR mise en évidence à côté de la pastille */
+.tier-div { display: inline-flex; align-items: center; justify-content: center; min-width: 1.3em; padding: 0 .25em; border-radius: 5px; background: rgba(0,0,0,.28); font-weight: 800; }
 .mmr-value { color: var(--accent); font-weight: 800; font-size: 1.15em; }
 .mmr-unit { color: var(--text-2); font-size: .8em; font-weight: 700; }
 

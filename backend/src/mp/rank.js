@@ -9,10 +9,18 @@ const TIERS = [
   { min: 2100, name: 'Maître', icon: '👑' },
 ];
 
+// Chaque palier est divisé en 3 divisions (1 = bas du palier, 3 = proche du suivant).
+const DIVISIONS = 3;
 function tierFromMmr(mmr) {
-  let t = TIERS[0];
-  for (const x of TIERS) if (mmr >= x.min) t = x;
-  return { name: t.name, icon: t.icon };
+  let idx = 0;
+  for (let i = 0; i < TIERS.length; i++) if (mmr >= TIERS[i].min) idx = i;
+  const t = TIERS[idx];
+  // Bande du palier (bande virtuelle de 300 pour le dernier, Maître).
+  const nextMin = idx + 1 < TIERS.length ? TIERS[idx + 1].min : t.min + 300;
+  const step = Math.max(1, (nextMin - t.min) / DIVISIONS);
+  let division = Math.floor((mmr - t.min) / step) + 1;
+  division = Math.max(1, Math.min(DIVISIONS, division));
+  return { name: t.name, icon: t.icon, division };
 }
 
 // Variations de MMR selon le classement (ELO basé sur le placement).
