@@ -131,7 +131,7 @@ function renderDailyIntro(d) {
   document.getElementById('daily-best').textContent = d.soloBestScore || 0;
   document.getElementById('daily-streak').textContent = d.streak || 0;
   const rank = document.getElementById('daily-rank');
-  rank.innerHTML = d.tier ? `${tierBadge(d.tier)} · ${d.soloMmr} MMR` : 'Pas encore classé';
+  rank.innerHTML = d.tier ? `${tierBadge(d.tier)} <span class="mmr-value">${d.soloMmr}</span> <span class="mmr-unit">MMR</span>` : 'Pas encore classé';
 
   const done = document.getElementById('daily-done');
   const start = document.getElementById('daily-start');
