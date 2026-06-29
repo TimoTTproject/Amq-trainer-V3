@@ -74,41 +74,57 @@ async function throttle() {
   lastRequestAt = Date.now();
 }
 
-// Recherche les thèmes d'un anime sur animethemes.moe
+// Une requête de recherche sur animethemes (avec gestion 429). Renvoie les candidats.
+async function searchAnimeThemes(query) {
+  await throttle();
+  const url = `${ANIMETHEMES_API}/anime?include=animethemes.song.artists,animethemes.animethemeentries.videos&q=${encodeURIComponent(query)}`;
+  let res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  if (res.status === 429) {
+    const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
+    await new Promise((r) => setTimeout(r, wait));
+    res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  }
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.anime || [];
+}
+
+// Recherche les thèmes d'un anime sur animethemes.moe. Essaie plusieurs requêtes
+// (titre principal puis titres alternatifs) pour améliorer le taux de correspondance
+// — beaucoup d'animes se trouvent mieux via leur titre anglais.
 async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
   try {
-    await throttle();
-    const url = `${ANIMETHEMES_API}/anime?include=animethemes.song.artists,animethemes.animethemeentries.videos&q=${encodeURIComponent(animeTitle)}`;
-    let res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
-    // Respect de la limite de débit : si 429, on attend puis on réessaie une fois.
-    if (res.status === 429) {
-      const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
-      await new Promise((r) => setTimeout(r, wait));
-      res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
-    }
-    if (!res.ok) return [];
-    const data = await res.json();
-    const candidates = data.anime || [];
-    if (!candidates.length) return [];
-
     // string-similarity est sensible à la casse → on compare en minuscules.
     // (AniList renvoie certains titres tout en majuscules : ONE PIECE, NARUTO…)
     const key = (s) => normalizeAnimeName(s).toLowerCase();
     const candKey = key(animeTitle);
     const synKeys = synonyms.map(key);
+    const scoreOf = (name) => {
+      const target = key(name);
+      let score = stringSimilarity.compareTwoStrings(candKey, target);
+      for (const sk of synKeys) score = Math.max(score, stringSimilarity.compareTwoStrings(sk, target));
+      return score;
+    };
+
+    // Requêtes à tenter : titre principal, puis jusqu'à 2 synonymes distincts.
+    const queries = [];
+    for (const q of [animeTitle, ...synonyms]) {
+      const t = (q || '').trim();
+      if (t && !queries.some((x) => x.toLowerCase() === t.toLowerCase())) queries.push(t);
+      if (queries.length >= 3) break;
+    }
 
     let best = null;
     let bestScore = 0.4;
-    for (const anime of candidates) {
-      const target = key(anime.name);
-      let score = stringSimilarity.compareTwoStrings(candKey, target);
-      for (const sk of synKeys) {
-        score = Math.max(score, stringSimilarity.compareTwoStrings(sk, target));
+    const seen = new Set();
+    for (const q of queries) {
+      const candidates = await searchAnimeThemes(q);
+      for (const anime of candidates) {
+        if (anime.id != null) { if (seen.has(anime.id)) continue; seen.add(anime.id); }
+        const score = scoreOf(anime.name);
+        if (score > bestScore) { bestScore = score; best = anime; }
       }
-      if (score > bestScore) {
-        bestScore = score;
-        best = anime;
-      }
+      if (best && bestScore >= 0.7) break; // bonne correspondance trouvée → on arrête
     }
     return best ? extractThemes(best, animeTitle) : [];
   } catch (err) {
