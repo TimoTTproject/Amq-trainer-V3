@@ -76,7 +76,9 @@ function setVolume(v) {
 const settings = {
   randomStart: localStorage.getItem('amq_randomStart') !== 'false',
   clipSeconds: parseInt(localStorage.getItem('amq_clip') ?? '20'),
+  autoNext: localStorage.getItem('amq_autonext') === 'true',
 };
+let autoNextTimer = null; // enchaînement automatique vers la manche suivante
 
 // ── helpers API ──
 async function api(path, opts = {}) {
@@ -214,7 +216,7 @@ function showView(name) {
   if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
-  if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } }
+  if (name !== 'quiz') { const qv = document.getElementById('quiz-video'); if (qv && !qv.paused) { qv.pause(); clearTimeout(clipTimer); } clearTimeout(autoNextTimer); }
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-play').classList.toggle('hidden', name !== 'play');
   document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
@@ -1049,6 +1051,20 @@ function setupAppUI() {
     settings.clipSeconds = parseInt(optClip.value);
     localStorage.setItem('amq_clip', optClip.value);
   });
+  const optAuto = document.getElementById('opt-autonext');
+  if (optAuto) {
+    optAuto.checked = settings.autoNext;
+    optAuto.addEventListener('change', () => {
+      settings.autoNext = optAuto.checked;
+      localStorage.setItem('amq_autonext', optAuto.checked);
+      if (!optAuto.checked) clearTimeout(autoNextTimer);
+    });
+  }
+  // « Passer » : abandonne la manche (révèle la réponse, sans tokens).
+  document.getElementById('skip-btn').addEventListener('click', () => {
+    if (!currentSong || answered) return;
+    if (isTraining) showAnswerCasual(); else guessAnswer('');
+  });
   document.getElementById('volume').addEventListener('input', (e) => setVolume(+e.target.value));
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => {
     b.addEventListener('click', () => sendFeedback(b.dataset.fb));
@@ -1293,6 +1309,7 @@ function syncTypeFilter() {
 }
 
 async function nextSong() {
+  clearTimeout(autoNextTimer);
   resetQuizUI();
   setHint('Chargement…');
   let song, roundToken, liked;
@@ -1333,6 +1350,7 @@ async function nextSong() {
   document.getElementById('answer-input').disabled = false;
   document.getElementById('reveal-btn').disabled = false;
   document.getElementById('answer-input').focus();
+  document.getElementById('skip-btn').classList.remove('hidden'); // « Passer » pendant la manche
   document.getElementById('next-btn').innerHTML = '<i class="fas fa-forward"></i> Manche suivante';
   updateVideoButtonVisibility(); // cache la vidéo en classé tant qu'on n'a pas répondu
   refreshQuizOptionsLock(); // manche en cours → fige les réglages
@@ -1389,10 +1407,13 @@ async function startClip() {
 
   // Coupure après la durée choisie (sauf "Illimitée" ou si la vidéo est révélée)
   if (settings.clipSeconds > 0) {
+    startQuizTimebar(settings.clipSeconds);
     clipTimer = setTimeout(() => {
-      if (!answered) v.pause();
+      if (!answered) { v.pause(); setOverlayEnded(true); } // extrait fini → invite à répondre/passer
       setPlayIcon();
     }, settings.clipSeconds * 1000);
+  } else {
+    stopQuizTimebar(); // illimité : pas de barre
   }
 
   // Mode chrono (entraînement) : auto-révélation un peu après la fin de l'extrait
@@ -1409,11 +1430,45 @@ function replayClip() {
   if (currentSong) startClip();
 }
 
+// Barre de temps de l'extrait (solo) : se vide sur la durée d'écoute.
+function startQuizTimebar(seconds) {
+  const bar = document.getElementById('quiz-timebar');
+  const fill = document.getElementById('quiz-timefill');
+  if (!bar || !fill) return;
+  bar.classList.remove('hidden');
+  fill.style.transition = 'none';
+  fill.style.width = '100%';
+  fill.classList.remove('low');
+  void fill.offsetWidth; // reflow
+  fill.style.transition = `width ${seconds}s linear`;
+  fill.style.width = '0%';
+  setTimeout(() => fill.classList.add('low'), Math.max(0, (seconds - 4) * 1000));
+}
+function stopQuizTimebar() {
+  const bar = document.getElementById('quiz-timebar');
+  const fill = document.getElementById('quiz-timefill');
+  if (fill) { fill.style.transition = 'none'; }
+  if (bar) bar.classList.add('hidden');
+}
+
+// Overlay « extrait terminé » : invite à proposer une réponse ou à passer.
+function setOverlayEnded(ended) {
+  const ov = document.getElementById('audio-overlay');
+  if (!ov) return;
+  ov.classList.toggle('ended', ended);
+  ov.innerHTML = ended
+    ? '<div class="overlay-ended"><i class="fas fa-clock"></i><span>Extrait terminé</span><small>Propose une réponse ou passe</small></div>'
+    : '<i class="fas fa-music"></i>';
+}
+
 function resetQuizUI() {
   document.getElementById('answer-result').classList.add('hidden');
   document.getElementById('answer-input').value = '';
   if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('answer-input');
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = false));
+  stopQuizTimebar();
+  setOverlayEnded(false);
+  document.getElementById('skip-btn').classList.add('hidden');
   showOverlay(true);
 }
 
@@ -1505,9 +1560,17 @@ function revealAnswerBox(answer) {
   document.getElementById('answer-title').textContent = answer.title;
   document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';
   document.getElementById('answer-result').classList.remove('hidden');
+  stopQuizTimebar();
+  setOverlayEnded(false);
+  document.getElementById('skip-btn').classList.add('hidden'); // manche résolue
   showOverlay(false); // révèle la vidéo
   updateVideoButtonVisibility();
   refreshQuizOptionsLock(); // manche résolue → réglages de nouveau modifiables
+  // Enchaînement automatique vers la manche suivante (option)
+  clearTimeout(autoNextTimer);
+  if (settings.autoNext) {
+    autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, 4000);
+  }
 }
 
 // Mode entraînement : révèle la réponse sans scorer ni gagner de tokens
