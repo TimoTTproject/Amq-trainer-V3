@@ -567,7 +567,8 @@ function showApp(user) {
   currentUser = user;
   const guest = !!user.isGuest;
   const requestedHash = location.hash.replace(/^#/, '');
-  const requested = requestedHash === 'home' ? 'play' : requestedHash;
+  const requested = requestedHash;
+  const defaultView = guest ? 'play' : 'home'; // les invités atterrissent sur le hub Jouer
   document.body.classList.toggle('guest-mode', guest);
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
@@ -578,7 +579,7 @@ function showApp(user) {
     document.querySelector('#logout-btn span').textContent = 'Quitter l’essai';
     document.querySelector('#view-play [data-nav="quiz"] p').textContent = 'Teste le catalogue global sans créer de compte';
   }
-  showView('play', { replace: true });
+  showView(defaultView, { replace: true });
   applyGameModeUI();
   renderHeaderUser();
   const linked = user.anilistListName || user.anilistName;
@@ -594,7 +595,7 @@ function showApp(user) {
     loadQuestsBadge();
     maybeOnboard();
   }
-  if (requested && requested !== 'play' && (!guest || requested === 'quiz')) {
+  if (requested && requested !== defaultView && (!guest || requested === 'quiz')) {
     suppressHistory = true;
     try { navTo(requested); } finally { suppressHistory = false; }
     const restoredUrl = new URL(location.href);
