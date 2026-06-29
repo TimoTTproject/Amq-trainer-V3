@@ -178,6 +178,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
   cards.sort(
     (a, b) =>
       RARITY_RANK[b.character.rarity] - RARITY_RANK[a.character.rarity] ||
+      (b.stars || 1) - (a.stars || 1) || // à rareté égale, les cartes ascensionnées priment
       (b.character.favourites || 0) - (a.character.favourites || 0)
   );
   const ownedByRarity = {};
@@ -190,7 +191,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
   const showcaseCards = (favs.length ? favs : cards).slice(0, 6);
   const showcase = showcaseCards.map((c) => ({
     id: c.character.id, name: c.character.name, imageUrl: c.character.imageUrl,
-    rarity: c.character.rarity, copies: c.copies, favorite: c.favorite,
+    rarity: c.character.rarity, copies: c.copies, favorite: c.favorite, stars: c.stars || 1,
   }));
 
   // Graphe de progression : 14 derniers jours d'activité

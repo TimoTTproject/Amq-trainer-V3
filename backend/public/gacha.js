@@ -238,9 +238,12 @@ function renderCollection() {
   }
   let list = collectionCards.filter((c) => collFilter === 'all' || c.rarity === collFilter);
   const rank = (r) => RARITY_ORDER.indexOf(r); // 0 = mythic … (du plus rare au plus commun)
+  const st = (c) => c.stars || 1;
   if (collSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
   else if (collSort === 'copies') list = [...list].sort((a, b) => b.copies - a.copies || rank(a.rarity) - rank(b.rarity));
-  else list = [...list].sort((a, b) => rank(a.rarity) - rank(b.rarity) || a.name.localeCompare(b.name));
+  else if (collSort === 'stars') list = [...list].sort((a, b) => st(b) - st(a) || rank(a.rarity) - rank(b.rarity) || a.name.localeCompare(b.name));
+  // Par défaut (rareté) : à rareté égale, les cartes ascensionnées (★) remontent.
+  else list = [...list].sort((a, b) => rank(a.rarity) - rank(b.rarity) || st(b) - st(a) || a.name.localeCompare(b.name));
   grid.innerHTML = list.length
     ? list.map((c) => cardHTML(c)).join('')
     : '<p class="muted">Aucune carte dans ce filtre.</p>';
