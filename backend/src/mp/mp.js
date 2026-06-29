@@ -404,32 +404,38 @@ function endRound(room) {
     }
   }
 
-  const results = [...room.players.values()]
-    .map((p) => {
-      const a = cur.answers.get(p.userId);
-      return {
-        name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
-        correct: !!a?.correct, points: a?.points || 0,
-        guess: a?.guess || null, passed: cur.passed.has(p.userId), // réponse saisie par le joueur (révélée à tous)
-        score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
-      };
-    })
-    .sort((a, b) => b.score - a.score);
+  // Émission du résultat protégée : une erreur ici ne doit pas empêcher la
+  // programmation de la transition ci-dessous (sinon la partie se fige).
+  try {
+    const results = [...room.players.values()]
+      .map((p) => {
+        const a = cur.answers.get(p.userId);
+        return {
+          name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
+          correct: !!a?.correct, points: a?.points || 0,
+          guess: a?.guess || null, passed: cur.passed.has(p.userId), // réponse saisie par le joueur (révélée à tous)
+          score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
 
-  io.to(room.id).emit('mp:round:result', {
-    round: room.round, total: room.settings.rounds, mode: room.mode,
-    answer: {
-      animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
-      title: s.title, artist: s.artist, type: s.type, number: s.number,
-    },
-    results,
-    teams: room.mode === 'teams' ? teamTotals(room) : null,
-  });
+    io.to(room.id).emit('mp:round:result', {
+      round: room.round, total: room.settings.rounds, mode: room.mode,
+      answer: {
+        animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
+        title: s.title, artist: s.artist, type: s.type, number: s.number,
+      },
+      results,
+      teams: room.mode === 'teams' ? teamTotals(room) : null,
+    });
+  } catch (e) {
+    console.error('mp round:result error:', e && (e.stack || e.message) || e);
+  }
   room.revealSong = s;
   room.revealUntil = Date.now() + RESULT_MS;
   const elimOver = room.mode === 'elim' && aliveCount(room) <= 1;
   const matchOver = elimOver || room.round >= room.settings.rounds || room.round >= ELIM_MAX_ROUNDS;
-  if (!matchOver) prepareNextRound(room);
+  if (!matchOver) prepareNextRound(room).catch((e) => console.error('mp: échec préparation manche suivante:', e && e.message));
   room.timer = setTimeout(() => {
     room.revealSong = null;
     // Sécurise la transition : une erreur ne doit ni planter le process ni figer
@@ -517,35 +523,49 @@ async function persistResults(room, ordered) {
 async function endGame(room) {
   room.status = 'over';
   clearTimeout(room.timer);
-  // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
-  const ordered = [...room.players.values()]
-    .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
-    .sort((a, b) => {
-      if (room.mode === 'elim') {
-        if (!!a.eliminated !== !!b.eliminated) return a.eliminated ? 1 : -1;
-        if ((b.lives || 0) !== (a.lives || 0)) return (b.lives || 0) - (a.lives || 0);
-      }
-      return b.score - a.score;
-    });
 
+  let ordered = [];
   let deltaById = {}, rewardById = {};
-  try { ({ deltaById, rewardById } = await persistResults(room, ordered)); }
-  catch (e) { console.error('mp persist error:', e.message); }
-  for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
-
-  const ranking = ordered.map((p, i) => ({
-    userId: p.userId,
-    name: p.name, avatarUrl: p.avatarUrl, frame: p.frame, score: p.score, team: p.team,
-    lives: p.lives, eliminated: p.eliminated,
-    mmrDelta: room.ranked ? deltaById[p.userId]?.delta ?? 0 : null,
-    tokenReward: rewardById[p.userId] || 0,
-  }));
-  let teams = null;
-  if (room.mode === 'teams') {
-    const t = teamTotals(room);
-    teams = TEAM_NAMES.map((name, i) => ({ name, score: t[i] }));
+  // Préparation du classement + persistance : isolée pour qu'un échec (BDD, MMR…)
+  // n'empêche jamais l'émission de la fin de partie.
+  try {
+    // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
+    ordered = [...room.players.values()]
+      .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
+      .sort((a, b) => {
+        if (room.mode === 'elim') {
+          if (!!a.eliminated !== !!b.eliminated) return a.eliminated ? 1 : -1;
+          if ((b.lives || 0) !== (a.lives || 0)) return (b.lives || 0) - (a.lives || 0);
+        }
+        return b.score - a.score;
+      });
+    try { ({ deltaById, rewardById } = await persistResults(room, ordered)); }
+    catch (e) { console.error('mp persist error:', e && e.message); }
+    for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
+  } catch (e) {
+    console.error('mp endGame prep error:', e && (e.stack || e.message) || e);
   }
-  io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams, ranking });
+
+  // Émission GARANTIE de la fin de partie : un échec ici ne doit jamais figer les
+  // clients sur la dernière manche.
+  try {
+    const ranking = ordered.map((p) => ({
+      userId: p.userId,
+      name: p.name, avatarUrl: p.avatarUrl, frame: p.frame, score: p.score, team: p.team,
+      lives: p.lives, eliminated: p.eliminated,
+      mmrDelta: room.ranked ? (deltaById[p.userId]?.delta ?? 0) : null,
+      tokenReward: rewardById[p.userId] || 0,
+    }));
+    let teams = null;
+    if (room.mode === 'teams') {
+      const t = teamTotals(room);
+      teams = TEAM_NAMES.map((name, i) => ({ name, score: t[i] }));
+    }
+    io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams, ranking });
+  } catch (e) {
+    console.error('mp game:over emit error:', e && (e.stack || e.message) || e);
+    try { io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams: null, ranking: [] }); } catch {}
+  }
 
   if (room.isPublic) {
     setTimeout(() => closeRoom(room), 30000);
