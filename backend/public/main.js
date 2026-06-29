@@ -374,10 +374,7 @@ function renderHeaderUser() {
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
   const rk = document.getElementById('header-rank');
-  if (currentUser.rankTier) {
-    rk.innerHTML = tierBadge(currentUser.rankTier);
-    rk.classList.remove('hidden');
-  } else rk.classList.add('hidden');
+  if (rk) rk.classList.add('hidden'); // badge de rang retiré de l'en-tête (visible au profil/classement)
   document.getElementById('daily-btn').classList.toggle('hidden', !currentUser.dailyAvailable);
 }
 
