@@ -11,6 +11,15 @@ const { validateEnv } = require('./util/env');
 // Vérifie la configuration avant toute initialisation (arrête le serveur si la prod est dangereuse).
 validateEnv();
 
+// Filet de sécurité : une erreur asynchrone isolée (ex. dans un timer de partie)
+// ne doit PAS tuer le process et figer toutes les parties en cours. On logue.
+process.on('unhandledRejection', (reason) => {
+  console.error('UnhandledRejection:', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('UncaughtException:', err && err.stack ? err.stack : err);
+});
+
 const { attachUser } = require('./auth/auth.middleware');
 const authRoutes = require('./auth/auth.routes');
 const anilistOAuthRoutes = require('./auth/anilist-oauth.routes');

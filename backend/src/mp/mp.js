@@ -241,15 +241,24 @@ function startGame(room) {
   });
   // La première musique commence à charger presque immédiatement ; son délai
   // de préparation remplace l'ancien écran d'attente vide.
-  setTimeout(() => startRound(room), 250);
+  setTimeout(() => { Promise.resolve(startRound(room)).catch((e) => console.error('mp: échec démarrage manche:', e && e.message)); }, 250);
 }
 
 async function pickSong(room) {
   const base = availableSongWhere(room);
-  // Priorité à la série principale (exclut films/OAV connus), repli si vide.
-  let where = { ...base, ...preferMainContent };
-  let total = await prisma.song.count({ where });
-  if (!total) { where = base; total = await prisma.song.count({ where }); }
+  // Priorité à la série principale (exclut films/OAV connus), repli si vide ou
+  // si le filtre échoue (ex. colonne format absente) → ne doit jamais figer la manche.
+  let where = base;
+  let total = 0;
+  try {
+    where = { ...base, ...preferMainContent };
+    total = await prisma.song.count({ where });
+    if (!total) { where = base; total = await prisma.song.count({ where }); }
+  } catch (e) {
+    console.error('pickSong filtre format indisponible, repli:', e.message);
+    where = base;
+    total = await prisma.song.count({ where });
+  }
   if (!total) return null;
   const song = await prisma.song.findFirst({
     where,
@@ -420,8 +429,12 @@ function endRound(room) {
   if (!matchOver) prepareNextRound(room);
   room.timer = setTimeout(() => {
     room.revealSong = null;
-    if (matchOver) endGame(room);
-    else startRound(room);
+    // Sécurise la transition : une erreur ne doit ni planter le process ni figer
+    // la partie → en cas d'échec d'une manche, on termine proprement la partie.
+    Promise.resolve(matchOver ? endGame(room) : startRound(room)).catch((e) => {
+      console.error('mp: échec de transition de manche:', e && e.message);
+      if (!matchOver) Promise.resolve(endGame(room)).catch(() => {});
+    });
   }, RESULT_MS);
 }
 
