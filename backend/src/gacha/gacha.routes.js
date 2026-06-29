@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { rollRarity, DUPLICATE_REFUND, DUST_GAIN, CRAFT_COST, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, DUST_GAIN, CRAFT_COST, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
@@ -297,6 +297,32 @@ router.post('/recycle', requireAuth, async (req, res) => {
   res.json(out);
 });
 
+// Ascension d'une carte (★) : consomme des DOUBLONS pour monter d'un niveau.
+// Purement cosmétique (prestige/vitrine) ; ne touche ni la rareté ni les classements.
+router.post('/ascend', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  const out = await prisma.$transaction(async (tx) => {
+    const card = await tx.userCard.findUnique({
+      where: { userId_characterId: { userId: req.user.id, characterId } },
+    });
+    if (!card) return { error: 'Tu ne possèdes pas cette carte' };
+    const stars = card.stars || 1;
+    if (stars >= MAX_STARS) return { error: 'Carte déjà au niveau maximum (★' + MAX_STARS + ')' };
+    const cost = ascendCost(stars);
+    if (card.copies < 1 + cost) return { error: `Il faut ${cost} doublon(s) pour passer ★${stars + 1} (tu en as ${card.copies - 1}).` };
+    // Consomme les doublons (rend les places au stock) et garde 1 exemplaire.
+    await destroyInstances(tx, req.user.id, characterId, cost);
+    const updated = await tx.userCard.update({
+      where: { userId_characterId: { userId: req.user.id, characterId } },
+      data: { copies: { decrement: cost }, stars: { increment: 1 } },
+    });
+    return { stars: updated.stars, copies: updated.copies, consumed: cost };
+  });
+  if (out.error) return res.status(400).json({ error: out.error });
+  res.json(out);
+});
+
 // Recycle TOUS les doublons de la collection d'un coup.
 router.post('/recycle-all', requireAuth, async (req, res) => {
   const dupes = await prisma.userCard.findMany({
@@ -439,6 +465,9 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     rankInRarity,
     totalInRarity,
     owned: card ? card.copies : 0,
+    stars: card ? (card.stars || 1) : 0,
+    ascendCost: card && (card.stars || 1) < MAX_STARS ? ascendCost(card.stars || 1) : 0,
+    maxStars: MAX_STARS,
     favorite: card ? card.favorite : false,
     featured: character.featured,
     craftCost: CRAFT_COST[character.rarity] || 0,
@@ -478,6 +507,7 @@ router.get('/collection', requireAuth, async (req, res) => {
       imageUrl: c.character.imageUrl,
       rarity: c.character.rarity,
       copies: c.copies,
+      stars: c.stars || 1,
     })),
     poolByRarity,
     ownedByRarity,

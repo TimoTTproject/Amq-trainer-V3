@@ -412,6 +412,7 @@ model UserCard {
   userId      String
   characterId Int
   copies      Int      @default(1)
+  stars       Int      @default(1) // niveau d'ascension (1..5), purement cosmétique
   favorite    Boolean  @default(false) // mis en vitrine du profil
   obtainedAt  DateTime @default(now())
 

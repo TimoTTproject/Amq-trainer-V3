@@ -6,7 +6,16 @@ const {
   rarityForRank,
   rollRarity,
   MAX_SUPPLY,
+  MAX_STARS,
+  ascendCost,
 } = require('../src/gacha/rarity');
+
+test('ascendCost grows per star and is 0 at max level', () => {
+  assert.ok(ascendCost(1) > 0);
+  assert.ok(ascendCost(4) > ascendCost(1)); // plus cher en montant
+  assert.equal(ascendCost(MAX_STARS), 0); // niveau max → plus d'ascension
+  assert.equal(ascendCost(99), 0);
+});
 
 test('rarityForRank follows the rank cutoffs (pyramid)', () => {
   const total = 1000;

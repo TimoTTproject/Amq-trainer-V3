@@ -54,6 +54,15 @@ const CRAFT_COST = { common: 20, rare: 60, epic: 200, legendary: 600, mythic: 15
 // Pitié : nombre de tirages sans Légendaire+ avant garantie
 const PITY_LIMIT = 60;
 
+// Ascension des cartes (★) : niveau 1 (base) → 5, purement cosmétique.
+// Coût en DOUBLONS pour atteindre le niveau suivant (index = niveau actuel).
+const MAX_STARS = 5;
+const ASCEND_COST = { 1: 2, 2: 3, 3: 5, 4: 8 }; // ★2:2 doublons · ★3:3 · ★4:5 · ★5:8
+// Doublons requis pour passer de `stars` à `stars+1` (0 = niveau max atteint).
+function ascendCost(stars) {
+  return ASCEND_COST[stars] || 0;
+}
+
 // Rareté réelle : stock max EN CIRCULATION simultanée, par rareté.
 // Généreux pour durer ; le recyclage rend l'exemplaire au stock (rareté dynamique).
 // Les communs sont quasi illimités ; ce sont les mythiques/légendaires qui se raréfient.
@@ -81,6 +90,9 @@ module.exports = {
   DUST_GAIN,
   CRAFT_COST,
   PITY_LIMIT,
+  MAX_STARS,
+  ASCEND_COST,
+  ascendCost,
   MAX_SUPPLY,
   PRICES,
 };

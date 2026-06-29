@@ -181,8 +181,13 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 
 /* Carte personnage */
 .gcard { position: relative; background: var(--bg-2); border-radius: 10px; overflow: hidden; border: 2px solid #2a2f42; }
-.gcard-img { width: 100%; aspect-ratio: 3/4; background-size: cover; background-position: center top; background-color: var(--bg-3); }
+.gcard-img { width: 100%; aspect-ratio: 3/4; background-size: cover; background-position: center top; background-color: var(--bg-3); position: relative; }
 .gcard-info { padding: 7px 8px; }
+/* Étoiles d'ascension (cartes + fiche) */
+.gcard-stars { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; color: #ffd54a;
+  font-size: .72rem; letter-spacing: 1px; text-shadow: 0 1px 3px rgba(0,0,0,.8); pointer-events: none; }
+.char-stars-line { font-size: 1.1rem; letter-spacing: 3px; color: #ffd54a; margin: 4px 0 2px; }
+.char-stars-line .muted { color: #5a5f70; }
 .gcard-name { font-size: .8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gcard-rarity { font-size: .7rem; color: var(--text-2); }
 .gcard .badge { position: absolute; top: 6px; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 8px; }

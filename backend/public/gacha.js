@@ -73,8 +73,9 @@ function cardHTML(c, opts = {}) {
   const style = [delayCss, cosmStyle(bd)].filter(Boolean).join(';');
   const styleAttr = style ? ` style="${style}"` : '';
   const cid = c.id != null ? ` data-cid="${c.id}"` : '';
+  const stars = c.stars > 1 ? `<div class="gcard-stars">${'★'.repeat(Math.min(5, c.stars))}</div>` : '';
   return `<div class="${cls}"${styleAttr}${cid}>
-    <div class="gcard-img" ${img}></div>
+    <div class="gcard-img" ${img}>${stars}</div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
       <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
@@ -437,6 +438,7 @@ async function openCharacter(id) {
       <h2 class="char-name">${escapeHtml(c.name)}</h2>
       ${c.series && c.series !== '—' ? `<div class="char-series">${escapeHtml(c.series)}</div>` : ''}
       <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''}</div>
+      ${d.owned ? `<div class="char-stars-line" title="Niveau d'ascension">${'★'.repeat(d.stars)}<span class="muted">${'☆'.repeat(Math.max(0, (d.maxStars || 5) - d.stars))}</span></div>` : ''}
       <div class="char-stats">
         <div class="cstat"><span>${rate}</span><label>Taux de tirage</label></div>
         <div class="cstat"><span>#${d.rankInRarity}/${d.totalInRarity}</span><label>Rang en ${d.rarityLabel}</label></div>
@@ -452,6 +454,9 @@ async function openCharacter(id) {
         : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
         <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
       </button>`}
+      ${d.owned && d.stars < (d.maxStars || 5) ? `<button class="btn-secondary char-ascend" id="char-ascend-btn" ${(d.owned - 1) < d.ascendCost ? 'disabled' : ''}>
+        <i class="fas fa-star"></i> Ascensionner ★${d.stars + 1} · ${d.ascendCost} doublon(s)${(d.owned - 1) < d.ascendCost ? ` (tu en as ${d.owned - 1})` : ''}
+      </button>` : ''}
       ${d.owned > 1 ? `<button class="btn-secondary char-recycle" id="char-recycle-btn">
         <i class="fas fa-recycle"></i> Recycler ${d.owned - 1} doublon(s) · +${(d.owned - 1) * d.dustGain} 🌟
       </button>` : ''}
@@ -485,6 +490,20 @@ async function openCharacter(id) {
           openCharacter(c.id); // recharge la fiche (copies + poussière à jour)
           loadCollection();
         } catch (e) { alert(e.message); recycleBtn.disabled = false; }
+      });
+    }
+    const ascendBtn = document.getElementById('char-ascend-btn');
+    if (ascendBtn) {
+      ascendBtn.addEventListener('click', async () => {
+        if (!confirm(`Ascensionner ${c.name} en ★${d.stars + 1} ? Cela consomme ${d.ascendCost} doublon(s).`)) return;
+        ascendBtn.disabled = true;
+        try {
+          await api('/api/gacha/ascend', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+          if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(c.rarity);
+          if (typeof burstConfetti === 'function') burstConfetti();
+          openCharacter(c.id); // recharge la fiche (★ + copies à jour)
+          loadCollection();
+        } catch (e) { alert(e.message); ascendBtn.disabled = false; }
       });
     }
     const favBtn = document.getElementById('char-fav-btn');
