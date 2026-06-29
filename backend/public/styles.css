@@ -1638,6 +1638,32 @@ header h1 i { color: var(--accent); }
   letter-spacing: .05em;
 }
 .playlist-rec-add:hover { color: #16070b; background: var(--accent); border-color: var(--accent); }
+.playlist-rec-actions { display: inline-flex; align-items: center; gap: 6px; }
+.playlist-rec-dismiss {
+  width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #3a404a;
+  border-radius: 50%; background: #0c0e12; color: var(--text-2); font-size: .8rem;
+}
+.playlist-rec-dismiss:hover { color: #fff; background: var(--red); border-color: var(--red); }
+
+/* ── Playlist : recherche-ajout ── */
+.playlist-search { margin: 26px 0 18px; }
+.playlist-search > h3 { font-size: 1.05rem; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.playlist-search > h3 i { color: var(--accent); }
+#playlist-search-input {
+  width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text);
+  border-radius: 10px; padding: 11px 14px; font-size: .95rem; margin-bottom: 12px;
+}
+#playlist-search-results { display: flex; flex-direction: column; gap: 8px; }
+.pl-search-row { display: flex; align-items: center; gap: 12px; background: #13151a; border: 1px solid #2a2f42; border-radius: 8px; padding: 8px 12px; }
+.pl-search-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pl-search-info strong { font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-search-info span { font-size: .78rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-play-row.placeholder { background: none; border: none; cursor: default; }
+.pl-search-add { white-space: nowrap; background: var(--bg-3); color: var(--text); border: 1px solid #3a404a; border-radius: 8px; padding: 8px 12px; font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.pl-search-add:hover { color: #16070b; background: var(--accent); border-color: var(--accent); }
+.pl-search-added { white-space: nowrap; color: var(--green); font-size: .82rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.playlist-list-title { font-size: 1.05rem; margin: 22px 0 10px; display: flex; align-items: center; gap: 8px; }
+.playlist-list-title i { color: var(--red); }
 
 @media (max-width: 850px) {
   .playlist-recs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

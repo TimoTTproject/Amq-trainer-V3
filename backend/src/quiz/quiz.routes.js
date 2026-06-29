@@ -316,6 +316,9 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
   });
   const likedSongs = likedStats.map((stat) => stat.song);
   const likedIds = likedSongs.map((song) => song.id);
+  // Sons que l'utilisateur a explicitement retirés des recommandations (« pas intéressé »)
+  const hiddenStats = await prisma.userSongStat.findMany({ where: { userId, recHidden: true }, select: { songId: true } });
+  const excludeIds = [...new Set([...likedIds, ...hiddenStats.map((s) => s.songId)])];
   const artists = [...new Set(likedSongs.map((song) => song.artist).filter(Boolean))];
   const anilistIds = [...new Set(likedSongs.map((song) => song.anilistId))];
 
@@ -363,7 +366,7 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     .slice(0, 20);
 
   const baseWhere = { videoUrl: { not: null } };
-  if (likedIds.length) baseWhere.id = { notIn: likedIds };
+  if (excludeIds.length) baseWhere.id = { notIn: excludeIds };
   const tasteSignals = [];
   if (artists.length) tasteSignals.push({ artist: { in: artists } });
   for (const tok of topArtistTokens) tasteSignals.push({ artist: { contains: tok, mode: 'insensitive' } });
@@ -421,6 +424,18 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     })),
     personalized: likedSongs.length > 0,
   });
+});
+
+// « Pas intéressé » : masque définitivement un son des recommandations.
+router.post('/playlist/recommendations/dismiss', requireAuth, async (req, res) => {
+  const songId = parseInt(req.body?.songId);
+  if (!songId) return res.status(400).json({ error: 'songId requis' });
+  await prisma.userSongStat.upsert({
+    where: { userId_songId: { userId: req.user.id, songId } },
+    update: { recHidden: true },
+    create: { userId: req.user.id, songId, recHidden: true },
+  });
+  res.json({ ok: true });
 });
 
 // Valide la réponse côté serveur, attribue les tokens et révèle l'anime.

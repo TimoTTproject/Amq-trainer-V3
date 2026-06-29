@@ -355,6 +355,7 @@ model UserSongStat {
   correctCount Int     @default(0)
   rating       Int? // note 1-5 donnée par l'utilisateur
   liked        Boolean @default(false) // ajouté à la playlist perso
+  recHidden    Boolean @default(false) // « pas intéressé » : exclu des recommandations
   // Répétition espacée (SRS)
   srsStreak    Int      @default(0) // bonnes réponses consécutives
   srsInterval  Int      @default(0) // jours jusqu'à la prochaine révision
