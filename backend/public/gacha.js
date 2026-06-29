@@ -300,24 +300,39 @@ let shopData = null;
 // État de la section « Personnages » (catalogue paginé, filtrable)
 let charShop = { series: '', q: '', page: 1, total: 0, pageSize: 24, items: [], seriesList: [] };
 let charShellRendered = false;
+let charLoaded = false; // chargé à la 1re ouverture de l'onglet Personnages
 let charSearchTimer = null;
 
 async function openShop() {
   showView('shop');
   document.getElementById('shop-tokens').textContent = currentUser.tokens;
   document.getElementById('shop-msg').textContent = '';
-  const wrap = document.getElementById('shop-groups');
-  wrap.innerHTML = '<p class="muted">Chargement…</p>';
+  setShopTab('cosmetics');
   charShellRendered = false;
+  charLoaded = false;
   charShop = { series: '', q: '', page: 1, total: 0, pageSize: 24, items: [], seriesList: [] };
   document.getElementById('shop-characters').innerHTML = '';
+  document.getElementById('shop-cosmetics').innerHTML = '<p class="muted">Chargement…</p>';
   try {
     shopData = await api('/api/shop');
     renderShop();
-    loadCharShop(1); // section Personnages (chargée en parallèle, non bloquante)
   } catch (e) {
-    wrap.innerHTML = `<p class="muted">${e.message}</p>`;
+    document.getElementById('shop-cosmetics').innerHTML = `<p class="muted">${e.message}</p>`;
   }
+}
+
+// Onglets de la boutique : un seul panneau visible. L'onglet Personnages charge
+// son catalogue paginé à la première ouverture (évite une requête inutile).
+function setShopTab(name) {
+  document.querySelectorAll('#shop-tabs .shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  document.getElementById('shop-cosmetics').classList.toggle('hidden', name !== 'cosmetics');
+  document.getElementById('shop-licenses-panel').classList.toggle('hidden', name !== 'licenses');
+  document.getElementById('shop-characters').classList.toggle('hidden', name !== 'characters');
+  if (name === 'characters' && !charLoaded) { charLoaded = true; loadCharShop(1); }
+}
+function onShopTabClick(e) {
+  const b = e.target.closest('.shop-tab');
+  if (b) setShopTab(b.dataset.tab);
 }
 
 // Aperçu visuel d'un item selon son slot
@@ -363,32 +378,25 @@ function shopItemHtml(item, nameOverride) {
 
 function renderShop() {
   document.getElementById('shop-tokens').textContent = shopData.tokens;
-  const wrap = document.getElementById('shop-groups');
-  const slotGroups = shopData.groups.map((g) => `
+  // Onglet Cosmétiques : les 4 slots.
+  document.getElementById('shop-cosmetics').innerHTML = shopData.groups.map((g) => `
     <div class="shop-group">
       <h3>${g.label}</h3>
       <div class="shop-grid">${g.items.map((item) => shopItemHtml(item)).join('')}</div>
     </div>
   `).join('');
 
-  // Section « Licences » : un bloc par franchise (artwork officiel AniList).
+  // Onglet Licences : un bloc par franchise (artwork officiel AniList).
   const licenses = shopData.licenses || [];
-  const licenseSection = licenses.length ? `
-    <div class="shop-licenses">
-      <div class="shop-licenses-head">
-        <h2><i class="fas fa-clapperboard"></i> Licences d'anime</h2>
-        <p class="muted">Dos de carte et bannières aux couleurs de tes séries préférées.</p>
+  document.getElementById('shop-licenses-panel').innerHTML = licenses.length ? `
+    <p class="muted shop-panel-intro">Dos de carte et bannières aux couleurs de tes séries préférées.</p>
+    ${licenses.map((g) => `
+      <div class="shop-group shop-group-license" style="${g.color ? `--lic-color:${g.color}` : ''}">
+        <h3>${escapeHtml(g.license)}</h3>
+        <div class="shop-grid">${g.items.map((item) => shopItemHtml(item, SLOT_SHORT[item.slot] || item.name)).join('')}</div>
       </div>
-      ${licenses.map((g) => `
-        <div class="shop-group shop-group-license" style="${g.color ? `--lic-color:${g.color}` : ''}">
-          <h3>${escapeHtml(g.license)}</h3>
-          <div class="shop-grid">${g.items.map((item) => shopItemHtml(item, SLOT_SHORT[item.slot] || item.name)).join('')}</div>
-        </div>
-      `).join('')}
-    </div>
-  ` : '';
-
-  wrap.innerHTML = slotGroups + licenseSection;
+    `).join('')}
+  ` : '<p class="muted">Aucune licence disponible.</p>';
 }
 
 function onShopClick(e) {
@@ -462,18 +470,13 @@ function renderCharShell() {
     .concat((charShop.seriesList || []).map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`))
     .join('');
   document.getElementById('shop-characters').innerHTML = `
-    <div class="shop-licenses shop-characters-head">
-      <div class="shop-licenses-head">
-        <h2><i class="fas fa-user-astronaut"></i> Personnages</h2>
-        <p class="muted">Mets ton perso préféré en dos de carte ou en bannière de profil.</p>
-      </div>
-      <div class="shop-char-controls">
-        <input id="char-search" type="search" placeholder="Rechercher un personnage…" autocomplete="off">
-        <select id="char-series">${opts}</select>
-      </div>
-      <div id="char-grid" class="shop-grid"></div>
-      <div id="char-pager" class="shop-pager"></div>
-    </div>`;
+    <p class="muted shop-panel-intro">Mets ton perso préféré en dos de carte ou en bannière de profil.</p>
+    <div class="shop-char-controls">
+      <input id="char-search" type="search" placeholder="Rechercher un personnage…" autocomplete="off">
+      <select id="char-series">${opts}</select>
+    </div>
+    <div id="char-grid" class="shop-grid"></div>
+    <div id="char-pager" class="shop-pager"></div>`;
   document.getElementById('char-search').addEventListener('input', (e) => {
     clearTimeout(charSearchTimer);
     const v = e.target.value;

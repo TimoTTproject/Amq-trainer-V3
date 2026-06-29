@@ -1257,6 +1257,18 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
   padding-left: 10px; border-left: 4px solid var(--lic-color, var(--accent));
 }
 
+/* ── Boutique : onglets (sous-menus) ── */
+.shop-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 20px; }
+.shop-tab {
+  background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text-2);
+  padding: 11px 18px; border-radius: 999px; font-weight: 600; font-size: .92rem;
+  display: inline-flex; align-items: center; gap: 8px; transition: filter .15s;
+}
+.shop-tab:hover { color: var(--text); }
+.shop-tab.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-color: transparent; }
+.shop-tab.active i { color: #fff; }
+.shop-panel-intro { margin: 0 0 14px; }
+
 /* ── Boutique : section Personnages (catalogue paginé) ── */
 .shop-char-controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 16px; }
 .shop-char-controls #char-search { flex: 1; min-width: 200px; }

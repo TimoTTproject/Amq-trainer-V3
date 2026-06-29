@@ -921,7 +921,9 @@ function setupAppUI() {
   document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('card-mp').addEventListener('click', openMultiplayer);
   document.getElementById('back-home-shop').addEventListener('click', () => showView('collection'));
-  document.getElementById('shop-groups').addEventListener('click', onShopClick);
+  document.getElementById('shop-tabs').addEventListener('click', onShopTabClick);
+  document.getElementById('shop-cosmetics').addEventListener('click', onShopClick);
+  document.getElementById('shop-licenses-panel').addEventListener('click', onShopClick);
   document.getElementById('shop-characters').addEventListener('click', onCharShopClick);
   document.getElementById('training-exit').addEventListener('click', openTraining);
   document.getElementById('training-grid').addEventListener('click', (e) => {
