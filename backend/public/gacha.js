@@ -501,6 +501,9 @@ async function openCharacter(id) {
       <button class="btn-secondary char-vote" id="char-vote-btn" data-cid="${c.id}">
         <i class="fas fa-check-to-slot"></i> ${voteMyChoice === c.id ? 'Vedette : voté ✓' : 'Voter vedette (sem. +1)'}
       </button>
+      <button class="btn-secondary char-wish${d.wished ? ' on' : ''}" id="char-wish-btn">
+        <i class="fa-heart ${d.wished ? 'fas' : 'far'}"></i> ${d.wished ? 'Dans ta wishlist ♥' : 'Ajouter à la wishlist'}
+      </button>
       ${d.soldOut
         ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Épuisé — échange seulement</button>`
         : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
@@ -542,6 +545,20 @@ async function openCharacter(id) {
           openCharacter(c.id); // recharge la fiche (copies + poussière à jour)
           loadCollection();
         } catch (e) { alert(e.message); recycleBtn.disabled = false; }
+      });
+    }
+    const wishBtn = document.getElementById('char-wish-btn');
+    if (wishBtn) {
+      let wished = d.wished;
+      wishBtn.addEventListener('click', async () => {
+        wishBtn.disabled = true;
+        try {
+          const r = await api('/api/gacha/wishlist', { method: 'POST', body: JSON.stringify({ characterId: c.id, wish: !wished }) });
+          wished = r.wished;
+          wishBtn.classList.toggle('on', wished);
+          wishBtn.innerHTML = `<i class="fa-heart ${wished ? 'fas' : 'far'}"></i> ${wished ? 'Dans ta wishlist ♥' : 'Ajouter à la wishlist'}`;
+          if (wished && typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+        } catch (e) { alert(e.message); } finally { wishBtn.disabled = false; }
       });
     }
     const voteBtn = document.getElementById('char-vote-btn');

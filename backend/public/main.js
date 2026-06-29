@@ -604,11 +604,29 @@ function renderProfile(d, isSelf = true) {
     document.getElementById('profile-best-label').textContent = 'Aucune carte pour l\'instant.';
   }
 
+  loadProfileWishlist(d.user.id, isSelf);
   renderProgression(d.progression || []);
   renderProfileRanked(d.ranked, d.mpRecent || [], d.solo);
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
   renderProfileBadges(d);
+}
+
+// Liste de souhaits affichée sur le profil (la sienne ou celle d'un autre joueur).
+async function loadProfileWishlist(userId, isSelf) {
+  const box = document.getElementById('profile-wishlist');
+  if (!box) return;
+  box.innerHTML = '<p class="muted">…</p>';
+  let items = [];
+  try { ({ items } = await api(`/api/gacha/wishlist?userId=${encodeURIComponent(userId)}`)); } catch { box.innerHTML = ''; return; }
+  if (!items.length) {
+    box.innerHTML = `<p class="muted">${isSelf ? 'Ajoute des persos à ta wishlist depuis leur fiche ♥' : 'Aucun souhait pour l\'instant.'}</p>`;
+    return;
+  }
+  box.innerHTML = items.map((c) => `<div class="wish-card${c.owned ? ' owned' : ''}" data-cid="${c.id}">${cardHTML(c, { noBorder: true })}${c.owned ? '<span class="wish-owned">obtenu ✓</span>' : ''}</div>`).join('');
+  box.querySelectorAll('[data-cid]').forEach((el) =>
+    el.addEventListener('click', () => { const id = parseInt(el.dataset.cid); if (typeof openCharacter === 'function') openCharacter(id); })
+  );
 }
 
 // Graphe SVG de la réussite par jour (14 derniers jours)

@@ -93,6 +93,7 @@ model User {
   pushSubs      PushSubscription[]
   seasonClaims  SeasonClaim[]
   featuredVotes FeaturedVote[]
+  wishlist      Wishlist[]
   quests        Quest[]
   dailyStats    DailyStat[]
   cosmetics     UserCosmetic[]
@@ -244,6 +245,21 @@ model SeasonClaim {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, season])
+}
+
+// Liste de souhaits : personnages qu'un joueur veut obtenir (visible des autres
+// pour faciliter les échanges).
+model Wishlist {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  characterId Int
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, characterId])
+  @@index([userId])
 }
 
 // Vote pour la vedette de la semaine suivante (1 vote par joueur et par semaine).
@@ -402,6 +418,7 @@ model Character {
   cards     UserCard[]
   instances CardInstance[]
   votes     FeaturedVote[]
+  wishedBy  Wishlist[]
 
   @@index([rarity])
   @@index([series])

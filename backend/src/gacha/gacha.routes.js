@@ -456,6 +456,42 @@ router.post('/favorite', requireAuth, async (req, res) => {
   res.json({ favorite });
 });
 
+// ── Wishlist (liste de souhaits) ──
+// Ajoute/retire un personnage de sa liste de souhaits (souhait d'obtention).
+router.post('/wishlist', requireAuth, async (req, res) => {
+  const characterId = parseInt(req.body?.characterId);
+  const wish = !!req.body?.wish;
+  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
+  if (wish) {
+    const exists = await prisma.character.findUnique({ where: { id: characterId }, select: { id: true } });
+    if (!exists) return res.status(404).json({ error: 'Personnage introuvable' });
+    await prisma.wishlist.upsert({
+      where: { userId_characterId: { userId: req.user.id, characterId } },
+      update: {}, create: { userId: req.user.id, characterId },
+    });
+  } else {
+    await prisma.wishlist.deleteMany({ where: { userId: req.user.id, characterId } });
+  }
+  res.json({ wished: wish });
+});
+
+// Wishlist d'un joueur (la sienne par défaut, ou celle d'un autre via ?userId).
+router.get('/wishlist', requireAuth, async (req, res) => {
+  const userId = req.query.userId || req.user.id;
+  const rows = await prisma.wishlist.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, soldOut: true } } },
+  });
+  // Que possède le joueur CONSULTÉ (pour griser les déjà-obtenus).
+  const ownedIds = new Set(
+    (await prisma.userCard.findMany({ where: { userId }, select: { characterId: true } })).map((c) => c.characterId)
+  );
+  res.json({
+    items: rows.map((r) => ({ ...r.character, owned: ownedIds.has(r.character.id) })),
+  });
+});
+
 // Fiche détaillée d'un personnage (+ possession de l'utilisateur)
 router.get('/character/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
@@ -478,6 +514,9 @@ router.get('/character/:id', requireAuth, async (req, res) => {
   const myInstances = await prisma.cardInstance.findMany({
     where: { userId: req.user.id, characterId: id }, orderBy: { serial: 'asc' }, select: { serial: true },
   });
+  const wished = !!(await prisma.wishlist.findUnique({
+    where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
+  }));
 
   res.json({
     character: {
@@ -497,6 +536,7 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     rankInRarity,
     totalInRarity,
     owned: card ? card.copies : 0,
+    wished,
     stars: card ? (card.stars || 1) : 0,
     ascendCost: card && (card.stars || 1) < MAX_STARS ? ascendCost(card.stars || 1) : 0,
     maxStars: MAX_STARS,
