@@ -78,6 +78,35 @@ app.use('/api/push', pushRoutes.router);
 app.use('/api/mp', mpRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// Aperçu de partage personnalisé : sur /?u=<id>, on sert le HTML avec des balises
+// Open Graph/Twitter du profil (carte riche sur Discord/Twitter). Doit passer
+// AVANT le statique. Sinon, repli sur l'index par défaut.
+const { prisma } = require('./db');
+const { indexHtml, injectMeta } = require('./share/og');
+const { tierFromMmr } = require('./mp/rank');
+app.get('/', async (req, res, next) => {
+  const uid = req.query.u;
+  if (!uid) return next();
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: String(uid) },
+      select: { displayName: true, mmr: true, rankedGames: true, towerBestFloor: true },
+    });
+    if (!user) return next();
+    const cards = await prisma.userCard.count({ where: { userId: String(uid) } });
+    const bits = [];
+    if (user.rankedGames > 0) { const t = tierFromMmr(user.mmr); bits.push(`${t.icon} ${t.name}`); }
+    if (user.towerBestFloor > 0) bits.push(`Château étage ${user.towerBestFloor}`);
+    bits.push(`${cards} carte${cards > 1 ? 's' : ''}`);
+    const title = `${user.displayName} · Anime Music Quiz`;
+    const description = `Profil de ${user.displayName} — ${bits.join(' · ')}. Affronte-le sur Anime Music Quiz !`;
+    res.set('Cache-Control', 'public, max-age=300');
+    res.type('html').send(injectMeta(indexHtml(), { title, description, url: `https://amqtrainer.fr/?u=${encodeURIComponent(String(uid))}` }));
+  } catch {
+    next();
+  }
+});
+
 // Frontend statique (dans backend/public pour être inclus au déploiement)
 const FRONTEND_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIR));
