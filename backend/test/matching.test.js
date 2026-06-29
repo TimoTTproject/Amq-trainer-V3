@@ -34,6 +34,22 @@ test('matches meaningful sub/super titles (seasons, parts)', () => {
   assert.ok(isCorrectGuess('Attack on Titan', song));
 });
 
+test('accepts base name for a season-only title (no base alt title)', () => {
+  const song = { animeTitle: 'Jujutsu Kaisen Season 2', altTitles: [] };
+  assert.ok(isCorrectGuess('Jujutsu Kaisen', song)); // préfixe majoritaire
+});
+
+test('rejects partial fragments that are not a majority prefix', () => {
+  // « online » est contenu dans le titre mais n'en est pas un préfixe → refusé
+  assert.equal(isCorrectGuess('online', { animeTitle: 'Sword Art Online', altTitles: [] }), false);
+  // « piece » contenu dans « One Piece » mais pas préfixe → refusé
+  assert.equal(isCorrectGuess('piece', { animeTitle: 'One Piece', altTitles: [] }), false);
+  // « academia » contenu mais pas préfixe → refusé
+  assert.equal(isCorrectGuess('academia', { animeTitle: 'Boku no Hero Academia', altTitles: [] }), false);
+  // préfixe trop court par rapport au titre (< 50 %) → refusé
+  assert.equal(isCorrectGuess('sword', { animeTitle: 'Sword Art Online', altTitles: [] }), false);
+});
+
 test('rejects empty, too-short or wrong guesses', () => {
   const song = { animeTitle: 'Naruto', altTitles: ['ナルト'] };
   assert.equal(isCorrectGuess('', song), false);

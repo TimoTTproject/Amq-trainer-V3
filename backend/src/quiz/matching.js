@@ -30,13 +30,16 @@ function isCorrectGuess(guess, song) {
     .filter((t) => t.length);
   return candidates.some((t) => {
     if (t === g) return true;
-    // sous-titre significatif (gère saisons/parties)
-    if (g.length >= 5 && (t.includes(g) || g.includes(t))) return true;
+    // Variante saison/partie : l'un est PRÉFIXE de l'autre et la partie commune
+    // est majoritaire (≥ 50 %). Évite qu'un simple fragment (« online », « piece »…)
+    // ou qu'un titre court contenu dans une AUTRE réponse ne valide à tort.
+    const [shorter, longer] = g.length <= t.length ? [g, t] : [t, g];
+    if (shorter.length >= 5 && longer.startsWith(shorter) && shorter.length / longer.length >= 0.5) return true;
     // 1-2 petites fautes, proportionnées à la longueur
     const dist = editDistance(g, t);
     if (dist <= 2 && dist / Math.max(g.length, t.length) <= 0.25) return true;
-    // filet de sécurité : similarité globale
-    return stringSimilarity.compareTwoStrings(t, g) >= 0.82;
+    // filet de sécurité : similarité globale élevée
+    return stringSimilarity.compareTwoStrings(t, g) >= 0.85;
   });
 }
 
