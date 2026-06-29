@@ -141,10 +141,10 @@ function flipCardHTML(c, i) {
   const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
   const cb = currentUser.cosmetics && currentUser.cosmetics.cardBack;
   const bd = currentUser.cosmetics && currentUser.cosmetics.cardBorder;
-  const backIcon = (cb && cb.icon) || 'fa-music';
+  const backIcon = cb && cb.image ? '' : ((cb && cb.icon) || 'fa-music');
   return `<div class="flip-card r-${c.rarity}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
     <div class="flip-inner">
-      <div class="flip-face flip-back${cosmClass(cb)}" style="${cosmStyle(cb)}"><div class="flip-back-inner"><i class="fas ${backIcon}"></i></div></div>
+      <div class="flip-face flip-back${cosmClass(cb)}" style="${cosmStyle(cb)}"><div class="flip-back-inner">${backIcon ? `<i class="fas ${backIcon}"></i>` : ''}</div></div>
       <div class="flip-face flip-front">
         <div class="gcard r-${c.rarity}${cosmClass(bd)}" style="${cosmStyle(bd)}">
           <div class="gcard-img" ${img}>${holo}</div>
@@ -317,8 +317,9 @@ function shopPreview(slot, item) {
   const cls = item.className ? ' ' + item.className : '';
   const style = item.css || '';
   if (slot === 'cardBack') {
-    const icon = item.icon || 'fa-music';
-    return `<span class="shop-prev shop-prev-back${cls}" style="${style}"><i class="fas ${icon}"></i></span>`;
+    // Dos « image » (licence) : pas d'icône par-dessus l'artwork.
+    const inner = item.image ? '' : `<i class="fas ${item.icon || 'fa-music'}"></i>`;
+    return `<span class="shop-prev shop-prev-back${cls}" style="${style}">${inner}</span>`;
   }
   if (slot === 'cardBorder') {
     return `<span class="shop-prev shop-prev-card${cls}" style="${style}"></span>`;
@@ -331,30 +332,55 @@ function shopPreview(slot, item) {
   return `<span class="shop-prev shop-prev-frame${cls}" style="${box ? 'box-shadow:' + box : ''}">A</span>`;
 }
 
+// Étiquette courte du type d'un item (pour les sections « Licences » où le
+// titre est la franchise, pas le slot).
+const SLOT_SHORT = { cardBack: 'Dos de carte', cardBorder: 'Bordure', profileBanner: 'Bannière', avatarFrame: "Cadre d'avatar" };
+
+// Rendu d'un item de boutique. `nameOverride` remplace le nom (sections licence
+// où l'on affiche le type plutôt que « Franchise — Dos de carte »).
+function shopItemHtml(item, nameOverride) {
+  const equipped = item.equipped;
+  let action;
+  if (equipped) action = '<span class="shop-tag equipped">Équipé</span>';
+  else if (item.owned) action = `<button class="btn-secondary shop-btn" data-act="equip" data-id="${item.id}">Équiper</button>`;
+  else if (item.locked) action = `<span class="shop-tag locked"><i class="fas fa-lock"></i> Palier ${escapeHtml(item.tierReqName || '')}</span>`;
+  else action = `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
+  const label = nameOverride != null ? nameOverride : item.name;
+  return `<div class="shop-item${equipped ? ' is-equipped' : ''}${item.locked ? ' is-locked' : ''}">
+    ${shopPreview(item.slot, item)}
+    <div class="shop-name">${escapeHtml(label)}${item.exclusive ? ' <i class="fas fa-star shop-excl" title="Exclusif de palier"></i>' : ''}</div>
+    ${action}
+  </div>`;
+}
+
 function renderShop() {
   document.getElementById('shop-tokens').textContent = shopData.tokens;
   const wrap = document.getElementById('shop-groups');
-  wrap.innerHTML = shopData.groups.map((g) => `
+  const slotGroups = shopData.groups.map((g) => `
     <div class="shop-group">
       <h3>${g.label}</h3>
-      <div class="shop-grid">
-        ${g.items.map((item) => {
-          const owned = item.owned;
-          const equipped = item.equipped;
-          let action;
-          if (equipped) action = '<span class="shop-tag equipped">Équipé</span>';
-          else if (owned) action = `<button class="btn-secondary shop-btn" data-act="equip" data-id="${item.id}">Équiper</button>`;
-          else if (item.locked) action = `<span class="shop-tag locked"><i class="fas fa-lock"></i> Palier ${escapeHtml(item.tierReqName || '')}</span>`;
-          else action = `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
-          return `<div class="shop-item${equipped ? ' is-equipped' : ''}${item.locked ? ' is-locked' : ''}">
-            ${shopPreview(g.slot, item)}
-            <div class="shop-name">${escapeHtml(item.name)}${item.exclusive ? ' <i class="fas fa-star shop-excl" title="Exclusif de palier"></i>' : ''}</div>
-            ${action}
-          </div>`;
-        }).join('')}
-      </div>
+      <div class="shop-grid">${g.items.map((item) => shopItemHtml(item)).join('')}</div>
     </div>
   `).join('');
+
+  // Section « Licences » : un bloc par franchise (artwork officiel AniList).
+  const licenses = shopData.licenses || [];
+  const licenseSection = licenses.length ? `
+    <div class="shop-licenses">
+      <div class="shop-licenses-head">
+        <h2><i class="fas fa-clapperboard"></i> Licences d'anime</h2>
+        <p class="muted">Dos de carte et bannières aux couleurs de tes séries préférées.</p>
+      </div>
+      ${licenses.map((g) => `
+        <div class="shop-group shop-group-license" style="${g.color ? `--lic-color:${g.color}` : ''}">
+          <h3>${escapeHtml(g.license)}</h3>
+          <div class="shop-grid">${g.items.map((item) => shopItemHtml(item, SLOT_SHORT[item.slot] || item.name)).join('')}</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  wrap.innerHTML = slotGroups + licenseSection;
 }
 
 function onShopClick(e) {
@@ -389,7 +415,7 @@ async function equipCosmetic(id) {
     const item = findShopItem(id);
     if (item && currentUser.cosmetics) {
       currentUser.cosmetics[r.slot] = r.equipped
-        ? { id: item.id, slot: r.slot, name: item.name, css: item.css || '', className: item.className || '', icon: item.icon || null }
+        ? { id: item.id, slot: r.slot, name: item.name, css: item.css || '', className: item.className || '', icon: item.icon || null, image: !!item.image }
         : defaultCosmetic(r.slot);
     }
     setEquipped(r.slot, r.equipped);
@@ -401,6 +427,10 @@ async function equipCosmetic(id) {
   }
 }
 
+// Tous les groupes porteurs d'items (slots + licences)
+function allShopGroups() {
+  return [...(shopData.groups || []), ...(shopData.licenses || [])];
+}
 // Le slot revient au défaut : on garde l'item gratuit (price 0) du slot
 function defaultCosmetic(slot) {
   const g = shopData.groups.find((x) => x.slot === slot);
@@ -408,17 +438,20 @@ function defaultCosmetic(slot) {
   return def ? { id: def.id, slot, name: def.name, css: def.css || '', className: def.className || '', icon: def.icon || null } : null;
 }
 function findShopItem(id) {
-  for (const g of shopData.groups) { const it = g.items.find((i) => i.id === id); if (it) return it; }
+  for (const g of allShopGroups()) { const it = g.items.find((i) => i.id === id); if (it) return it; }
   return null;
 }
 function markOwned(id) {
-  for (const g of shopData.groups) { const it = g.items.find((i) => i.id === id); if (it) it.owned = true; }
+  for (const g of allShopGroups()) { const it = g.items.find((i) => i.id === id); if (it) it.owned = true; }
 }
+// Met à jour les drapeaux « équipé » de TOUS les items du slot (slots + licences).
 function setEquipped(slot, equippedId) {
-  const g = shopData.groups.find((x) => x.slot === slot);
-  if (!g) return;
-  g.equipped = equippedId;
-  g.items.forEach((i) => { i.equipped = equippedId ? i.id === equippedId : i.price === 0; });
+  for (const g of allShopGroups()) {
+    g.items.forEach((i) => {
+      if (i.slot !== slot) return;
+      i.equipped = equippedId ? i.id === equippedId : i.price === 0;
+    });
+  }
 }
 
 // ── Stats de tirage (modale chance) ──

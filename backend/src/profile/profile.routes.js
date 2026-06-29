@@ -77,7 +77,7 @@ function computeLevel(xp) {
 
 // Récompense en tokens pour avoir atteint un niveau (niveau 1 = départ, 0 token)
 function levelReward(level) {
-  return level <= 1 ? 0 : level * 20;
+  return level <= 1 ? 0 : level * 15;
 }
 // Total des récompenses entre deux niveaux (exclus → inclus)
 function rewardBetween(fromLevel, toLevel) {

@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { COSMETICS, SLOTS, SLOT_LABELS, byId, publicCosmetic } = require('./cosmetics');
+const { COSMETICS, SLOTS, SLOT_LABELS, LICENSES, LICENSE_COLORS, byId, publicCosmetic } = require('./cosmetics');
 const { tierFromMmr, TIERS } = require('../mp/rank');
 
 const router = express.Router();
@@ -36,25 +36,37 @@ router.get('/', requireAuth, async (req, res) => {
     toGrant.forEach((c) => ownedIds.add(c.id));
   }
 
+  // Forme publique d'un item avec possession + équipement. Réutilisé par les
+  // groupes par slot et par les groupes de licence.
+  const toItem = (c) => {
+    const isOwned = c.price === 0 || ownedIds.has(c.id);
+    return {
+      ...publicCosmetic(c),
+      price: c.price ?? null,
+      owned: isOwned,
+      equipped: (req.user[c.slot] || null) === c.id || (c.price === 0 && !req.user[c.slot]),
+      // Exclusif non encore débloqué : palier requis affiché côté front
+      locked: !!c.exclusive && !isOwned,
+      tierReqName: c.exclusive && c.tierReq != null ? (TIERS[c.tierReq] && TIERS[c.tierReq].name) : null,
+    };
+  };
+
+  // Groupes par slot : on exclut les cosmétiques de licence (affichés à part).
   const groups = SLOTS.map((slot) => ({
     slot,
     label: SLOT_LABELS[slot],
     equipped: req.user[slot] || null, // null = item par défaut du slot
-    items: COSMETICS.filter((c) => c.slot === slot).map((c) => {
-      const isOwned = c.price === 0 || ownedIds.has(c.id);
-      return {
-        ...publicCosmetic(c),
-        price: c.price ?? null,
-        owned: isOwned,
-        equipped: (req.user[slot] || null) === c.id || (c.price === 0 && !req.user[slot]),
-        // Exclusif non encore débloqué : palier requis affiché côté front
-        locked: !!c.exclusive && !isOwned,
-        tierReqName: c.exclusive && c.tierReq != null ? (TIERS[c.tierReq] && TIERS[c.tierReq].name) : null,
-      };
-    }),
+    items: COSMETICS.filter((c) => c.slot === slot && !c.license).map(toItem),
   }));
 
-  res.json({ tokens: req.user.tokens, tier: bestIdx >= 0 ? TIERS[bestIdx].name : null, groups });
+  // Groupes par franchise (section « Licences »).
+  const licenses = LICENSES.map((name) => ({
+    license: name,
+    color: LICENSE_COLORS[name] || null,
+    items: COSMETICS.filter((c) => c.license === name).map(toItem),
+  })).filter((g) => g.items.length);
+
+  res.json({ tokens: req.user.tokens, tier: bestIdx >= 0 ? TIERS[bestIdx].name : null, groups, licenses });
 });
 
 // Achat d'un cosmétique avec des tokens.

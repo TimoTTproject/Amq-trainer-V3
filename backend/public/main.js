@@ -11,6 +11,9 @@ let isTraining = false; // session du centre d'entraînement
 let trainingSource = null; // review | missed | liked | due | series | mine | global
 let trainingSeries = null; // série choisie quand trainingSource === 'series'
 let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
+let roundReward = null; // { max, timed, grace, floorAt, floor } pour la jauge « tokens en jeu »
+let roundStartAt = 0; // réception du tirage : référence du bonus de vitesse (≈ sat serveur)
+let gaugeTimer = null; // rafraîchit la jauge de tokens en jeu
 let trainPlayed = 0, trainCorrect = 0, trainStreak = 0; // suivi de session d'entraînement
 let trainingChrono = false; // mode chrono (auto-révélation)
 let chronoTimer = null;
@@ -1440,7 +1443,7 @@ async function nextSong() {
   if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; }
   resetQuizUI();
   setHint('Chargement…');
-  let song, roundToken, liked;
+  let song, roundToken, liked, reward;
   const SOURCES = ['review', 'missed', 'liked', 'due', 'series'];
   let qs;
   if (trainingSource && SOURCES.includes(trainingSource)) {
@@ -1453,13 +1456,15 @@ async function nextSong() {
   }
   if (quizType && quizType !== 'all') qs += `&type=${quizType}`;
   try {
-    ({ song, roundToken, liked } = await api(`/api/quiz/random?${qs}`));
+    ({ song, roundToken, liked, reward } = await api(`/api/quiz/random?${qs}`));
   } catch (err) {
     setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
     return;
   }
   currentSong = song;
   currentRoundToken = roundToken;
+  roundReward = reward || null;
+  roundStartAt = Date.now(); // référence vitesse : aligne la jauge sur le `sat` serveur
   currentLiked = !!liked;
   currentLevel = 'cash';
   setLikeButton();
@@ -1481,8 +1486,10 @@ async function nextSong() {
   document.getElementById('answer-input').focus();
   document.getElementById('skip-btn').classList.remove('hidden'); // « Passer » pendant la manche
   document.getElementById('next-btn').innerHTML = '<i class="fas fa-forward"></i> Manche suivante';
+  document.getElementById('next-btn').disabled = true; // pas de saut sans répondre (fausserait les stats) → utiliser « Passer »
   updateVideoButtonVisibility(); // cache la vidéo en classé tant qu'on n'a pas répondu
   refreshQuizOptionsLock(); // manche en cours → fige les réglages
+  startRewardGauge(); // jauge « tokens en jeu » (décroît avec la vitesse, classé seulement)
 
   await startClip(); // applique départ aléatoire + coupure, puis lance
 }
@@ -1581,6 +1588,54 @@ function stopQuizTimebar() {
   if (bar) bar.classList.add('hidden');
 }
 
+// Multiplicateur de vitesse — DOIT rester aligné avec speedMultiplier() côté serveur
+// (backend/src/quiz/quiz.routes.js). Les constantes (grace/floorAt/floor) viennent
+// du serveur via roundReward, donc seule la forme de la courbe est dupliquée ici.
+function speedMult(elapsedSec, c) {
+  if (!(elapsedSec > c.grace)) return 1;
+  if (elapsedSec >= c.floorAt) return c.floor;
+  const t = (elapsedSec - c.grace) / (c.floorAt - c.grace);
+  return 1 - t * (1 - c.floor);
+}
+
+// Jauge « tokens en jeu » : montre en temps réel ce que vaut une bonne réponse
+// maintenant. Décroît avec la vitesse en mode classé ; reste figée sinon.
+function startRewardGauge() {
+  const el = document.getElementById('reward-stake');
+  stopRewardGauge();
+  if (!el) return;
+  if (!roundReward || !roundReward.max) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const tick = () => {
+    if (answered) return stopRewardGauge();
+    let stake = roundReward.max, atFloor = false;
+    if (roundReward.timed) {
+      const elapsed = (Date.now() - roundStartAt) / 1000;
+      const m = speedMult(elapsed, roundReward);
+      stake = Math.max(1, Math.round(roundReward.max * m));
+      atFloor = m <= roundReward.floor + 0.001;
+    }
+    el.innerHTML = `<i class="fas fa-bolt"></i> ${stake} 🪙 en jeu`;
+    el.classList.toggle('low', atFloor);
+  };
+  tick();
+  if (roundReward.timed) gaugeTimer = setInterval(tick, 250);
+}
+function stopRewardGauge() {
+  clearInterval(gaugeTimer);
+  gaugeTimer = null;
+}
+
+// Détail du calcul de récompense (transparence), affiché au verdict.
+function rewardDetailText(b) {
+  if (!b) return '';
+  if (!b.firstCorrect) return 'Rejeu : gain réduit (anti-farm)';
+  const parts = [`${b.base} de base`];
+  if (b.speedMult < 0.999) parts.push(`vitesse ×${b.speedMult.toFixed(2)}`);
+  if (b.levelMult < 0.999) parts.push(`${b.level} ×${b.levelMult}`);
+  return parts.join(' · ');
+}
+
 // Overlay « extrait terminé » : invite à proposer une réponse ou à passer.
 function setOverlayEnded(ended) {
   const ov = document.getElementById('audio-overlay');
@@ -1596,6 +1651,11 @@ function resetQuizUI() {
   document.getElementById('answer-input').value = '';
   if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('answer-input');
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = false));
+  const detail = document.getElementById('reward-detail');
+  if (detail) detail.textContent = '';
+  stopRewardGauge();
+  const stake = document.getElementById('reward-stake');
+  if (stake) stake.classList.add('hidden');
   stopQuizTimebar();
   setOverlayEnded(false);
   document.getElementById('skip-btn').classList.add('hidden');
@@ -1623,6 +1683,7 @@ async function requestChoices(level) {
     const r = await api('/api/quiz/choices', { method: 'POST', body: JSON.stringify({ roundToken: currentRoundToken, level }) });
     currentRoundToken = r.roundToken;
     currentLevel = level;
+    if (roundReward && r.reward) { roundReward.max = r.reward.max; startRewardGauge(); } // aide → enjeu réduit
     hideAssist();
     document.getElementById('answer-area').classList.add('hidden');
     const box = document.getElementById('choice-buttons');
@@ -1638,6 +1699,7 @@ async function guessAnswer(forcedGuess) {
   answered = true;
   clearTimeout(clipTimer); // plus de coupure une fois validé
   clearTimeout(chronoTimer);
+  stopRewardGauge(); // fige les tokens en jeu au moment de valider
   video().play().catch(() => {});
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
@@ -1674,6 +1736,8 @@ async function guessAnswer(forcedGuess) {
     sfx.wrong();
   }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
+  const detail = document.getElementById('reward-detail');
+  if (detail) detail.textContent = r.reward ? rewardDetailText(r.breakdown) : '';
 
   revealAnswerBox(r.answer);
   recordTraining(r.correct);
@@ -1693,6 +1757,7 @@ function revealAnswerBox(answer) {
   document.getElementById('answer-result').classList.remove('hidden');
   stopQuizTimebar();
   setOverlayEnded(false);
+  document.getElementById('next-btn').disabled = false; // manche résolue → on peut passer à la suite
   document.getElementById('skip-btn').classList.add('hidden'); // manche résolue
   showOverlay(false); // révèle la vidéo
   updateVideoButtonVisibility();
@@ -1717,6 +1782,7 @@ async function showAnswerCasual() {
   answered = true;
   clearTimeout(clipTimer);
   clearTimeout(chronoTimer);
+  stopRewardGauge();
   recordTraining(false); // abandon = compté comme raté dans la session
   hideAssist();
   document.querySelectorAll('#choice-buttons .choice-opt').forEach((b) => (b.disabled = true));

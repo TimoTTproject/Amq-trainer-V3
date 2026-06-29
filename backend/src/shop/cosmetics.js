@@ -11,6 +11,95 @@
 // L'item `default` de chaque slot est gratuit et possédé par tout le monde
 // implicitement (price 0, jamais stocké en BDD).
 
+// ── LICENCES D'ANIME ──────────────────────────────────────────
+// Cosmétiques thématiques utilisant l'artwork officiel AniList (couverture =
+// dos de carte, bannière = fond de profil), hotlinké depuis le CDN AniList —
+// exactement comme les images de personnages des cartes gacha. Achat en tokens
+// (monnaie de jeu, aucun argent réel). Regroupés par franchise dans la boutique.
+const ANIME_LICENSES = [
+  { key: 'one-piece', name: 'One Piece', color: '#e49335',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21-ELSYx3yMPcKM.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/21-wf37VakJmZqs.jpg' },
+  { key: 'naruto', name: 'Naruto', color: '#e47850',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx20-dE6UHbFFg1A5.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/20-HHxhPj5JD13a.jpg' },
+  { key: 'dragon-ball-z', name: 'Dragon Ball Z', color: '#e49343',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx813-ZhnFNOeCU5dQ.png',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/813-03ZLvWJgR6Wd.jpg' },
+  { key: 'attack-on-titan', name: "L'Attaque des Titans", color: '#f1a143',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-buvcRTBx4NSm.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/16498-8jpFCOcDmneX.jpg' },
+  { key: 'demon-slayer', name: 'Demon Slayer', color: '#f1c9ae',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx101922-WBsBl0ClmgYL.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922-33MtJGsUSxga.jpg' },
+  { key: 'jujutsu-kaisen', name: 'Jujutsu Kaisen', color: '#e45d5d',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx113415-LHBAeoZDIsnF.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/113415-jQBSkxWAAk83.jpg' },
+  { key: 'my-hero-academia', name: 'My Hero Academia', color: '#f1d643',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21459-nYh85uj2Fuwr.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/21459-yeVkolGKdGUV.jpg' },
+  { key: 'fma-brotherhood', name: 'Fullmetal Alchemist', color: '#e4c993',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx5114-nSWCgQlmOMtj.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/5114-q0V5URebphSG.jpg' },
+  { key: 'bleach', name: 'Bleach', color: '#f1a150',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx269-d2GmRkJbMopq.png',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/269-08ar2HJOUAuL.jpg' },
+  { key: 'death-note', name: 'Death Note', color: '#b23b3b',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1535-kUgkcrfOrkUM.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/1535.jpg' },
+  { key: 'hunter-x-hunter', name: 'Hunter x Hunter', color: '#f1d65d',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx11061-y5gsT1hoHuHw.png',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/11061-8WkkTZ6duKpq.jpg' },
+  { key: 'sword-art-online', name: 'Sword Art Online', color: '#e4bb5d',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx11757-SxYDUzdr9rh2.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/11757-TlEEV9weG4Ag.jpg' },
+  { key: 'one-punch-man', name: 'One Punch Man', color: '#e4ae5d',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21087-B5DHjqZ3kW4b.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/21087-sHb9zUZFsHe1.jpg' },
+  { key: 'spy-x-family', name: 'Spy x Family', color: '#7fd0d0',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx140960-Kb6R5nYQfjmP.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/140960-Z7xSvkRxHKfj.jpg' },
+  { key: 'chainsaw-man', name: 'Chainsaw Man', color: '#d4452f',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx127230-DdP4vAdssLoz.png',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/127230-o8IRwCGVr9KW.jpg' },
+  { key: 'tokyo-ghoul', name: 'Tokyo Ghoul', color: '#ff6b35',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b20605-k665mVkSug8D.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/20605-RCJ7M71zLmrh.jpg' },
+  { key: 'code-geass', name: 'Code Geass', color: '#c9d678',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx1575-hsmWM2ydNm1m.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/1575.jpg' },
+  { key: 'steins-gate', name: 'Steins;Gate', color: '#e4b98a',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx9253-tIUXF2gfU8Sg.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/n9253-JIhmKgBKsWUN.jpg' },
+  { key: 're-zero', name: 'Re:Zero', color: '#f150ae',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21355-wRVUrGxpvIQQ.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/21355-f9SjOfEJMk5P.jpg' },
+  { key: 'mob-psycho-100', name: 'Mob Psycho 100', color: '#d65d1a',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21507-6YUSbh2m0N1p.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/21507-Qx8bGsLXUgLo.jpg' },
+  { key: 'vinland-saga', name: 'Vinland Saga', color: '#f16b5d',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx101348-2fhDFPCuMNiz.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/101348-pivKKffCAwAY.jpg' },
+  { key: 'evangelion', name: 'Evangelion', color: '#f17843',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx30-AI1zr74Dh4ye.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/30-gEMoHHIqxDgN.jpg' },
+  { key: 'black-clover', name: 'Black Clover', color: '#d6c96b',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx97940-fyh8o7gNbha0.png',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/97940-1URQdQ4U1a0b.jpg' },
+  { key: 'dr-stone', name: 'Dr. Stone', color: '#e4bb50',
+    cover: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx113936-D4eYd4XwslVI.jpg',
+    banner: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/113936-PpMtCY9kCwwV.jpg' },
+];
+
+// Génère 2 cosmétiques par franchise : un dos de carte (couverture) et une
+// bannière de profil (bannière). `image: true` → l'aperçu/dos n'affiche pas d'icône.
+const LICENSE_COSMETICS = ANIME_LICENSES.flatMap((l) => [
+  { id: `lic-${l.key}-back`, slot: 'cardBack', license: l.name, name: `${l.name} — Dos de carte`,
+    price: 1200, image: true, css: `background:#0c0e12 url('${l.cover}') center/cover` },
+  { id: `lic-${l.key}-banner`, slot: 'profileBanner', license: l.name, name: `${l.name} — Bannière`,
+    price: 1000, image: true, css: `background:#0c0e12 url('${l.banner}') center/cover` },
+]);
+
 const COSMETICS = [
   // ── Dos de cartes ─────────────────────────────────────────────
   { id: 'back-default', slot: 'cardBack', name: 'Classique', price: 0,
@@ -73,7 +162,14 @@ const COSMETICS = [
     css: 'background:linear-gradient(135deg,#3a8dde,#7fd2ff,#dff6ff,#3a8dde)', className: 'cb-shine' },
   { id: 'frame-rank-maitre', slot: 'avatarFrame', name: 'Rang Maître', exclusive: true, tierReq: 5, icon: 'fa-crown',
     css: '', className: 'cosm-mythic-frame' },
+
+  // ── Licences d'anime (générées ci-dessus) ────────────────────
+  ...LICENSE_COSMETICS,
 ];
+
+// Ordre + couleur d'accent des franchises (pour la section « Licences » de la boutique)
+const LICENSES = ANIME_LICENSES.map((l) => l.name);
+const LICENSE_COLORS = Object.fromEntries(ANIME_LICENSES.map((l) => [l.name, l.color]));
 
 const SLOTS = ['cardBack', 'cardBorder', 'profileBanner', 'avatarFrame'];
 const SLOT_LABELS = {
@@ -98,6 +194,8 @@ function publicCosmetic(c) {
   if (!c) return null;
   return {
     id: c.id, slot: c.slot, name: c.name, css: c.css || '', className: c.className || '', icon: c.icon || null,
+    ...(c.image ? { image: true } : {}),
+    ...(c.license ? { license: c.license } : {}),
     ...(c.exclusive ? { exclusive: true, tierReq: c.tierReq } : {}),
   };
 }
@@ -117,6 +215,8 @@ module.exports = {
   COSMETICS,
   SLOTS,
   SLOT_LABELS,
+  LICENSES,
+  LICENSE_COLORS,
   byId,
   publicCosmetic,
   resolveEquipped,

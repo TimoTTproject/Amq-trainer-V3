@@ -337,6 +337,12 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .quiz-timebar { height: 7px; background: var(--bg-3); border-radius: 6px; overflow: hidden; margin: 8px 0 2px; }
 .quiz-timefill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; }
 .quiz-timefill.low { background: var(--red); }
+.reward-stake { display: flex; width: fit-content; align-items: center; gap: 6px; margin: 6px auto 2px; padding: 3px 10px; border-radius: 999px; background: var(--bg-3); color: var(--accent-2); font-weight: 700; font-size: .9rem; }
+.reward-stake.hidden { display: none; }
+.reward-stake .fa-bolt { color: var(--accent); }
+.reward-stake.low { color: var(--red); }
+.reward-detail { color: var(--text-2); font-size: .85rem; margin: -2px 0 8px; }
+.reward-detail:empty { display: none; }
 @keyframes pulse { 0%,100% { opacity: .5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
 .quiz-hint { color: var(--text-2); font-size: .88rem; margin: 10px 0 0; text-align: center; }
 
@@ -1241,6 +1247,16 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .shop-item.is-locked { opacity: .72; }
 .shop-excl { color: var(--orange); font-size: .72rem; }
 
+/* ── Boutique : section Licences d'anime ── */
+.shop-licenses { margin-top: 34px; padding-top: 22px; border-top: 1px solid #2a2f42; }
+.shop-licenses-head h2 { font-size: 1.2rem; display: flex; align-items: center; gap: 9px; }
+.shop-licenses-head h2 i { color: var(--accent-2); }
+.shop-licenses-head p { margin: 4px 0 6px; font-size: .85rem; }
+.shop-group-license h3 {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding-left: 10px; border-left: 4px solid var(--lic-color, var(--accent));
+}
+
 /* Aperçus */
 .shop-prev { display: flex; align-items: center; justify-content: center; }
 .shop-prev-back {
@@ -1648,4 +1664,54 @@ button, a, .nav-item, .hub-card, .home-card, .gcard, .tower-choice {
   /* Saisie de réponse : champ + bouton empilés et pleine largeur */
   .answer-area { flex-direction: column; align-items: stretch; }
   .answer-area > .btn-primary, .answer-area > button { width: 100%; justify-content: center; }
+}
+
+/* ════════════════════════════════════════════
+   MOBILE — lisibilité & confort tactile (passe générale)
+   ════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  /* — Texte : remonte les tailles les plus petites à un seuil lisible — */
+  body { line-height: 1.5; }
+  .hint, .quiz-hint, .gm-hint, .catalog-info, .panel-row label,
+  .quiz-options, .quiz-options label, .assist-label, .assist-btn,
+  .home-card p, .reward-detail, .mode-btn, .tf-btn, .nav-item { font-size: .95rem; }
+  /* Micro-textes secondaires : remontée plus douce */
+  .badge-desc { font-size: .82rem; }
+  .reward-stake { font-size: 1rem; }
+  .home-card h3 { font-size: 1.15rem; }
+  .gm-tag { font-size: .95rem; }
+
+  /* — Cibles tactiles : minimum 44px, plus d'air autour — */
+  .btn-primary, .btn-secondary, .btn-anilist, .btn-google,
+  .mode-btn, .tf-btn, .assist-btn, .feedback-buttons button,
+  .nav-item, .quiz-controls button, .choice-opt {
+    min-height: 44px;
+  }
+  .btn-primary, .btn-secondary { padding: 11px 16px; }
+  /* Boutons à icône seule (header + lecteur) : carré, bien centré */
+  #mute-btn, #logout-btn, #lang-toggle, #play-btn, #replay-btn, #like-btn {
+    min-width: 44px; min-height: 44px; justify-content: center; padding: 10px;
+  }
+
+  /* — Navigation : onglets plus larges au doigt — */
+  .navbar { gap: 4px; }
+  .nav-item { padding: 11px 14px; }
+
+  /* — Réglages du quiz : empilés, pleine largeur, plus lisibles — */
+  .quiz-options { gap: 12px; }
+  .quiz-options label { justify-content: space-between; width: 100%; }
+  .quiz-options select { padding: 8px 10px; }
+
+  /* — Barre de contrôles : bouton principal en pleine largeur dessous — */
+  .quiz-controls { gap: 8px; }
+  .quiz-controls #next-btn { margin-left: 0; flex: 1 0 100%; justify-content: center; }
+
+  /* — Mode classique / filtre OP-ED : enroulement propre, filtre pleine largeur — */
+  .gamemode-switch { gap: 8px; }
+  .type-filter { width: 100%; margin-left: 0; justify-content: stretch; }
+  .type-filter .tf-btn { flex: 1; }
+
+  /* — Catalogue / sélecteur de mode : pleine largeur — */
+  .mode-switch { width: 100%; }
+  .mode-switch .mode-btn { flex: 1; }
 }

@@ -69,7 +69,7 @@ async function getReviewSongIds(userId) {
     .map((s) => s.songId);
 }
 
-// Récompense en tokens pour une bonne réponse
+// Récompense de base en tokens pour une bonne réponse (avant vitesse/niveau)
 function computeReward(song, firstCorrect) {
   if (!firstCorrect) return 2; // rejeu : petite récompense (anti-farm)
   let reward = 10;
@@ -77,6 +77,23 @@ function computeReward(song, firstCorrect) {
   if (p < 50000) reward += 5; // anime peu connu = plus difficile
   else if (p < 150000) reward += 2;
   return reward;
+}
+
+// Bonus de vitesse (solo classé) : gain plein pendant un court délai de grâce
+// (le temps de charger l'extrait et de réfléchir), puis décroissance linéaire
+// jusqu'à un plancher. Référence = `sat` du jeton de manche (signé, non falsifiable).
+const SPEED = { graceSec: 5, floorAtSec: 25, floor: 0.4 };
+function speedMultiplier(elapsedSec) {
+  if (!(elapsedSec > SPEED.graceSec)) return 1;
+  if (elapsedSec >= SPEED.floorAtSec) return SPEED.floor;
+  const t = (elapsedSec - SPEED.graceSec) / (SPEED.floorAtSec - SPEED.graceSec);
+  return 1 - t * (1 - SPEED.floor);
+}
+
+// Récompense maximale affichable (vitesse pleine) au niveau d'aide courant, pour
+// alimenter la jauge « tokens en jeu » côté client sans révéler la popularité brute.
+function maxRewardFor(song, firstCorrect, level) {
+  return Math.max(1, Math.round(computeReward(song, firstCorrect) * (LEVEL_MULT[level] ?? 1)));
 }
 
 // Tire une musique au hasard. La réponse n'est PAS renvoyée (anti-triche).
@@ -99,7 +116,7 @@ router.get('/random', requireAuth, async (req, res) => {
     let total = await prisma.song.count({ where });
     if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
-    song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true } });
+    song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
     let songIds;
     if (source === 'review') {
@@ -139,17 +156,25 @@ router.get('/random', requireAuth, async (req, res) => {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
     }
     const randomId = songIds[Math.floor(Math.random() * songIds.length)];
-    song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true, audioUrl: true } });
+    song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   }
   if (!song) return res.status(404).json({ error: 'Aucune musique disponible' });
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
   const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash' });
   const stat = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId: req.user.id, songId: song.id } },
-    select: { liked: true },
+    select: { liked: true, correctCount: true },
   });
+  const firstCorrect = !stat || stat.correctCount === 0;
+  // Infos pour la jauge « tokens en jeu » : récompense max au niveau cash, et la
+  // courbe de vitesse. `timed` = false en entraînement/rejeu (gain figé, sans chrono).
+  const reward = {
+    max: ranked ? maxRewardFor(song, firstCorrect, 'cash') : 0,
+    timed: ranked && firstCorrect,
+    grace: SPEED.graceSec, floorAt: SPEED.floorAtSec, floor: SPEED.floor,
+  };
   // On ne renvoie PAS l'URL .webm (anti-triche) : le client lit le flux proxifié.
-  res.json({ song: { id: song.id }, roundToken, liked: !!stat?.liked });
+  res.json({ song: { id: song.id }, roundToken, liked: !!stat?.liked, reward });
 });
 
 // Flux vidéo de la manche, proxifié (le titre ne fuite pas par l'URL). Le jeton
@@ -177,8 +202,18 @@ router.post('/choices', requireAuth, rateLimit({ max: 120, name: 'choices' }), a
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
   const options = await buildChoices(song, LEVEL_COUNT[level]);
-  const roundToken = issueRoundToken({ userId: req.user.id, songId: round.sid, ranked: round.ranked, level });
-  res.json({ options, roundToken, level });
+  // Préserve `sat` : le chrono de vitesse court depuis le début de la manche, pas
+  // depuis le passage en Carré/Duo.
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: round.sid, ranked: round.ranked, level, startedAt: round.sat });
+  let reward;
+  if (round.ranked) {
+    const stat = await prisma.userSongStat.findUnique({
+      where: { userId_songId: { userId: req.user.id, songId: round.sid } },
+      select: { correctCount: true },
+    });
+    reward = { max: maxRewardFor(song, !stat || stat.correctCount === 0, level) };
+  }
+  res.json({ options, roundToken, level, reward });
 });
 
 // Like / unlike d'une musique (playlist perso)
@@ -409,8 +444,12 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
   });
   const firstCorrect = correct && (!prev || prev.correctCount === 0);
   // Les tokens ne sont gagnés qu'en mode classé, pondérés par le niveau (cash/carré/duo)
-  const mult = LEVEL_MULT[round?.level] ?? 1;
-  const reward = correct && ranked ? Math.max(1, Math.round(computeReward(song, firstCorrect) * mult)) : 0;
+  // et par la vitesse de réponse (uniquement à la première bonne réponse).
+  const levelMult = LEVEL_MULT[round?.level] ?? 1;
+  const elapsedSec = round?.sat ? Math.max(0, Math.floor(Date.now() / 1000) - round.sat) : 0;
+  const speedMult = firstCorrect ? speedMultiplier(elapsedSec) : 1; // pas de bonus vitesse au rejeu
+  const base = computeReward(song, firstCorrect);
+  const reward = correct && ranked ? Math.max(1, Math.round(base * levelMult * speedMult)) : 0;
   const srs = nextSrs(prev?.srsStreak, correct); // planification répétition espacée
 
   const result = await prisma.$transaction(async (tx) => {
@@ -452,6 +491,15 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'guess' }), async
   res.json({
     correct,
     reward,
+    // Détail du calcul (transparence) quand des tokens sont gagnés.
+    ...(reward > 0
+      ? {
+          breakdown: {
+            base, levelMult, speedMult: Math.round(speedMult * 100) / 100,
+            level: round?.level || 'cash', firstCorrect, elapsedSec,
+          },
+        }
+      : {}),
     ...(result.tokens !== null ? { tokens: result.tokens } : {}),
     answer: {
       animeTitle: song.animeTitle,
