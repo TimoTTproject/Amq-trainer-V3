@@ -281,12 +281,15 @@ function connectMp() {
           const isMe = p.name === currentUser.displayName;
           const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
           const rec = p.isRecord ? ' <span class="mp-record">record</span>' : '';
+          const reward = p.tokenReward ? ` <span class="mp-reward">+${p.tokenReward} 🪙</span>` : '';
           return `<li class="lb-row${isMe ? ' me' : ''}">
             <span class="lb-rank">${medal(i + 1)}</span>${av}
-            <span class="lb-name">${escapeHtml(p.name)}${rec}</span>
+            <span class="lb-name">${escapeHtml(p.name)}${rec}${reward}</span>
             <span class="lb-value">${p.correct || 0} bonne${(p.correct || 0) > 1 ? 's' : ''}</span>
           </li>`;
         }).join('');
+      const mine = (d.ranking || []).find((p) => p.name === currentUser.displayName);
+      if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') syncTokenBalance();
       return;
     }
 

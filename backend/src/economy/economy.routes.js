@@ -21,6 +21,7 @@ const REASON_LABELS = {
   quest_reward: 'Récompense de quête',
   cosmetic_purchase: 'Achat boutique',
   mp_reward: 'Récompense multijoueur',
+  coop_reward: 'Tour en équipe (coop)',
   daily_reward: 'Défi du jour',
   season_reward: 'Récompense de saison',
 };

@@ -153,7 +153,7 @@ router.get('/players/list', requireAuth, async (req, res) => {
 router.get('/:userId', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.userId },
-    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true, claimedLevel: true, mmr: true, rankedGames: true, rankedWins: true, soloMmr: true, soloGames: true, soloBestScore: true, dailyStreakBest: true, cardBack: true, cardBorder: true, profileBanner: true, avatarFrame: true },
+    select: { id: true, displayName: true, avatarUrl: true, bio: true, createdAt: true, tokens: true, towerBestFloor: true, coopBestFloor: true, claimedLevel: true, mmr: true, rankedGames: true, rankedWins: true, soloMmr: true, soloGames: true, soloBestScore: true, dailyStreakBest: true, cardBack: true, cardBorder: true, profileBanner: true, avatarFrame: true },
   });
   if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
 

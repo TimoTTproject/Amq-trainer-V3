@@ -862,6 +862,7 @@ function renderProfile(d, isSelf = true) {
   document.getElementById('profile-correct').textContent = s.correct;
   document.getElementById('profile-rate').textContent = s.rate + '%';
   document.getElementById('profile-tower').textContent = d.user.towerBestFloor || 0;
+  document.getElementById('profile-coop').textContent = d.user.coopBestFloor || 0;
   document.getElementById('profile-cards-count').textContent = d.cardsCount || 0;
   document.getElementById('profile-tokens').textContent = d.user.tokens;
   const dustEl = document.getElementById('profile-dust');

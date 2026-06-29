@@ -28,6 +28,8 @@ const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
 // AU MOINS un joueur trouve ; sinon −1 vie commune. Le temps se réduit avec les étages.
 const COOP_START_LIVES = 3;
 const COOP_MAX_FLOORS = 100; // garde-fou
+const COOP_TOKENS_PER_FLOOR = 1; // gain par étage franchi (partage le plafond/jour du multi)
+const COOP_GAME_CAP = 30; // max de tokens coop par partie
 function coopRoundMs(floor) {
   return Math.max(12000, 25000 - (floor - 1) * 500); // 25s -> plancher 12s vers l'étage 27
 }
@@ -558,14 +560,40 @@ async function endCoopGame(room) {
       .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), correct: p.correct || 0, score: p.score }))
       .sort((a, b) => b.correct - a.correct || b.score - a.score);
     let bestBy = {};
+    const rewardBy = {};
     try {
       const ids = ordered.map((p) => p.userId);
-      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, coopBestFloor: true } });
+      const users = await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, coopBestFloor: true, mpRewardDay: true, mpRewardToday: true },
+      });
       bestBy = Object.fromEntries(users.map((u) => [u.id, u.coopBestFloor || 0]));
-      if (floor > 0) await prisma.user.updateMany({ where: { id: { in: ids }, coopBestFloor: { lt: floor } }, data: { coopBestFloor: floor } });
-    } catch (e) { console.error('coop best update:', e && e.message); }
+      const byId = Object.fromEntries(users.map((u) => [u.id, u]));
+      // Gain plafonné (≥ 2 comptes distincts), partageant le budget quotidien du multi.
+      const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD && floor > 0;
+      const today = todayStr();
+      await prisma.$transaction(
+        ordered.flatMap((p) => {
+          const u = byId[p.userId] || {};
+          const data = {};
+          if ((bestBy[p.userId] || 0) < floor) data.coopBestFloor = floor; // record perso
+          let granted = 0;
+          if (rewardEnabled) {
+            const usedToday = u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0;
+            const dailyLeft = Math.max(0, MP_DAILY_CAP - usedToday);
+            granted = Math.min(floor * COOP_TOKENS_PER_FLOOR, COOP_GAME_CAP, dailyLeft);
+          }
+          rewardBy[p.userId] = granted;
+          if (granted > 0) { data.tokens = { increment: granted }; data.mpRewardDay = today; data.mpRewardToday = (u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0) + granted; }
+          const ops = [];
+          if (Object.keys(data).length) ops.push(prisma.user.update({ where: { id: p.userId }, data }));
+          if (granted > 0) ops.push(prisma.tokenTransaction.create({ data: { userId: p.userId, amount: granted, reason: 'coop_reward' } }));
+          return ops;
+        })
+      );
+    } catch (e) { console.error('coop reward/best update:', e && e.message); }
     for (const p of ordered) progressQuests(p.userId, 'mp', 1);
-    ranking = ordered.map((p) => ({ ...p, isRecord: floor > 0 && floor > (bestBy[p.userId] || 0) }));
+    ranking = ordered.map((p) => ({ ...p, isRecord: floor > 0 && floor > (bestBy[p.userId] || 0), tokenReward: rewardBy[p.userId] || 0 }));
   } catch (e) {
     console.error('mp endCoopGame prep error:', e && (e.stack || e.message) || e);
   }
