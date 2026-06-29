@@ -127,11 +127,11 @@ function renderDailyIntro(d) {
   dailyTotal = d.total;
   document.getElementById('daily-total').textContent = d.total;
   document.getElementById('daily-mmr').textContent = d.soloGames > 0 ? d.soloMmr : '—';
-  document.getElementById('daily-tier').innerHTML = d.tier ? tierBadge(d.tier) : 'Non classé';
+  document.getElementById('daily-tier').textContent = d.tier ? `${d.tier.icon || ''} ${d.tier.name}` : 'Non classé';
   document.getElementById('daily-best').textContent = d.soloBestScore || 0;
   document.getElementById('daily-streak').textContent = d.streak || 0;
   const rank = document.getElementById('daily-rank');
-  rank.innerHTML = d.tier ? `${tierBadge(d.tier)} <span class="mmr-value">${d.soloMmr}</span> <span class="mmr-unit">MMR</span>` : 'Pas encore classé';
+  rank.innerHTML = d.tier ? `<span class="mmr-value">${d.soloMmr}</span> <span class="mmr-unit">MMR</span>` : 'Pas encore classé';
 
   const done = document.getElementById('daily-done');
   const start = document.getElementById('daily-start');
@@ -259,7 +259,7 @@ function renderDailyResult(res) {
   const sign = delta >= 0 ? '+' : '';
   document.getElementById('daily-over-delta').innerHTML =
     `${res.mmrBefore} → <b>${res.mmrAfter}</b> MMR <span class="${delta >= 0 ? 'gain' : 'spend'}">(${sign}${delta})</span>`
-    + (res.tier ? ` · ${res.tier.icon} ${escapeHtml(res.tier.name)}` : '');
+    ;
   const streakLine = document.getElementById('daily-over-streak');
   if (streakLine) {
     const best = res.streak >= res.streakBest && res.streak > 1 ? ' · record !' : '';

@@ -607,7 +607,6 @@ function renderProfileRanked(r, recent, solo) {
     ? '<p class="muted">Aucune partie classée. Lance une « Partie classée » dans le multi !</p>'
     : `<div class="ranked-card">
         <span class="ranked-label">🏅 Multi</span>
-        ${tierBadge(r.tier, 'big')}
         <span class="ranked-mmr">${r.mmr} MMR</span>
         <span class="hint">${r.wins} victoire(s) · ${r.games} partie(s) · ${r.winrate}% WR</span>
       </div>`;
@@ -615,7 +614,6 @@ function renderProfileRanked(r, recent, solo) {
     ? ''
     : `<div class="ranked-card">
         <span class="ranked-label">🗓️ Solo</span>
-        ${tierBadge(solo.tier, 'big')}
         <span class="ranked-mmr">${solo.mmr} MMR</span>
         <span class="hint">${solo.games} défi(s) · meilleur score ${solo.bestScore}</span>
       </div>`;
