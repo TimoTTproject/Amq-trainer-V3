@@ -318,9 +318,10 @@ function renderAvatar(el, user) {
 function tierSlug(name) {
   return { 'Bronze': 'bronze', 'Argent': 'silver', 'Or': 'gold', 'Platine': 'platine', 'Diamant': 'diamant', 'Maître': 'maitre' }[name] || 'bronze';
 }
+const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 function tierBadge(tier, extra) {
   if (!tier || !tier.name) return '';
-  const div = tier.division ? ` <span class="tier-div">${tier.division}</span>` : '';
+  const div = tier.division ? ` <span class="tier-div">${ROMAN[tier.division] || tier.division}</span>` : '';
   return `<span class="tier-badge t-${tierSlug(tier.name)}${extra ? ' ' + extra : ''}">${tier.icon || ''} ${escapeHtml(tier.name)}${div}</span>`;
 }
 

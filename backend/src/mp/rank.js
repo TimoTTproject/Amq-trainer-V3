@@ -18,8 +18,10 @@ function tierFromMmr(mmr) {
   // Bande du palier (bande virtuelle de 300 pour le dernier, Maître).
   const nextMin = idx + 1 < TIERS.length ? TIERS[idx + 1].min : t.min + 300;
   const step = Math.max(1, (nextMin - t.min) / DIVISIONS);
-  let division = Math.floor((mmr - t.min) / step) + 1;
-  division = Math.max(1, Math.min(DIVISIONS, division));
+  let d = Math.floor((mmr - t.min) / step) + 1; // 1 = bas de bande … DIVISIONS = haut
+  d = Math.max(1, Math.min(DIVISIONS, d));
+  // Convention LoL : I = meilleur (haut du palier) → on inverse.
+  const division = DIVISIONS + 1 - d;
   return { name: t.name, icon: t.icon, division };
 }
 
