@@ -730,6 +730,8 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 
 /* Classé */
 .mp-ranked-btn { background: linear-gradient(135deg, var(--orange), #ff5d8f); color: #2a1400; }
+.mp-quick-rounds { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; color: var(--text-2); font-size: .9rem; }
+.mp-quick-rounds .hint { font-size: .75rem; }
 .mp-myrank { text-align: center; color: var(--text-2); margin-bottom: 14px; }
 .mp-myrank b { color: var(--text); }
 .mp-mmr { font-size: .8rem; font-weight: 700; }

@@ -284,7 +284,7 @@ function connectMp() {
   return mpSocket;
 }
 
-function joinMatchmaking(event, searchingText) {
+function joinMatchmaking(event, searchingText, payload) {
   mpLeft = false;
   mpEngaged = true;
   const msg = document.getElementById('mp-menu-msg');
@@ -293,7 +293,7 @@ function joinMatchmaking(event, searchingText) {
   if (!socket) return;
 
   const send = () => {
-    socket.timeout(10000).emit(event, (err, ack) => {
+    const cb = (err, ack) => {
       if (err || !ack?.ok) {
         msg.textContent = 'La file ne répond pas. Réessaie dans quelques secondes.';
         mpEngaged = false;
@@ -302,7 +302,10 @@ function joinMatchmaking(event, searchingText) {
       msg.textContent = ack.players > 1
         ? `${ack.players} joueurs trouvés — préparation de la partie…`
         : 'File rejointe — en attente d’un autre joueur…';
-    });
+    };
+    // Avec payload (ex. nombre de manches) ou sans (classé = format figé).
+    if (payload) socket.timeout(10000).emit(event, payload, cb);
+    else socket.timeout(10000).emit(event, cb);
   };
   if (socket.connected) send();
   else {
@@ -537,7 +540,9 @@ function mpSettingsPayload() {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('mp-quick').addEventListener('click', () => {
-    joinMatchmaking('mp:quick', 'Recherche d’une partie rapide…');
+    const sel = document.getElementById('mp-quick-rounds');
+    const rounds = sel ? parseInt(sel.value, 10) : 10;
+    joinMatchmaking('mp:quick', 'Recherche d’une partie rapide…', { rounds });
   });
   document.getElementById('mp-ranked').addEventListener('click', () => {
     joinMatchmaking('mp:ranked', 'Recherche d’une partie classée…');

@@ -147,13 +147,15 @@ function addPlayer(room, socket) {
   room.players.set(u.id, { userId: u.id, name: u.displayName, avatarUrl: u.avatarUrl, avatarFrame: u.avatarFrame, socketId: socket.id, connected: true, score: 0, dcTimer: null });
 }
 
-function joinPublic(socket, ranked) {
+function joinPublic(socket, ranked, opts) {
   if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
   const ptr = ranked ? rankedRoomId : publicRoomId;
   let room = ptr ? rooms.get(ptr) : null;
   if (!room || room.status !== 'lobby' || room.players.size >= MAX_PLAYERS) {
     room = newRoom({ isPublic: true, ranked });
     if (ranked) rankedRoomId = room.id; else publicRoomId = room.id;
+    // Partie rapide : le 1er joueur de la file fixe le nombre de manches.
+    if (!ranked && opts && VALID_ROUNDS.includes(opts.rounds)) room.settings.rounds = opts.rounds;
   }
   addPlayer(room, socket);
   sysChat(room, `${socket.data.user.displayName} a rejoint`);
@@ -705,8 +707,10 @@ function initMp(server) {
     addOnline(socket);
     reattach(socket); // restaure une partie en cours si l'utilisateur en avait une
     socket.on('mp:invite', (toUserId) => invite(socket, String(toUserId || '')));
-    socket.on('mp:quick', (ack) => {
-      const room = joinPublic(socket, false);
+    socket.on('mp:quick', (opts, ack) => {
+      // Compat : si appelé avec seulement le callback (ancien client).
+      if (typeof opts === 'function') { ack = opts; opts = null; }
+      const room = joinPublic(socket, false, opts);
       if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0 });
     });
     socket.on('mp:ranked', (ack) => {

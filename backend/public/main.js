@@ -77,8 +77,11 @@ const settings = {
   randomStart: localStorage.getItem('amq_randomStart') !== 'false',
   clipSeconds: parseInt(localStorage.getItem('amq_clip') ?? '20'),
   autoNext: localStorage.getItem('amq_autonext') === 'true',
+  count: parseInt(localStorage.getItem('amq_count') ?? '0'), // 0 = illimité
 };
 let autoNextTimer = null; // enchaînement automatique vers la manche suivante
+// Session finie (solo classique) : compteur de sons et bonnes réponses
+let quizCount = 0, quizCorrect = 0, quizSessionEnded = false;
 
 // ── helpers API ──
 async function api(path, opts = {}) {
@@ -1060,6 +1063,15 @@ function setupAppUI() {
       if (!optAuto.checked) clearTimeout(autoNextTimer);
     });
   }
+  const optCount = document.getElementById('opt-count');
+  if (optCount) {
+    optCount.value = String(settings.count);
+    optCount.addEventListener('change', () => {
+      settings.count = parseInt(optCount.value);
+      localStorage.setItem('amq_count', optCount.value);
+      quizSessionEnded = true; // la prochaine manche démarre une nouvelle session
+    });
+  }
   // « Passer » : abandonne la manche (révèle la réponse, sans tokens).
   document.getElementById('skip-btn').addEventListener('click', () => {
     if (!currentSong || answered) return;
@@ -1134,6 +1146,7 @@ function openQuiz() {
   applyGameModeUI();
   refreshCatalogInfo();
   refreshQuizOptionsLock();
+  quizSessionEnded = true; // la 1re manche démarre une session propre
   showView('quiz');
 }
 
@@ -1310,6 +1323,8 @@ function syncTypeFilter() {
 
 async function nextSong() {
   clearTimeout(autoNextTimer);
+  // Nouvelle session finie (solo classique) : remet les compteurs à zéro.
+  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; }
   resetQuizUI();
   setHint('Chargement…');
   let song, roundToken, liked;
@@ -1337,6 +1352,7 @@ async function nextSong() {
   setLikeButton();
   resetAssist();
   answered = false;
+  if (!isTraining && settings.count > 0) quizCount++; // session finie en cours
   const v = video();
   await closePictureInPictureFor(v);
   const clipUrl = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`;
@@ -1402,7 +1418,8 @@ async function startClip() {
     setPlayIcon();
     return;
   }
-  setHint("🎵 Devine l'anime à partir de l'extrait.");
+  const sessionTag = (!isTraining && settings.count > 0) ? ` · Son ${quizCount}/${settings.count}` : '';
+  setHint("🎵 Devine l'anime à partir de l'extrait." + sessionTag);
   setPlayIcon();
 
   // Coupure après la durée choisie (sauf "Illimitée" ou si la vidéo est révélée)
@@ -1534,6 +1551,7 @@ async function guessAnswer(forcedGuess) {
     return;
   }
 
+  if (r.correct && !isTraining && settings.count > 0) quizCorrect++;
   const verdict = document.getElementById('answer-verdict');
   if (r.correct) {
     verdict.textContent = r.reward ? `✅ Bonne réponse !  +${r.reward} 🪙` : '✅ Bonne réponse !';
@@ -1566,9 +1584,16 @@ function revealAnswerBox(answer) {
   showOverlay(false); // révèle la vidéo
   updateVideoButtonVisibility();
   refreshQuizOptionsLock(); // manche résolue → réglages de nouveau modifiables
-  // Enchaînement automatique vers la manche suivante (option)
+
+  // Fin d'une session finie (solo classique) : récap + nouvelle partie.
+  const sessionDone = !isTraining && settings.count > 0 && quizCount >= settings.count;
   clearTimeout(autoNextTimer);
-  if (settings.autoNext) {
+  if (sessionDone) {
+    quizSessionEnded = true;
+    setHint(`🏁 Partie terminée : ${quizCorrect}/${settings.count} bonne(s) réponse(s) !`);
+    document.getElementById('next-btn').innerHTML = '<i class="fas fa-rotate-right"></i> Nouvelle partie';
+  } else if (settings.autoNext) {
+    // Enchaînement automatique vers la manche suivante (option)
     autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, 4000);
   }
 }
