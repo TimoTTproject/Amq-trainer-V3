@@ -686,6 +686,13 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .mp-score-row { display: grid; grid-template-columns: 1fr auto auto 56px; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 8px; padding: 8px 14px; font-size: .9rem; }
 .mp-score-row.ok { border-color: var(--green); }
 .mp-score-row.elim { opacity: .5; }
+.mp-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mp-name-top { display: inline-flex; align-items: center; gap: 6px; }
+.mp-guess { font-size: .76rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-guess i { margin-right: 2px; }
+.mp-guess.ok { color: var(--green); }
+.mp-guess.ko { color: var(--red); }
+.mp-guess.skip, .mp-guess.none { font-style: italic; opacity: .75; }
 .mp-lives { font-size: .8rem; letter-spacing: 1px; white-space: nowrap; }
 .mp-teamdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
 .mp-teamdot.t0 { background: #ff6b6b; } .mp-teamdot.t1 { background: #3aa0ff; }

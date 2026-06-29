@@ -409,8 +409,15 @@ function renderMpScores(results, withPoints) {
       const team = p.team != null ? ` <span class="mp-teamdot t${p.team}"></span>` : '';
       const lives = `<span class="mp-lives">${mpMode === 'elim' ? (p.eliminated ? '💀' : ('❤️'.repeat(Math.max(0, p.lives || 0)) || '—')) : ''}</span>`;
       const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
+      // Réponse saisie par le joueur (révélée à tous une fois la manche validée)
+      let guess = '';
+      if (withPoints) {
+        if (p.guess) guess = `<span class="mp-guess ${p.correct ? 'ok' : 'ko'}"><i class="fas ${p.correct ? 'fa-check' : 'fa-xmark'}"></i> ${escapeHtml(p.guess)}</span>`;
+        else if (p.passed) guess = '<span class="mp-guess skip">a passé</span>';
+        else guess = '<span class="mp-guess none">pas de réponse</span>';
+      }
       return `<div class="mp-score-row${p.correct ? ' ok' : ''}${p.eliminated ? ' elim' : ''}">
-        <span class="mp-name">${av}${escapeHtml(p.name)}${team}</span>
+        <span class="mp-name"><span class="mp-name-top">${av}${escapeHtml(p.name)}${team}</span>${guess}</span>
         ${lives}
         ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
         <span class="mp-total">${p.score}</span>

@@ -15,7 +15,7 @@ const PUBLIC_MIN = 2;
 const COUNTDOWN_MS = 20000;
 const FIRST_ROUND_PREP_MS = 3000;
 const PRELOADED_ROUND_PREP_MS = 750;
-const RESULT_MS = 4000;
+const RESULT_MS = 6000; // durée de l'écran de révélation (réponse + scores)
 const DC_GRACE_LOBBY = 25000; // délai avant retrait après déconnexion (lobby)
 const DC_GRACE_GAME = 120000; // ... en partie (reconnexion possible)
 const VALID_ROUNDS = [5, 10, 15, 20];
@@ -410,6 +410,7 @@ function endRound(room) {
       return {
         name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
         correct: !!a?.correct, points: a?.points || 0,
+        guess: a?.guess || null, passed: cur.passed.has(p.userId), // réponse saisie par le joueur (révélée à tous)
         score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
       };
     })
