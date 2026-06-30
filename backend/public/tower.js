@@ -24,12 +24,10 @@ async function openTower() {
   try {
     const s = await api('/api/tower/status');
     document.getElementById('tower-best').textContent = s.bestFloor;
-    document.getElementById('tower-cost').textContent = s.admin ? '0' : s.entryCost;
-    document.getElementById('tower-free').textContent = s.admin
-      ? 'Admin ∞'
-      : s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
-    towerEntryCost = s.admin ? 0 : s.entryCost;
-    towerFreeAvailable = s.admin || s.freeAvailable;
+    document.getElementById('tower-cost').textContent = s.entryCost;
+    document.getElementById('tower-free').textContent = s.freeAvailable ? 'Dispo ✅' : 'Utilisée';
+    towerEntryCost = s.entryCost;
+    towerFreeAvailable = s.freeAvailable;
     towerEntryKnown = true;
     const notice = document.getElementById('tower-entry-notice');
     const title = document.getElementById('tower-entry-title');
@@ -37,11 +35,7 @@ async function openTower() {
     const start = document.getElementById('tower-start');
     notice.classList.toggle('free', towerFreeAvailable);
     notice.classList.toggle('paid', !towerFreeAvailable);
-    if (s.admin) {
-      title.textContent = 'Entrée administrateur gratuite';
-      detail.textContent = 'Aucun token ne sera débité.';
-      start.innerHTML = '<i class="fas fa-play"></i> Entrer gratuitement';
-    } else if (s.freeAvailable) {
+    if (s.freeAvailable) {
       title.textContent = 'Ton entrée gratuite du jour est disponible';
       detail.textContent = 'Cette partie ne coûtera aucun token.';
       start.innerHTML = '<i class="fas fa-ticket"></i> Utiliser mon entrée gratuite';

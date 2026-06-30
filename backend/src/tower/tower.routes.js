@@ -5,7 +5,6 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { proxyVideo } = require('../util/stream');
 const { preferredMediaUrl } = require('../storage/r2');
-const { isAdmin } = require('../admin/admin');
 const { progressQuests } = require('../quests/quests');
 const { preferMainContent } = require('../catalog/format');
 const {
@@ -74,12 +73,10 @@ router.get('/status', requireAuth, async (req, res) => {
     where: { userId: req.user.id, status: 'active' },
     orderBy: { startedAt: 'desc' },
   });
-  const admin = isAdmin(req.user);
   res.json({
-    entryCost: admin ? 0 : ENTRY_COST,
+    entryCost: ENTRY_COST,
     startLives: START_LIVES,
-    freeAvailable: admin || freeEntryAvailable(req.user.towerLastFreeAt),
-    admin,
+    freeAvailable: freeEntryAvailable(req.user.towerLastFreeAt),
     bestFloor: req.user.towerBestFloor || 0,
     tokens: req.user.tokens,
     activeRun: active ? floorPayload(active) : null,
@@ -93,9 +90,8 @@ router.post('/start', requireAuth, async (req, res) => {
   const existing = await prisma.towerRun.findFirst({ where: { userId, status: 'active' } });
   if (existing) return res.json({ resumed: true, ...floorPayload(existing) });
 
-  const admin = isAdmin(req.user); // entrée libre illimitée pour les tests
-  const useFree = !admin && freeEntryAvailable(req.user.towerLastFreeAt);
-  if (!admin && !useFree && req.user.tokens < ENTRY_COST) {
+  const useFree = freeEntryAvailable(req.user.towerLastFreeAt);
+  if (!useFree && req.user.tokens < ENTRY_COST) {
     return res.status(400).json({ error: 'Pas assez de tokens (et entrée gratuite déjà utilisée aujourd\'hui)' });
   }
 
@@ -103,9 +99,7 @@ router.post('/start', requireAuth, async (req, res) => {
   if (!floor) return res.status(503).json({ error: 'Catalogue insuffisant pour ce mode' });
 
   const run = await prisma.$transaction(async (tx) => {
-    if (admin) {
-      // ni débit, ni consommation de l'entrée gratuite
-    } else if (useFree) {
+    if (useFree) {
       await tx.user.update({ where: { id: userId }, data: { towerLastFreeAt: new Date() } });
     } else {
       await tx.user.update({ where: { id: userId }, data: { tokens: { decrement: ENTRY_COST } } });
