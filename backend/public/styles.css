@@ -718,8 +718,18 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .flip-front .gcard-img { aspect-ratio: auto; flex: 1; }
 .flip-front .gcard-info { padding: 7px 9px; }
 .flip-card.flipped.r-epic .flip-front { box-shadow: 0 0 18px #b06cff77; }
-.flip-card.flipped.r-legendary .flip-front { box-shadow: 0 0 22px #ffb648aa; }
-.flip-card.flipped.r-mythic .flip-front { box-shadow: 0 0 26px #ff5d8fcc; }
+.flip-card.flipped.r-legendary .flip-front { animation: auraLegend 1.6s ease-in-out infinite; }
+.flip-card.flipped.r-mythic .flip-front { animation: auraMythic 1.5s ease-in-out infinite; }
+@keyframes auraLegend { 0%, 100% { box-shadow: 0 0 18px #ffb64888; } 50% { box-shadow: 0 0 36px #ffb648, 0 0 8px #fff6; } }
+@keyframes auraMythic { 0%, 100% { box-shadow: 0 0 20px #ff5d8f99; } 50% { box-shadow: 0 0 42px #ff5d8f, 0 0 10px #fff7; } }
+
+/* Flash lumineux à l'instant de la révélation */
+.flip-card.flipped .flip-front::after {
+  content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.9), transparent 60%);
+  animation: revealFlash .6s ease-out forwards;
+}
+@keyframes revealFlash { 0% { opacity: .85; } 100% { opacity: 0; } }
 
 /* Effet holographique (épique+) */
 .holo { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: .8;
@@ -1109,6 +1119,22 @@ body.guest-mode .feedback-buttons { display: none !important; }
   box-shadow: 0 14px 34px rgba(255,93,143,.30), inset 0 1px 0 rgba(255,255,255,.28);
 }
 #pull-pack:hover { box-shadow: 0 22px 46px rgba(255,93,143,.44), inset 0 1px 0 rgba(255,255,255,.32); }
+
+/* Reflet qui balaie au survol */
+.gacha-actions .btn-primary .pull-shine {
+  position: absolute; top: -10%; bottom: -10%; left: -60%; width: 45%; z-index: 2;
+  transform: skewX(-18deg); pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.40), transparent);
+}
+.gacha-actions .btn-primary:hover .pull-shine { animation: pullSweep .75s ease; }
+@keyframes pullSweep { 0% { left: -60%; opacity: .9; } 100% { left: 120%; opacity: 0; } }
+/* Badge « garanti » sur le paquet */
+.gacha-actions .btn-primary .pull-guarantee {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  background: rgba(0,0,0,.30); color: #fff; font-size: .64rem; font-weight: 800; letter-spacing: .06em;
+  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; text-shadow: none;
+  border: 1px solid rgba(255,255,255,.28);
+}
 
 /* Ressources (pitié / poussière) en pastilles */
 .gacha-meta { gap: 12px; margin: 8px 0 16px; }
