@@ -133,6 +133,7 @@ const settings = {
   clipSeconds: parseInt(localStorage.getItem('amq_clip') ?? '20'),
   autoNext: localStorage.getItem('amq_autonext') === 'true',
   count: parseInt(localStorage.getItem('amq_count') ?? '0'), // 0 = illimité
+  titleLang: localStorage.getItem('amq_titleLang') || 'en', // 'en' = anglais d'abord, 'jp' = japonais d'abord
 };
 let autoNextTimer = null; // enchaînement automatique vers la manche suivante
 // Session finie (solo classique) : compteur de sons et bonnes réponses
@@ -1513,6 +1514,15 @@ function setupAppUI() {
     settings.clipSeconds = parseInt(optClip.value);
     localStorage.setItem('amq_clip', optClip.value);
   });
+  const optTitleLang = document.getElementById('opt-title-lang');
+  if (optTitleLang) {
+    optTitleLang.value = settings.titleLang;
+    optTitleLang.addEventListener('change', () => {
+      settings.titleLang = optTitleLang.value === 'jp' ? 'jp' : 'en';
+      localStorage.setItem('amq_titleLang', settings.titleLang);
+      if (typeof closeAnimeAutocomplete === 'function') { closeAnimeAutocomplete('answer-input'); closeAnimeAutocomplete('mp-input'); }
+    });
+  }
   const optAuto = document.getElementById('opt-autonext');
   if (optAuto) {
     optAuto.checked = settings.autoNext;

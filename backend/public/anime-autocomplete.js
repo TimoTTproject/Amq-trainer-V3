@@ -21,13 +21,22 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const state = { input, list, suggestions: [], activeIndex: -1, timer: null, request: 0, onSubmit };
   animeAutocompleteStates.set(inputId, state);
 
+  // Préférence d'affichage : anglais d'abord (défaut) ou japonais/romaji d'abord.
+  const englishFirst = () => typeof settings === 'undefined' || settings.titleLang !== 'jp';
+
   const render = () => {
     if (!state.suggestions.length) return closeAnimeAutocomplete(inputId);
+    const enFirst = englishFirst();
     list.innerHTML = state.suggestions
-      .map((suggestion, index) => `<button type="button" class="anime-suggestion${index === state.activeIndex ? ' active' : ''}" role="option" aria-selected="${index === state.activeIndex}" data-anime-index="${index}">
-        <span>${escapeHtml(suggestion.title)}</span>
-        ${suggestion.englishTitle ? `<small>${escapeHtml(suggestion.englishTitle)}</small>` : ''}
-      </button>`)
+      .map((suggestion, index) => {
+        const en = suggestion.englishTitle;
+        const primary = enFirst && en ? en : suggestion.title;
+        const secondary = enFirst && en ? suggestion.title : (en && en !== suggestion.title ? en : null);
+        return `<button type="button" class="anime-suggestion${index === state.activeIndex ? ' active' : ''}" role="option" aria-selected="${index === state.activeIndex}" data-anime-index="${index}">
+        <span>${escapeHtml(primary)}</span>
+        ${secondary ? `<small>${escapeHtml(secondary)}</small>` : ''}
+      </button>`;
+      })
       .join('');
     list.classList.remove('hidden');
     input.setAttribute('aria-expanded', 'true');
@@ -37,9 +46,9 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const choose = (index) => {
     const suggestion = state.suggestions[index];
     if (!suggestion) return;
-    // Un synonyme AniList peut ressembler à un titre anglais sans être le nom
-    // canonique (par exemple « Banana Chips »). La sélection garde donc le vrai titre.
-    input.value = suggestion.title;
+    // On remplit avec le titre affiché en premier (anglais si dispo selon la
+    // préférence). Le matching accepte aussi bien l'anglais que le romaji.
+    input.value = englishFirst() && suggestion.englishTitle ? suggestion.englishTitle : suggestion.title;
     closeAnimeAutocomplete(inputId);
     input.focus();
   };
