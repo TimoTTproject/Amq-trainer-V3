@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { everyoneResolved, availableSongWhere, videoForRound, rawReward, MP_GAME_CAP } = require('../src/mp/mp');
+const { everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP } = require('../src/mp/mp');
 
 test('rawReward = bonnes réponses ×2 + bonus de placement, plafonné par partie', () => {
   assert.equal(rawReward({ correct: 0 }, 1), 20); // 0 + bonus 1er
@@ -57,6 +57,14 @@ test('limits quick matches to the combined song lists of present players', () =>
     videoUrl: { not: null },
     id: { in: [12, 34, 56] },
   });
+});
+
+test('adds only purchased anime emotes to the free multiplayer reactions', () => {
+  const free = unlockedEmoteSymbols([]);
+  const unlocked = unlockedEmoteSymbols(['emote-naruto', 'emote-death-note', 'unknown']);
+  assert.equal(unlocked.length, free.length + 2);
+  assert.ok(unlocked.includes('🍥'));
+  assert.ok(unlocked.includes('📓'));
 });
 
 test('serves the preloaded song only for the upcoming round', () => {

@@ -340,6 +340,7 @@ function setShopTab(name) {
   document.querySelectorAll('#shop-tabs .shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
   document.getElementById('shop-cosmetics').classList.toggle('hidden', name !== 'cosmetics');
   document.getElementById('shop-licenses-panel').classList.toggle('hidden', name !== 'licenses');
+  document.getElementById('shop-emotes').classList.toggle('hidden', name !== 'emotes');
   document.getElementById('shop-characters').classList.toggle('hidden', name !== 'characters');
   if (name === 'characters' && !charLoaded) { charLoaded = true; loadCharShop(1); }
 }
@@ -389,6 +390,17 @@ function shopItemHtml(item, nameOverride) {
   </div>`;
 }
 
+function shopEmoteHtml(item) {
+  const action = item.owned
+    ? '<span class="shop-tag equipped"><i class="fas fa-check"></i> Débloqué</span>'
+    : `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
+  return `<div class="shop-item shop-emote-item${item.owned ? ' is-equipped' : ''}">
+    <span class="shop-emote-preview" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+    <div class="shop-name">${escapeHtml(item.name)}</div>
+    ${action}
+  </div>`;
+}
+
 function renderShop() {
   document.getElementById('shop-tokens').textContent = shopData.tokens;
   // Onglet Cosmétiques : les 4 slots.
@@ -410,6 +422,11 @@ function renderShop() {
       </div>
     `).join('')}
   ` : '<p class="muted">Aucune licence disponible.</p>';
+
+  const emotes = shopData.emotes || [];
+  document.getElementById('shop-emotes').innerHTML = `
+    <p class="muted shop-panel-intro">Débloque des symboles emblématiques à utiliser comme réactions en multijoueur.</p>
+    <div class="shop-grid">${emotes.map(shopEmoteHtml).join('')}</div>`;
 }
 
 function onShopClick(e) {
@@ -421,16 +438,20 @@ function onShopClick(e) {
 
 async function buyCosmetic(id) {
   const msg = document.getElementById('shop-msg');
+  const item = findShopItem(id);
   try {
     const r = await api('/api/shop/buy', { method: 'POST', body: JSON.stringify({ cosmeticId: id }) });
     currentUser.tokens = r.tokens;
     renderHeaderUser();
     sfx.correct && sfx.correct();
-    msg.textContent = 'Acheté ! Clique sur « Équiper » pour l\'utiliser.';
+    msg.textContent = item?.unlockOnly
+      ? 'Emoji débloqué ! Il est maintenant disponible en multijoueur.'
+      : 'Acheté ! Clique sur « Équiper » pour l\'utiliser.';
     // Marque l'item possédé localement puis re-rend
     markOwned(id);
     shopData.tokens = r.tokens;
     renderShop();
+    if (item?.unlockOnly && typeof refreshMpEmotes === 'function') refreshMpEmotes();
     if (charShop.items.length) renderCharGrid();
   } catch (err) {
     msg.textContent = err.message;
@@ -533,7 +554,7 @@ function onCharShopClick(e) {
 
 // Tous les groupes porteurs d'items (slots + licences + personnages chargés)
 function allShopGroups() {
-  return [...(shopData.groups || []), ...(shopData.licenses || []), { items: charShop.items }];
+  return [...(shopData.groups || []), ...(shopData.licenses || []), { items: shopData.emotes || [] }, { items: charShop.items }];
 }
 // Le slot revient au défaut : on garde l'item gratuit (price 0) du slot
 function defaultCosmetic(slot) {

@@ -26,7 +26,8 @@ function updateCoopLives() {
 }
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
-const MP_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+let mpEmotes = [...MP_FREE_EMOTES];
 const mpVideo = () => document.getElementById('mp-video');
 
 // Quitter la salle quand on navigue HORS de la vue multi (back, navbar, etc.).
@@ -255,7 +256,7 @@ function connectMp() {
     document.getElementById('mp-progress').textContent = '';
     const modeTxt = mpCoop ? 'Coop · Tour en équipe' : mpMode === 'teams' ? `Équipes — tu es ${mpTeamNames[myTeam] || '?'}` : mpMode === 'elim' ? `Élimination — ${d.elimLives} vies` : '';
     document.getElementById('mp-feedback').textContent = (d.ranked ? '🏅 Classé — ' : '') + (modeTxt ? modeTxt + ' — ' : '') + `c'est parti ! ${d.players.length} joueur(s) 🎮`;
-    renderEmotesBar();
+    refreshMpEmotes();
   });
 
   mpSocket.on('mp:round:start', (d) => {
@@ -571,9 +572,21 @@ function appendChat(m) {
 
 // ── Emotes ──
 function renderEmotesBar() {
-  document.getElementById('mp-emotes').innerHTML = MP_EMOTES
+  document.getElementById('mp-emotes').innerHTML = mpEmotes
     .map((e) => `<button class="mp-emote-btn" data-emote="${e}">${e}</button>`)
     .join('');
+}
+
+function refreshMpEmotes() {
+  if (!mpSocket) {
+    mpEmotes = [...MP_FREE_EMOTES];
+    renderEmotesBar();
+    return;
+  }
+  mpSocket.timeout(5000).emit('mp:emotes:get', (err, data) => {
+    mpEmotes = !err && Array.isArray(data?.emotes) ? data.emotes : [...MP_FREE_EMOTES];
+    renderEmotesBar();
+  });
 }
 function floatEmote(emote, name) {
   const layer = document.getElementById('mp-reactions');

@@ -1258,6 +1258,7 @@ function setupAppUI() {
   document.getElementById('shop-tabs').addEventListener('click', onShopTabClick);
   document.getElementById('shop-cosmetics').addEventListener('click', onShopClick);
   document.getElementById('shop-licenses-panel').addEventListener('click', onShopClick);
+  document.getElementById('shop-emotes').addEventListener('click', onShopClick);
   document.getElementById('shop-characters').addEventListener('click', onCharShopClick);
   document.getElementById('training-exit').addEventListener('click', openTraining);
   document.getElementById('training-grid').addEventListener('click', (e) => {

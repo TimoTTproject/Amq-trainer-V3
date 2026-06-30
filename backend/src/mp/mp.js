@@ -7,7 +7,7 @@ const { englishTitleFor } = require('../quiz/anime-titles');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
 const { weekKey } = require('../util/week');
-const { byId, publicCosmetic } = require('../shop/cosmetics');
+const { byId, publicCosmetic, ANIME_EMOTES } = require('../shop/cosmetics');
 const { preferredMediaUrl } = require('../storage/r2');
 const { preferMainContent } = require('../catalog/format');
 
@@ -39,7 +39,8 @@ function roundDurationMs(room) {
   return room.mode === 'coop' ? coopRoundMs(room.round) : room.settings.roundMs;
 }
 const TEAM_NAMES = ['Rouge', 'Bleu'];
-const EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const ANIME_EMOTE_BY_SYMBOL = new Map(ANIME_EMOTES.map((item) => [item.symbol, item]));
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
 // Récompense en tokens (perf + plafond quotidien anti-abus). Le farm entre amis
@@ -893,9 +894,31 @@ function chat(socket, text) {
   if (room.chat.length > 60) room.chat = room.chat.slice(-40);
   io.to(room.id).emit('mp:chat', { name: socket.data.user.displayName, text: t });
 }
-function emote(socket, e) {
+function unlockedEmoteSymbols(ownedIds) {
+  const owned = new Set(ownedIds || []);
+  return [...FREE_EMOTES, ...ANIME_EMOTES.filter((item) => owned.has(item.id)).map((item) => item.symbol)];
+}
+
+async function emotesForUser(userId) {
+  const rows = await prisma.userCosmetic.findMany({
+    where: { userId, cosmeticId: { in: ANIME_EMOTES.map((item) => item.id) } },
+    select: { cosmeticId: true },
+  });
+  return unlockedEmoteSymbols(rows.map((row) => row.cosmeticId));
+}
+
+async function emote(socket, e) {
   const room = rooms.get(socket.data.roomId);
-  if (!room || !EMOTES.includes(e)) return;
+  if (!room) return;
+  if (!FREE_EMOTES.includes(e)) {
+    const item = ANIME_EMOTE_BY_SYMBOL.get(e);
+    if (!item) return;
+    const owned = await prisma.userCosmetic.findUnique({
+      where: { userId_cosmeticId: { userId: socket.data.user.id, cosmeticId: item.id } },
+      select: { id: true },
+    });
+    if (!owned) return;
+  }
   io.to(room.id).emit('mp:emote', { name: socket.data.user.displayName, emote: e });
 }
 
@@ -963,7 +986,14 @@ function initMp(server) {
     socket.on('mp:start', () => hostStart(socket));
     socket.on('mp:leave', () => leaveRoom(socket));
     socket.on('mp:chat', (t) => chat(socket, t));
-    socket.on('mp:emote', (e) => emote(socket, e));
+    socket.on('mp:emote', (e) => {
+      emote(socket, e).catch((err) => console.error('mp emote error:', err && err.message));
+    });
+    socket.on('mp:emotes:get', async (ack) => {
+      if (typeof ack !== 'function') return;
+      try { ack({ emotes: await emotesForUser(socket.data.user.id) }); }
+      catch { ack({ emotes: FREE_EMOTES }); }
+    });
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
     socket.on('mp:skip', () => onSkip(socket));
     socket.on('disconnect', () => { removeOnline(socket); onDisconnect(socket); });
@@ -971,4 +1001,4 @@ function initMp(server) {
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound, rawReward, MP_GAME_CAP };
+module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP };
