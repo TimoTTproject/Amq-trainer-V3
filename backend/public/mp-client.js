@@ -206,13 +206,19 @@ function connectMp() {
     clearTimeout(mpPreloadTimer);
     mpPreloadTimer = setTimeout(() => {
       if (mpLeft || d.round <= mpActiveRound) return;
-      const v = mpVideo();
-      v.pause();
-      document.getElementById('mp-overlay').classList.remove('hidden');
-      v.src = d.clipUrl;
-      v.preload = 'auto';
-      v.load();
-      mpPreparedUrl = d.clipUrl;
+      // Préchauffe le prochain extrait dans un élément CACHÉ pour ne PAS interrompre
+      // la vidéo/le son de la réponse en cours (révélés jusqu'à la manche suivante).
+      let pre = document.getElementById('mp-video-preload');
+      if (!pre) {
+        pre = document.createElement('video');
+        pre.id = 'mp-video-preload';
+        pre.muted = true; pre.preload = 'auto'; pre.playsInline = true;
+        pre.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px';
+        document.body.appendChild(pre);
+      }
+      pre.src = d.clipUrl;
+      pre.load();
+      mpPreparedUrl = d.clipUrl; // le cache HTTP est réchauffé → chargement rapide à la manche suivante
     }, 900);
   });
 

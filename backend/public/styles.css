@@ -763,6 +763,21 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .mp-players { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .mp-chip { background: var(--bg-3); border-radius: 999px; padding: 4px 12px 4px 5px; font-size: .82rem; display: inline-flex; align-items: center; gap: 7px; }
 .mp-game { max-width: 720px; margin: 0 auto; }
+
+/* ── Multi : écran de partie + fin plus aérés (scopé, n'affecte pas la Tour) ── */
+#mp-game { max-width: 880px; }
+#mp-game .tower-hud { font-size: 1.25rem; margin-bottom: 14px; padding: 6px 2px; }
+#mp-game .tower-timebar { height: 10px; margin-bottom: 20px; }
+#mp-game .media-wrapper { border-radius: 16px; }
+#mp-game .answer-area { gap: 12px; margin-top: 20px; }
+#mp-game #mp-input { padding: 14px 16px; font-size: 1.05rem; }
+#mp-game #mp-submit, #mp-game #mp-skip { padding: 13px 22px; font-size: 1rem; }
+#mp-game .mp-result { padding: 18px 22px; margin: 20px auto; font-size: 1.05rem; max-width: 660px; }
+#mp-game .mp-scores { gap: 8px; margin-top: 18px; }
+#mp-game .mp-score-row { padding: 12px 16px; }
+#mp-over { max-width: 640px; margin: 34px auto 0; }
+#mp-over h3 { font-size: 1.65rem; margin-bottom: 24px; }
+#mp-over .lb-row { padding: 12px 15px; }
 .anime-autocomplete { position: relative; flex: 1 1 260px; min-width: 0; }
 .answer-area .anime-autocomplete input { width: 100%; }
 .anime-suggestions {
