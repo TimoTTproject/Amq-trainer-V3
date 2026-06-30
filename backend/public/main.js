@@ -556,6 +556,7 @@ function navTo(name) {
   if (name === 'admin') return openAdmin();
   if (name === 'profile') return openProfile();
   if (name === 'mp') return openMultiplayer();
+  if (name === 'coop') return startCoop();
   if (name === 'playlist') return openPlaylist();
   if (name === 'quiz') return openQuiz();
   if (name === 'training') return openTraining();

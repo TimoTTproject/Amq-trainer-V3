@@ -276,6 +276,16 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hub-txt p { color: var(--text-2); font-size: .88rem; line-height: 1.4; }
 .hub-go { color: var(--text-2); font-size: .9rem; transition: transform .15s, color .15s; }
 .hub-card:hover .hub-go { color: var(--c, var(--accent)); transform: translateX(3px); }
+/* Carte mise en avant (ex. Coop) : lueur d'accent + badge */
+.hub-card.hub-card-feat {
+  border-color: var(--c, var(--accent));
+  box-shadow: inset 4px 0 var(--c, var(--accent)), 0 0 24px -6px var(--c, var(--accent));
+}
+.hub-badge {
+  display: inline-block; vertical-align: middle; margin-left: 8px;
+  background: var(--c, var(--accent)); color: #06222a; font-size: .58rem; font-weight: 800;
+  letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; text-transform: uppercase;
+}
 @media (max-width: 560px) { .hub-grid { grid-template-columns: 1fr; } }
 
 /* Accueil */

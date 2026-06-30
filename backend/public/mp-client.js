@@ -98,6 +98,15 @@ function openMultiplayer() {
   }).catch(() => {});
 }
 
+// Lance directement un salon privé en mode Coop (Tour en équipe) — depuis le
+// menu Jouer ou le menu multijoueur.
+function startCoop() {
+  mpLeft = false; mpEngaged = true;
+  showView('mp');
+  connectMp();
+  if (mpSocket) mpSocket.emit('mp:create', { ...mpSettingsPayload(), mode: 'coop' });
+}
+
 // hostId est l'userId de l'hôte (le serveur clé les joueurs par userId, pas par socket)
 function mpIsHost() { return !!(mpRoom && currentUser && mpRoom.hostId === currentUser.id); }
 
@@ -613,10 +622,7 @@ function initMpUI() {
     connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());
   });
   // Crée directement un salon privé en mode Coop (Tour en équipe).
-  document.getElementById('mp-coop').addEventListener('click', () => {
-    mpLeft = false; mpEngaged = true;
-    connectMp(); mpSocket && mpSocket.emit('mp:create', { ...mpSettingsPayload(), mode: 'coop' });
-  });
+  document.getElementById('mp-coop').addEventListener('click', startCoop);
   document.getElementById('mp-join').addEventListener('click', () => {
     const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
     if (!code) return;
