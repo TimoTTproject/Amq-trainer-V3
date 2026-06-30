@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { COSMETICS, LICENSES, ANIME_EMOTES } = require('../src/shop/cosmetics');
 
 test('every anime license provides five card backs and five profile banners', () => {
@@ -23,5 +25,7 @@ test('anime emotes have unique symbols and are purchasable unlocks', () => {
     assert.equal(item.slot, 'emote');
     assert.equal(item.unlockOnly, true);
     assert.ok(item.price > 0);
+    assert.match(item.imageUrl, /^\/assets\/emotes\/.+\.svg$/);
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', item.imageUrl)), `${item.imageUrl} should exist`);
   }
 });

@@ -27,7 +27,8 @@ function updateCoopLives() {
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
 const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
-let mpEmotes = [...MP_FREE_EMOTES];
+const mpFreeEmoteItems = () => MP_FREE_EMOTES.map((symbol) => ({ id: symbol, symbol }));
+let mpEmotes = mpFreeEmoteItems();
 const mpVideo = () => document.getElementById('mp-video');
 
 // Quitter la salle quand on navigue HORS de la vue multi (back, navbar, etc.).
@@ -219,7 +220,7 @@ function connectMp() {
 
   mpSocket.on('mp:chat', (m) => appendChat(m));
 
-  mpSocket.on('mp:emote', (d) => floatEmote(d.emote, d.name));
+  mpSocket.on('mp:emote', (d) => floatEmote(d));
 
   // Notifs d'échange en temps réel
   mpSocket.on('trade:new', (d) => {
@@ -573,26 +574,38 @@ function appendChat(m) {
 // ── Emotes ──
 function renderEmotesBar() {
   document.getElementById('mp-emotes').innerHTML = mpEmotes
-    .map((e) => `<button class="mp-emote-btn" data-emote="${e}">${e}</button>`)
+    .map((e) => `<button class="mp-emote-btn" data-emote="${escapeHtml(e.id)}" title="${escapeHtml(e.name || '')}">
+      ${e.imageUrl
+        ? `<img src="${escapeHtml(e.imageUrl)}" alt="${escapeHtml(e.name || e.symbol)}" onerror="this.replaceWith(document.createTextNode('${escapeHtml(e.symbol)}'))">`
+        : escapeHtml(e.symbol)}
+    </button>`)
     .join('');
 }
 
 function refreshMpEmotes() {
   if (!mpSocket) {
-    mpEmotes = [...MP_FREE_EMOTES];
+    mpEmotes = mpFreeEmoteItems();
     renderEmotesBar();
     return;
   }
   mpSocket.timeout(5000).emit('mp:emotes:get', (err, data) => {
-    mpEmotes = !err && Array.isArray(data?.emotes) ? data.emotes : [...MP_FREE_EMOTES];
+    mpEmotes = !err && Array.isArray(data?.emotes) ? data.emotes : mpFreeEmoteItems();
     renderEmotesBar();
   });
 }
-function floatEmote(emote, name) {
+function floatEmote(data) {
   const layer = document.getElementById('mp-reactions');
   const el = document.createElement('div');
   el.className = 'mp-reaction';
-  el.textContent = emote;
+  if (data.imageUrl) {
+    const img = document.createElement('img');
+    img.src = data.imageUrl;
+    img.alt = data.label || data.emote;
+    img.addEventListener('error', () => { el.textContent = data.emote; }, { once: true });
+    el.appendChild(img);
+  } else {
+    el.textContent = data.emote;
+  }
   el.style.left = (10 + Math.random() * 80) + '%';
   layer.appendChild(el);
   setTimeout(() => el.remove(), 2200);

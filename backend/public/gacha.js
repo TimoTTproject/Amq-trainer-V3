@@ -395,7 +395,10 @@ function shopEmoteHtml(item) {
     ? '<span class="shop-tag equipped"><i class="fas fa-check"></i> Débloqué</span>'
     : `<button class="btn-primary shop-btn" data-act="buy" data-id="${item.id}"><b>${item.price}</b> 🪙</button>`;
   return `<div class="shop-item shop-emote-item${item.owned ? ' is-equipped' : ''}">
-    <span class="shop-emote-preview" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+    <span class="shop-emote-preview">
+      <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" loading="lazy"
+        onerror="this.remove();this.parentElement.textContent='${escapeHtml(item.symbol)}'">
+    </span>
     <div class="shop-name">${escapeHtml(item.name)}</div>
     ${action}
   </div>`;
