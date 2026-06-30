@@ -1144,10 +1144,13 @@
           <span id="mp-room-code" class="mp-room-code"></span>
           <button class="btn-link" id="mp-leave">Quitter</button>
         </div>
+        <div class="mp-players-bar">
+          <h3><i class="fas fa-users"></i> Joueurs (<span id="mp-pcount">0</span>)</h3>
+          <div id="mp-room-players" class="mp-players"></div>
+        </div>
         <div class="mp-room-grid">
-          <div class="profile-section">
-            <h3><i class="fas fa-users"></i> Joueurs (<span id="mp-pcount">0</span>)</h3>
-            <div id="mp-room-players" class="mp-players"></div>
+          <div class="profile-section mp-room-config">
+            <h3><i class="fas fa-sliders"></i> Réglages</h3>
             <div id="mp-ranked-note" class="mp-ranked-note hidden"></div>
             <div id="mp-settings" class="mp-settings">
               <label>Mode
@@ -1183,7 +1186,7 @@
             <p id="mp-room-status" class="hint"></p>
             <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Lancer la partie</button>
           </div>
-          <div class="profile-section">
+          <div class="profile-section mp-chat-section">
             <h3><i class="fas fa-comments"></i> Chat</h3>
             <div id="mp-chat" class="mp-chat"></div>
             <div class="mp-chat-input">

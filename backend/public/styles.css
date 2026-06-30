@@ -845,9 +845,34 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .mp-coop-info li i { color: #38d6d6; width: 18px; text-align: center; flex-shrink: 0; }
 
 /* Salon : en-tête + code en badge */
-.mp-room-head { padding-bottom: 12px; border-bottom: 1px solid #2a2f42; }
-.mp-room-code { display: inline-flex; align-items: center; gap: 9px; font-size: .92rem; color: var(--text-2); }
-.mp-room-code b { color: #fff; letter-spacing: 4px; font-size: 1.2rem; background: var(--bg-3); border: 1px solid #3a3f55; padding: 4px 13px; border-radius: 8px; }
+.mp-room-head { padding: 4px 2px 18px; border-bottom: 1px solid #2a2f42; }
+.mp-room-code { display: inline-flex; align-items: center; gap: 10px; font-size: .95rem; color: var(--text-2); }
+.mp-room-code b { color: #fff; letter-spacing: 6px; font-size: 1.45rem; background: var(--bg-3); border: 1px solid #3a3f55; padding: 8px 18px; border-radius: 10px; }
+
+/* ── Salon multi : lobby plus aéré (remplit l'écran) ── */
+.mp-players-bar {
+  text-align: center; margin: 18px 0 22px; padding: 22px 20px;
+  background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 16px;
+}
+.mp-players-bar h3 { font-size: 1.1rem; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.mp-players-bar .mp-players { gap: 12px; }
+.mp-players-bar .mp-chip { font-size: 1.02rem; padding: 8px 18px 8px 8px; gap: 10px; }
+.mp-players-bar .mp-chip .avatar { width: 34px; height: 34px; font-size: .9rem; }
+.mp-room-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; }
+.mp-room .profile-section { padding: 24px; }
+.mp-room .profile-section > h3 { font-size: 1.15rem; margin-bottom: 16px; }
+.mp-room-config { display: flex; flex-direction: column; gap: 18px; }
+.mp-room-config .mp-settings { margin: 0; gap: 16px; }
+.mp-room-config #mp-room-status { margin: 0; }
+.mp-room-config #mp-start { width: 100%; padding: 16px; font-size: 1.1rem; border-radius: 14px; }
+.mp-room-config .mp-coop-info { margin: 0; padding: 18px 20px; }
+.mp-room-config .mp-coop-info-head { font-size: 1.1rem; }
+.mp-room-config .mp-coop-info li { font-size: .95rem; gap: 11px; }
+.mp-chat-section .mp-chat { height: 340px; }
+@media (max-width: 720px) {
+  .mp-room-grid { grid-template-columns: 1fr; }
+  .mp-chat-section .mp-chat { height: 240px; }
+}
 #mp-start { width: 100%; }
 
 /* Chat */
