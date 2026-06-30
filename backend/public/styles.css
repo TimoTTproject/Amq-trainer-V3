@@ -829,9 +829,25 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .mp-room-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .mp-chip.host { border: 1px solid var(--orange); }
 .mp-settings { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
-.mp-settings label { color: var(--text-2); font-size: .8rem; display: flex; flex-direction: column; gap: 4px; }
-.mp-settings select { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 7px 10px; border-radius: 8px; }
-.mp-settings select:disabled { opacity: .6; }
+.mp-settings label { color: var(--text-2); font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 150px; }
+.mp-settings select { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 9px 11px; border-radius: 8px; font-size: .92rem; text-transform: none; }
+.mp-settings select:disabled { opacity: .55; }
+
+/* Encart explicatif du mode Coop (Tour en équipe) */
+.mp-coop-info {
+  margin: 8px 0 6px; padding: 14px 16px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(56,214,214,.13), rgba(56,214,214,.03));
+  border: 1px solid rgba(56,214,214,.32); border-left: 4px solid #38d6d6;
+}
+.mp-coop-info-head { font-weight: 800; color: #38d6d6; display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 1.02rem; }
+.mp-coop-info ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.mp-coop-info li { font-size: .86rem; color: var(--text); display: flex; align-items: center; gap: 9px; line-height: 1.3; }
+.mp-coop-info li i { color: #38d6d6; width: 18px; text-align: center; flex-shrink: 0; }
+
+/* Salon : en-tête + code en badge */
+.mp-room-head { padding-bottom: 12px; border-bottom: 1px solid #2a2f42; }
+.mp-room-code { display: inline-flex; align-items: center; gap: 9px; font-size: .92rem; color: var(--text-2); }
+.mp-room-code b { color: #fff; letter-spacing: 4px; font-size: 1.2rem; background: var(--bg-3); border: 1px solid #3a3f55; padding: 4px 13px; border-radius: 8px; }
 #mp-start { width: 100%; }
 
 /* Chat */

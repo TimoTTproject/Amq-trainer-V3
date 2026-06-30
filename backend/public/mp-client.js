@@ -396,17 +396,30 @@ function renderRoom(d) {
     note.innerHTML = '🏅 <b>Partie classée</b> — format fixe : 10 manches · 25 s · Openings + Endings. '
       + 'Réglages non modifiables. Ton <b>MMR</b> évolue selon ton classement final.';
   }
+  const isCoop = !ranked && (d.settings.mode || 'classic') === 'coop';
   if (!ranked) {
-    const isCoop = (d.settings.mode || 'classic') === 'coop';
     document.getElementById('mp-set-rounds').value = String(d.settings.rounds);
     document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
     document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
-    // Coop : étages infinis + temps automatique → Manches/Temps non applicables.
-    document.getElementById('mp-set-rounds').disabled = !isHost || isCoop;
-    document.getElementById('mp-set-speed').disabled = !isHost || isCoop;
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
+    // Coop : étages infinis + temps automatique → on masque Manches / Temps.
+    document.getElementById('mp-field-rounds').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-speed').classList.toggle('hidden', isCoop);
+  }
+  // Encart explicatif du mode Coop (Tour en équipe)
+  const coopInfo = document.getElementById('mp-coop-info');
+  coopInfo.classList.toggle('hidden', !isCoop);
+  if (isCoop) {
+    coopInfo.innerHTML = `
+      <div class="mp-coop-info-head"><i class="fas fa-chess-rook"></i> Tour en équipe</div>
+      <ul>
+        <li><i class="fas fa-heart"></i> <b>3 vies partagées</b> pour toute l'équipe</li>
+        <li><i class="fas fa-stairs"></i> Étages <b>infinis</b> — le temps se réduit en montant</li>
+        <li><i class="fas fa-users"></i> Étage validé si <b>au moins un joueur</b> trouve, sinon −1 vie</li>
+        <li><i class="fas fa-trophy"></i> Score = l'<b>étage atteint</b> ensemble (record perso au profil)</li>
+      </ul>`;
   }
 
   const startBtn = document.getElementById('mp-start');

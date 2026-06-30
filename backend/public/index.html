@@ -1158,13 +1158,13 @@
                   <option value="coop">Coop · Tour en équipe (vies partagées)</option>
                 </select>
               </label>
-              <label>Manches
+              <label id="mp-field-rounds">Manches
                 <select id="mp-set-rounds">
                   <option value="5">5</option><option value="10" selected>10</option>
                   <option value="15">15</option><option value="20">20</option>
                 </select>
               </label>
-              <label>Temps / manche
+              <label id="mp-field-speed">Temps / manche
                 <select id="mp-set-speed">
                   <option value="15000">Rapide (15s)</option>
                   <option value="25000" selected>Normal (25s)</option>
@@ -1179,6 +1179,7 @@
                 </select>
               </label>
             </div>
+            <div id="mp-coop-info" class="mp-coop-info hidden"></div>
             <p id="mp-room-status" class="hint"></p>
             <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Lancer la partie</button>
           </div>
