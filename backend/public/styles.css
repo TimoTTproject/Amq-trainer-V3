@@ -1069,19 +1069,53 @@ body.guest-mode .feedback-buttons { display: none !important; }
   #view-profile .profile-stats { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* ── Gacha : boutons de tirage en cartes ── */
+/* ── Gacha : boutons de tirage en cartes « premium » ── */
 .open-chars, #open-chars-btn { margin: 4px 0 8px; }
-.gacha-actions { gap: 14px; margin: 18px 0 8px; }
+.gacha-actions { gap: 16px; margin: 20px 0 10px; }
 .gacha-actions .btn-primary {
-  flex: 1; min-width: 200px; flex-direction: column; gap: 8px; align-items: center;
-  padding: 22px 18px; border-radius: 16px; font-size: 1.05rem; text-align: center;
-  box-shadow: 0 8px 24px rgba(108,140,255,.18);
+  position: relative; overflow: hidden;
+  flex: 1; min-width: 220px; flex-direction: column; gap: 12px; align-items: center;
+  padding: 28px 20px; border-radius: 20px; font-size: 1.05rem; text-align: center;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.28);
+  background: linear-gradient(150deg, #6c8cff, #8a6cff 52%, #b06cff);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 14px 34px rgba(108,140,255,.30), inset 0 1px 0 rgba(255,255,255,.28);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s;
 }
-.gacha-actions .btn-primary i { font-size: 1.7rem; }
-.gacha-actions .btn-primary b { font-size: 1.25rem; }
-.pull-label { font-weight: 700; }
-.pull-price { opacity: .92; font-size: .95rem; }
-#pull-pack { background: linear-gradient(135deg, var(--orange), #ff5d8f); color: #2a1400; box-shadow: 0 8px 24px rgba(255,93,143,.22); }
+/* éclat haut + halo d'angle décoratifs */
+.gacha-actions .btn-primary::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 80% at 50% -25%, rgba(255,255,255,.4), transparent 60%);
+}
+.gacha-actions .btn-primary::after {
+  content: ''; position: absolute; right: -34px; bottom: -34px; width: 120px; height: 120px;
+  background: radial-gradient(circle, rgba(255,255,255,.18), transparent 70%); pointer-events: none;
+}
+.gacha-actions .btn-primary:hover {
+  transform: translateY(-4px); filter: brightness(1.05);
+  box-shadow: 0 22px 46px rgba(108,140,255,.42), inset 0 1px 0 rgba(255,255,255,.32);
+}
+.gacha-actions .btn-primary > * { position: relative; z-index: 1; }
+.gacha-actions .btn-primary i {
+  font-size: 1.5rem; width: 58px; height: 58px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.28); box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+}
+.pull-label { font-weight: 800; font-size: 1.18rem; letter-spacing: .3px; }
+.pull-price { font-size: .98rem; font-weight: 600; background: rgba(0,0,0,.20); padding: 5px 14px; border-radius: 999px; }
+.pull-price b { font-size: 1.15rem; }
+#pull-pack {
+  background: linear-gradient(150deg, #ff9a4c, #ff5d8f 52%, #ff6bd6);
+  box-shadow: 0 14px 34px rgba(255,93,143,.30), inset 0 1px 0 rgba(255,255,255,.28);
+}
+#pull-pack:hover { box-shadow: 0 22px 46px rgba(255,93,143,.44), inset 0 1px 0 rgba(255,255,255,.32); }
+
+/* Ressources (pitié / poussière) en pastilles */
+.gacha-meta { gap: 12px; margin: 8px 0 16px; }
+.gacha-dust, .gacha-pity {
+  background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 999px; padding: 8px 15px;
+}
+.pity-bar { width: 110px; height: 8px; }
 
 /* ── Gacha : progression de collection (pastilles colorées) ── */
 .collection-progress .prog {
