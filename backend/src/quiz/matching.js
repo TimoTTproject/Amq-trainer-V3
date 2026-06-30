@@ -2,7 +2,9 @@
 // musique (romaji/anglais/natif/synonymes), avec tolérance aux petites fautes.
 const stringSimilarity = require('string-similarity');
 
-const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// Normalisation : minuscules + on retire ponctuation/espaces. Le « ∞ » stylisé
+// (ex. « SK∞ » = SK8 the Infinity) est converti en « 8 » pour rester saisissable.
+const norm = (s) => (s || '').toLowerCase().replace(/∞/g, '8').replace(/[^a-z0-9]/g, '');
 
 // Distance de Levenshtein (nombre de corrections entre deux chaînes)
 function editDistance(a, b) {

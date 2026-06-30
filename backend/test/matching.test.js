@@ -39,6 +39,14 @@ test('accepts base name for a season-only title (no base alt title)', () => {
   assert.ok(isCorrectGuess('Jujutsu Kaisen', song)); // préfixe majoritaire
 });
 
+test('handles the stylised ∞ title (SK∞ = SK8)', () => {
+  assert.equal(norm('SK∞'), 'sk8');
+  const song = { animeTitle: 'SK∞', altTitles: ['SK8 the Infinity'] };
+  assert.ok(isCorrectGuess('SK8', song));
+  assert.ok(isCorrectGuess('SK∞', song));
+  assert.ok(isCorrectGuess('SK8 the Infinity', song));
+});
+
 test('rejects partial fragments that are not a majority prefix', () => {
   // « online » est contenu dans le titre mais n'en est pas un préfixe → refusé
   assert.equal(isCorrectGuess('online', { animeTitle: 'Sword Art Online', altTitles: [] }), false);
