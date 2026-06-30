@@ -12,6 +12,7 @@ let trainingSource = null; // review | missed | liked | due | series | mine | gl
 let trainingSeries = null; // série choisie quand trainingSource === 'series'
 let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
 let roundReward = null; // { max, timed, grace, floorAt, floor } pour la jauge « tokens en jeu »
+let rewardCap = null; // { used, max, resetAt } plafond anti-farm (fenêtre 6h)
 let roundStartAt = 0; // réception du tirage : référence du bonus de vitesse (≈ sat serveur)
 let gaugeTimer = null; // rafraîchit la jauge de tokens en jeu
 let trainPlayed = 0, trainCorrect = 0, trainStreak = 0; // suivi de session d'entraînement
@@ -1824,7 +1825,10 @@ async function nextSong() {
   }
   if (quizType && quizType !== 'all') qs += `&type=${quizType}`;
   try {
-    ({ song, roundToken, liked, reward } = await api(`/api/quiz/random?${qs}`));
+    let capData;
+    ({ song, roundToken, liked, reward, rewardCap: capData } = await api(`/api/quiz/random?${qs}`));
+    rewardCap = capData || null; // null en entraînement/non classé
+    renderRewardCap(rewardCap);
   } catch (err) {
     setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
     return;
@@ -2020,6 +2024,25 @@ function stopRewardGauge() {
   gaugeTimer = null;
 }
 
+// Compteur du plafond anti-farm (fenêtre glissante de 6 h).
+function renderRewardCap(cap) {
+  const el = document.getElementById('reward-cap');
+  if (!el) return;
+  if (!cap || !cap.max) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const full = cap.used >= cap.max;
+  el.classList.toggle('full', full);
+  el.innerHTML = full
+    ? `🚫 Plafond atteint : ${cap.max} 🪙 / 6 h · reset ${capResetText(cap.resetAt)}`
+    : `<i class="fas fa-shield-halved"></i> Plafond : <b>${cap.used}</b>/${cap.max} 🪙 <small>(6 h)</small>`;
+}
+function capResetText(ts) {
+  const ms = (ts || 0) - Date.now();
+  if (ms <= 0) return 'imminent';
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `dans ${h} h ${String(m).padStart(2, '0')}` : `dans ${m} min`;
+}
+
 // Détail du calcul de récompense (transparence), affiché au verdict.
 function rewardDetailText(b) {
   if (!b) return '';
@@ -2130,8 +2153,13 @@ async function guessAnswer(forcedGuess) {
     sfx.wrong();
   }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
+  if (r.rewardCap) { rewardCap = r.rewardCap; renderRewardCap(rewardCap); }
   const detail = document.getElementById('reward-detail');
-  if (detail) detail.textContent = r.reward ? rewardDetailText(r.breakdown) : '';
+  if (detail) {
+    detail.textContent = r.rewardCap && r.rewardCap.capped
+      ? '🚫 Plafond anti-farm atteint (300 🪙 / 6 h)'
+      : (r.reward ? rewardDetailText(r.breakdown) : '');
+  }
 
   revealAnswerBox(r.answer);
   recordTraining(r.correct);

@@ -353,6 +353,10 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .reward-stake.low { color: var(--red); }
 .reward-detail { color: var(--text-2); font-size: .85rem; margin: -2px 0 8px; }
 .reward-detail:empty { display: none; }
+.reward-cap { text-align: center; font-size: .82rem; color: var(--text-2); margin: 2px 0 4px; }
+.reward-cap i { color: var(--accent-2); margin-right: 4px; }
+.reward-cap b { color: var(--text); }
+.reward-cap.full { color: var(--orange); font-weight: 700; }
 @keyframes pulse { 0%,100% { opacity: .5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
 .quiz-hint { color: var(--text-2); font-size: .88rem; margin: 10px 0 0; text-align: center; }
 

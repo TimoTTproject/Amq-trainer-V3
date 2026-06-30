@@ -63,6 +63,10 @@ model User {
   mpRewardDay   String? // AAAA-MM-JJ
   mpRewardToday Int     @default(0)
 
+  // Plafond anti-farm du quiz solo : fenêtre glissante de 6h
+  quizRewardAt     DateTime? // début de la fenêtre courante
+  quizRewardWindow Int       @default(0) // tokens gagnés dans la fenêtre
+
   // Gacha enrichi
   pity Int @default(0) // tirages depuis le dernier Légendaire+ (garantie)
   dust Int @default(0) // poussière obtenue avec les doublons (pour fabriquer)

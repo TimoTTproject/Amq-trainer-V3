@@ -96,6 +96,18 @@ function maxRewardFor(song, firstCorrect, level) {
   return Math.max(1, Math.round(computeReward(song, firstCorrect) * (LEVEL_MULT[level] ?? 1)));
 }
 
+// Plafond anti-farm du quiz solo : au plus QUIZ_CAP tokens par fenêtre glissante.
+const QUIZ_CAP = 300;
+const QUIZ_WINDOW_MS = 6 * 3600 * 1000; // 6 heures
+// État de la fenêtre courante d'un utilisateur (depuis req.user).
+function quizCapState(user) {
+  const now = Date.now();
+  const start = user.quizRewardAt ? new Date(user.quizRewardAt).getTime() : 0;
+  const active = now - start < QUIZ_WINDOW_MS;
+  const used = active ? (user.quizRewardWindow || 0) : 0;
+  return { active, used, left: Math.max(0, QUIZ_CAP - used), resetAt: (active ? start : now) + QUIZ_WINDOW_MS };
+}
+
 // Tire une musique au hasard. La réponse n'est PAS renvoyée (anti-triche).
 // ?mode=mine (catalogue perso, défaut) | global (catalogue partagé)
 // ?ranked=true|false : fige le mode classé côté serveur (jeton de manche).
@@ -178,8 +190,14 @@ router.get('/random', requirePlayer, async (req, res) => {
     timed: ranked && firstCorrect,
     grace: SPEED.graceSec, floorAt: SPEED.floorAtSec, floor: SPEED.floor,
   };
+  // Compteur du plafond anti-farm (affiché côté client), seulement en classé.
+  let rewardCap;
+  if (ranked && !guest) {
+    const cap = quizCapState(req.user);
+    rewardCap = { used: cap.used, max: QUIZ_CAP, resetAt: cap.resetAt };
+  }
   // On ne renvoie PAS l'URL .webm (anti-triche) : le client lit le flux proxifié.
-  res.json({ song: { id: song.id }, roundToken, liked: !!stat?.liked, reward });
+  res.json({ song: { id: song.id }, roundToken, liked: !!stat?.liked, reward, ...(rewardCap ? { rewardCap } : {}) });
 });
 
 // Flux vidéo de la manche, proxifié (le titre ne fuite pas par l'URL). Le jeton
@@ -487,6 +505,10 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   const speedMult = firstCorrect ? speedMultiplier(elapsedSec) : 1; // pas de bonus vitesse au rejeu
   const base = computeReward(song, firstCorrect);
   const reward = correct && ranked ? Math.max(1, Math.round(base * levelMult * speedMult)) : 0;
+  // Plafond anti-farm : limite le gain à ce qu'il reste dans la fenêtre de 6h.
+  const cap = quizCapState(req.user);
+  const grant = Math.min(reward, cap.left);
+  const capped = reward > grant; // une partie (ou tout) a été coupée par le plafond
   const srs = nextSrs(prev?.srsStreak, correct); // planification répétition espacée
 
   const result = await prisma.$transaction(async (tx) => {
@@ -510,14 +532,18 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
       create: { userId, day, played: 1, correct: correct ? 1 : 0 },
     });
     let tokens = null;
-    if (reward > 0) {
+    if (grant > 0) {
       const u = await tx.user.update({
         where: { id: userId },
-        data: { tokens: { increment: reward } },
+        data: {
+          tokens: { increment: grant },
+          quizRewardAt: cap.active ? req.user.quizRewardAt : new Date(),
+          quizRewardWindow: cap.used + grant,
+        },
       });
       tokens = u.tokens;
       await tx.tokenTransaction.create({
-        data: { userId, amount: reward, reason: firstCorrect ? 'quiz_first_correct' : 'quiz_correct' },
+        data: { userId, amount: grant, reason: firstCorrect ? 'quiz_first_correct' : 'quiz_correct' },
       });
     }
     return { tokens };
@@ -527,9 +553,9 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
 
   res.json({
     correct,
-    reward,
-    // Détail du calcul (transparence) quand des tokens sont gagnés.
-    ...(reward > 0
+    reward: grant,
+    // Détail du calcul (transparence) quand le gain n'est pas écrêté par le plafond.
+    ...(grant > 0 && !capped
       ? {
           breakdown: {
             base, levelMult, speedMult: Math.round(speedMult * 100) / 100,
@@ -537,6 +563,8 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
           },
         }
       : {}),
+    // Plafond anti-farm (compteur + écrêtage)
+    ...(ranked ? { rewardCap: { used: cap.used + grant, max: QUIZ_CAP, resetAt: cap.resetAt, capped } } : {}),
     ...(result.tokens !== null ? { tokens: result.tokens } : {}),
     answer: {
       animeTitle: song.animeTitle,
