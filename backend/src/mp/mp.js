@@ -160,6 +160,7 @@ function addPlayer(room, socket) {
   userRoom.set(u.id, room.id);
   if (!room.hostId) room.hostId = u.id;
   room.players.set(u.id, { userId: u.id, name: u.displayName, avatarUrl: u.avatarUrl, avatarFrame: u.avatarFrame, socketId: socket.id, connected: true, score: 0, dcTimer: null });
+  room.poolUnavailable = false;
 }
 
 function joinPublic(socket, ranked, opts) {
@@ -272,9 +273,11 @@ function setSettings(socket, s) {
 
 function maybeCountdown(room) {
   if (!room.isPublic) return;
-  if (room.players.size >= PUBLIC_MIN && !room.countdownTimer) {
+  if (room.players.size >= PUBLIC_MIN && !room.countdownTimer && !room.poolUnavailable) {
     room.countdownEndsAt = Date.now() + COUNTDOWN_MS;
-    room.countdownTimer = setTimeout(() => startGame(room), COUNTDOWN_MS);
+    room.countdownTimer = setTimeout(() => {
+      startGame(room).catch((e) => console.error('mp start error:', e && e.message));
+    }, COUNTDOWN_MS);
   } else if (room.players.size < PUBLIC_MIN && room.countdownTimer) {
     clearTimeout(room.countdownTimer);
     room.countdownTimer = null;
@@ -285,14 +288,42 @@ function hostStart(socket) {
   const room = rooms.get(socket.data.roomId);
   if (!room || room.hostId !== socket.data.user.id || room.status !== 'lobby') return;
   if (room.players.size < (room.isPublic ? PUBLIC_MIN : 1)) return;
-  startGame(room);
+  room.poolUnavailable = false;
+  startGame(room).catch((e) => console.error('mp start error:', e && e.message));
 }
 
 // ── Boucle de jeu ──
-function startGame(room) {
+async function startGame(room) {
   if (room.status !== 'lobby') return;
+  room.status = 'starting';
   if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
   room.countdownEndsAt = 0;
+
+  // Partie rapide non classée : pool commun = union des listes des joueurs
+  // présents au lancement. Le classé et les salons privés gardent le catalogue global.
+  room.songPoolIds = null;
+  if (room.isPublic && !room.ranked) {
+    try {
+      const entries = await prisma.userCatalogEntry.findMany({
+        where: { userId: { in: [...room.players.keys()] } },
+        select: { songId: true },
+      });
+      room.songPoolIds = [...new Set(entries.map((entry) => entry.songId))];
+    } catch (e) {
+      console.error('mp quick pool error:', e && e.message);
+      room.songPoolIds = [];
+    }
+    if (!room.songPoolIds.length) {
+      room.status = 'lobby';
+      room.poolUnavailable = true;
+      io.to(room.id).emit('mp:error', {
+        msg: 'Aucun son disponible dans les listes des joueurs présents. Importez au moins une liste AniList.',
+      });
+      broadcastRoom(room);
+      return;
+    }
+  }
+
   if (publicRoomId === room.id) publicRoomId = null;
   if (rankedRoomId === room.id) rankedRoomId = null;
   room.status = 'playing';
@@ -354,6 +385,7 @@ async function pickSong(room) {
 function availableSongWhere(room) {
   return {
     videoUrl: { not: null },
+    ...(Array.isArray(room.songPoolIds) ? { id: { in: room.songPoolIds } } : {}),
     ...(room.settings?.themeType && room.settings.themeType !== 'all' ? { type: room.settings.themeType } : {}),
     ...(room.usedAnilistIds.size ? { anilistId: { notIn: [...room.usedAnilistIds] } } : {}),
   };
@@ -683,11 +715,9 @@ async function endGame(room) {
   if (room.mode === 'coop') return endCoopGame(room);
 
   let ordered = [];
-  let deltaById = {}, rewardById = {};
-  // Préparation du classement + persistance : isolée pour qu'un échec (BDD, MMR…)
-  // n'empêche jamais l'émission de la fin de partie.
+  // Le classement ne dépend pas de la BDD : on l'envoie immédiatement. Attendre
+  // la persistance ici pouvait figer tous les clients sur la manche 10/10.
   try {
-    // Classement : élimination = survivants d'abord (par vies puis score), sinon par score
     ordered = [...room.players.values()]
       .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)), score: p.score, correct: p.correct || 0, team: p.team, lives: p.lives, eliminated: p.eliminated }))
       .sort((a, b) => {
@@ -697,33 +727,48 @@ async function endGame(room) {
         }
         return b.score - a.score;
       });
-    try { ({ deltaById, rewardById } = await persistResults(room, ordered)); }
-    catch (e) { console.error('mp persist error:', e && e.message); }
-    for (const p of ordered) progressQuests(p.userId, 'mp', 1); // quête « parties multi »
   } catch (e) {
     console.error('mp endGame prep error:', e && (e.stack || e.message) || e);
   }
 
-  // Émission GARANTIE de la fin de partie : un échec ici ne doit jamais figer les
-  // clients sur la dernière manche.
+  const ranking = ordered.map((p) => ({
+    userId: p.userId,
+    name: p.name, avatarUrl: p.avatarUrl, frame: p.frame, score: p.score, team: p.team,
+    lives: p.lives, eliminated: p.eliminated,
+    mmrDelta: null, tokenReward: 0,
+  }));
+  let teams = null;
+  if (room.mode === 'teams') {
+    const t = teamTotals(room);
+    teams = TEAM_NAMES.map((name, i) => ({ name, score: t[i] }));
+  }
+
   try {
-    const ranking = ordered.map((p) => ({
-      userId: p.userId,
-      name: p.name, avatarUrl: p.avatarUrl, frame: p.frame, score: p.score, team: p.team,
-      lives: p.lives, eliminated: p.eliminated,
-      mmrDelta: room.ranked ? (deltaById[p.userId]?.delta ?? 0) : null,
-      tokenReward: rewardById[p.userId] || 0,
-    }));
-    let teams = null;
-    if (room.mode === 'teams') {
-      const t = teamTotals(room);
-      teams = TEAM_NAMES.map((name, i) => ({ name, score: t[i] }));
-    }
-    io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams, ranking });
+    io.to(room.id).emit('mp:game:over', {
+      ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams, ranking,
+      rewardsPending: true,
+    });
   } catch (e) {
     console.error('mp game:over emit error:', e && (e.stack || e.message) || e);
     try { io.to(room.id).emit('mp:game:over', { ranked: room.ranked, mode: room.mode, teamNames: TEAM_NAMES, teams: null, ranking: [] }); } catch {}
   }
+
+  // La sauvegarde complète ensuite l'écran de fin, sans pouvoir bloquer le jeu.
+  Promise.resolve(persistResults(room, ordered))
+    .then(({ deltaById, rewardById }) => {
+      io.to(room.id).emit('mp:game:finalized', {
+        ranking: ordered.map((p) => ({
+          userId: p.userId,
+          mmrDelta: room.ranked ? (deltaById[p.userId]?.delta ?? 0) : null,
+          tokenReward: rewardById[p.userId] || 0,
+        })),
+      });
+    })
+    .catch((e) => {
+      console.error('mp persist error:', e && e.message);
+      io.to(room.id).emit('mp:game:finalized', { ranking: [] });
+    });
+  for (const p of ordered) progressQuests(p.userId, 'mp', 1);
 
   if (room.isPublic) {
     setTimeout(() => closeRoom(room), 30000);
@@ -757,6 +802,7 @@ function removePlayer(room, userId) {
   if (!p) return;
   if (p.dcTimer) clearTimeout(p.dcTimer);
   room.players.delete(userId);
+  room.poolUnavailable = false;
   if (userRoom.get(userId) === room.id) userRoom.delete(userId);
   if (room.players.size === 0) { closeRoom(room); return; }
   if (room.hostId === userId) room.hostId = room.players.keys().next().value;

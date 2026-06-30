@@ -50,6 +50,15 @@ test('filters multiplayer songs by opening or ending', () => {
   });
 });
 
+test('limits quick matches to the combined song lists of present players', () => {
+  const room = roomWithTwoPlayers();
+  room.songPoolIds = [12, 34, 56];
+  assert.deepEqual(availableSongWhere(room), {
+    videoUrl: { not: null },
+    id: { in: [12, 34, 56] },
+  });
+});
+
 test('serves the preloaded song only for the upcoming round', () => {
   const room = {
     round: 2,

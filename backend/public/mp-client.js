@@ -412,14 +412,15 @@ function connectMp() {
         const tag = d.mode === 'elim' ? (p.eliminated ? ' 💀' : ' ❤️') : '';
         const isMe = p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName;
         const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');
-        return `<li class="lb-row${isMe ? ' me' : ''}">
+        return `<li class="lb-row${isMe ? ' me' : ''}" data-final-index="${i}">
           <span class="lb-rank">${medal(i + 1)}</span>
           ${av}
           <span class="lb-name">${escapeHtml(p.name)}${team}${tag}${delta}${reward}</span>
           <span class="lb-value">${p.score} pts</span>
         </li>`;
       })
-      .join('');
+      .join('')
+      + (d.rewardsPending ? '<p class="muted" id="mp-finalizing">Calcul des récompenses…</p>' : '');
 
     // Le serveur a déjà crédité le gain : relire le solde autoritaire évite
     // les doubles ajouts visuels et les corrections au prochain écran.
@@ -427,6 +428,24 @@ function connectMp() {
     if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') {
       syncTokenBalance();
     }
+  });
+
+  // Le classement est déjà visible ; la BDD complète ensuite les gains et le MMR.
+  mpSocket.on('mp:game:finalized', (d) => {
+    document.getElementById('mp-finalizing')?.remove();
+    (d.ranking || []).forEach((p, i) => {
+      const name = document.querySelector(`#mp-ranking [data-final-index="${i}"] .lb-name`);
+      if (!name) return;
+      if (p.mmrDelta != null) {
+        name.insertAdjacentHTML('beforeend',
+          ` <span class="mp-mmr ${p.mmrDelta >= 0 ? 'gain' : 'spend'}">${p.mmrDelta >= 0 ? '+' : ''}${p.mmrDelta} MMR</span>`);
+      }
+      if (p.tokenReward) {
+        name.insertAdjacentHTML('beforeend', ` <span class="mp-reward">+${p.tokenReward} 🪙</span>`);
+      }
+    });
+    const mine = (d.ranking || []).find((p) => p.userId === currentUser.id);
+    if (mine?.tokenReward && typeof syncTokenBalance === 'function') syncTokenBalance();
   });
   return mpSocket;
 }
