@@ -1233,7 +1233,7 @@ function setupAppUI() {
   setupProfileUI();
 
   // Navigation accueil ⇄ quiz ⇄ gacha
-  document.getElementById('card-play').addEventListener('click', openQuiz);
+  document.getElementById('card-play').addEventListener('click', () => navTo('play'));
   document.getElementById('card-training').addEventListener('click', openTraining);
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
