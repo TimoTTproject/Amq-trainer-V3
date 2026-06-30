@@ -410,7 +410,9 @@ function renderRoom(d) {
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
-    // Coop : étages infinis + temps automatique → on masque Manches / Temps.
+    // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto → on
+    // masque les champs Mode, Manches et Temps (l'encart coop explique tout).
+    document.getElementById('mp-field-mode').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-rounds').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-speed').classList.toggle('hidden', isCoop);
   }
@@ -640,8 +642,6 @@ function initMpUI() {
     mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:create', mpSettingsPayload());
   });
-  // Crée directement un salon privé en mode Coop (Tour en équipe).
-  document.getElementById('mp-coop').addEventListener('click', startCoop);
   document.getElementById('mp-join').addEventListener('click', () => {
     const code = document.getElementById('mp-code-input').value.trim().toUpperCase();
     if (!code) return;
