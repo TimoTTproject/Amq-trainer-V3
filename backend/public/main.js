@@ -126,6 +126,17 @@ function setVolume(v) {
     if (el && +el.value !== v) el.value = v;
   });
 }
+// Applique le volume sauvegardé à TOUT média dès qu'il démarre, quel que soit le
+// mode (solo, château, multi, daily) ou le moment de création de l'élément.
+// `loadstart`/`play` ne bouillonnent pas → écoute en phase de capture sur le document.
+['loadstart', 'play', 'volumechange'].forEach((evt) => {
+  document.addEventListener(evt, (e) => {
+    const el = e.target;
+    if (!el || (el.tagName !== 'AUDIO' && el.tagName !== 'VIDEO')) return;
+    const v = getVolume();
+    if (Math.abs((el.volume ?? 1) - v) > 0.001) el.volume = v;
+  }, true);
+});
 
 // Réglages quiz (persistés)
 const settings = {
@@ -2038,13 +2049,15 @@ function stopRewardGauge() {
 function renderRewardCap(cap) {
   const el = document.getElementById('reward-cap');
   if (!el) return;
-  if (!cap || !cap.max) { el.classList.add('hidden'); return; }
+  const full = cap && cap.max && cap.used >= cap.max;
+  // On n'affiche le compteur que lorsqu'on APPROCHE du plafond (≥ 80 %) ou qu'il
+  // est atteint — sinon l'indicateur paraît « actif » alors qu'on en est loin.
+  if (!cap || !cap.max || (!full && cap.used < cap.max * 0.8)) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  const full = cap.used >= cap.max;
   el.classList.toggle('full', full);
   el.innerHTML = full
     ? `🚫 Plafond atteint : ${cap.max} 🪙 / 6 h · reset ${capResetText(cap.resetAt)}`
-    : `<i class="fas fa-shield-halved"></i> Plafond : <b>${cap.used}</b>/${cap.max} 🪙 <small>(6 h)</small>`;
+    : `<i class="fas fa-shield-halved"></i> Plafond proche : <b>${cap.used}</b>/${cap.max} 🪙 <small>(6 h)</small>`;
 }
 function capResetText(ts) {
   const ms = (ts || 0) - Date.now();

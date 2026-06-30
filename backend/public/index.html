@@ -146,6 +146,11 @@
           <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" aria-label="Volume de la musique" />
           <button id="mute-btn" class="btn-secondary" title="Activer ou couper les effets sonores" aria-label="Activer ou couper les effets sonores"><i class="fas fa-volume-high"></i></button>
           <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language" aria-label="Changer de langue">EN</button>
+          <label for="opt-title-lang" class="header-menu-label">Noms d'anime</label>
+          <select id="opt-title-lang" class="header-menu-select" title="Langue affichée en premier dans les suggestions (tous les modes)">
+            <option value="en">🇬🇧 Anglais d'abord</option>
+            <option value="jp">🇯🇵 Japonais d'abord</option>
+          </select>
           <button id="logout-btn" class="btn-secondary" aria-label="Se déconnecter"><i class="fas fa-sign-out-alt"></i><span>Déconnexion</span></button>
         </div>
       </div>
@@ -546,12 +551,6 @@
           <option value="5">5</option>
           <option value="10">10</option>
           <option value="20">20</option>
-        </select>
-      </label>
-      <label>Noms d'anime :
-        <select id="opt-title-lang" title="Langue affichée en premier dans les suggestions (tous les modes)">
-          <option value="en">🇬🇧 Anglais d'abord</option>
-          <option value="jp">🇯🇵 Japonais d'abord</option>
         </select>
       </label>
     </div>
