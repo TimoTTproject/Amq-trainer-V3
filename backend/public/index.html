@@ -614,8 +614,14 @@
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="gacha-tokens">0</span></span>
       </div>
       <p class="gacha-sub" id="gacha-pool"></p>
+      <div class="shop-tabs" id="gacha-tabs">
+        <button class="shop-tab active" data-gtab="pull"><i class="fas fa-ticket"></i> Tirage</button>
+        <button class="shop-tab" data-gtab="events"><i class="fas fa-star"></i> Vedettes &amp; vote</button>
+        <button class="shop-tab" data-gtab="collection"><i class="fas fa-images"></i> Collection</button>
+      </div>
 
-      <!-- Cœur : ressources (pitié / poussière) → tirage → résultat -->
+      <!-- Onglet Tirage : ressources (pitié / poussière) → tirage → résultat -->
+      <div id="gacha-panel-pull" class="gacha-panel">
       <div class="gacha-meta" id="gacha-meta"></div>
       <div class="gacha-actions">
         <button class="btn-primary" id="pull-single">
@@ -636,14 +642,19 @@
         <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
         <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
       </div>
+      </div><!-- /gacha-panel-pull -->
 
-      <!-- Événements de la semaine : vedettes (taux boosté) + vote -->
-      <div class="gacha-events">
-        <div class="gacha-weekly" id="gacha-weekly"></div>
-        <div class="gacha-featured" id="gacha-featured"></div>
-        <div class="gacha-vote" id="gacha-vote"></div>
-      </div>
+      <!-- Onglet Vedettes & vote -->
+      <div id="gacha-panel-events" class="gacha-panel hidden">
+        <div class="gacha-events">
+          <div class="gacha-weekly" id="gacha-weekly"></div>
+          <div class="gacha-featured" id="gacha-featured"></div>
+          <div class="gacha-vote" id="gacha-vote"></div>
+        </div>
+      </div><!-- /gacha-panel-events -->
 
+      <!-- Onglet Collection -->
+      <div id="gacha-panel-collection" class="gacha-panel hidden">
       <div class="collection">
         <h3><i class="fas fa-images"></i> Ma collection</h3>
         <div id="collection-progress" class="collection-progress"></div>
@@ -661,6 +672,7 @@
         </div>
         <div id="collection-grid" class="card-grid"></div>
       </div>
+      </div><!-- /gacha-panel-collection -->
     </div>
 
     <!-- VUE BOUTIQUE -->

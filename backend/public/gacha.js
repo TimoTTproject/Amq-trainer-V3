@@ -11,8 +11,21 @@ function setGachaTokens() {
   document.getElementById('gacha-tokens').textContent = currentUser.tokens;
 }
 
+// Onglets du gacha : Tirage / Vedettes & vote / Collection
+function setGachaTab(name) {
+  document.querySelectorAll('#gacha-tabs .shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.gtab === name));
+  document.getElementById('gacha-panel-pull').classList.toggle('hidden', name !== 'pull');
+  document.getElementById('gacha-panel-events').classList.toggle('hidden', name !== 'events');
+  document.getElementById('gacha-panel-collection').classList.toggle('hidden', name !== 'collection');
+}
+function onGachaTabClick(e) {
+  const b = e.target.closest('.shop-tab');
+  if (b) setGachaTab(b.dataset.gtab);
+}
+
 async function openGacha() {
   showView('gacha');
+  setGachaTab('pull');
   setGachaTokens();
   document.getElementById('gacha-msg').textContent = '';
   document.getElementById('pull-result').classList.add('hidden');

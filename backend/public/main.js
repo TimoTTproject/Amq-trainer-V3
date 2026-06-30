@@ -1311,6 +1311,7 @@ function setupAppUI() {
   document.getElementById('open-chars-btn').addEventListener('click', openCharacters);
   document.getElementById('back-gacha-chars').addEventListener('click', () => showView('gacha'));
   // Stats de tirage (chance)
+  document.getElementById('gacha-tabs').addEventListener('click', onGachaTabClick);
   document.getElementById('gacha-stats-btn').addEventListener('click', openGachaStats);
   document.getElementById('gacha-stats-close').addEventListener('click', () =>
     document.getElementById('gacha-stats-modal').classList.add('hidden'));
