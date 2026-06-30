@@ -1807,6 +1807,35 @@ async function toggleLike() {
   } catch (e) { setHint(e.message); }
 }
 
+// Bouton ❤ générique, partagé par le Château et le Multi (et tout autre mode).
+// `btn` suit son propre état via dataset.liked ; on ne connaît pas l'état initial
+// (le serveur ne le renvoie pas), donc le cœur part vide puis reflète la vérité.
+async function quickLike(btn, songId) {
+  if (!btn || !songId) return;
+  if (!currentUser || currentUser.isGuest) return;
+  btn.disabled = true;
+  const wantLiked = btn.dataset.liked !== '1';
+  try {
+    const r = await api('/api/quiz/like', { method: 'POST', body: JSON.stringify({ songId, liked: wantLiked }) });
+    btn.dataset.liked = r.liked ? '1' : '0';
+    btn.querySelector('i').className = r.liked ? 'fas fa-heart' : 'far fa-heart';
+    btn.classList.toggle('liked', r.liked);
+    if (r.liked && typeof sfx !== 'undefined') sfx.correct();
+  } catch {} finally { btn.disabled = false; }
+}
+// Prépare un bouton ❤ pour une musique révélée (Château, Multi). Masqué pour les
+// invités (le like nécessite un compte).
+function setupQuickLike(btn, songId) {
+  if (!btn) return;
+  if (!songId || !currentUser || currentUser.isGuest) { btn.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.dataset.liked = '0';
+  btn.querySelector('i').className = 'far fa-heart';
+  btn.classList.remove('liked');
+  btn.onclick = () => quickLike(btn, songId);
+}
+
 // Partage du jeu : Web Share API (mobile) sinon copie du lien
 async function shareGame() {
   const url = location.origin || 'https://amqtrainer.fr';

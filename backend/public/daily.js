@@ -238,13 +238,15 @@ async function submitDaily(forced) {
   document.getElementById('daily-score').textContent = `${dailyScore} pts`;
   const fb = document.getElementById('daily-feedback');
   const eng = r.answer ? `<strong>${escapeHtml(r.answer.animeTitle)}</strong>` : '';
-  fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `Réponse : ${eng}`;
+  fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `Réponse : ${eng}`
+    + ` <button class="like-reveal hidden" id="daily-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`;
+  if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('daily-like'), r.answer && r.answer.songId);
   r.correct ? sfx.correct() : sfx.wrong();
 
   if (r.done) {
-    setTimeout(() => renderDailyResult(r.result), 1600);
+    setTimeout(() => renderDailyResult(r.result), 2400);
   } else {
-    setTimeout(() => playDailySong(r.next), 1600);
+    setTimeout(() => playDailySong(r.next), 2400);
   }
 }
 

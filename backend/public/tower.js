@@ -85,6 +85,7 @@ async function enterFloor(floor) {
   renderTowerLives(floor.lives);
   const towerMsg = document.getElementById('tower-msg');
   towerMsg.textContent = 'Chargement du son…';
+  document.getElementById('tower-like')?.classList.add('hidden'); // ❤ caché tant que le son n'est pas révélé
 
   // 4 propositions
   document.getElementById('tower-choices').innerHTML = floor.options
@@ -172,11 +173,13 @@ async function answerTower(choice, timeout = false) {
     msg.textContent = r.timedOut ? '⏱️ Temps écoulé !' : '❌ Raté !';
     sfx.wrong();
   }
+  // Bouton ❤ : on connaît enfin la musique (révélée) → on peut l'ajouter à la playlist.
+  if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('tower-like'), r.songId);
 
   if (r.status === 'over') {
-    setTimeout(() => showTowerOver(r), 1400);
+    setTimeout(() => showTowerOver(r), 2200);
   } else {
-    setTimeout(() => enterFloor(r.next), 1400);
+    setTimeout(() => enterFloor(r.next), 2200);
   }
 }
 

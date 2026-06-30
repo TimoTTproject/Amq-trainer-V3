@@ -329,7 +329,10 @@ function connectMp() {
       ? ` <span class="mp-answer-english">(${escapeHtml(d.answer.englishTitle)})</span>`
       : '';
     res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
+      <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
+    // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
+    if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('mp-like'), d.answer.songId);
     if (d.coop) {
       mpCoop = true;
       if (typeof d.teamLives === 'number') mpTeamLives = d.teamLives;

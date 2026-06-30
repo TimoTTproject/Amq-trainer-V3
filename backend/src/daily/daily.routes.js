@@ -140,7 +140,8 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
   const newCorrect = run.correct + (correct ? 1 : 0);
   const isLast = nextIndex >= run.songIds.length;
 
-  const answer = { animeTitle: song.animeTitle, title: song.title, artist: song.artist, type: song.type, number: song.number };
+  // songId révélé ici seulement (post-réponse) → permet d'ajouter la musique à sa playlist.
+  const answer = { songId: song.id, animeTitle: song.animeTitle, title: song.title, artist: song.artist, type: song.type, number: song.number };
 
   if (!isLast) {
     const updated = await prisma.dailyRun.update({

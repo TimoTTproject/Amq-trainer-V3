@@ -1372,6 +1372,19 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 @keyframes likePop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
 .pl-remove:hover { background: var(--red); color: #fff; border-color: var(--red); }
 
+/* Bouton ❤ générique de révélation (Château, Multi) */
+.like-reveal {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--bg); border: 1px solid #2a2f42; color: var(--text-2);
+  cursor: pointer; transition: transform .12s ease, color .15s, border-color .15s, background .15s;
+}
+.like-reveal:hover { color: var(--red); border-color: var(--red); transform: scale(1.08); }
+.like-reveal.liked { color: var(--red); border-color: var(--red); background: rgba(244,63,94,.12); }
+.like-reveal.liked i { animation: likePop .35s ease; }
+.tower-reveal-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.tower-reveal-row #tower-msg { margin: 0; }
+
 /* Centre d'entraînement */
 .training-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   background: linear-gradient(135deg, rgba(62,201,138,.16), rgba(108,140,255,.14));

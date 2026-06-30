@@ -199,6 +199,7 @@ router.post('/answer', requireAuth, async (req, res) => {
     return res.json({
       correct: true,
       correctIndex,
+      songId: run.currentSongId, // son qu'on vient de jouer → permet de l'ajouter à la playlist
       lifeGained,
       status: 'active',
       next: floorPayload(updated),
@@ -224,6 +225,7 @@ router.post('/answer', requireAuth, async (req, res) => {
       correct: false,
       timedOut,
       correctIndex,
+      songId: run.currentSongId,
       lifeLost: true,
       status: 'active',
       next: floorPayload(updated),
@@ -232,7 +234,7 @@ router.post('/answer', requireAuth, async (req, res) => {
 
   // Plus de vies → fin de partie
   const result = await finishRun(run);
-  res.json({ correct: false, timedOut, correctIndex, status: 'over', ...result });
+  res.json({ correct: false, timedOut, correctIndex, songId: run.currentSongId, status: 'over', ...result });
 });
 
 // Abandonne la partie en cours (crédite la récompense des étages déjà franchis)

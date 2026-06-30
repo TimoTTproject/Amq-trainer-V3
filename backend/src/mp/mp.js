@@ -508,6 +508,7 @@ function endRound(room) {
       round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds, mode: room.mode,
       coop: room.mode === 'coop', teamLives: room.teamLives, floorCleared,
       answer: {
+        songId: s.id,
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
         title: s.title, artist: s.artist, type: s.type, number: s.number,
       },
