@@ -614,15 +614,9 @@
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="gacha-tokens">0</span></span>
       </div>
       <p class="gacha-sub" id="gacha-pool"></p>
-      <div class="gacha-meta" id="gacha-meta"></div>
-      <div class="gacha-weekly" id="gacha-weekly"></div>
-      <div class="gacha-vote" id="gacha-vote"></div>
-      <div class="gacha-featured" id="gacha-featured"></div>
-      <div class="gacha-tools">
-        <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
-        <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
-      </div>
 
+      <!-- Cœur : ressources (pitié / poussière) → tirage → résultat -->
+      <div class="gacha-meta" id="gacha-meta"></div>
       <div class="gacha-actions">
         <button class="btn-primary" id="pull-single">
           <i class="fas fa-ticket"></i>
@@ -636,9 +630,19 @@
         </button>
       </div>
       <p id="gacha-msg" class="gacha-msg"></p>
-
       <div id="pull-result" class="pull-result hidden"></div>
       <button class="btn-secondary reveal-all hidden" id="reveal-all-btn"><i class="fas fa-hand-sparkles"></i> Tout retourner</button>
+      <div class="gacha-tools">
+        <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
+        <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
+      </div>
+
+      <!-- Événements de la semaine : vedettes (taux boosté) + vote -->
+      <div class="gacha-events">
+        <div class="gacha-weekly" id="gacha-weekly"></div>
+        <div class="gacha-featured" id="gacha-featured"></div>
+        <div class="gacha-vote" id="gacha-vote"></div>
+      </div>
 
       <div class="collection">
         <h3><i class="fas fa-images"></i> Ma collection</h3>

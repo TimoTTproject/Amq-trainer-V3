@@ -982,6 +982,12 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .th-other { flex: 1; min-width: 120px; }
 .th-detail { font-style: normal; }
 
+/* ── Section « Événements » (vedettes + vote), regroupée et séparée ── */
+.gacha-events { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
+.gacha-events:has(> *:not(:empty)) { padding-top: 20px; border-top: 1px solid #2a2f42; }
+.gacha-events > * { margin: 0 !important; } /* l'espacement est géré par le gap du conteneur */
+.gacha-weekly:empty, .gacha-featured:empty, .gacha-vote:empty { display: none; }
+
 /* ── Bannière vedettes de la semaine ── */
 .gacha-weekly { margin: 14px 0; }
 .gacha-weekly:empty { display: none; }
