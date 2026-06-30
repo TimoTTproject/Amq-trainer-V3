@@ -6,6 +6,7 @@ const { isCorrectGuess } = require('../quiz/matching');
 const { englishTitleFor } = require('../quiz/anime-titles');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
+const { weekKey } = require('../util/week');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { preferredMediaUrl } = require('../storage/r2');
 const { preferMainContent } = require('../catalog/format');
@@ -591,6 +592,12 @@ async function endCoopGame(room) {
           return ops;
         })
       );
+      // Score hebdomadaire (classement coop + récompense aux 2 meilleurs en fin de semaine)
+      if (floor > 0) {
+        const week = weekKey();
+        await prisma.coopWeeklyScore.createMany({ data: ids.map((uid) => ({ userId: uid, week, floor: 0 })), skipDuplicates: true });
+        await prisma.coopWeeklyScore.updateMany({ where: { userId: { in: ids }, week, floor: { lt: floor } }, data: { floor } });
+      }
     } catch (e) { console.error('coop reward/best update:', e && e.message); }
     for (const p of ordered) progressQuests(p.userId, 'mp', 1);
     ranking = ordered.map((p) => ({ ...p, isRecord: floor > 0 && floor > (bestBy[p.userId] || 0), tokenReward: rewardBy[p.userId] || 0 }));

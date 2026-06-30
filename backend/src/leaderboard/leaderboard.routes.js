@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { tierFromMmr } = require('../mp/rank');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
+const { weekKey } = require('../util/week');
 
 const router = express.Router();
 const TOP_N = 50;
@@ -79,6 +80,29 @@ async function towerBoard(meId) {
   return { top, me: myRank };
 }
 
+// Coop (Tour en équipe) : meilleur étage de la SEMAINE en cours. Les 2 premiers
+// gagnent des tokens en fin de semaine (récompense hebdomadaire).
+async function coopBoard(meId) {
+  const week = weekKey();
+  const rows = await prisma.coopWeeklyScore.findMany({
+    where: { week, floor: { gt: 0 } },
+    orderBy: { floor: 'desc' },
+    take: TOP_N,
+    select: { userId: true, floor: true, user: { select: { displayName: true, avatarUrl: true, avatarFrame: true } } },
+  });
+  const top = rows.map((r, i) => ({
+    rank: i + 1, userId: r.userId, displayName: r.user.displayName, avatarUrl: r.user.avatarUrl,
+    frame: frameOf(r.user), value: r.floor, isMe: r.userId === meId,
+  }));
+  const mineRow = await prisma.coopWeeklyScore.findUnique({ where: { userId_week: { userId: meId, week } }, select: { floor: true } });
+  let myRank = null;
+  if (mineRow && mineRow.floor > 0) {
+    const better = await prisma.coopWeeklyScore.count({ where: { week, floor: { gt: mineRow.floor } } });
+    myRank = { rank: better + 1, value: mineRow.floor };
+  }
+  return { top, me: myRank, week, rewards: [1000, 500] };
+}
+
 // Tokens : classement par solde
 async function tokensBoard(meId) {
   const users = await prisma.user.findMany({
@@ -132,7 +156,7 @@ async function collectionBoard(meId) {
 }
 
 router.get('/', requireAuth, async (req, res) => {
-  const type = ['tokens', 'collection', 'ranked', 'solo'].includes(req.query.type) ? req.query.type : 'tower';
+  const type = ['tokens', 'collection', 'ranked', 'solo', 'coop'].includes(req.query.type) ? req.query.type : 'tower';
   const board =
     type === 'tokens'
       ? await tokensBoard(req.user.id)
@@ -142,6 +166,8 @@ router.get('/', requireAuth, async (req, res) => {
       ? await rankedBoard(req.user.id)
       : type === 'solo'
       ? await soloBoard(req.user.id)
+      : type === 'coop'
+      ? await coopBoard(req.user.id)
       : await towerBoard(req.user.id);
   res.json({ type, ...board });
 });

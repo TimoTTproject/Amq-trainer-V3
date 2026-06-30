@@ -152,6 +152,35 @@ if (pushEnabled()) {
   }, 5 * 60 * 1000);
 }
 
+// Récompense coop hebdomadaire : les 2 meilleurs étages de la SEMAINE écoulée
+// gagnent 1000 / 500 🪙. Idempotent (store partagé + flag `rewarded` en BDD).
+const { previousWeekKey } = require('./util/week');
+async function payCoopWeekly(week) {
+  const top = await prisma.coopWeeklyScore.findMany({
+    where: { week, floor: { gt: 0 }, rewarded: false },
+    orderBy: { floor: 'desc' }, take: 2,
+  });
+  const amounts = [1000, 500];
+  for (let i = 0; i < top.length; i++) {
+    const amt = amounts[i]; const row = top[i];
+    try {
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: row.userId }, data: { tokens: { increment: amt } } }),
+        prisma.tokenTransaction.create({ data: { userId: row.userId, amount: amt, reason: 'coop_weekly' } }),
+        prisma.coopWeeklyScore.update({ where: { id: row.id }, data: { rewarded: true } }),
+      ]);
+    } catch (e) { console.error('coop weekly pay:', e && e.message); }
+  }
+  if (top.length) console.log(`  → Récompenses coop hebdo (${week}) : ${top.length} joueur(s) payé(s)`);
+}
+setInterval(async () => {
+  const prev = previousWeekKey(); // semaine qui vient de se terminer
+  try {
+    if (!(await store.setIfAbsent('coop-weekly:' + prev, 14 * 86400))) return; // déjà traité
+    await payCoopWeekly(prev);
+  } catch (e) { console.error('coop weekly check:', e && e.message); }
+}, 60 * 60 * 1000);
+
 server.listen(PORT, () => {
   console.log(`\n  Anime Music Quiz`);
   console.log(`  → App        : http://localhost:${PORT}`);

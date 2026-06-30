@@ -22,6 +22,7 @@ const REASON_LABELS = {
   cosmetic_purchase: 'Achat boutique',
   mp_reward: 'Récompense multijoueur',
   coop_reward: 'Tour en équipe (coop)',
+  coop_weekly: 'Classement coop hebdo 🏆',
   daily_reward: 'Défi du jour',
   season_reward: 'Récompense de saison',
 };

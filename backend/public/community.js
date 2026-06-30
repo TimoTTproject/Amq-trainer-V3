@@ -6,6 +6,7 @@
 // ── CLASSEMENT ──
 const LB_UNITS = {
   tower: (v) => `Étage ${v}`,
+  coop: (v) => `Étage ${v}`,
   tokens: (v) => `${v} 🪙`,
   collection: (v) => `${v} cartes`,
   ranked: (v) => `${v} MMR`,
@@ -83,7 +84,12 @@ async function loadLeaderboard(type) {
   meBox.innerHTML = '';
   const unit = LB_UNITS[type] || ((v) => v);
   try {
-    const { top, me } = await api(`/api/leaderboard?type=${type}`);
+    const { top, me, rewards } = await api(`/api/leaderboard?type=${type}`);
+    const note = document.getElementById('lb-note');
+    if (note) {
+      note.classList.toggle('hidden', !rewards);
+      if (rewards) note.innerHTML = `🏆 <b>Récompense hebdo</b> — 1<sup>er</sup> : <b>${rewards[0]} 🪙</b> · 2<sup>e</sup> : <b>${rewards[1]} 🪙</b>. Classement remis à zéro chaque lundi.`;
+    }
     if (me) {
       meBox.innerHTML = `<span class="lb-rank">#${me.rank}</span>
         <span class="lb-me-label">Ton rang</span>

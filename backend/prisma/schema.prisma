@@ -101,6 +101,7 @@ model User {
   wishlist        Wishlist[]
   quests          Quest[]
   dailyStats      DailyStat[]
+  coopWeekly      CoopWeeklyScore[]
   cosmetics       UserCosmetic[]
   tradesSent      Trade[]              @relation("TradeFrom")
   tradesReceived  Trade[]              @relation("TradeTo")
@@ -204,6 +205,21 @@ model Quest {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, day])
+}
+
+// Meilleur étage coop (Tour en équipe) atteint par semaine. Sert au classement
+// hebdomadaire et à la distribution des récompenses aux 2 meilleurs.
+model CoopWeeklyScore {
+  id       Int     @id @default(autoincrement())
+  userId   String
+  week     String // clé de semaine = lundi (UTC) au format AAAA-MM-JJ
+  floor    Int     @default(0) // meilleur étage atteint cette semaine-là
+  rewarded Boolean @default(false) // récompense hebdo déjà versée pour cette ligne
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, week])
+  @@index([week, floor])
 }
 
 // Historique des parties multijoueur (persistance des résultats)
