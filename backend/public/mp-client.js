@@ -75,7 +75,7 @@ function mpToast(html, actionLabel, onAction) {
 }
 
 function mpShow(panel) {
-  ['menu', 'room', 'game', 'over'].forEach((p) =>
+  ['menu', 'coopmenu', 'room', 'game', 'over'].forEach((p) =>
     document.getElementById('mp-' + p).classList.toggle('hidden', p !== panel)
   );
 }
@@ -98,13 +98,15 @@ function openMultiplayer() {
   }).catch(() => {});
 }
 
-// Lance directement un salon privé en mode Coop (Tour en équipe) — depuis le
-// menu Jouer ou le menu multijoueur.
+// Entrée Coop (depuis la carte « Jouer ») : écran avec « Créer un salon » ou
+// « Rejoindre » par code — pour que deux amis puissent se retrouver.
 function startCoop() {
   mpLeft = false; mpEngaged = true;
   showView('mp');
   connectMp();
-  if (mpSocket) mpSocket.emit('mp:create', { ...mpSettingsPayload(), mode: 'coop' });
+  mpShow('coopmenu');
+  const msg = document.getElementById('mp-coop-msg'); if (msg) msg.textContent = '';
+  const code = document.getElementById('mp-coop-code'); if (code) code.value = '';
 }
 
 // hostId est l'userId de l'hôte (le serveur clé les joueurs par userId, pas par socket)
@@ -126,7 +128,11 @@ function connectMp() {
   mpSocket.on('connect_error', () => {
     document.getElementById('mp-menu-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
   });
-  mpSocket.on('mp:error', (d) => { document.getElementById('mp-menu-msg').textContent = d.msg || 'Erreur'; });
+  mpSocket.on('mp:error', (d) => {
+    const m = d.msg || 'Erreur';
+    const menu = document.getElementById('mp-menu-msg'); if (menu) menu.textContent = m;
+    const coop = document.getElementById('mp-coop-msg'); if (coop) coop.textContent = m;
+  });
   mpSocket.on('mp:info', (d) => mpToast(d.msg));
   mpSocket.on('mp:invited', (d) => {
     mpToast(`🎮 <b>${escapeHtml(d.from)}</b> t'invite à jouer !`, 'Rejoindre', () => {
@@ -648,6 +654,19 @@ function initMpUI() {
     mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:join', code);
   });
+  // Entrée Coop : créer / rejoindre / retour
+  document.getElementById('mp-coop-create').addEventListener('click', () => {
+    mpLeft = false; mpEngaged = true;
+    connectMp(); mpSocket && mpSocket.emit('mp:create', { ...mpSettingsPayload(), mode: 'coop' });
+  });
+  document.getElementById('mp-coop-join').addEventListener('click', () => {
+    const code = document.getElementById('mp-coop-code').value.trim().toUpperCase();
+    if (!code) { document.getElementById('mp-coop-msg').textContent = 'Entre le code de ton ami.'; return; }
+    mpLeft = false; mpEngaged = true;
+    document.getElementById('mp-coop-msg').textContent = 'Connexion au salon…';
+    connectMp(); mpSocket && mpSocket.emit('mp:join', code);
+  });
+  document.getElementById('mp-coop-back').addEventListener('click', () => { mpLeft = true; showView('play'); });
   document.getElementById('mp-leave').addEventListener('click', () => {
     mpEngaged = false;
     mpSocket && mpSocket.emit('mp:leave'); mpRoom = null; mpShow('menu');

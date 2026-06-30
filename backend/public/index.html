@@ -1139,6 +1139,22 @@
         </details>
       </div>
 
+      <!-- 1b. Entrée Coop (Créer ou Rejoindre) -->
+      <div id="mp-coopmenu" class="mp-coopmenu hidden">
+        <button class="btn-back" id="mp-coop-back"><i class="fas fa-arrow-left"></i> Jouer</button>
+        <div class="mp-coop-entry">
+          <div class="mp-coop-entry-head"><i class="fas fa-people-group"></i> Coop · Tour en équipe</div>
+          <p class="hint">Montez le plus haut possible ensemble — vies partagées, étages infinis.</p>
+          <button class="btn-primary btn-lg" id="mp-coop-create"><i class="fas fa-plus"></i> Créer un salon</button>
+          <div class="mp-coop-or">— ou rejoins un ami avec son code —</div>
+          <div class="mp-join-row">
+            <input type="text" id="mp-coop-code" placeholder="CODE" maxlength="4" autocomplete="off" />
+            <button class="btn-secondary" id="mp-coop-join"><i class="fas fa-right-to-bracket"></i> Rejoindre</button>
+          </div>
+          <p id="mp-coop-msg" class="gacha-msg"></p>
+        </div>
+      </div>
+
       <!-- 2. Salon -->
       <div id="mp-room" class="mp-room hidden">
         <div class="mp-room-head">

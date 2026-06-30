@@ -839,6 +839,16 @@ body.guest-mode .feedback-buttons { display: none !important; }
 
 /* Menu multi */
 .mp-menu-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+
+/* Entrée Coop : créer / rejoindre */
+.mp-coopmenu { max-width: 480px; margin: 0 auto; }
+.mp-coop-entry { background: var(--bg-2); border: 1px solid #2a2f42; border-left: 4px solid #38d6d6; border-radius: 16px; padding: 26px 24px; text-align: center; }
+.mp-coop-entry-head { font-size: 1.3rem; font-weight: 800; color: #38d6d6; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.mp-coop-entry .hint { margin: 8px 0 18px; }
+.mp-coop-entry .btn-lg { width: 100%; justify-content: center; }
+.mp-coop-or { color: var(--text-2); font-size: .85rem; margin: 16px 0; }
+.mp-coop-entry .mp-join-row { display: flex; gap: 8px; }
+.mp-coop-entry .mp-join-row input { flex: 1; text-align: center; letter-spacing: 4px; text-transform: uppercase; font-size: 1.1rem; }
 .mp-join-row { display: flex; gap: 8px; justify-content: center; }
 .mp-join-row input { width: 130px; text-align: center; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 10px; border-radius: 10px; }
 

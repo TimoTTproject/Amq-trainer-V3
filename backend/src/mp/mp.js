@@ -187,11 +187,13 @@ function createRoom(socket, settings) {
   return room;
 }
 function joinByCode(socket, code) {
-  if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
   const room = [...rooms.values()].find((r) => r.code === String(code || '').toUpperCase() && !r.isPublic);
   if (!room) { socket.emit('mp:error', { msg: 'Salle introuvable' }); return null; }
+  if (socket.data.roomId === room.id) return room; // déjà dans cette salle
   if (room.status !== 'lobby') { socket.emit('mp:error', { msg: 'Partie déjà commencée' }); return null; }
   if (room.players.size >= MAX_PLAYERS) { socket.emit('mp:error', { msg: 'Salle pleine' }); return null; }
+  // Quitte la salle actuelle (ex. son propre salon coop vide) avant de rejoindre.
+  if (socket.data.roomId) leaveRoom(socket);
   addPlayer(room, socket);
   sysChat(room, `${socket.data.user.displayName} a rejoint`);
   socket.emit('mp:joined', { roomId: room.id });
