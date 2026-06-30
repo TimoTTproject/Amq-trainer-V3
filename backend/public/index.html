@@ -1120,6 +1120,14 @@
         </div>
         <p id="mp-menu-msg" class="gacha-msg"></p>
 
+        <div class="mp-rooms">
+          <div class="mp-rooms-head">
+            <span><i class="fas fa-tower-broadcast"></i> Parties en cours</span>
+            <button class="btn-link" id="mp-rooms-refresh"><i class="fas fa-rotate"></i> Rafraîchir</button>
+          </div>
+          <div id="mp-rooms-list" class="mp-rooms-list"></div>
+        </div>
+
         <details class="mp-help">
           <summary><i class="fas fa-circle-info"></i> Comment fonctionne le classé&nbsp;?</summary>
           <div class="mp-help-body">
@@ -1217,6 +1225,10 @@
 
       <!-- 3. Partie -->
       <div id="mp-game" class="mp-game hidden">
+        <div id="mp-spectator-bar" class="mp-spectator-bar hidden">
+          <span><i class="fas fa-eye"></i> Mode spectateur</span>
+          <button class="btn-secondary" id="mp-spectator-leave"><i class="fas fa-arrow-left"></i> Quitter</button>
+        </div>
         <div class="tower-hud">
           <span><span id="mp-round-word">Manche</span> <b id="mp-round">1</b><span id="mp-total-sep">/<b id="mp-total">10</b></span></span>
           <span id="mp-coop-lives" class="mp-coop-lives hidden"></span>

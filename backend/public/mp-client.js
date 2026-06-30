@@ -15,6 +15,7 @@ let mpTeamNames = ['Rouge', 'Bleu'];
 let mpEliminated = false; // moi, en mode élimination
 let mpCoop = false; // mode coop (Tour en équipe)
 let mpTeamLives = 0; // vies partagées en coop
+let mpSpectating = false; // je regarde une partie (lecture seule, pas joueur)
 
 // Affiche les vies partagées de l'équipe (coop) dans le HUD.
 function updateCoopLives() {
@@ -35,7 +36,9 @@ function mpHandleLeaveView() {
   if (!mpEngaged) return;
   mpEngaged = false;
   mpLeft = true;
-  if (mpSocket) mpSocket.emit('mp:leave');
+  if (mpSocket) { if (mpSpectating) mpSocket.emit('mp:unspectate'); mpSocket.emit('mp:leave'); }
+  mpSpectating = false;
+  applySpectatorUI();
   mpRoom = null;
   mpEliminated = false;
   mpShow('menu');
@@ -82,9 +85,10 @@ function mpShow(panel) {
 
 function openMultiplayer() {
   mpLeft = false; // entrée délibérée dans la vue
+  mpSpectating = false;
   showView('mp');
   connectMp();
-  if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; }
+  if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; loadMpRooms(); }
   // Affiche mon rang classé dans le menu
   api(`/api/profile/${currentUser.id}`).then((d) => {
     const el = document.getElementById('mp-myrank');
@@ -107,6 +111,70 @@ function startCoop() {
   mpShow('coopmenu');
   const msg = document.getElementById('mp-coop-msg'); if (msg) msg.textContent = '';
   const code = document.getElementById('mp-coop-code'); if (code) code.value = '';
+}
+
+// ── Liste des parties publiques en cours + mode spectateur ──
+function loadMpRooms() {
+  const list = document.getElementById('mp-rooms-list');
+  if (!list) return;
+  const sock = connectMp();
+  if (!sock) return;
+  list.innerHTML = '<p class="muted">Chargement…</p>';
+  const render = () => sock.emit('mp:rooms', (res) => {
+    const rooms = (res && res.rooms) || [];
+    if (!rooms.length) { list.innerHTML = '<p class="muted">Aucune partie publique en cours.</p>'; return; }
+    const label = (m, ranked) => ranked ? '🏅 Classé' : m === 'teams' ? 'Équipes' : m === 'elim' ? 'Élimination' : 'Classique';
+    list.innerHTML = rooms.map((r) => {
+      const playing = r.status === 'playing';
+      const state = playing
+        ? `<span class="mp-room-state playing">● En jeu${r.total ? ` · manche ${r.round}/${r.total}` : ''}</span>`
+        : '<span class="mp-room-state lobby">○ En attente</span>';
+      const action = playing
+        ? `<button class="btn-secondary mp-spectate-btn" data-spectate="${r.id}"><i class="fas fa-eye"></i> Regarder</button>`
+        : '';
+      const spec = r.spectators ? ` · 👁 ${r.spectators}` : '';
+      return `<div class="mp-room-item">
+        <div class="mp-room-item-info">
+          <div class="mp-room-item-top">${label(r.mode, r.ranked)} · <b>${r.players}</b> joueur${r.players > 1 ? 's' : ''}${spec}</div>
+          <div class="mp-room-item-sub">${state} <span class="muted">${escapeHtml((r.names || []).join(', '))}</span></div>
+        </div>
+        ${action}
+      </div>`;
+    }).join('');
+  });
+  if (sock.connected) render(); else sock.once('connect', render);
+}
+
+function spectateRoom(roomId) {
+  mpLeft = false; mpEngaged = true; mpSpectating = true;
+  const sock = connectMp();
+  if (!sock) return;
+  const go = () => sock.emit('mp:spectate', roomId, (res) => {
+    if (!res || !res.ok) {
+      mpSpectating = false;
+      document.getElementById('mp-menu-msg').textContent = 'Partie indisponible (peut-être terminée).';
+      loadMpRooms();
+    }
+  });
+  if (sock.connected) go(); else sock.once('connect', go);
+}
+
+// Quitte le mode spectateur et revient au menu.
+function stopSpectate() {
+  if (mpSpectating && mpSocket) mpSocket.emit('mp:unspectate');
+  mpSpectating = false; mpRoom = null;
+  applySpectatorUI();
+  mpStopClip();
+  mpShow('menu');
+  loadMpRooms();
+}
+
+// Applique l'UI lecture seule du spectateur sur l'écran de partie.
+function applySpectatorUI() {
+  const game = document.getElementById('mp-game');
+  if (game) game.classList.toggle('spectating', mpSpectating);
+  const bar = document.getElementById('mp-spectator-bar');
+  if (bar) bar.classList.toggle('hidden', !mpSpectating);
 }
 
 // hostId est l'userId de l'hôte (le serveur clé les joueurs par userId, pas par socket)
@@ -169,6 +237,8 @@ function connectMp() {
     mpLobbyCountdown = null;
     showView('mp');
     mpShow('game');
+    if (d.spectator) mpSpectating = true;
+    applySpectatorUI();
     mpMode = d.mode || 'classic';
     mpTeamNames = d.teamNames || ['Rouge', 'Bleu'];
     mpEliminated = false;
@@ -198,12 +268,13 @@ function connectMp() {
     document.getElementById('mp-result').classList.add('hidden');
     document.getElementById('mp-progress').textContent = '';
     const input = document.getElementById('mp-input');
-    const lock = !!d.alreadyAnswered || !!d.alreadyPassed || mpEliminated;
+    const lock = !!d.alreadyAnswered || !!d.alreadyPassed || mpEliminated || mpSpectating;
     input.value = '';
     if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('mp-input');
     mpLockAnswer(lock);
     if (!lock) input.focus();
-    document.getElementById('mp-feedback').textContent = mpEliminated ? '💀 Éliminé — tu es spectateur'
+    document.getElementById('mp-feedback').textContent = mpSpectating ? '👁 Tu regardes la partie'
+      : mpEliminated ? '💀 Éliminé — tu es spectateur'
       : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
     mpStartClip(d.clipUrl, d.startAt, d.duration);
   });
@@ -315,7 +386,7 @@ function connectMp() {
     }
 
     const iWon = d.ranking[0] && d.ranking[0].name === currentUser.displayName;
-    if (iWon) { sfx.win(); burstConfetti(40); } else { sfx.lose(); }
+    if (!mpSpectating) { if (iWon) { sfx.win(); burstConfetti(40); } else { sfx.lose(); } }
     let title = d.ranked ? '🏅 Classement final (classé)' : '🏆 Classement final';
     let teamsHtml = '';
     if (d.mode === 'teams' && d.teams) {
@@ -667,6 +738,13 @@ function initMpUI() {
     connectMp(); mpSocket && mpSocket.emit('mp:join', code);
   });
   document.getElementById('mp-coop-back').addEventListener('click', () => { mpLeft = true; showView('play'); });
+  // Liste des parties en cours + spectateur
+  document.getElementById('mp-rooms-refresh').addEventListener('click', loadMpRooms);
+  document.getElementById('mp-rooms-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-spectate]');
+    if (b) spectateRoom(b.dataset.spectate);
+  });
+  document.getElementById('mp-spectator-leave').addEventListener('click', stopSpectate);
   document.getElementById('mp-leave').addEventListener('click', () => {
     mpEngaged = false;
     mpSocket && mpSocket.emit('mp:leave'); mpRoom = null; mpShow('menu');

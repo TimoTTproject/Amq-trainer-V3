@@ -849,6 +849,20 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .mp-coop-or { color: var(--text-2); font-size: .85rem; margin: 16px 0; }
 .mp-coop-entry .mp-join-row { display: flex; gap: 8px; }
 .mp-coop-entry .mp-join-row input { flex: 1; text-align: center; letter-spacing: 4px; text-transform: uppercase; font-size: 1.1rem; }
+
+/* Parties en cours (liste publique) + mode spectateur */
+.mp-rooms { margin-top: 18px; }
+.mp-rooms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-weight: 700; }
+.mp-rooms-list { display: flex; flex-direction: column; gap: 8px; }
+.mp-room-item { display: flex; align-items: center; gap: 12px; justify-content: space-between; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 10px; padding: 10px 14px; }
+.mp-room-item-info { min-width: 0; }
+.mp-room-item-top { font-size: .92rem; }
+.mp-room-item-sub { font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-room-state.playing { color: var(--green); font-weight: 700; }
+.mp-room-state.lobby { color: var(--text-2); }
+.mp-spectate-btn { white-space: nowrap; flex-shrink: 0; }
+.mp-spectator-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(108,140,255,.13); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 14px; margin-bottom: 12px; font-weight: 700; color: var(--accent); }
+#mp-game.spectating .answer-area, #mp-game.spectating .mp-emotes { display: none; }
 .mp-join-row { display: flex; gap: 8px; justify-content: center; }
 .mp-join-row input { width: 130px; text-align: center; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 10px; border-radius: 10px; }
 

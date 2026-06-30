@@ -145,6 +145,7 @@ function newRoom({ isPublic, ranked }) {
     hostId: null, players: new Map(),
     settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' },
     status: 'lobby', chat: [], round: 0, current: null,
+    spectators: new Set(), // userIds qui regardent (pas des joueurs)
     usedSongIds: new Set(), usedAnilistIds: new Set(),
     nextSong: null, nextSongPromise: null,
     timer: null, countdownTimer: null, countdownEndsAt: 0, revealSong: null, revealUntil: 0,
@@ -199,6 +200,60 @@ function joinByCode(socket, code) {
   socket.emit('mp:joined', { roomId: room.id });
   broadcastRoom(room);
   return room;
+}
+
+// Liste des parties PUBLIQUES en cours (lobby ou en jeu). Les salons privés/coop
+// (à code) ne sont jamais listés.
+function publicRoomsList() {
+  return [...rooms.values()]
+    .filter((r) => r.isPublic && r.players.size > 0)
+    .map((r) => ({
+      id: r.id, ranked: r.ranked, mode: r.mode || r.settings.mode || 'classic',
+      status: r.status, round: r.round, total: r.settings.rounds,
+      players: r.players.size, names: [...r.players.values()].map((p) => p.name).slice(0, 8),
+      spectators: r.spectators.size,
+    }))
+    .sort((a, b) => (a.status === 'playing' ? 0 : 1) - (b.status === 'playing' ? 0 : 1) || b.players - a.players);
+}
+
+// Devenir spectateur d'une partie publique (reçoit les events de la salle sans
+// faire partie des joueurs). Ne fonctionne pas sur les salons privés/coop.
+function spectate(socket, roomId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.isPublic) { socket.emit('mp:error', { msg: 'Partie introuvable' }); return false; }
+  if (room.players.has(socket.data.user.id)) return false; // déjà joueur de cette partie
+  if (socket.data.roomId) leaveRoom(socket); // on ne spectate pas en jouant
+  if (socket.data.spectating && socket.data.spectating !== roomId) stopSpectating(socket);
+  socket.join(room.id);
+  socket.data.spectating = room.id;
+  room.spectators.add(socket.data.user.id);
+  // État courant envoyé au seul spectateur (les autres l'ont déjà reçu).
+  if (room.status === 'playing') {
+    const arr = [...room.players.values()];
+    socket.emit('mp:game:start', {
+      totalRounds: room.mode === 'coop' ? null : room.settings.rounds, ranked: room.ranked, mode: room.mode,
+      elimLives: ELIM_LIVES, coop: room.mode === 'coop', teamLives: room.teamLives, teamNames: TEAM_NAMES,
+      spectator: true, players: arr.map((p) => ({ name: p.name, avatarUrl: p.avatarUrl, team: p.team })),
+    });
+    if (room.current) {
+      const remaining = Math.max(1500, room.current.endsAt - Date.now());
+      socket.emit('mp:round:start', {
+        round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
+        coop: room.mode === 'coop', teamLives: room.teamLives, spectator: true,
+        clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt: Date.now(), duration: remaining,
+      });
+    }
+  } else {
+    socket.emit('mp:room', { ...roomSnapshot(room), spectator: true });
+  }
+  return true;
+}
+function stopSpectating(socket) {
+  const roomId = socket.data.spectating;
+  if (!roomId) return;
+  socket.data.spectating = null;
+  const room = rooms.get(roomId);
+  if (room) { room.spectators.delete(socket.data.user.id); socket.leave(roomId); }
 }
 
 function applySettings(room, s) {
@@ -727,6 +782,7 @@ function leaveRoom(socket) {
 
 // Déconnexion (refresh, perte réseau) : on garde le slot avec un délai de grâce
 function onDisconnect(socket) {
+  if (socket.data.spectating) { stopSpectating(socket); return; } // spectateur : simple retrait
   const room = rooms.get(socket.data.roomId);
   if (!room) return;
   const p = room.players.get(socket.data.user.id);
@@ -808,7 +864,7 @@ function videoForRound(room, requestedRound) {
 
 function getCurrentVideo(roomId, userId, requestedRound) {
   const room = rooms.get(roomId);
-  if (!room || !room.players.has(userId)) return null;
+  if (!room || !(room.players.has(userId) || room.spectators.has(userId))) return null;
   return videoForRound(room, requestedRound);
 }
 
@@ -850,6 +906,12 @@ function initMp(server) {
       const room = joinByCode(socket, code);
       if (typeof ack === 'function') ack({ ok: !!room, players: room?.players.size || 0 });
     });
+    socket.on('mp:rooms', (ack) => { if (typeof ack === 'function') ack({ rooms: publicRoomsList() }); });
+    socket.on('mp:spectate', (roomId, ack) => {
+      const ok = spectate(socket, String(roomId || ''));
+      if (typeof ack === 'function') ack({ ok });
+    });
+    socket.on('mp:unspectate', () => stopSpectating(socket));
     socket.on('mp:settings', (s) => setSettings(socket, s));
     socket.on('mp:start', () => hostStart(socket));
     socket.on('mp:leave', () => leaveRoom(socket));
