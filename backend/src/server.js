@@ -181,6 +181,30 @@ setInterval(async () => {
   } catch (e) { console.error('coop weekly check:', e && e.message); }
 }, 60 * 60 * 1000);
 
+// Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
+// → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
+// Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
+const { repairBrokenTitlesBatch } = require('./catalog/catalog.service');
+async function repairCatalogTitles() {
+  try {
+    let total = 0;
+    for (let guard = 0; guard < 60; guard++) {
+      const r = await repairBrokenTitlesBatch(50);
+      if (!r.processed) break;
+      total += r.fixed;
+      console.log(`  → Réparation titres : ${r.fixed}/${r.processed} corrigés (${r.remaining} restants)`);
+      await new Promise((res) => setTimeout(res, 1500)); // limite de débit AniList
+    }
+    if (total) console.log(`  → Réparation titres terminée : ${total} anime(s) corrigé(s).`);
+  } catch (e) { console.error('réparation titres:', e && e.message); }
+}
+setTimeout(() => {
+  // Lock partagé : ne lance la passe qu'une fois (réessaie après 12 h si échec).
+  store.setIfAbsent('catalog-title-repair:v1', 12 * 3600)
+    .then((ok) => { if (ok) repairCatalogTitles(); })
+    .catch(() => {});
+}, 25000);
+
 server.listen(PORT, () => {
   console.log(`\n  Anime Music Quiz`);
   console.log(`  → App        : http://localhost:${PORT}`);

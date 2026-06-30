@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime, getAnimeFormatsByIds } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
 // animethemes.moe renvoie 403 sans User-Agent identifiable
@@ -17,11 +17,24 @@ function buildAltTitles(media) {
   return [...new Set(all.filter((s) => s && typeof s === 'string' && s.trim()).map((s) => s.trim()))];
 }
 
+// Un titre n'est qu'un fragment de saison/partie (le vrai nom a disparu) : à éviter.
+// Ex. « 2nd Season », « Season 2 », « Part 1 », « Anime inconnu ».
+function isSeasonFragment(s) {
+  const t = (s || '').trim();
+  if (!t || t === 'Anime inconnu' || t === 'Inconnu') return true;
+  return /^(\d+(st|nd|rd|th)\s+)?(season|cour|part|saison|partie)\b/i.test(t)
+    || /^(s\d+|part\s*\d+|cour\s*\d+|season\s*\d+|the\s+final\b)/i.test(t);
+}
+
 function normalizeAnimeName(name) {
   if (!name || name === 'undefined' || name === 'null') return 'Anime inconnu';
   let n = name.toString().trim();
   if (/^gintama/i.test(n)) return n; // Gintama : garder les saisons distinctes
-  n = n.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
+  // On retire les annotations entre parenthèses/crochets — SAUF si cela vide le
+  // titre ou ne laisse qu'un fragment de saison. Certains titres ont des crochets
+  // intégrés au nom (ex. « [Oshi no Ko] ») qu'il ne faut surtout pas supprimer.
+  const stripped = n.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
+  n = isSeasonFragment(stripped) ? n.replace(/\s+/g, ' ').trim() : stripped;
   n = n.replace(/\b\w/g, (c) => c.toUpperCase());
   return n || 'Anime inconnu';
 }
@@ -305,4 +318,39 @@ async function backfillFormatsBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, buildAltTitles, scanEndingsBatch, backfillFormatsBatch };
+// Répare les `animeTitle` corrompus (fragments de saison « 2nd Season », titres
+// vides « Anime inconnu »…) : re-récupère le vrai titre sur AniList par anilistId
+// et recalcule animeTitle + altTitles (+ format). À appeler en boucle jusqu'à
+// remaining === 0. Réseau AniList limité (lots de 50).
+async function repairBrokenTitlesBatch(limit = 50) {
+  // anilistIds distincts dont le titre courant est cassé
+  const rows = await prisma.song.findMany({ select: { anilistId: true, animeTitle: true }, distinct: ['anilistId'] });
+  const badIds = [...new Set(rows.filter((r) => isSeasonFragment(r.animeTitle)).map((r) => r.anilistId))];
+  if (!badIds.length) return { processed: 0, fixed: 0, remaining: 0 };
+
+  const slice = badIds.slice(0, Math.min(limit, 50)); // AniList Page perPage = 50
+  let media = [];
+  try { media = await getAnimeTitlesByIds(slice); } catch (err) {
+    console.warn('repair titres — AniList indispo:', err.message);
+    return { processed: 0, fixed: 0, remaining: badIds.length };
+  }
+  const byId = new Map(media.map((m) => [m.id, m]));
+
+  let fixed = 0;
+  for (const id of slice) {
+    const m = byId.get(id);
+    if (!m) continue;
+    const raw = m.title?.romaji || m.title?.english || m.title?.native;
+    const animeTitle = normalizeAnimeName(raw);
+    if (isSeasonFragment(animeTitle)) continue; // toujours pas exploitable → on laisse
+    const data = { animeTitle, altTitles: buildAltTitles(m) };
+    if (m.format) data.format = m.format;
+    await prisma.song.updateMany({ where: { anilistId: id }, data });
+    // Garder le titre du cache d'exploration cohérent
+    await prisma.scannedAnime.updateMany({ where: { anilistId: id }, data: { animeTitle } });
+    fixed++;
+  }
+  return { processed: slice.length, fixed, remaining: Math.max(0, badIds.length - slice.length) };
+}
+
+module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, isSeasonFragment, buildAltTitles, scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch };
