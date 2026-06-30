@@ -22,16 +22,22 @@ const {
 const router = express.Router();
 
 // Construit un étage : une musique correcte + 3 distracteurs (animes distincts).
-async function buildFloor() {
+// `excludeId` = son de l'étage précédent, évité pour ne pas avoir deux fois le
+// même son d'affilée.
+async function buildFloor(excludeId) {
   // Priorité à la série principale (exclut films/OAV connus), repli si trop peu de titres.
   let where = { videoUrl: { not: null }, ...preferMainContent };
   let total = await prisma.song.count({ where });
   if (total < 4) { where = { videoUrl: { not: null } }; total = await prisma.song.count({ where }); }
   if (total < 4) return null;
 
+  // Pour la bonne réponse, on exclut le son précédent (sauf si ça vide le pool).
+  const correctWhere = excludeId ? { ...where, id: { not: excludeId } } : where;
+  const correctTotal = excludeId ? await prisma.song.count({ where: correctWhere }) : total;
+  const useExcl = correctTotal > 0;
   const correct = await prisma.song.findFirst({
-    where,
-    skip: Math.floor(Math.random() * total),
+    where: useExcl ? correctWhere : where,
+    skip: Math.floor(Math.random() * (useExcl ? correctTotal : total)),
     select: { id: true, animeTitle: true },
   });
   if (!correct) return null;
@@ -176,7 +182,7 @@ router.post('/answer', requireAuth, async (req, res) => {
     const lifeGained = cleared % LIFE_BONUS_EVERY === 0 && lives < MAX_LIVES;
     if (lifeGained) lives += 1;
 
-    const next = await buildFloor();
+    const next = await buildFloor(run.currentSongId);
     if (!next) return res.status(503).json({ error: 'Catalogue insuffisant' });
 
     const updated = await prisma.towerRun.update({
@@ -202,7 +208,7 @@ router.post('/answer', requireAuth, async (req, res) => {
   // Mauvaise réponse ou temps écoulé → on perd une vie
   const lives = run.lives - 1;
   if (lives > 0) {
-    const next = await buildFloor();
+    const next = await buildFloor(run.currentSongId);
     if (!next) return res.status(503).json({ error: 'Catalogue insuffisant' });
     const updated = await prisma.towerRun.update({
       where: { id: run.id },
