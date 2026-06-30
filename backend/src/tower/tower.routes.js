@@ -85,10 +85,13 @@ async function buildFloor(excludeId) {
 }
 
 // Représentation cliente d'un étage (sans révéler la bonne réponse).
-// `t` change à chaque nouvelle musique (floorStartedAt) → URL unique, sinon le
-// navigateur rejoue la vidéo en cache (même runId d'un étage à l'autre).
+// `t` doit être unique à CHAQUE nouvelle musique, sinon le navigateur rejoue la
+// vidéo en cache. Sur une mauvaise réponse l'étage garde le même numéro mais le
+// son change : on combine donc étage ET vies (les vies décroissent strictement
+// au sein d'un même étage → couple (floor, lives) unique pour chaque tirage).
+// On n'expose ni l'URL réelle ni le songId (anti-triche QCM).
 function floorPayload(run) {
-  const bust = run.floorStartedAt ? new Date(run.floorStartedAt).getTime() : run.floor;
+  const bust = run.floorStartedAt ? new Date(run.floorStartedAt).getTime() : `${run.floor}-${run.lives}`;
   return {
     runId: run.id,
     floor: run.floor,
