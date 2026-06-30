@@ -40,7 +40,7 @@ function roundDurationMs(room) {
 }
 const TEAM_NAMES = ['Rouge', 'Bleu'];
 const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
-const ANIME_EMOTE_BY_SYMBOL = new Map(ANIME_EMOTES.map((item) => [item.symbol, item]));
+const ANIME_EMOTE_BY_ID = new Map(ANIME_EMOTES.map((item) => [item.id, item]));
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
 // Récompense en tokens (perf + plafond quotidien anti-abus). Le farm entre amis
@@ -896,7 +896,12 @@ function chat(socket, text) {
 }
 function unlockedEmoteSymbols(ownedIds) {
   const owned = new Set(ownedIds || []);
-  return [...FREE_EMOTES, ...ANIME_EMOTES.filter((item) => owned.has(item.id)).map((item) => item.symbol)];
+  return [
+    ...FREE_EMOTES.map((symbol) => ({ id: symbol, symbol })),
+    ...ANIME_EMOTES.filter((item) => owned.has(item.id)).map((item) => ({
+      id: item.id, symbol: item.symbol, name: item.name, imageUrl: item.imageUrl,
+    })),
+  ];
 }
 
 async function emotesForUser(userId) {
@@ -910,16 +915,25 @@ async function emotesForUser(userId) {
 async function emote(socket, e) {
   const room = rooms.get(socket.data.roomId);
   if (!room) return;
-  if (!FREE_EMOTES.includes(e)) {
-    const item = ANIME_EMOTE_BY_SYMBOL.get(e);
-    if (!item) return;
+  if (FREE_EMOTES.includes(e)) {
+    io.to(room.id).emit('mp:emote', { name: socket.data.user.displayName, emote: e });
+    return;
+  }
+  const item = ANIME_EMOTE_BY_ID.get(e);
+  if (!item) return;
+  {
     const owned = await prisma.userCosmetic.findUnique({
       where: { userId_cosmeticId: { userId: socket.data.user.id, cosmeticId: item.id } },
       select: { id: true },
     });
     if (!owned) return;
   }
-  io.to(room.id).emit('mp:emote', { name: socket.data.user.displayName, emote: e });
+  io.to(room.id).emit('mp:emote', {
+    name: socket.data.user.displayName,
+    emote: item.symbol,
+    imageUrl: item.imageUrl,
+    label: item.name,
+  });
 }
 
 function videoForRound(room, requestedRound) {
@@ -992,7 +1006,7 @@ function initMp(server) {
     socket.on('mp:emotes:get', async (ack) => {
       if (typeof ack !== 'function') return;
       try { ack({ emotes: await emotesForUser(socket.data.user.id) }); }
-      catch { ack({ emotes: FREE_EMOTES }); }
+      catch { ack({ emotes: unlockedEmoteSymbols([]) }); }
     });
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
     socket.on('mp:skip', () => onSkip(socket));

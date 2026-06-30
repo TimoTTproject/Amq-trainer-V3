@@ -199,27 +199,26 @@ const ANIME_LICENSES = [
     bannerAlt: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/176301-GkuTF1YTT6b2.jpg' },
 ];
 
-// Réactions multijoueur à débloquer dans la boutique. On utilise des symboles
-// Unicode emblématiques plutôt que des logos/images propriétaires : ils restent
-// lisibles partout et ne nécessitent aucun asset externe.
+// Réactions illustrées avec des emblèmes dédiés (SVG locaux, nets à toute taille).
+// Le symbole Unicode reste uniquement un fallback si une image ne charge pas.
 const ANIME_EMOTES = [
-  { id: 'emote-one-piece', slot: 'emote', name: 'One Piece · Jolly Roger', symbol: '☠️', price: 180, unlockOnly: true },
-  { id: 'emote-naruto', slot: 'emote', name: 'Naruto · Ramen', symbol: '🍥', price: 180, unlockOnly: true },
-  { id: 'emote-dragon-ball', slot: 'emote', name: 'Dragon Ball · Boule à 4 étoiles', symbol: '🟠⭐', price: 220, unlockOnly: true },
-  { id: 'emote-aot', slot: 'emote', name: "L’Attaque des Titans · Bataillon", symbol: '🪽', price: 220, unlockOnly: true },
-  { id: 'emote-demon-slayer', slot: 'emote', name: 'Demon Slayer · Hanafuda', symbol: '🎴', price: 220, unlockOnly: true },
-  { id: 'emote-jujutsu-kaisen', slot: 'emote', name: 'Jujutsu Kaisen · Six Yeux', symbol: '👁️', price: 220, unlockOnly: true },
-  { id: 'emote-fullmetal', slot: 'emote', name: 'Fullmetal Alchemist · Alchimie', symbol: '⚗️', price: 180, unlockOnly: true },
-  { id: 'emote-death-note', slot: 'emote', name: 'Death Note · Carnet', symbol: '📓', price: 180, unlockOnly: true },
-  { id: 'emote-bleach', slot: 'emote', name: 'Bleach · Zanpakutō', symbol: '🗡️', price: 180, unlockOnly: true },
-  { id: 'emote-hunter', slot: 'emote', name: 'Hunter × Hunter · Carte', symbol: '♠️', price: 180, unlockOnly: true },
-  { id: 'emote-sao', slot: 'emote', name: 'Sword Art Online · Doubles lames', symbol: '⚔️', price: 180, unlockOnly: true },
-  { id: 'emote-chainsaw-man', slot: 'emote', name: 'Chainsaw Man · Tronçonneuse', symbol: '🪚', price: 220, unlockOnly: true },
-  { id: 'emote-pokemon', slot: 'emote', name: 'Pokémon · Poké Ball', symbol: '🔴⚪', price: 220, unlockOnly: true },
-  { id: 'emote-sailor-moon', slot: 'emote', name: 'Sailor Moon · Croissant lunaire', symbol: '🌙', price: 180, unlockOnly: true },
-  { id: 'emote-code-geass', slot: 'emote', name: 'Code Geass · Roi noir', symbol: '♟️', price: 180, unlockOnly: true },
-  { id: 'emote-steins-gate', slot: 'emote', name: 'Steins;Gate · Temps', symbol: '⌛', price: 180, unlockOnly: true },
-];
+  { id: 'emote-one-piece', name: 'One Piece · Jolly Roger', symbol: '☠️', imageUrl: '/assets/emotes/one-piece.svg', price: 180 },
+  { id: 'emote-naruto', name: 'Naruto · Sharingan', symbol: '🔴', imageUrl: '/assets/emotes/sharingan.svg', price: 180 },
+  { id: 'emote-dragon-ball', name: 'Dragon Ball · 4 étoiles', symbol: '🟠', imageUrl: '/assets/emotes/dragon-ball.svg', price: 220 },
+  { id: 'emote-aot', name: "L’Attaque des Titans · Bataillon", symbol: '🪽', imageUrl: '/assets/emotes/aot-wings.svg', price: 220 },
+  { id: 'emote-demon-slayer', name: 'Demon Slayer · Hanafuda', symbol: '🎴', imageUrl: '/assets/emotes/hanafuda.svg', price: 220 },
+  { id: 'emote-jujutsu-kaisen', name: 'Jujutsu Kaisen · Sceau', symbol: '👁️', imageUrl: '/assets/emotes/jujutsu.svg', price: 220 },
+  { id: 'emote-fullmetal', name: 'Fullmetal Alchemist · Transmutation', symbol: '⚗️', imageUrl: '/assets/emotes/transmutation.svg', price: 180 },
+  { id: 'emote-death-note', name: 'Death Note · Carnet', symbol: '📓', imageUrl: '/assets/emotes/death-note.svg', price: 180 },
+  { id: 'emote-bleach', name: 'Bleach · Badge Shinigami', symbol: '💀', imageUrl: '/assets/emotes/bleach-badge.svg', price: 180 },
+  { id: 'emote-hunter', name: 'Hunter × Hunter · Licence', symbol: '♠️', imageUrl: '/assets/emotes/hunter-license.svg', price: 180 },
+  { id: 'emote-sao', name: 'Sword Art Online · Doubles lames', symbol: '⚔️', imageUrl: '/assets/emotes/sao-swords.svg', price: 180 },
+  { id: 'emote-chainsaw-man', name: 'Chainsaw Man · Cordon', symbol: '🪚', imageUrl: '/assets/emotes/chainsaw.svg', price: 220 },
+  { id: 'emote-pokemon', name: 'Pokémon · Poké Ball', symbol: '🔴⚪', imageUrl: '/assets/emotes/pokeball.svg', price: 220 },
+  { id: 'emote-sailor-moon', name: 'Sailor Moon · Broche lunaire', symbol: '🌙', imageUrl: '/assets/emotes/sailor-brooch.svg', price: 180 },
+  { id: 'emote-code-geass', name: 'Code Geass · Geass', symbol: '♟️', imageUrl: '/assets/emotes/geass.svg', price: 180 },
+  { id: 'emote-steins-gate', name: 'Steins;Gate · Divergence', symbol: '⌛', imageUrl: '/assets/emotes/divergence.svg', price: 180 },
+].map((item) => ({ ...item, slot: 'emote', unlockOnly: true }));
 
 // Trois illustrations de personnages complètent les deux artworks de série.
 // Elles permettent à chaque licence de proposer cinq familles visuelles.
@@ -539,6 +538,7 @@ function publicCosmetic(c) {
     ...(c.license ? { license: c.license } : {}),
     ...(c.exclusive ? { exclusive: true, tierReq: c.tierReq } : {}),
     ...(c.symbol ? { symbol: c.symbol } : {}),
+    ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
     ...(c.unlockOnly ? { unlockOnly: true } : {}),
   };
 }
