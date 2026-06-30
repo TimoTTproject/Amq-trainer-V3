@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { COSMETICS, SLOTS, SLOT_LABELS, LICENSES, LICENSE_COLORS, byId, publicCosmetic } = require('./cosmetics');
+const { COSMETICS, SLOTS, SLOT_LABELS, LICENSES, LICENSE_COLORS, ANIME_EMOTES, byId, publicCosmetic } = require('./cosmetics');
 const charCos = require('./character-cosmetics');
 const { tierFromMmr, TIERS } = require('../mp/rank');
 
@@ -78,7 +78,9 @@ router.get('/', requireAuth, async (req, res) => {
     items: COSMETICS.filter((c) => c.license === name).map(toItem),
   })).filter((g) => g.items.length);
 
-  res.json({ tokens: req.user.tokens, tier: bestIdx >= 0 ? TIERS[bestIdx].name : null, groups, licenses });
+  const emotes = ANIME_EMOTES.map(toItem);
+
+  res.json({ tokens: req.user.tokens, tier: bestIdx >= 0 ? TIERS[bestIdx].name : null, groups, licenses, emotes });
 });
 
 // Catalogue « personnages » : volumineux → paginé + filtre série + recherche.
@@ -141,6 +143,7 @@ router.post('/equip', requireAuth, async (req, res) => {
   if (id) {
     const item = await resolveCosmetic(id);
     if (!item) return res.status(404).json({ error: 'Cosmétique introuvable' });
+    if (item.unlockOnly) return res.status(400).json({ error: 'Ce symbole est débloqué automatiquement après son achat' });
     // Tout sauf l'item gratuit par défaut (price 0) exige la possession — y compris
     // les exclusifs de palier (price null).
     if (item.price !== 0) {

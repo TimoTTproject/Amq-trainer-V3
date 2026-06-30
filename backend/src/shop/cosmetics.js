@@ -199,6 +199,28 @@ const ANIME_LICENSES = [
     bannerAlt: 'https://s4.anilist.co/file/anilistcdn/media/anime/banner/176301-GkuTF1YTT6b2.jpg' },
 ];
 
+// Réactions multijoueur à débloquer dans la boutique. On utilise des symboles
+// Unicode emblématiques plutôt que des logos/images propriétaires : ils restent
+// lisibles partout et ne nécessitent aucun asset externe.
+const ANIME_EMOTES = [
+  { id: 'emote-one-piece', slot: 'emote', name: 'One Piece · Jolly Roger', symbol: '☠️', price: 180, unlockOnly: true },
+  { id: 'emote-naruto', slot: 'emote', name: 'Naruto · Ramen', symbol: '🍥', price: 180, unlockOnly: true },
+  { id: 'emote-dragon-ball', slot: 'emote', name: 'Dragon Ball · Boule à 4 étoiles', symbol: '🟠⭐', price: 220, unlockOnly: true },
+  { id: 'emote-aot', slot: 'emote', name: "L’Attaque des Titans · Bataillon", symbol: '🪽', price: 220, unlockOnly: true },
+  { id: 'emote-demon-slayer', slot: 'emote', name: 'Demon Slayer · Hanafuda', symbol: '🎴', price: 220, unlockOnly: true },
+  { id: 'emote-jujutsu-kaisen', slot: 'emote', name: 'Jujutsu Kaisen · Six Yeux', symbol: '👁️', price: 220, unlockOnly: true },
+  { id: 'emote-fullmetal', slot: 'emote', name: 'Fullmetal Alchemist · Alchimie', symbol: '⚗️', price: 180, unlockOnly: true },
+  { id: 'emote-death-note', slot: 'emote', name: 'Death Note · Carnet', symbol: '📓', price: 180, unlockOnly: true },
+  { id: 'emote-bleach', slot: 'emote', name: 'Bleach · Zanpakutō', symbol: '🗡️', price: 180, unlockOnly: true },
+  { id: 'emote-hunter', slot: 'emote', name: 'Hunter × Hunter · Carte', symbol: '♠️', price: 180, unlockOnly: true },
+  { id: 'emote-sao', slot: 'emote', name: 'Sword Art Online · Doubles lames', symbol: '⚔️', price: 180, unlockOnly: true },
+  { id: 'emote-chainsaw-man', slot: 'emote', name: 'Chainsaw Man · Tronçonneuse', symbol: '🪚', price: 220, unlockOnly: true },
+  { id: 'emote-pokemon', slot: 'emote', name: 'Pokémon · Poké Ball', symbol: '🔴⚪', price: 220, unlockOnly: true },
+  { id: 'emote-sailor-moon', slot: 'emote', name: 'Sailor Moon · Croissant lunaire', symbol: '🌙', price: 180, unlockOnly: true },
+  { id: 'emote-code-geass', slot: 'emote', name: 'Code Geass · Roi noir', symbol: '♟️', price: 180, unlockOnly: true },
+  { id: 'emote-steins-gate', slot: 'emote', name: 'Steins;Gate · Temps', symbol: '⌛', price: 180, unlockOnly: true },
+];
+
 // Trois illustrations de personnages complètent les deux artworks de série.
 // Elles permettent à chaque licence de proposer cinq familles visuelles.
 const LICENSE_CHARACTER_ART = {
@@ -473,6 +495,7 @@ const COSMETICS = [
 
   // ── Licences d'anime (générées ci-dessus) ────────────────────
   ...LICENSE_COSMETICS,
+  ...ANIME_EMOTES,
 ];
 
 // Ordre + couleur d'accent des franchises (pour la section « Licences » de la boutique)
@@ -515,6 +538,8 @@ function publicCosmetic(c) {
     ...(c.image ? { image: true } : {}),
     ...(c.license ? { license: c.license } : {}),
     ...(c.exclusive ? { exclusive: true, tierReq: c.tierReq } : {}),
+    ...(c.symbol ? { symbol: c.symbol } : {}),
+    ...(c.unlockOnly ? { unlockOnly: true } : {}),
   };
 }
 
@@ -535,6 +560,7 @@ module.exports = {
   SLOT_LABELS,
   LICENSES,
   LICENSE_COLORS,
+  ANIME_EMOTES,
   byId,
   registerDynamicResolver,
   publicCosmetic,

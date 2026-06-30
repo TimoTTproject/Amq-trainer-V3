@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { COSMETICS, LICENSES } = require('../src/shop/cosmetics');
+const { COSMETICS, LICENSES, ANIME_EMOTES } = require('../src/shop/cosmetics');
 
 test('every anime license provides five card backs and five profile banners', () => {
   for (const license of LICENSES) {
@@ -14,4 +14,14 @@ test('every anime license provides five card backs and five profile banners', ()
 test('shop cosmetic ids stay unique', () => {
   const ids = COSMETICS.map((item) => item.id);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test('anime emotes have unique symbols and are purchasable unlocks', () => {
+  assert.ok(ANIME_EMOTES.length >= 12);
+  assert.equal(new Set(ANIME_EMOTES.map((item) => item.symbol)).size, ANIME_EMOTES.length);
+  for (const item of ANIME_EMOTES) {
+    assert.equal(item.slot, 'emote');
+    assert.equal(item.unlockOnly, true);
+    assert.ok(item.price > 0);
+  }
 });
