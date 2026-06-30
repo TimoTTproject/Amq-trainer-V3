@@ -25,7 +25,7 @@ test('anime emotes have unique symbols and are purchasable unlocks', () => {
     assert.equal(item.slot, 'emote');
     assert.equal(item.unlockOnly, true);
     assert.ok(item.price > 0);
-    assert.match(item.imageUrl, /^\/assets\/emotes\/.+\.svg$/);
+    assert.match(item.imageUrl, /^\/assets\/emotes\/.+\.(?:svg|png|jpg)$/);
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', item.imageUrl)), `${item.imageUrl} should exist`);
   }
 });

@@ -63,8 +63,8 @@ test('adds only purchased anime emotes to the free multiplayer reactions', () =>
   const free = unlockedEmoteSymbols([]);
   const unlocked = unlockedEmoteSymbols(['emote-naruto', 'emote-death-note', 'unknown']);
   assert.equal(unlocked.length, free.length + 2);
-  assert.ok(unlocked.some((item) => item.id === 'emote-naruto' && item.imageUrl.endsWith('/sharingan.svg')));
-  assert.ok(unlocked.some((item) => item.id === 'emote-death-note' && item.imageUrl.endsWith('/death-note.svg')));
+  assert.ok(unlocked.some((item) => item.id === 'emote-naruto' && item.imageUrl.endsWith('/official/sharingan.png')));
+  assert.ok(unlocked.some((item) => item.id === 'emote-death-note' && item.imageUrl.endsWith('/official/death-note.jpg')));
 });
 
 test('serves the preloaded song only for the upcoming round', () => {
