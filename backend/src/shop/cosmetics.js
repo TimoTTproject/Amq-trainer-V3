@@ -218,6 +218,20 @@ const ANIME_EMOTES = [
   { id: 'emote-sailor-moon', name: 'Sailor Moon · Broche lunaire', symbol: '🌙', imageUrl: '/assets/emotes/sailor-brooch.svg', price: 180 },
   { id: 'emote-code-geass', name: 'Code Geass · Geass', symbol: '♟️', imageUrl: '/assets/emotes/geass.svg', price: 180 },
   { id: 'emote-steins-gate', name: 'Steins;Gate · Divergence', symbol: '⌛', imageUrl: '/assets/emotes/divergence.svg', price: 180 },
+  { id: 'emote-my-hero', name: 'My Hero Academia · U.A.', symbol: '🦸', imageUrl: '/assets/emotes/ua-academy.svg', price: 180 },
+  { id: 'emote-one-punch', name: 'One Punch Man · Poing', symbol: '👊', imageUrl: '/assets/emotes/one-punch.svg', price: 180 },
+  { id: 'emote-spy-family', name: 'Spy × Family · Chimère', symbol: '🕵️', imageUrl: '/assets/emotes/chimera.svg', price: 180 },
+  { id: 'emote-tokyo-ghoul', name: 'Tokyo Ghoul · Masque', symbol: '👺', imageUrl: '/assets/emotes/ghoul-mask.svg', price: 220 },
+  { id: 'emote-evangelion', name: 'Evangelion · NERV', symbol: '🍂', imageUrl: '/assets/emotes/nerv.svg', price: 220 },
+  { id: 'emote-black-clover', name: 'Black Clover · Grimoire', symbol: '🍀', imageUrl: '/assets/emotes/black-clover.svg', price: 180 },
+  { id: 'emote-frieren', name: 'Frieren · Bâton magique', symbol: '🪄', imageUrl: '/assets/emotes/frieren-staff.svg', price: 180 },
+  { id: 'emote-solo-leveling', name: 'Solo Leveling · Dague', symbol: '🗡️', imageUrl: '/assets/emotes/solo-dagger.svg', price: 220 },
+  { id: 'emote-haikyuu', name: 'Haikyuu!! · Volley', symbol: '🏐', imageUrl: '/assets/emotes/haikyuu-ball.svg', price: 180 },
+  { id: 'emote-blue-lock', name: 'Blue Lock · Verrou', symbol: '⚽', imageUrl: '/assets/emotes/blue-lock.svg', price: 220 },
+  { id: 'emote-oshi-no-ko', name: 'Oshi no Ko · Œil étoilé', symbol: '⭐', imageUrl: '/assets/emotes/star-eye.svg', price: 220 },
+  { id: 'emote-bocchi', name: 'Bocchi the Rock! · Guitare', symbol: '🎸', imageUrl: '/assets/emotes/bocchi-guitar.svg', price: 180 },
+  { id: 'emote-jojo', name: 'JoJo · Masque de pierre', symbol: '🗿', imageUrl: '/assets/emotes/stone-mask.svg', price: 220 },
+  { id: 'emote-fairy-tail', name: 'Fairy Tail · Guilde', symbol: '🔥', imageUrl: '/assets/emotes/fairy-tail.svg', price: 180 },
 ].map((item) => ({ ...item, slot: 'emote', unlockOnly: true }));
 
 // Trois illustrations de personnages complètent les deux artworks de série.
