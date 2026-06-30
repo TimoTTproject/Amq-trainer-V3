@@ -8,8 +8,8 @@ const { englishTitleFor } = require('./anime-titles');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
-const { rankRecommendations, artistTokens } = require('./recommendations');
-const { preferMainContent } = require('../catalog/format');
+const { rankRecommendations, artistTokens, isSideContent } = require('./recommendations');
+const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
 
 const router = express.Router();
@@ -147,11 +147,13 @@ router.get('/random', requirePlayer, async (req, res) => {
       const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
       songIds = f.map((s) => s.id);
     }
-    // Ma liste (mode normal) : priorise la série principale (exclut films/OAV connus),
-    // avec repli si ça vide tout (catalogue pas encore tagué, ou liste 100 % secondaire).
+    // Ma liste (mode normal) : priorise la série principale et exclut films/OAV/
+    // spéciaux — par le format quand il est connu, sinon d'après le TITRE (gère les
+    // morceaux non tagués `format: null`, qui passaient avant). Repli si ça vide tout.
     if (!source && songIds.length) {
-      const f = await prisma.song.findMany({ where: { id: { in: songIds }, ...preferMainContent }, select: { id: true } });
-      if (f.length) songIds = f.map((s) => s.id);
+      const rows = await prisma.song.findMany({ where: { id: { in: songIds } }, select: { id: true, animeTitle: true, format: true } });
+      const main = rows.filter((s) => (s.format ? isMainFormat(s.format) : !isSideContent(s.animeTitle)));
+      if (main.length) songIds = main.map((s) => s.id);
     }
     if (!songIds.length) {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
