@@ -21,9 +21,20 @@ const {
 
 const router = express.Router();
 
-// Construit un étage : une musique correcte + 3 distracteurs (animes distincts).
-// `excludeId` = son de l'étage précédent, évité pour ne pas avoir deux fois le
-// même son d'affilée.
+// Clé de « franchise » : nom normalisé sans saison/partie/format, pour éviter que
+// deux saisons d'une même série (ex. « [Oshi No Ko] » et « [Oshi No Ko] 2nd Season »)
+// apparaissent comme deux propositions distinctes — ce qui rend le QCM incohérent.
+function franchiseKey(title) {
+  return (title || '')
+    .toLowerCase()
+    .replace(/[\[\]()]/g, ' ')
+    .replace(/\b(\d+(st|nd|rd|th)\s+season|season\s*\d+|\d+(st|nd|rd|th)\s+cour|cour\s*\d+|part\s*\d+|the\s+final\s+season|final\s+season|the\s+final|kanketsu-?hen|s\d+|2nd|3rd|the\s+movie|movie|tv|ova|oad|special)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+// Construit un étage : une musique correcte + 3 distracteurs de franchises DISTINCTES.
+// `excludeId` = son de l'étage précédent : on évite non seulement ce son mais tout
+// l'anime correspondant, pour ne pas enchaîner deux sons de la même série.
 async function buildFloor(excludeId) {
   // Priorité à la série principale (exclut films/OAV connus), repli si trop peu de titres.
   let where = { videoUrl: { not: null }, ...preferMainContent };
@@ -31,8 +42,17 @@ async function buildFloor(excludeId) {
   if (total < 4) { where = { videoUrl: { not: null } }; total = await prisma.song.count({ where }); }
   if (total < 4) return null;
 
-  // Pour la bonne réponse, on exclut le son précédent (sauf si ça vide le pool).
-  const correctWhere = excludeId ? { ...where, id: { not: excludeId } } : where;
+  // Anime du son précédent → exclu de la bonne réponse (pas juste l'id du son).
+  let prevAnilistId = null;
+  if (excludeId) {
+    const prev = await prisma.song.findUnique({ where: { id: excludeId }, select: { anilistId: true } });
+    prevAnilistId = prev?.anilistId ?? null;
+  }
+  const correctWhere = {
+    ...where,
+    ...(excludeId ? { id: { not: excludeId } } : {}),
+    ...(prevAnilistId ? { anilistId: { not: prevAnilistId } } : {}),
+  };
   const correctTotal = excludeId ? await prisma.song.count({ where: correctWhere }) : total;
   const useExcl = correctTotal > 0;
   const correct = await prisma.song.findFirst({
@@ -42,20 +62,26 @@ async function buildFloor(excludeId) {
   });
   if (!correct) return null;
 
-  const titles = new Set([correct.animeTitle]);
+  // 3 distracteurs : franchises différentes du bon anime ET entre elles.
+  const usedKeys = new Set([franchiseKey(correct.animeTitle)]);
+  const options = [correct.animeTitle];
   let guard = 0;
-  while (titles.size < 4 && guard++ < 40) {
+  while (options.length < 4 && guard++ < 80) {
     const s = await prisma.song.findFirst({
       where,
       skip: Math.floor(Math.random() * total),
       select: { animeTitle: true },
     });
-    if (s) titles.add(s.animeTitle);
+    if (!s) continue;
+    const key = franchiseKey(s.animeTitle);
+    if (usedKeys.has(key)) continue; // même franchise (ou bon anime) → on saute
+    usedKeys.add(key);
+    options.push(s.animeTitle);
   }
-  if (titles.size < 4) return null;
+  if (options.length < 4) return null;
 
-  const options = shuffle([...titles]);
-  return { songId: correct.id, options, answer: options.indexOf(correct.animeTitle) };
+  const shuffled = shuffle(options);
+  return { songId: correct.id, options: shuffled, answer: shuffled.indexOf(correct.animeTitle) };
 }
 
 // Représentation cliente d'un étage (sans révéler la bonne réponse).
