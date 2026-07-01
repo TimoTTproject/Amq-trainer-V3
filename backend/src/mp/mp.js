@@ -243,6 +243,7 @@ function spectate(socket, roomId) {
         round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
         coop: room.mode === 'coop', teamLives: room.teamLives, spectator: true,
         clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt: Date.now(), duration: remaining,
+        voteSkip: { votes: skipVoteCount(room), needed: skipVotesNeeded(room) },
       });
     }
   } else {
@@ -405,11 +406,12 @@ async function startRound(room) {
   const durationMs = roundDurationMs(room);
   const startAt = Date.now() + prepMs;
   const endsAt = startAt + durationMs;
-  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set() };
+  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set() };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
     coop: room.mode === 'coop', teamLives: room.teamLives,
     clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: durationMs,
+    voteSkip: { votes: 0, needed: skipVotesNeeded(room) },
   });
   room.timer = setTimeout(() => endRound(room), prepMs + durationMs);
 }
@@ -488,6 +490,44 @@ function onSkip(socket) {
   if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
 }
 
+// Vote pour passer l'extrait en cours (son cassé/détesté) : majorité des joueurs
+// actifs (connectés, non éliminés) requise. Ne compte que les votes de joueurs
+// toujours éligibles au moment du calcul (un départ recalcule le quorum).
+function skipVotesNeeded(room) {
+  const eligible = connectedPlayers(room).filter((p) => !p.eliminated).length;
+  return Math.max(1, Math.ceil(eligible / 2));
+}
+function skipVoteCount(room) {
+  if (!room.current) return 0;
+  const eligible = new Set(connectedPlayers(room).filter((p) => !p.eliminated).map((p) => p.userId));
+  let count = 0;
+  for (const uid of room.current.skipVotes) if (eligible.has(uid)) count++;
+  return count;
+}
+// Écourte la manche (sans pénalité) si le quorum de votes est atteint. Appelé
+// après chaque vote ET après un départ de joueur (le quorum peut changer sans
+// nouveau vote). Idempotent : ne fait rien si la manche est déjà terminée/écourtée.
+function maybeSkipByVote(room) {
+  if (!room.current || room.current.votedSkip) return false;
+  if (skipVoteCount(room) < skipVotesNeeded(room)) return false;
+  room.current.votedSkip = true;
+  clearTimeout(room.timer);
+  endRound(room);
+  return true;
+}
+function onVoteSkip(socket) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || !room.current) return;
+  const uid = socket.data.user.id;
+  const player = room.players.get(uid);
+  if (!player || player.eliminated) return;
+  const cur = room.current;
+  if (cur.skipVotes.has(uid)) cur.skipVotes.delete(uid);
+  else cur.skipVotes.add(uid);
+  io.to(room.id).emit('mp:voteskip:update', { votes: skipVoteCount(room), needed: skipVotesNeeded(room) });
+  maybeSkipByVote(room);
+}
+
 function aliveCount(room) {
   return [...room.players.values()].filter((p) => !p.eliminated).length;
 }
@@ -503,8 +543,10 @@ function endRound(room) {
   room.current = null;
   const s = cur.song;
 
-  // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé
-  if (room.mode === 'elim') {
+  // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé.
+  // Sauf si la manche a été écourtée par vote (son cassé/détesté) : personne
+  // n'est pénalisé pour ne pas avoir eu le temps de répondre.
+  if (room.mode === 'elim' && !cur.votedSkip) {
     for (const p of room.players.values()) {
       if (p.eliminated) continue;
       if (!cur.answers.get(p.userId)?.correct) {
@@ -515,8 +557,9 @@ function endRound(room) {
   }
 
   // Coop : l'étage est franchi si AU MOINS un joueur a trouvé ; sinon −1 vie commune.
+  // Un étage écourté par vote n'est ni franchi ni raté : il est simplement annulé.
   let floorCleared = false;
-  if (room.mode === 'coop') {
+  if (room.mode === 'coop' && !cur.votedSkip) {
     floorCleared = [...cur.answers.values()].some((a) => a.correct);
     if (floorCleared) room.coopCleared = (room.coopCleared || 0) + 1;
     else room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
@@ -540,6 +583,7 @@ function endRound(room) {
     io.to(room.id).emit('mp:round:result', {
       round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds, mode: room.mode,
       coop: room.mode === 'coop', teamLives: room.teamLives, floorCleared,
+      skipped: !!cur.votedSkip,
       answer: {
         songId: s.id,
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
@@ -814,6 +858,9 @@ function removePlayer(room, userId) {
     if (conn.length && conn.every((pl) => room.current.answers.get(pl.userId)?.correct)) {
       clearTimeout(room.timer);
       endRound(room);
+    } else if (!maybeSkipByVote(room)) {
+      // Le départ change le quorum (dénominateur) même sans nouveau vote.
+      io.to(room.id).emit('mp:voteskip:update', { votes: skipVoteCount(room), needed: skipVotesNeeded(room) });
     }
   }
   broadcastRoom(room);
@@ -879,6 +926,8 @@ function reattach(socket) {
         duration: remaining, resumed: true,
         alreadyAnswered: !!room.current.answers.get(uid)?.correct,
         alreadyPassed: room.current.passed.has(uid),
+        voteSkip: { votes: skipVoteCount(room), needed: skipVotesNeeded(room) },
+        alreadyVotedSkip: room.current.skipVotes.has(uid),
       });
     }
   }
@@ -1010,9 +1059,13 @@ function initMp(server) {
     });
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
     socket.on('mp:skip', () => onSkip(socket));
+    socket.on('mp:voteskip', () => onVoteSkip(socket));
     socket.on('disconnect', () => { removeOnline(socket); onDisconnect(socket); });
   });
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP };
+module.exports = {
+  initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound,
+  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount,
+};

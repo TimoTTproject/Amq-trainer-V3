@@ -779,7 +779,8 @@ body.guest-mode .feedback-buttons { display: none !important; }
 #mp-game .media-wrapper { border-radius: 16px; }
 #mp-game .answer-area { gap: 12px; margin-top: 20px; }
 #mp-game #mp-input { padding: 14px 16px; font-size: 1.05rem; }
-#mp-game #mp-submit, #mp-game #mp-skip { padding: 13px 22px; font-size: 1rem; }
+#mp-game #mp-submit, #mp-game #mp-skip, #mp-game #mp-voteskip { padding: 13px 22px; font-size: 1rem; }
+#mp-voteskip.active { background: var(--accent); color: #fff; }
 #mp-game .mp-result { padding: 18px 22px; margin: 20px auto; font-size: 1.05rem; max-width: 660px; }
 #mp-game .mp-scores { gap: 8px; margin-top: 18px; }
 #mp-game .mp-score-row { padding: 12px 16px; }
