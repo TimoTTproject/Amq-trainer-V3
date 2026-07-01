@@ -13,11 +13,17 @@ const ROUND_TTL = '30m'; // une manche doit être validée dans les 30 min
 // `sat` (start-at, en secondes epoch) date le DÉBUT de la manche : il sert de
 // référence au bonus de vitesse et est préservé quand on passe en Carré/Duo
 // (sinon l'aide remettrait le chrono à zéro). Signé → non falsifiable par le client.
-function issueRoundToken({ userId, songId, ranked, level = 'cash', startedAt }) {
+// `mode`/`source`/`series` mémorisent le périmètre (catalogue perso, entraînement…)
+// dans lequel la musique a été tirée, pour piocher les distracteurs Carré/Duo dans
+// ce même périmètre (sinon la bonne réponse est la seule que le joueur connaît).
+function issueRoundToken({ userId, songId, ranked, level = 'cash', startedAt, mode, source, series }) {
   return jwt.sign(
     {
       rt: true, uid: userId, sid: songId, ranked: !!ranked, level,
       sat: startedAt || Math.floor(Date.now() / 1000),
+      ...(mode ? { mode } : {}),
+      ...(source ? { source } : {}),
+      ...(series ? { series } : {}),
       jti: crypto.randomUUID(),
     },
     JWT_SECRET,
