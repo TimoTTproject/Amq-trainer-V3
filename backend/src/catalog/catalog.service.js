@@ -102,11 +102,45 @@ async function searchAnimeThemes(query) {
   return data.anime || [];
 }
 
-// Recherche les thèmes d'un anime sur animethemes.moe. Essaie plusieurs requêtes
-// (titre principal puis titres alternatifs) pour améliorer le taux de correspondance
-// — beaucoup d'animes se trouvent mieux via leur titre anglais.
-async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
+// Résolution fiable par identifiant AniList : animethemes.moe référence les sites externes
+// (AniList, MAL…) de chaque anime. Contrairement à la recherche floue par titre — qui peut
+// se tromper d'anime pour des franchises proches (film/OVA/compilation au titre voisin,
+// ex. « Parallel Works » confondu avec la série TV) — cette correspondance est univoque.
+// Repli sur la recherche par titre uniquement si l'anime n'a pas (encore) de ressource
+// AniList référencée là-bas.
+async function fetchAnimeByAnilistId(anilistId) {
+  await throttle();
+  const params = new URLSearchParams({
+    'filter[site]': 'AniList',
+    'filter[external_id]': String(anilistId),
+    include: 'anime.animethemes.song.artists,anime.animethemes.animethemeentries.videos',
+  });
+  const url = `${ANIMETHEMES_API}/resources?${params.toString()}`;
+  let res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  if (res.status === 429) {
+    const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
+    await new Promise((r) => setTimeout(r, wait));
+    res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  }
+  if (!res.ok) return null;
+  const data = await res.json();
+  for (const resource of data.resources || []) {
+    const anime = (resource.anime || [])[0];
+    if (anime) return anime;
+  }
+  return null;
+}
+
+// Recherche les thèmes d'un anime sur animethemes.moe. Essaie d'abord la correspondance
+// univoque par anilistId, puis se replie sur la recherche floue par titre (titre principal
+// puis titres alternatifs) — beaucoup d'animes se trouvent mieux via leur titre anglais.
+async function fetchThemesFromAnimeThemes(animeTitle, synonyms = [], anilistId = null) {
   try {
+    if (anilistId) {
+      const anime = await fetchAnimeByAnilistId(anilistId);
+      if (anime) return extractThemes(anime, animeTitle);
+    }
+
     // string-similarity est sensible à la casse → on compare en minuscules.
     // (AniList renvoie certains titres tout en majuscules : ONE PIECE, NARUTO…)
     const key = (s) => normalizeAnimeName(s).toLowerCase();
@@ -157,7 +191,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
   if (scanned) return [];
 
   // 3) Jamais exploré → recherche animethemes (une seule fois).
-  const themes = await fetchThemesFromAnimeThemes(animeTitle, synonyms);
+  const themes = await fetchThemesFromAnimeThemes(animeTitle, synonyms, anilistId);
   const cleanTitle = normalizeAnimeName(animeTitle);
   const rows = [];
   for (const t of themes) {
@@ -261,7 +295,7 @@ async function scanEndingsBatch(limit = 20) {
   let added = 0;
   for (const a of batch) {
     try {
-      const themes = await fetchThemesFromAnimeThemes(a.animeTitle, []);
+      const themes = await fetchThemesFromAnimeThemes(a.animeTitle, [], a.anilistId);
       const eds = themes.filter((t) => t.type === 'ED');
       if (eds.length) {
         const ref = await prisma.song.findFirst({ where: { anilistId: a.anilistId }, select: { popularity: true, altTitles: true } });
@@ -353,4 +387,14 @@ async function repairBrokenTitlesBatch(limit = 50) {
   return { processed: slice.length, fixed, remaining: Math.max(0, badIds.length - slice.length) };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, isSeasonFragment, buildAltTitles, scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch };
+module.exports = {
+  importUserList,
+  getOrCreateSongsForAnime,
+  normalizeAnimeName,
+  isSeasonFragment,
+  buildAltTitles,
+  scanEndingsBatch,
+  backfillFormatsBatch,
+  repairBrokenTitlesBatch,
+  fetchThemesFromAnimeThemes,
+};
