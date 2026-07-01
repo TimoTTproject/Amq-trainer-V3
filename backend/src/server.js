@@ -184,7 +184,7 @@ setInterval(async () => {
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
 // Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
-const { repairBrokenTitlesBatch } = require('./catalog/catalog.service');
+const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('./catalog/catalog.service');
 async function repairCatalogTitles() {
   try {
     let total = 0;
@@ -204,6 +204,22 @@ setTimeout(() => {
     .then((ok) => { if (ok) repairCatalogTitles(); })
     .catch(() => {});
 }, 25000);
+
+// Nettoyage unique des synonymes ambigus (franchises à nombreuses saisons — le
+// nom générique de la franchise, ex. « Pokemon », listé comme synonyme AniList
+// de chaque saison, rendait n'importe laquelle acceptée comme réponse pour
+// n'importe quelle autre). Aucun appel réseau → une seule passe suffit.
+setTimeout(() => {
+  store.setIfAbsent('catalog-alt-titles-dedupe:v1', 12 * 3600)
+    .then(async (ok) => {
+      if (!ok) return;
+      try {
+        const r = await dedupeAmbiguousAltTitles();
+        if (r.updated) console.log(`  → Synonymes ambigus retirés : ${r.updated} anime(s) sur ${r.scanned} (${r.ambiguousKeys} synonyme(s) ambigu(s)).`);
+      } catch (e) { console.error('dédup synonymes ambigus:', e && e.message); }
+    })
+    .catch(() => {});
+}, 30000);
 
 server.listen(PORT, () => {
   console.log(`\n  Anime Music Quiz`);
