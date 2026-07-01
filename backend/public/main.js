@@ -31,7 +31,13 @@ let appReadyPromise = null;
 let appUiReady = false;
 let currentView = null;
 let suppressHistory = false;
-const video = () => document.getElementById('quiz-video');
+// Deux lecteurs partagent le même emplacement (cf. index.html) : `activeVideoId`
+// dit lequel est actuellement affiché/joué. video() le renvoie toujours ; l'autre
+// sert à précharger la manche suivante en arrière-plan (cf. prefetchNextRound).
+let activeVideoId = 'quiz-video';
+const video = () => document.getElementById(activeVideoId);
+const preloadVideoEl = () => document.getElementById(activeVideoId === 'quiz-video' ? 'quiz-video-b' : 'quiz-video');
+let prefetchedRound = null; // { qs, song, roundToken, liked, reward, rewardCap } ou null
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -496,7 +502,7 @@ function showView(name, options = {}) {
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
   if (name !== 'quiz') {
-    const qv = document.getElementById('quiz-video');
+    const qv = video();
     if (qv && !qv.paused) qv.pause();
     clearTimeout(clipTimer); clearTimeout(chronoTimer); clearTimeout(autoNextTimer);
     if (typeof stopRewardGauge === 'function') stopRewardGauge();
@@ -1632,8 +1638,18 @@ function resetQuizToStart() {
   currentRoundToken = null;
   currentLevel = 'cash';
   roundReward = null;
-  const v = video();
-  if (v) { try { v.pause(); } catch {} v.removeAttribute('src'); try { v.load(); } catch {} delete v.dataset.clipUrl; }
+  prefetchedRound = null; // une manche préchargée n'a plus de sens après un reset complet
+  [video(), preloadVideoEl()].forEach((v) => {
+    if (!v) return;
+    try { v.pause(); } catch {}
+    v.removeAttribute('src'); try { v.load(); } catch {}
+    delete v.dataset.clipUrl;
+  });
+  // Repart toujours sur le lecteur d'origine visible (au cas où un échange aurait
+  // eu lieu juste avant ce reset complet).
+  document.getElementById('quiz-video-b')?.classList.add('hidden');
+  document.getElementById('quiz-video')?.classList.remove('hidden');
+  activeVideoId = 'quiz-video';
   resetQuizUI();
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
@@ -1857,13 +1873,10 @@ function syncTypeFilter() {
   document.querySelectorAll('#type-filter .tf-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === quizType));
 }
 
-async function nextSong() {
-  clearTimeout(autoNextTimer);
-  // Nouvelle session finie (solo classique) : remet les compteurs à zéro.
-  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; }
-  resetQuizUI();
-  setHint('Chargement…');
-  let song, roundToken, liked, reward;
+// Query string du tirage aléatoire, selon les réglages courants — utilisé aussi
+// bien pour le tirage normal que pour le préchargement en arrière-plan (cf.
+// prefetchNextRound), afin que les deux soient toujours strictement identiques.
+function buildRandomQuery() {
   const SOURCES = ['review', 'missed', 'liked', 'due', 'series'];
   let qs;
   if (trainingSource && SOURCES.includes(trainingSource)) {
@@ -1875,15 +1888,68 @@ async function nextSong() {
     qs = `mode=${mode}&ranked=${gameMode === 'ranked'}`;
   }
   if (quizType && quizType !== 'all') qs += `&type=${quizType}`;
+  return qs;
+}
+
+// Précharge la manche suivante (tirage + début de buffering vidéo) pendant le
+// temps mort naturel de la révélation, dans le lecteur caché — pour que « Manche
+// suivante » démarre quasi instantanément au lieu de ré-attendre l'appel réseau
+// ET le buffering de l'extrait depuis zéro. Best-effort : en cas d'échec ou de
+// réglages changés entre-temps, nextSong() se rabat simplement sur un tirage normal.
+async function prefetchNextRound() {
+  if (quizSessionEnded) return; // la session est finie, une nouvelle partie redémarrera proprement
+  const qs = buildRandomQuery();
   try {
-    let capData;
-    ({ song, roundToken, liked, reward, rewardCap: capData } = await api(`/api/quiz/random?${qs}`));
-    rewardCap = capData || null; // null en entraînement/non classé
-    renderRewardCap(rewardCap);
-  } catch (err) {
-    setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
-    return;
+    const { song, roundToken, liked, reward, rewardCap: capData } = await api(`/api/quiz/random?${qs}`);
+    if (buildRandomQuery() !== qs) return; // réglages changés pendant l'attente → on jette
+    const pv = preloadVideoEl();
+    pv.dataset.clipUrl = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`;
+    pv.src = pv.dataset.clipUrl;
+    pv.preload = 'auto';
+    pv.load();
+    prefetchedRound = { qs, song, roundToken, liked, reward, rewardCap: capData };
+  } catch {
+    prefetchedRound = null; // tant pis, nextSong() referra un tirage normal
   }
+}
+
+// Bascule le lecteur actif vers celui qui a été préchargé (déjà en cours de
+// chargement) : video() renverra désormais cet élément. L'ancien est libéré.
+function swapToPreloadedVideo() {
+  const old = video();
+  const next = preloadVideoEl();
+  if (old) { try { old.pause(); } catch {} old.removeAttribute('src'); try { old.load(); } catch {} delete old.dataset.clipUrl; }
+  old?.classList.add('hidden');
+  next.classList.remove('hidden');
+  activeVideoId = next.id;
+}
+
+async function nextSong() {
+  clearTimeout(autoNextTimer);
+  // Nouvelle session finie (solo classique) : remet les compteurs à zéro.
+  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; }
+  resetQuizUI();
+  const qs = buildRandomQuery();
+  let song, roundToken, liked, reward;
+  const usingPrefetch = !!(prefetchedRound && prefetchedRound.qs === qs);
+  if (usingPrefetch) {
+    ({ song, roundToken, liked, reward } = prefetchedRound);
+    rewardCap = prefetchedRound.rewardCap || null;
+    renderRewardCap(rewardCap);
+  } else {
+    prefetchedRound = null; // périmé (réglages différents) ou jamais abouti → on jette
+    setHint('Chargement…');
+    try {
+      let capData;
+      ({ song, roundToken, liked, reward, rewardCap: capData } = await api(`/api/quiz/random?${qs}`));
+      rewardCap = capData || null; // null en entraînement/non classé
+      renderRewardCap(rewardCap);
+    } catch (err) {
+      setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
+      return;
+    }
+  }
+  prefetchedRound = null; // consommée (ou jamais eue) : plus valable pour la manche suivante
   currentSong = song;
   currentRoundToken = roundToken;
   roundReward = reward || null;
@@ -1894,13 +1960,16 @@ async function nextSong() {
   resetAssist();
   answered = false;
   if (!isTraining && settings.count > 0) quizCount++; // session finie en cours
+  if (usingPrefetch) swapToPreloadedVideo(); // le lecteur caché prend la place du visible
   const v = video();
   await closePictureInPictureFor(v);
   const clipUrl = `/api/quiz/clip/${song.id}?rt=${encodeURIComponent(roundToken)}`;
-  v.dataset.clipUrl = clipUrl;
-  v.src = clipUrl; // flux proxifié (anti-triche)
-  v.preload = 'auto';
-  v.load();
+  if (!usingPrefetch) {
+    v.dataset.clipUrl = clipUrl;
+    v.src = clipUrl; // flux proxifié (anti-triche)
+    v.preload = 'auto';
+    v.load();
+  } // sinon déjà chargée (ou en cours) par prefetchNextRound()
   v.volume = getVolume();
   showOverlay(true); // mode audio : on masque l'image, le son joue quand même
 
@@ -2249,6 +2318,10 @@ function revealAnswerBox(answer) {
     // Enchaînement automatique vers la manche suivante (option)
     autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, 4000);
   }
+  // Profite du temps mort de la révélation (4 s d'auto-enchaînement, ou le temps
+  // que le joueur clique sur « Manche suivante ») pour précharger la manche
+  // d'après en arrière-plan — cf. prefetchNextRound().
+  if (!sessionDone) prefetchNextRound();
 }
 
 // Mode entraînement : révèle la réponse sans scorer ni gagner de tokens

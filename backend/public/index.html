@@ -558,7 +558,11 @@
     <!-- Quiz -->
     <section class="quiz-panel">
       <div class="media-wrapper" id="media-wrapper">
-        <video id="quiz-video" playsinline preload="auto" disablepictureinpicture></video>
+        <video id="quiz-video" class="quiz-video-el" playsinline preload="auto" disablepictureinpicture></video>
+        <!-- 2ᵉ lecteur cachée : précharge la manche suivante pendant la révélation
+             de la manche en cours (cf. prefetchNextRound côté JS), puis prend la
+             place de la première (échangées via activeVideoId, jamais déplacées). -->
+        <video id="quiz-video-b" class="quiz-video-el hidden" playsinline preload="auto" disablepictureinpicture></video>
         <!-- couvre la vidéo en mode "audio seul" (la vidéo reste rendue et joue le son) -->
         <div class="audio-overlay" id="audio-overlay"><i class="fas fa-music"></i></div>
       </div>
