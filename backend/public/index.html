@@ -585,7 +585,7 @@
         <button id="like-btn" class="btn-secondary" title="Ajouter à ma playlist" disabled><i class="far fa-heart"></i></button>
         <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
         <button id="show-answer-btn" class="btn-secondary"><i class="fas fa-lightbulb"></i> Voir la réponse</button>
-        <button id="skip-btn" class="btn-secondary hidden"><i class="fas fa-forward-step"></i> Passer</button>
+        <button id="skip-btn" class="btn-secondary hidden" title="Passer (Échap)"><i class="fas fa-forward-step"></i> Passer</button>
         <button id="next-btn" class="btn-primary"><i class="fas fa-play"></i> Démarrer</button>
       </div>
 
@@ -1284,8 +1284,8 @@
             <div id="mp-suggestions" class="anime-suggestions hidden" role="listbox"></div>
           </div>
           <button class="btn-primary" id="mp-submit">Valider</button>
-          <button class="btn-secondary" id="mp-skip" title="Je ne sais pas"><i class="fas fa-forward"></i> Passer</button>
-          <button class="btn-secondary" id="mp-voteskip" title="Voter pour passer cet extrait (son cassé, mauvais rip…)"><i class="fas fa-ban"></i> <span id="mp-voteskip-label">Voter pour passer</span></button>
+          <button class="btn-secondary" id="mp-skip" title="Je ne sais pas (Échap)"><i class="fas fa-forward"></i> Passer</button>
+          <button class="btn-secondary" id="mp-voteskip" title="Voter pour passer cet extrait (son cassé, mauvais rip…) — Maj+Échap"><i class="fas fa-ban"></i> <span id="mp-voteskip-label">Voter pour passer</span></button>
         </div>
         <div class="mp-emotes" id="mp-emotes"></div>
         <p id="mp-feedback" class="gacha-msg"></p>
@@ -1337,6 +1337,7 @@
 
       <h3>🎯 Le principe</h3>
       <p>Un extrait d'<b>opening</b> (ou d'<b>ending</b>) d'anime est joué : devine de quel anime il s'agit en tapant son titre. L'orthographe approximative et les titres alternatifs (romaji, anglais…) sont acceptés.</p>
+      <p class="about-sub">Jouable 100% au clavier : touches <b>1-9</b> pour choisir en QCM (Carré/Duo), <b>Échap</b> pour passer, <b>Maj+Échap</b> pour voter passer en multijoueur.</p>
 
       <h3>🎮 Modes de jeu</h3>
       <ul>
