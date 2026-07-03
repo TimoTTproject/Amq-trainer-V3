@@ -517,6 +517,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .header-more-menu #logout-btn { width: 100%; height: auto; min-height: 44px; padding: 10px 14px; }
 .header-more-menu #logout-btn span { display: inline; }
 
+.reward-caps-popover {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 40;
+  min-width: 240px; max-width: 300px; padding: 12px 14px;
+  background: #101217; border: 1px solid #343943; border-radius: 7px;
+  box-shadow: 8px 8px 0 rgba(5, 6, 9, .8);
+  font-size: .85rem;
+}
+.reward-caps-popover h4 { margin: 0 0 10px; font-size: .9rem; }
+.reward-cap-row { margin-bottom: 10px; }
+.reward-cap-row:last-child { margin-bottom: 0; }
+.reward-cap-row .reward-cap-label { display: flex; justify-content: space-between; color: var(--text-2); margin-bottom: 4px; }
+.reward-cap-bar { height: 6px; border-radius: 4px; background: var(--bg-3); overflow: hidden; }
+.reward-cap-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.reward-cap-fill.full { background: var(--red, #ff6b6b); }
+.reward-cap-reset { font-size: .78rem; color: var(--text-2); margin-top: 3px; }
+
 body.guest-mode .navbar .nav-item:not([data-nav="play"]),
 body.guest-mode .token-badge,
 body.guest-mode #profile-btn,

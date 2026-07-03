@@ -40,7 +40,7 @@ function roundDurationMs(room) {
   return room.mode === 'coop' ? coopRoundMs(room.round) : room.settings.roundMs;
 }
 const TEAM_NAMES = ['Rouge', 'Bleu'];
-const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀', '🤓'];
 const ANIME_EMOTE_BY_ID = new Map(ANIME_EMOTES.map((item) => [item.id, item]));
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
@@ -55,6 +55,16 @@ const MP_MIN_PLAYERS_REWARD = 2; // au moins 2 comptes distincts pour récompens
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// État du plafond quotidien (multi + coop, budget partagé) pour un utilisateur.
+// `resetAt` = minuit prochain (heure serveur), cohérent avec todayStr().
+function mpCapState(user) {
+  const today = todayStr();
+  const used = user.mpRewardDay === today ? (user.mpRewardToday || 0) : 0;
+  const now = new Date();
+  const resetAt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  return { used, max: MP_DAILY_CAP, resetAt };
 }
 
 function shuffle(a) {
@@ -1075,5 +1085,5 @@ function initMp(server) {
 
 module.exports = {
   initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound,
-  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount,
+  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_DAILY_CAP,
 };

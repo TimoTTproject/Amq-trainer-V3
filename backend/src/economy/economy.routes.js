@@ -2,6 +2,8 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { quizCapState, QUIZ_CAP } = require('../quiz/quiz.routes');
+const { mpCapState, MP_DAILY_CAP } = require('../mp/mp');
 
 const router = express.Router();
 
@@ -60,6 +62,22 @@ router.get('/balance', requireAuth, async (req, res) => {
   });
   if (!user) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(user);
+});
+
+// État des plafonds anti-farm (quiz solo : fenêtre glissante 6h ; multi/coop :
+// quotidien) — consultable hors quiz (ex. clic sur la monnaie dans l'en-tête).
+router.get('/reward-caps', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { quizRewardAt: true, quizRewardWindow: true, mpRewardDay: true, mpRewardToday: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+  const quiz = quizCapState(user);
+  const multiplayer = mpCapState(user);
+  res.json({
+    quiz: { used: quiz.used, max: QUIZ_CAP, resetAt: quiz.resetAt },
+    multiplayer: { used: multiplayer.used, max: MP_DAILY_CAP, resetAt: multiplayer.resetAt },
+  });
 });
 
 router.get('/transactions', requireAuth, async (req, res) => {

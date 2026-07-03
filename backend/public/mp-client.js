@@ -29,7 +29,7 @@ function updateCoopLives() {
 }
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
-const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀', '🤓'];
 const mpFreeEmoteItems = () => MP_FREE_EMOTES.map((symbol) => ({ id: symbol, symbol }));
 let mpEmotes = mpFreeEmoteItems();
 const mpVideo = () => document.getElementById('mp-video');

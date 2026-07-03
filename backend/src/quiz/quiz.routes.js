@@ -706,4 +706,4 @@ router.get('/stats', requireAuth, async (req, res) => {
   res.json({ played, correct, rate: played ? Math.round((correct / played) * 100) : 0 });
 });
 
-module.exports = { router };
+module.exports = { router, quizCapState, QUIZ_CAP };

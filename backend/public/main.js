@@ -1207,6 +1207,7 @@ function setupAppUI() {
   };
   headerMenuButton.addEventListener('click', (event) => {
     event.stopPropagation();
+    document.getElementById('reward-caps-popover')?.classList.add('hidden');
     setHeaderMenu(headerMenu.classList.contains('hidden'));
   });
   document.addEventListener('click', (event) => {
@@ -1218,6 +1219,50 @@ function setupAppUI() {
       headerMenuButton.focus();
     }
   });
+
+  // Plafonds anti-farm (quiz solo 6h glissant + multi/coop quotidien) : popup au
+  // clic sur la monnaie, hors quiz — jusque-là seulement visible pendant une manche.
+  const rewardCapsBtn = document.getElementById('reward-caps-btn');
+  const rewardCapsPopover = document.getElementById('reward-caps-popover');
+  const setRewardCapsPopover = (open) => {
+    rewardCapsPopover.classList.toggle('hidden', !open);
+    rewardCapsBtn.setAttribute('aria-expanded', String(open));
+  };
+  const rewardCapRow = (label, cap) => {
+    const pct = cap.max ? Math.min(100, Math.round((cap.used / cap.max) * 100)) : 0;
+    const msLeft = Math.max(0, cap.resetAt - Date.now());
+    const h = Math.floor(msLeft / 3600000);
+    const m = Math.floor((msLeft % 3600000) / 60000);
+    const resetTxt = h > 0 ? `reset dans ${h} h ${String(m).padStart(2, '0')}` : `reset dans ${m} min`;
+    return `<div class="reward-cap-row">
+      <div class="reward-cap-label"><span>${label}</span><span>${cap.used}/${cap.max} 🪙</span></div>
+      <div class="reward-cap-bar"><div class="reward-cap-fill${pct >= 100 ? ' full' : ''}" style="width:${pct}%"></div></div>
+      <div class="reward-cap-reset">${resetTxt}</div>
+    </div>`;
+  };
+  rewardCapsBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!rewardCapsPopover.classList.contains('hidden')) return setRewardCapsPopover(false);
+    setHeaderMenu(false);
+    rewardCapsPopover.innerHTML = '<p class="hint">Chargement…</p>';
+    setRewardCapsPopover(true);
+    try {
+      const data = await api('/api/economy/reward-caps');
+      rewardCapsPopover.innerHTML = `<h4>Plafonds anti-farm</h4>${rewardCapRow('🎯 Quiz solo (6h)', data.quiz)}${rewardCapRow('🎮 Multi / Coop (jour)', data.multiplayer)}`;
+    } catch (e) {
+      rewardCapsPopover.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
+    }
+  });
+  document.addEventListener('click', (event) => {
+    if (!rewardCapsPopover.classList.contains('hidden') && !event.target.closest('.user-section')) setRewardCapsPopover(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !rewardCapsPopover.classList.contains('hidden')) {
+      setRewardCapsPopover(false);
+      rewardCapsBtn.focus();
+    }
+  });
+
   document.getElementById('dev-tokens-btn').addEventListener('click', devGrantTokens);
   const muteBtn = document.getElementById('mute-btn');
   const updateMuteIcon = () => {
