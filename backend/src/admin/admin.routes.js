@@ -255,16 +255,22 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
 
 // Recalcule la rareté de TOUS les personnages par rang de popularité (favourites).
 // Restaure la pyramide quel que soit le total (écrase les raretés manuelles).
+// Resynchronise aussi maxSupply/soldOut sur la nouvelle rareté (sinon un perso qui
+// change de palier garde l'ancien stock max, ex. Mythique avec un cap de Légendaire).
 router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) => {
-  const all = await prisma.character.findMany({ select: { id: true, favourites: true } });
+  const all = await prisma.character.findMany({ select: { id: true, favourites: true, rarity: true, minted: true } });
   all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
   const total = all.length;
   if (!total) return res.json({ total: 0, counts: {} });
 
+  // Regroupe par (nouvelle rareté, ancienne rareté) pour ne resynchroniser le stock
+  // que sur les personnages dont la rareté change réellement.
   const byRarity = {};
+  const changedByRarity = {};
   all.forEach((c, i) => {
     const r = rarityForRank(i, total);
     (byRarity[r] ||= []).push(c.id);
+    if (r !== c.rarity) (changedByRarity[r] ||= []).push(c);
   });
 
   // updateMany par rareté, en lots de 500 ids (limite de taille de requête)
@@ -275,6 +281,15 @@ router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) =
     for (let i = 0; i < ids.length; i += 500) {
       const chunk = ids.slice(i, i + 500);
       ops.push(prisma.character.updateMany({ where: { id: { in: chunk } }, data: { rarity } }));
+    }
+  }
+  // Pour les personnages qui changent de rareté, aligne maxSupply sur le nouveau
+  // palier (jamais sous le nombre déjà en circulation) et met à jour soldOut.
+  for (const [rarity, chars] of Object.entries(changedByRarity)) {
+    const cap = MAX_SUPPLY[rarity] || 1000000;
+    for (const c of chars) {
+      const maxSupply = Math.max(cap, c.minted);
+      ops.push(prisma.character.update({ where: { id: c.id }, data: { maxSupply, soldOut: c.minted >= maxSupply } }));
     }
   }
   await prisma.$transaction(ops);
