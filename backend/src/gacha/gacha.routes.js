@@ -90,6 +90,35 @@ router.get('/info', async (req, res) => {
   });
 });
 
+// Fil des derniers tirages Légendaire+ (tous joueurs confondus), pour le hub d'accueil.
+router.get('/recent-pulls', requireAuth, async (req, res) => {
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit) || 12));
+  const pulls = await prisma.cardInstance.findMany({
+    where: { character: { rarity: { in: ['legendary', 'mythic'] } } },
+    orderBy: { obtainedAt: 'desc' },
+    take: limit,
+    select: {
+      serial: true,
+      obtainedAt: true,
+      character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } },
+      user: { select: { id: true, displayName: true, avatarUrl: true } },
+    },
+  });
+  res.json({
+    pulls: pulls.map((p) => ({
+      characterId: p.character.id,
+      name: p.character.name,
+      imageUrl: p.character.imageUrl,
+      rarity: p.character.rarity,
+      rarityLabel: RARITY_LABELS[p.character.rarity],
+      series: p.character.series,
+      serial: p.serial,
+      obtainedAt: p.obtainedAt,
+      user: { id: p.user.id, displayName: p.user.displayName, avatarUrl: p.user.avatarUrl },
+    })),
+  });
+});
+
 // Stats de tirage de l'utilisateur : répartition par rareté (réelle vs attendue)
 // + indice de chance. La « valeur » d'une rareté = 1/probabilité, si bien que
 // l'espérance par tirage vaut le nombre de raretés → indice 100% = pile dans la moyenne.

@@ -549,6 +549,7 @@ function showView(name, options = {}) {
     history[method]({ view: name }, '', url);
   }
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
+  if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
 }
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
@@ -2482,6 +2483,46 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('home-quests').addEventListener('click', (e) => {
     const b = e.target.closest('.quest-claim');
     if (b) claimQuest(b.dataset.qid, b);
+  });
+});
+
+// ── Hub d'accueil : derniers tirages Légendaire+ (tous joueurs) ──
+function timeAgo(iso) {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return 'à l’instant';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `il y a ${h} h`;
+  return `il y a ${Math.floor(h / 24)} j`;
+}
+
+async function loadRecentPulls() {
+  const box = document.getElementById('home-recent-pulls');
+  if (!box) return;
+  try {
+    const { pulls } = await api('/api/gacha/recent-pulls?limit=12');
+    if (!pulls || !pulls.length) { box.innerHTML = ''; return; }
+    box.innerHTML =
+      `<h3 class="quests-title"><i class="fas fa-bolt"></i> Derniers tirages Légendaire+</h3>
+      <div class="recent-pulls-strip">${pulls.map((p) => {
+        const img = p.imageUrl ? `style="background-image:url('${p.imageUrl}')"` : '';
+        return `<button class="recent-pull-card r-${p.rarity}" data-cid="${p.characterId}" title="${escapeHtml(p.name)}">
+          <div class="rp-img" ${img}></div>
+          <span class="rp-rarity r-${p.rarity}">${p.rarityLabel}</span>
+          <span class="rp-name">${escapeHtml(p.name)}</span>
+          ${p.series ? `<span class="rp-series">${escapeHtml(p.series)}</span>` : ''}
+          <span class="rp-user">${p.user.avatarUrl ? `<img class="rp-avatar" src="${p.user.avatarUrl}" alt="">` : ''}${escapeHtml(p.user.displayName)}</span>
+          <span class="rp-time">${timeAgo(p.obtainedAt)}</span>
+        </button>`;
+      }).join('')}</div>`;
+  } catch { box.innerHTML = ''; }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('home-recent-pulls').addEventListener('click', (e) => {
+    const b = e.target.closest('.recent-pull-card');
+    if (b && typeof openCharacter === 'function') openCharacter(b.dataset.cid);
   });
 });
 
