@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { rankRecommendations, artistTokens, isSideContent } = require('../src/quiz/recommendations');
+const { rankRecommendations, artistTokens, isSideContent, songKey } = require('../src/quiz/recommendations');
 const { englishTitleFor } = require('../src/quiz/anime-titles');
 
 test('artistTokens splits collaborations into individual performers', () => {
@@ -86,6 +86,41 @@ test('keeps the first selection diverse', () => {
 
   const ranked = rankRecommendations({ candidates, limit: 4 });
   assert.ok(ranked.filter((song) => song.anilistId === 10).length <= 2);
+});
+
+test('never recommends a song already in the playlist, even under a different anilistId', () => {
+  // Le catalogue contient parfois un doublon du même opening rattaché à un
+  // anilistId différent (film/compilation mal matché à l'import).
+  const likedSongs = [
+    { id: 1, anilistId: 10, animeTitle: 'Tengen Toppa Gurren Lagann', artist: 'Shouko Nakagawa', type: 'OP', number: 1 },
+  ];
+  const candidates = [
+    { id: 2, anilistId: 999, animeTitle: 'Tengen Toppa Gurren Lagann · Parallel Works', artist: 'Shouko Nakagawa', type: 'OP', number: 1, title: 'Sorairo Days', popularity: 100 },
+    { id: 3, anilistId: 30, animeTitle: 'Anime C', artist: 'Other', type: 'OP', number: 1, title: 'Some Song', popularity: 10 },
+  ];
+  const ranked = rankRecommendations({
+    likedSongs: likedSongs.map((s) => ({ ...s, title: 'Sorairo Days' })),
+    candidates,
+    limit: 5,
+  });
+  assert.ok(!ranked.some((song) => song.id === 2));
+});
+
+test('deduplicates identical candidates catalogued under different anilistIds', () => {
+  const candidates = [
+    { id: 1, anilistId: 10, animeTitle: 'Anime A', artist: 'Artist', type: 'OP', number: 1, title: 'Song', popularity: 50 },
+    { id: 2, anilistId: 20, animeTitle: 'Anime A Movie', artist: 'Artist', type: 'OP', number: 1, title: 'Song', popularity: 5, format: 'MOVIE' },
+  ];
+  const ranked = rankRecommendations({ candidates, limit: 5 });
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].id, 1); // garde la version "série principale", pas le film
+});
+
+test('songKey ignores case/whitespace and identifies the same track regardless of anilistId', () => {
+  assert.equal(
+    songKey({ type: 'OP', number: 1, title: ' Sorairo Days ', artist: 'Shouko Nakagawa' }),
+    songKey({ type: 'OP', number: 1, title: 'sorairo days', artist: 'shouko nakagawa' })
+  );
 });
 
 test('extracts the English AniList title without mistaking synonyms', () => {

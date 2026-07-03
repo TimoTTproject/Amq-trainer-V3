@@ -16,6 +16,9 @@ let mpEliminated = false; // moi, en mode élimination
 let mpCoop = false; // mode coop (Tour en équipe)
 let mpTeamLives = 0; // vies partagées en coop
 let mpSpectating = false; // je regarde une partie (lecture seule, pas joueur)
+let mpVotedSkip = false; // ai-je voté pour passer l'extrait en cours ?
+let mpVoteSkipVotes = 0;
+let mpVoteSkipNeeded = 1;
 
 // Affiche les vies partagées de l'équipe (coop) dans le HUD.
 function updateCoopLives() {
@@ -26,7 +29,7 @@ function updateCoopLives() {
 }
 let mpEngaged = false; // suis-je dans une salle/file (≠ simple consultation du menu) ?
 let mpLeft = false; // ai-je quitté volontairement la vue ? (ignore les events en vol)
-const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const MP_FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀', '🤓'];
 const mpFreeEmoteItems = () => MP_FREE_EMOTES.map((symbol) => ({ id: symbol, symbol }));
 let mpEmotes = mpFreeEmoteItems();
 const mpVideo = () => document.getElementById('mp-video');
@@ -244,6 +247,7 @@ function connectMp() {
     mpMode = d.mode || 'classic';
     mpTeamNames = d.teamNames || ['Rouge', 'Bleu'];
     mpEliminated = false;
+    mpVotedSkip = false;
     mpCoop = !!d.coop;
     mpTeamLives = d.teamLives || 0;
     const myTeam = (d.players.find((p) => p.name === currentUser.displayName) || {}).team;
@@ -278,7 +282,17 @@ function connectMp() {
     document.getElementById('mp-feedback').textContent = mpSpectating ? '👁 Tu regardes la partie'
       : mpEliminated ? '💀 Éliminé — tu es spectateur'
       : d.alreadyAnswered ? '✅ Déjà répondu' : d.alreadyPassed ? '⏭️ Tu as passé' : (d.resumed ? '↩️ Reconnecté' : '');
+    mpVotedSkip = !!d.alreadyVotedSkip; // false sur une manche neuve, restauré si reconnexion
+    mpVoteSkipVotes = d.voteSkip?.votes ?? 0;
+    mpVoteSkipNeeded = d.voteSkip?.needed ?? 1;
+    renderMpVoteSkip();
     mpStartClip(d.clipUrl, d.startAt, d.duration);
+  });
+
+  mpSocket.on('mp:voteskip:update', (d) => {
+    mpVoteSkipVotes = d.votes;
+    mpVoteSkipNeeded = d.needed;
+    renderMpVoteSkip();
   });
 
   mpSocket.on('mp:round:preload', (d) => {
@@ -330,7 +344,8 @@ function connectMp() {
     const englishTitle = d.answer.englishTitle && d.answer.englishTitle !== d.answer.animeTitle
       ? ` <span class="mp-answer-english">(${escapeHtml(d.answer.englishTitle)})</span>`
       : '';
-    res.innerHTML = `<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
+    const skippedBanner = d.skipped ? '<div class="mp-coop-banner">⏭️ Extrait passé au vote</div>' : '';
+    res.innerHTML = `${skippedBanner}<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
     // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
@@ -509,8 +524,10 @@ function renderRoom(d) {
     document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
     document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
+    document.getElementById('mp-set-source').value = d.settings.songSource || (d.isPublic ? 'lists' : 'global');
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
+    document.getElementById('mp-set-source').disabled = !isHost;
     // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto → on
     // masque les champs Mode, Manches et Temps (l'encart coop explique tout).
     document.getElementById('mp-field-mode').classList.toggle('hidden', isCoop);
@@ -745,12 +762,31 @@ function mpSkip() {
   if (document.getElementById('mp-skip').disabled || !mpSocket) return;
   mpSocket.emit('mp:skip');
 }
+
+// Vote pour passer l'extrait en cours (son cassé, mauvais rip…) — indépendant de
+// « Passer » : reste disponible même après avoir déjà répondu/passé, tant que la
+// manche est en cours. Bascule (toggle) : re-cliquer retire son vote.
+function renderMpVoteSkip() {
+  const btn = document.getElementById('mp-voteskip');
+  if (!btn) return;
+  btn.disabled = mpEliminated || mpSpectating;
+  btn.classList.toggle('active', mpVotedSkip);
+  const label = document.getElementById('mp-voteskip-label');
+  if (label) label.textContent = `Voter pour passer (${mpVoteSkipVotes}/${mpVoteSkipNeeded})`;
+}
+function mpVoteSkip() {
+  if (!mpSocket || mpEliminated || mpSpectating) return;
+  mpVotedSkip = !mpVotedSkip; // optimiste : confirmé par le décompte mp:voteskip:update
+  renderMpVoteSkip();
+  mpSocket.emit('mp:voteskip');
+}
 function mpSettingsPayload() {
   return {
     rounds: parseInt(document.getElementById('mp-set-rounds').value),
     roundMs: parseInt(document.getElementById('mp-set-speed').value),
     mode: document.getElementById('mp-set-mode').value,
     themeType: document.getElementById('mp-set-theme').value,
+    songSource: document.getElementById('mp-set-source').value,
   };
 }
 
@@ -803,6 +839,7 @@ function initMpUI() {
   document.getElementById('mp-set-speed').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-mode').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-theme').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-source').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {
@@ -811,6 +848,7 @@ function initMpUI() {
   });
   document.getElementById('mp-submit').addEventListener('click', mpSubmitGuess);
   document.getElementById('mp-skip').addEventListener('click', mpSkip);
+  document.getElementById('mp-voteskip').addEventListener('click', mpVoteSkip);
   document.getElementById('mp-again').addEventListener('click', () => {
     // retour au salon (privé) ou au menu (rapide)
     if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }

@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP } = require('../src/mp/mp');
+const {
+  everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP,
+  skipVotesNeeded, skipVoteCount,
+} = require('../src/mp/mp');
 
 test('rawReward = bonnes réponses ×2 + bonus de placement, plafonné par partie', () => {
   assert.equal(rawReward({ correct: 0 }, 1), 20); // 0 + bonus 1er
@@ -65,6 +68,36 @@ test('adds only purchased anime emotes to the free multiplayer reactions', () =>
   assert.equal(unlocked.length, free.length + 2);
   assert.ok(unlocked.some((item) => item.id === 'emote-naruto' && item.imageUrl.endsWith('/official/sharingan.png')));
   assert.ok(unlocked.some((item) => item.id === 'emote-death-note' && item.imageUrl.endsWith('/official/death-note.jpg')));
+});
+
+test('vote-skip needs a strict majority of active (connected, non-eliminated) players', () => {
+  const room = roomWithTwoPlayers();
+  assert.equal(skipVotesNeeded(room), 1); // 2 joueurs → 1 vote suffit (majorité)
+  room.players.set('u3', { userId: 'u3', connected: true, eliminated: false });
+  assert.equal(skipVotesNeeded(room), 2); // 3 joueurs → 2 votes
+  room.players.get('u2').connected = false; // déconnecté → hors quorum
+  assert.equal(skipVotesNeeded(room), 1); // 2 actifs restants (u1, u3) → 1 vote
+});
+
+test('vote-skip always requires at least one vote, even with zero eligible players', () => {
+  const room = roomWithTwoPlayers();
+  room.players.get('u1').eliminated = true;
+  room.players.get('u2').eliminated = true;
+  assert.equal(skipVotesNeeded(room), 1); // jamais 0 (pas de skip automatique)
+});
+
+test('skipVoteCount only counts votes from currently eligible players', () => {
+  const room = roomWithTwoPlayers();
+  room.current.skipVotes = new Set(['u1']);
+  assert.equal(skipVoteCount(room), 1);
+  room.current.skipVotes.add('u2');
+  assert.equal(skipVoteCount(room), 2);
+  // u2 se déconnecte : son vote antérieur ne compte plus tant qu'il n'est pas revenu.
+  room.players.get('u2').connected = false;
+  assert.equal(skipVoteCount(room), 1);
+  // Un joueur éliminé ne peut pas non plus faire pencher le quorum.
+  room.players.get('u1').eliminated = true;
+  assert.equal(skipVoteCount(room), 0);
 });
 
 test('serves the preloaded song only for the upcoming round', () => {

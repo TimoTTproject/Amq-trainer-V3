@@ -28,19 +28,77 @@ function shuffle(arr) {
   return a;
 }
 
-// Propositions pour Carré/Duo : bonne réponse + distracteurs (animes distincts)
-async function buildChoices(song, count) {
+// Propositions pour Carré/Duo : bonne réponse + distracteurs (animes distincts).
+// `titlePool`, quand fourni, restreint les distracteurs au catalogue/à la source
+// d'où vient la question (sinon des animes piochés dans tout le catalogue global
+// se distinguent trop facilement de ceux que le joueur a réellement dans sa liste,
+// ce qui trahit la bonne réponse par élimination). On complète avec le catalogue
+// global si ce périmètre ne contient pas assez d'animes distincts.
+async function buildChoices(song, count, titlePool = null) {
   const titles = new Set([song.animeTitle]);
-  const total = await prisma.song.count();
-  let guard = 0;
-  while (titles.size < count && guard++ < 40) {
-    const s = await prisma.song.findFirst({
-      skip: Math.floor(Math.random() * total),
-      select: { animeTitle: true },
-    });
-    if (s) titles.add(s.animeTitle);
+  if (titlePool && titlePool.length) {
+    for (const t of shuffle(titlePool)) {
+      if (titles.size >= count) break;
+      if (t !== song.animeTitle) titles.add(t);
+    }
+  }
+  if (titles.size < count) {
+    const total = await prisma.song.count();
+    let guard = 0;
+    while (titles.size < count && guard++ < 40) {
+      const s = await prisma.song.findFirst({
+        skip: Math.floor(Math.random() * total),
+        select: { animeTitle: true },
+      });
+      if (s) titles.add(s.animeTitle);
+    }
   }
   return shuffle([...titles]);
+}
+
+// Résout l'ensemble des ids de musiques d'un mode/source d'entraînement pour un
+// utilisateur — partagé entre le tirage (/random) et les distracteurs Carré/Duo
+// (/choices), pour que les deux piochent dans exactement le même périmètre.
+async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
+  let songIds;
+  if (source === 'review') {
+    songIds = await getReviewSongIds(userId);
+  } else if (source === 'due') {
+    const stats = await prisma.userSongStat.findMany({
+      where: { userId, srsDueAt: { not: null, lte: new Date() } },
+      select: { songId: true },
+    });
+    songIds = stats.map((s) => s.songId);
+  } else if (source === 'series') {
+    const rows = await prisma.song.findMany({
+      where: { animeTitle: series || '', videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) },
+      select: { id: true },
+    });
+    songIds = rows.map((r) => r.id);
+  } else if (source) {
+    const where = { userId };
+    if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
+    else where.liked = true;
+    const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
+    songIds = stats.map((s) => s.songId);
+  } else {
+    const entries = await prisma.userCatalogEntry.findMany({ where: { userId }, select: { songId: true } });
+    songIds = entries.map((e) => e.songId);
+  }
+  // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series')
+  if (typeFilter && source !== 'series' && songIds.length) {
+    const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
+    songIds = f.map((s) => s.id);
+  }
+  // Ma liste (mode normal) : priorise la série principale et exclut films/OAV/
+  // spéciaux — par le format quand il est connu, sinon d'après le TITRE (gère les
+  // morceaux non tagués `format: null`, qui passaient avant). Repli si ça vide tout.
+  if (!source && songIds.length) {
+    const rows = await prisma.song.findMany({ where: { id: { in: songIds } }, select: { id: true, animeTitle: true, format: true } });
+    const main = rows.filter((s) => (s.format ? isMainFormat(s.format) : !isSideContent(s.animeTitle)));
+    if (main.length) songIds = main.map((s) => s.id);
+  }
+  return songIds;
 }
 
 // Répétition espacée : prochaine échéance selon la série de bonnes réponses.
@@ -120,6 +178,7 @@ router.get('/random', requirePlayer, async (req, res) => {
   // Filtre type de thème : 'OP' | 'ED' | (rien = les deux)
   const typeFilter = ['OP', 'ED'].includes(req.query.type) ? req.query.type : null;
 
+  const series = source === 'series' ? (req.query.series || '').trim() : undefined;
   let song = null;
   if (!source && mode === 'global') {
     // Perf : on évite de charger tous les ids → count + skip aléatoire.
@@ -131,42 +190,7 @@ router.get('/random', requirePlayer, async (req, res) => {
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
-    let songIds;
-    if (source === 'review') {
-      songIds = await getReviewSongIds(req.user.id);
-    } else if (source === 'due') {
-      const stats = await prisma.userSongStat.findMany({
-        where: { userId: req.user.id, srsDueAt: { not: null, lte: new Date() } },
-        select: { songId: true },
-      });
-      songIds = stats.map((s) => s.songId);
-    } else if (source === 'series') {
-      const series = (req.query.series || '').trim();
-      const rows = await prisma.song.findMany({ where: { animeTitle: series, videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) }, select: { id: true } });
-      songIds = rows.map((r) => r.id);
-    } else if (source) {
-      const where = { userId: req.user.id };
-      if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
-      else where.liked = true;
-      const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
-      songIds = stats.map((s) => s.songId);
-    } else {
-      const entries = await prisma.userCatalogEntry.findMany({ where: { userId: req.user.id }, select: { songId: true } });
-      songIds = entries.map((e) => e.songId);
-    }
-    // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series')
-    if (typeFilter && source !== 'series' && songIds.length) {
-      const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
-      songIds = f.map((s) => s.id);
-    }
-    // Ma liste (mode normal) : priorise la série principale et exclut films/OAV/
-    // spéciaux — par le format quand il est connu, sinon d'après le TITRE (gère les
-    // morceaux non tagués `format: null`, qui passaient avant). Repli si ça vide tout.
-    if (!source && songIds.length) {
-      const rows = await prisma.song.findMany({ where: { id: { in: songIds } }, select: { id: true, animeTitle: true, format: true } });
-      const main = rows.filter((s) => (s.format ? isMainFormat(s.format) : !isSideContent(s.animeTitle)));
-      if (main.length) songIds = main.map((s) => s.id);
-    }
+    const songIds = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter });
     if (!songIds.length) {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
     }
@@ -175,7 +199,9 @@ router.get('/random', requirePlayer, async (req, res) => {
   }
   if (!song) return res.status(404).json({ error: 'Aucune musique disponible' });
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
-  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash' });
+  // mode/source/series sont mémorisés pour piocher les distracteurs Carré/Duo dans
+  // le même périmètre que la question (cf. /choices).
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash', mode, source, series });
   const stat = guest
     ? null
     : await prisma.userSongStat.findUnique({
@@ -224,10 +250,27 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   const song = await prisma.song.findUnique({ where: { id: round.sid } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
-  const options = await buildChoices(song, LEVEL_COUNT[level]);
+  // Distracteurs pris dans le même périmètre que la question (catalogue perso /
+  // source d'entraînement) : sinon des animes purement aléatoires du catalogue
+  // global se distinguent trop facilement de ceux que le joueur connaît vraiment,
+  // ce qui trahit la bonne réponse par élimination.
+  let titlePool = null;
+  if (round.mode === 'mine' || round.source) {
+    const ids = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, typeFilter: null });
+    if (ids.length) {
+      const rows = await prisma.song.findMany({ where: { id: { in: ids } }, select: { animeTitle: true } });
+      titlePool = [...new Set(rows.map((r) => r.animeTitle))];
+    }
+  }
+
+  const options = await buildChoices(song, LEVEL_COUNT[level], titlePool);
   // Préserve `sat` : le chrono de vitesse court depuis le début de la manche, pas
-  // depuis le passage en Carré/Duo.
-  const roundToken = issueRoundToken({ userId: req.user.id, songId: round.sid, ranked: round.ranked, level, startedAt: round.sat });
+  // depuis le passage en Carré/Duo. mode/source/series aussi, pour un éventuel
+  // second appel (Duo → Carré n'existe pas actuellement mais reste cohérent).
+  const roundToken = issueRoundToken({
+    userId: req.user.id, songId: round.sid, ranked: round.ranked, level, startedAt: round.sat,
+    mode: round.mode, source: round.source, series: round.series,
+  });
   let reward;
   if (round.ranked) {
     const stat = await prisma.userSongStat.findUnique({
@@ -268,45 +311,67 @@ router.get('/training-stats', requireAuth, async (req, res) => {
   res.json({ review: reviewIds.length, missed, liked, mine, due, scheduled, mastered });
 });
 
+// Rafraîchit (si expiré) le cache des séries : titre + synonymes normalisés de
+// chaque anime distinct du catalogue. Partagé par /series (recherche serveur,
+// entraînement ciblé) et /series-all (liste complète, autocomplétion de réponse).
+async function ensureSeriesSearchCache() {
+  if (seriesSearchCache.expiresAt >= Date.now()) return;
+  const rows = await prisma.song.findMany({
+    where: { videoUrl: { not: null } },
+    select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
+    orderBy: { popularity: 'desc' },
+  });
+  const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
+  seriesSearchCache = {
+    expiresAt: Date.now() + 5 * 60 * 1000,
+    entries: uniqueRows.map((row) => {
+      const englishTitle = englishTitleFor(row);
+      return {
+        title: row.animeTitle,
+        englishTitle,
+        popularity: row.popularity || 0,
+        searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
+      };
+    }),
+  };
+}
+
+// Liste complète (titre + synonymes normalisés) pour l'autocomplétion de réponse
+// pendant le quiz : chargée UNE FOIS côté client puis filtrée localement (cf.
+// anime-autocomplete.js), pour éliminer l'aller-retour réseau à chaque frappe —
+// c'est ce qui rendait l'autocomplétion perceptiblement plus lente que sur AMQ,
+// qui filtre entièrement côté client (indépendant de la qualité de connexion).
+router.get('/series-all', requirePlayer, async (req, res) => {
+  await ensureSeriesSearchCache();
+  res.json({
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, popularity, searchTitles }) => ({
+      title, englishTitle, popularity, searchTitles,
+    })),
+  });
+});
+
 // Recherche de séries (animes) pour l'entraînement ciblé
 router.get('/series', requirePlayer, async (req, res) => {
   const q = (req.query.q || '').trim();
   if (q.length < 1) return res.json({ series: [], suggestions: [] });
-  if (seriesSearchCache.expiresAt < Date.now()) {
-    const rows = await prisma.song.findMany({
-      where: { videoUrl: { not: null } },
-      select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
-      orderBy: { popularity: 'desc' },
-    });
-    const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
-    seriesSearchCache = {
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      entries: uniqueRows.map((row) => {
-        const englishTitle = englishTitleFor(row);
-        return {
-          title: row.animeTitle,
-          englishTitle,
-          popularity: row.popularity || 0,
-          searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
-        };
-      }),
-    };
-  }
+  await ensureSeriesSearchCache();
   const needle = q.toLocaleLowerCase();
+  // Un seul passage par entrée pour calculer l'index de correspondance (au lieu de
+  // le refaire à chaque comparaison du tri, ce qui rend la frappe saccadée quand le
+  // catalogue grossit) : on décore, on trie sur ces valeurs déjà calculées, on retire.
   const suggestions = seriesSearchCache.entries
-    .filter((entry) => entry.searchTitles.some((title) => title.includes(needle)))
-    .sort((a, b) => {
-      const ai = Math.min(...a.searchTitles.map((title) => {
+    .map((entry) => {
+      let matchIndex = Number.MAX_SAFE_INTEGER;
+      for (const title of entry.searchTitles) {
         const index = title.indexOf(needle);
-        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
-      }));
-      const bi = Math.min(...b.searchTitles.map((title) => {
-        const index = title.indexOf(needle);
-        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
-      }));
-      return ai - bi || b.popularity - a.popularity || a.title.localeCompare(b.title);
+        if (index >= 0 && index < matchIndex) matchIndex = index;
+      }
+      return { entry, matchIndex };
     })
-    .slice(0, 20);
+    .filter(({ matchIndex }) => matchIndex !== Number.MAX_SAFE_INTEGER)
+    .sort((a, b) => a.matchIndex - b.matchIndex || b.entry.popularity - a.entry.popularity || a.entry.title.localeCompare(b.entry.title))
+    .slice(0, 20)
+    .map(({ entry }) => entry);
   res.json({
     series: suggestions.map((entry) => entry.title),
     suggestions: suggestions.map(({ title, englishTitle }) => ({ title, englishTitle })),
@@ -641,4 +706,4 @@ router.get('/stats', requireAuth, async (req, res) => {
   res.json({ played, correct, rate: played ? Math.round((correct / played) * 100) : 0 });
 });
 
-module.exports = { router };
+module.exports = { router, quizCapState, QUIZ_CAP };

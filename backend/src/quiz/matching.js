@@ -4,7 +4,11 @@ const stringSimilarity = require('string-similarity');
 
 // Normalisation : minuscules + on retire ponctuation/espaces. Le « ∞ » stylisé
 // (ex. « SK∞ » = SK8 the Infinity) est converti en « 8 » pour rester saisissable.
-const norm = (s) => (s || '').toLowerCase().replace(/∞/g, '8').replace(/[^a-z0-9]/g, '');
+// L'apostrophe est gardée (variantes ’/` ramenées à ') : certaines suites portent
+// un titre qui ne diffère de l'original QUE par une apostrophe finale (ex. « Gintama »
+// / « Gintama' », deux animes distincts) — sans ça, les deux deviennent la même
+// chaîne et sont acceptés l'un pour l'autre.
+const norm = (s) => (s || '').toLowerCase().replace(/∞/g, '8').replace(/[’`]/g, "'").replace(/[^a-z0-9']/g, '');
 
 // Distance de Levenshtein (nombre de corrections entre deux chaînes)
 function editDistance(a, b) {
@@ -32,11 +36,22 @@ function isCorrectGuess(guess, song) {
     .filter((t) => t.length);
   return candidates.some((t) => {
     if (t === g) return true;
+    // Une apostrophe finale marque parfois une suite différente de l'original
+    // (« Gintama' » est un autre anime que « Gintama », pas juste une saison) :
+    // si les deux chaînes ne diffèrent QUE par cette apostrophe, on refuse — la
+    // tolérance aux fautes ci-dessous ne doit pas l'avaler comme un simple typo.
+    if (t === g + "'" || g === t + "'") return false;
     // Variante saison/partie : l'un est PRÉFIXE de l'autre et la partie commune
     // est majoritaire (≥ 50 %). Évite qu'un simple fragment (« online », « piece »…)
-    // ou qu'un titre court contenu dans une AUTRE réponse ne valide à tort.
+    // ou qu'un titre court contenu dans une AUTRE réponse ne valide à tort — et
+    // qu'une suite marquée par une apostrophe (idem) ne passe pour l'original.
     const [shorter, longer] = g.length <= t.length ? [g, t] : [t, g];
-    if (shorter.length >= 5 && longer.startsWith(shorter) && shorter.length / longer.length >= 0.5) return true;
+    if (
+      shorter.length >= 5 &&
+      longer.startsWith(shorter) &&
+      shorter.length / longer.length >= 0.5 &&
+      longer[shorter.length] !== "'"
+    ) return true;
     // 1-2 petites fautes, proportionnées à la longueur
     const dist = editDistance(g, t);
     if (dist <= 2 && dist / Math.max(g.length, t.length) <= 0.25) return true;

@@ -5,7 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
-const { scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch } = require('../catalog/catalog.service');
+const { scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
   r2Status,
@@ -201,6 +201,18 @@ router.post('/backfill-format', requireAuth, requireAdmin, async (req, res) => {
 router.post('/repair-titles', requireAuth, requireAdmin, async (req, res) => {
   try {
     const r = await repairBrokenTitlesBatch(50);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Retire les synonymes ambigus (ex. « Pokemon » listé sur chaque saison) qui
+// rendent des animes distincts interchangeables comme réponse. Aucun appel
+// réseau : passe complète en un seul appel (pas de boucle nécessaire).
+router.post('/dedupe-alt-titles', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await dedupeAmbiguousAltTitles();
     res.json(r);
   } catch (e) {
     res.status(502).json({ error: e.message });

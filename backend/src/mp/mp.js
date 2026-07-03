@@ -23,6 +23,7 @@ const VALID_ROUNDS = [5, 10, 15, 20];
 const VALID_ROUNDMS = [15000, 25000, 40000];
 const VALID_MODES = ['classic', 'teams', 'elim', 'coop'];
 const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
+const VALID_SONG_SOURCES = ['global', 'lists'];
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
 // Coop (Tour en équipe) : vies partagées, étages infinis, l'étage est validé si
@@ -39,7 +40,7 @@ function roundDurationMs(room) {
   return room.mode === 'coop' ? coopRoundMs(room.round) : room.settings.roundMs;
 }
 const TEAM_NAMES = ['Rouge', 'Bleu'];
-const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀'];
+const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀', '🤓'];
 const ANIME_EMOTE_BY_ID = new Map(ANIME_EMOTES.map((item) => [item.id, item]));
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
@@ -54,6 +55,16 @@ const MP_MIN_PLAYERS_REWARD = 2; // au moins 2 comptes distincts pour récompens
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// État du plafond quotidien (multi + coop, budget partagé) pour un utilisateur.
+// `resetAt` = minuit prochain (heure serveur), cohérent avec todayStr().
+function mpCapState(user) {
+  const today = todayStr();
+  const used = user.mpRewardDay === today ? (user.mpRewardToday || 0) : 0;
+  const now = new Date();
+  const resetAt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  return { used, max: MP_DAILY_CAP, resetAt };
 }
 
 function shuffle(a) {
@@ -144,7 +155,11 @@ function newRoom({ isPublic, ranked }) {
   const room = {
     id, isPublic, ranked: !!ranked, code: isPublic ? null : genCode(),
     hostId: null, players: new Map(),
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' },
+    // songSource : 'lists' pioche dans l'union des catalogues AniList des joueurs
+    // présents (par défaut en partie rapide, comme avant) ; 'global' pioche dans
+    // tout le catalogue (par défaut en salon privé, comme avant). Modifiable par
+    // l'hôte dans les deux cas (hors classé, toujours 'global', figé).
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global' },
     status: 'lobby', chat: [], round: 0, current: null,
     spectators: new Set(), // userIds qui regardent (pas des joueurs)
     usedSongIds: new Set(), usedAnilistIds: new Set(),
@@ -243,6 +258,7 @@ function spectate(socket, roomId) {
         round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
         coop: room.mode === 'coop', teamLives: room.teamLives, spectator: true,
         clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt: Date.now(), duration: remaining,
+        voteSkip: { votes: skipVoteCount(room), needed: skipVotesNeeded(room) },
       });
     }
   } else {
@@ -264,6 +280,7 @@ function applySettings(room, s) {
   if (VALID_ROUNDMS.includes(s.roundMs)) room.settings.roundMs = s.roundMs;
   if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
   if (VALID_THEME_TYPES.includes(s.themeType)) room.settings.themeType = s.themeType;
+  if (VALID_SONG_SOURCES.includes(s.songSource)) room.settings.songSource = s.songSource;
 }
 function setSettings(socket, s) {
   const room = rooms.get(socket.data.roomId);
@@ -300,10 +317,12 @@ async function startGame(room) {
   if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
   room.countdownEndsAt = 0;
 
-  // Partie rapide non classée : pool commun = union des listes des joueurs
-  // présents au lancement. Le classé et les salons privés gardent le catalogue global.
+  // Pool commun = union des listes AniList des joueurs présents, si l'hôte a
+  // choisi « listes des joueurs » (settings.songSource) — par défaut en partie
+  // rapide, modifiable en salon privé aussi. Le classé garde toujours le
+  // catalogue global (réglages figés, cf. applySettings).
   room.songPoolIds = null;
-  if (room.isPublic && !room.ranked) {
+  if (!room.ranked && room.settings.songSource === 'lists') {
     try {
       const entries = await prisma.userCatalogEntry.findMany({
         where: { userId: { in: [...room.players.keys()] } },
@@ -405,11 +424,12 @@ async function startRound(room) {
   const durationMs = roundDurationMs(room);
   const startAt = Date.now() + prepMs;
   const endsAt = startAt + durationMs;
-  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set() };
+  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set() };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
     coop: room.mode === 'coop', teamLives: room.teamLives,
     clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: durationMs,
+    voteSkip: { votes: 0, needed: skipVotesNeeded(room) },
   });
   room.timer = setTimeout(() => endRound(room), prepMs + durationMs);
 }
@@ -488,6 +508,44 @@ function onSkip(socket) {
   if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
 }
 
+// Vote pour passer l'extrait en cours (son cassé/détesté) : majorité des joueurs
+// actifs (connectés, non éliminés) requise. Ne compte que les votes de joueurs
+// toujours éligibles au moment du calcul (un départ recalcule le quorum).
+function skipVotesNeeded(room) {
+  const eligible = connectedPlayers(room).filter((p) => !p.eliminated).length;
+  return Math.max(1, Math.ceil(eligible / 2));
+}
+function skipVoteCount(room) {
+  if (!room.current) return 0;
+  const eligible = new Set(connectedPlayers(room).filter((p) => !p.eliminated).map((p) => p.userId));
+  let count = 0;
+  for (const uid of room.current.skipVotes) if (eligible.has(uid)) count++;
+  return count;
+}
+// Écourte la manche (sans pénalité) si le quorum de votes est atteint. Appelé
+// après chaque vote ET après un départ de joueur (le quorum peut changer sans
+// nouveau vote). Idempotent : ne fait rien si la manche est déjà terminée/écourtée.
+function maybeSkipByVote(room) {
+  if (!room.current || room.current.votedSkip) return false;
+  if (skipVoteCount(room) < skipVotesNeeded(room)) return false;
+  room.current.votedSkip = true;
+  clearTimeout(room.timer);
+  endRound(room);
+  return true;
+}
+function onVoteSkip(socket) {
+  const room = rooms.get(socket.data.roomId);
+  if (!room || !room.current) return;
+  const uid = socket.data.user.id;
+  const player = room.players.get(uid);
+  if (!player || player.eliminated) return;
+  const cur = room.current;
+  if (cur.skipVotes.has(uid)) cur.skipVotes.delete(uid);
+  else cur.skipVotes.add(uid);
+  io.to(room.id).emit('mp:voteskip:update', { votes: skipVoteCount(room), needed: skipVotesNeeded(room) });
+  maybeSkipByVote(room);
+}
+
 function aliveCount(room) {
   return [...room.players.values()].filter((p) => !p.eliminated).length;
 }
@@ -503,8 +561,10 @@ function endRound(room) {
   room.current = null;
   const s = cur.song;
 
-  // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé
-  if (room.mode === 'elim') {
+  // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé.
+  // Sauf si la manche a été écourtée par vote (son cassé/détesté) : personne
+  // n'est pénalisé pour ne pas avoir eu le temps de répondre.
+  if (room.mode === 'elim' && !cur.votedSkip) {
     for (const p of room.players.values()) {
       if (p.eliminated) continue;
       if (!cur.answers.get(p.userId)?.correct) {
@@ -515,8 +575,9 @@ function endRound(room) {
   }
 
   // Coop : l'étage est franchi si AU MOINS un joueur a trouvé ; sinon −1 vie commune.
+  // Un étage écourté par vote n'est ni franchi ni raté : il est simplement annulé.
   let floorCleared = false;
-  if (room.mode === 'coop') {
+  if (room.mode === 'coop' && !cur.votedSkip) {
     floorCleared = [...cur.answers.values()].some((a) => a.correct);
     if (floorCleared) room.coopCleared = (room.coopCleared || 0) + 1;
     else room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
@@ -540,6 +601,7 @@ function endRound(room) {
     io.to(room.id).emit('mp:round:result', {
       round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds, mode: room.mode,
       coop: room.mode === 'coop', teamLives: room.teamLives, floorCleared,
+      skipped: !!cur.votedSkip,
       answer: {
         songId: s.id,
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
@@ -814,6 +876,9 @@ function removePlayer(room, userId) {
     if (conn.length && conn.every((pl) => room.current.answers.get(pl.userId)?.correct)) {
       clearTimeout(room.timer);
       endRound(room);
+    } else if (!maybeSkipByVote(room)) {
+      // Le départ change le quorum (dénominateur) même sans nouveau vote.
+      io.to(room.id).emit('mp:voteskip:update', { votes: skipVoteCount(room), needed: skipVotesNeeded(room) });
     }
   }
   broadcastRoom(room);
@@ -879,6 +944,8 @@ function reattach(socket) {
         duration: remaining, resumed: true,
         alreadyAnswered: !!room.current.answers.get(uid)?.correct,
         alreadyPassed: room.current.passed.has(uid),
+        voteSkip: { votes: skipVoteCount(room), needed: skipVotesNeeded(room) },
+        alreadyVotedSkip: room.current.skipVotes.has(uid),
       });
     }
   }
@@ -1010,9 +1077,13 @@ function initMp(server) {
     });
     socket.on('mp:guess', (t) => onGuess(socket, String(t || '').slice(0, 120)));
     socket.on('mp:skip', () => onSkip(socket));
+    socket.on('mp:voteskip', () => onVoteSkip(socket));
     socket.on('disconnect', () => { removeOnline(socket); onDisconnect(socket); });
   });
   return io;
 }
 
-module.exports = { initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP };
+module.exports = {
+  initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound,
+  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_DAILY_CAP,
+};

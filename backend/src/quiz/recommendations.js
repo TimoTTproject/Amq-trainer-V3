@@ -32,6 +32,37 @@ function increment(map, key) {
   map.set(key, (map.get(key) || 0) + 1);
 }
 
+// Identifie un même morceau indépendamment de l'anilistId : le catalogue contient
+// parfois des doublons du même opening/ending rattachés à un anilistId différent
+// (film/compilation/single mal matché côté import) — on ne veut ni le recommander
+// s'il est déjà dans la playlist, ni le montrer deux fois dans les suggestions.
+function songKey(song) {
+  const title = String(song.title || '').trim().toLocaleLowerCase();
+  // Le titre est requis en base (jamais vide en pratique) : sans lui, deux entrées
+  // ne peuvent pas être confirmées identiques, donc on les traite comme distinctes.
+  if (!title) return `id:${song.id}`;
+  return [song.type || '', song.number || '', title, cleanArtist(song.artist)].join('|');
+}
+
+// Entre deux doublons du même morceau, garde la version « série principale »
+// (format connu non secondaire), puis la plus populaire.
+function betterDuplicate(a, b) {
+  const aSide = a.format && !isMainFormat(a.format);
+  const bSide = b.format && !isMainFormat(b.format);
+  if (aSide !== bSide) return aSide ? b : a;
+  return (b.popularity || 0) > (a.popularity || 0) ? b : a;
+}
+
+function dedupeSongs(songs) {
+  const byKey = new Map();
+  for (const song of songs) {
+    const key = songKey(song);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? betterDuplicate(existing, song) : song);
+  }
+  return [...byKey.values()];
+}
+
 function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCounts = new Map(), limit = 8 }) {
   const artistLikes = new Map();
   const seriesLikes = new Map();
@@ -42,6 +73,11 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
     increment(seriesLikes, song.anilistId);
     increment(typeLikes, song.type);
   }
+
+  // Écarte les candidats qui sont en réalité déjà dans la playlist (même morceau,
+  // simplement cataloguée sous un anilistId différent), puis les doublons entre eux.
+  const likedKeys = new Set(likedSongs.map(songKey));
+  candidates = dedupeSongs(candidates.filter((song) => !likedKeys.has(songKey(song))));
 
   const maxPopularity = Math.max(1, ...candidates.map((song) => song.popularity || 0));
   const maxCollaborative = Math.max(1, ...collaborativeCounts.values());
@@ -100,4 +136,4 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
   return selected.map(({ score, ...song }) => song);
 }
 
-module.exports = { rankRecommendations, artistTokens, isSideContent };
+module.exports = { rankRecommendations, artistTokens, isSideContent, songKey };

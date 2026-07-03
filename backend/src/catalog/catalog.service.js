@@ -2,6 +2,7 @@
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
 const { getCompletedAnime, getAnimeFormatsByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
+const { norm } = require('../quiz/matching');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
 // animethemes.moe renvoie 403 sans User-Agent identifiable
@@ -15,6 +16,80 @@ function buildAltTitles(media) {
   const t = media.title || {};
   const all = [t.romaji, t.english, t.native, ...(media.synonyms || [])];
   return [...new Set(all.filter((s) => s && typeof s === 'string' && s.trim()).map((s) => s.trim()))];
+}
+
+// Précision des réponses (franchises à nombreuses saisons — Pokémon, Yu-Gi-Oh…) :
+// AniList liste souvent le surnom générique de la franchise comme synonyme de
+// CHAQUE saison prise séparément (chacune a son propre anilistId). Gardé tel quel,
+// ce synonyme rend n'importe quelle saison acceptée comme réponse pour n'importe
+// quelle autre. Un titre/synonyme est « ambigu » s'il correspond (une fois
+// normalisé comme une réponse de joueur, cf. matching.js) à ≥ 2 anilistId distincts.
+// `entries` : [{ anilistId, animeTitle, altTitles }]. Renvoie l'ensemble des clés
+// normalisées ambiguës.
+function computeAmbiguousTitleKeys(entries) {
+  const owners = new Map(); // clé normalisée -> Set<anilistId>
+  const track = (anilistId, text) => {
+    const key = norm(text);
+    if (!key) return;
+    if (!owners.has(key)) owners.set(key, new Set());
+    owners.get(key).add(anilistId);
+  };
+  for (const entry of entries) {
+    track(entry.anilistId, entry.animeTitle);
+    for (const alt of entry.altTitles || []) track(entry.anilistId, alt);
+  }
+  const ambiguous = new Set();
+  for (const [key, ids] of owners) {
+    if (ids.size > 1) ambiguous.add(key);
+  }
+  return ambiguous;
+}
+
+// Retire les synonymes ambigus d'une liste — jamais le titre principal lui-même
+// (animeTitle n'est pas dans `altTitles`, donc toujours conservé).
+function stripAmbiguousAltTitles(altTitles, ambiguousKeys) {
+  return (altTitles || []).filter((alt) => !ambiguousKeys.has(norm(alt)));
+}
+
+// Filtre les synonymes d'un anime qu'on s'apprête à (re)cataloguer contre le reste
+// du catalogue déjà existant, pour ne pas introduire une nouvelle ambiguïté à
+// l'import. Ne couvre que le sens « nouveau synonyme entre en conflit avec de
+// l'existant » — l'autre sens (un ancien synonyme devient ambigu à cause d'un
+// import ultérieur) est traité par la passe de fond `dedupeAmbiguousAltTitles`.
+async function filterAmbiguousAltTitles(altTitles, anilistId) {
+  if (!altTitles || !altTitles.length) return altTitles || [];
+  const existing = await prisma.song.findMany({
+    where: { anilistId: { not: anilistId } },
+    distinct: ['anilistId'],
+    select: { animeTitle: true, altTitles: true },
+  });
+  const claimed = new Set();
+  for (const row of existing) {
+    claimed.add(norm(row.animeTitle));
+    for (const alt of row.altTitles || []) claimed.add(norm(alt));
+  }
+  return altTitles.filter((alt) => !claimed.has(norm(alt)));
+}
+
+// Passe de fond : nettoie les synonymes ambigus déjà présents dans tout le
+// catalogue (ex. catalogue importé avant l'existence de ce filtre). Auto-suffisant
+// (aucun appel réseau), rejouable à volonté — idempotent une fois les synonymes
+// retirés. Appelée une fois au démarrage (server.js) et disponible en admin.
+async function dedupeAmbiguousAltTitles() {
+  const rows = await prisma.song.findMany({
+    distinct: ['anilistId'],
+    select: { anilistId: true, animeTitle: true, altTitles: true },
+  });
+  const ambiguous = computeAmbiguousTitleKeys(rows);
+  let updated = 0;
+  for (const row of rows) {
+    const kept = stripAmbiguousAltTitles(row.altTitles, ambiguous);
+    if (kept.length !== (row.altTitles || []).length) {
+      await prisma.song.updateMany({ where: { anilistId: row.anilistId }, data: { altTitles: kept } });
+      updated++;
+    }
+  }
+  return { scanned: rows.length, ambiguousKeys: ambiguous.size, updated };
 }
 
 // Un titre n'est qu'un fragment de saison/partie (le vrai nom a disparu) : à éviter.
@@ -102,11 +177,45 @@ async function searchAnimeThemes(query) {
   return data.anime || [];
 }
 
-// Recherche les thèmes d'un anime sur animethemes.moe. Essaie plusieurs requêtes
-// (titre principal puis titres alternatifs) pour améliorer le taux de correspondance
-// — beaucoup d'animes se trouvent mieux via leur titre anglais.
-async function fetchThemesFromAnimeThemes(animeTitle, synonyms = []) {
+// Résolution fiable par identifiant AniList : animethemes.moe référence les sites externes
+// (AniList, MAL…) de chaque anime. Contrairement à la recherche floue par titre — qui peut
+// se tromper d'anime pour des franchises proches (film/OVA/compilation au titre voisin,
+// ex. « Parallel Works » confondu avec la série TV) — cette correspondance est univoque.
+// Repli sur la recherche par titre uniquement si l'anime n'a pas (encore) de ressource
+// AniList référencée là-bas.
+async function fetchAnimeByAnilistId(anilistId) {
+  await throttle();
+  const params = new URLSearchParams({
+    'filter[site]': 'AniList',
+    'filter[external_id]': String(anilistId),
+    include: 'anime.animethemes.song.artists,anime.animethemes.animethemeentries.videos',
+  });
+  const url = `${ANIMETHEMES_API}/resources?${params.toString()}`;
+  let res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  if (res.status === 429) {
+    const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
+    await new Promise((r) => setTimeout(r, wait));
+    res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
+  }
+  if (!res.ok) return null;
+  const data = await res.json();
+  for (const resource of data.resources || []) {
+    const anime = (resource.anime || [])[0];
+    if (anime) return anime;
+  }
+  return null;
+}
+
+// Recherche les thèmes d'un anime sur animethemes.moe. Essaie d'abord la correspondance
+// univoque par anilistId, puis se replie sur la recherche floue par titre (titre principal
+// puis titres alternatifs) — beaucoup d'animes se trouvent mieux via leur titre anglais.
+async function fetchThemesFromAnimeThemes(animeTitle, synonyms = [], anilistId = null) {
   try {
+    if (anilistId) {
+      const anime = await fetchAnimeByAnilistId(anilistId);
+      if (anime) return extractThemes(anime, animeTitle);
+    }
+
     // string-similarity est sensible à la casse → on compare en minuscules.
     // (AniList renvoie certains titres tout en majuscules : ONE PIECE, NARUTO…)
     const key = (s) => normalizeAnimeName(s).toLowerCase();
@@ -157,8 +266,12 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
   if (scanned) return [];
 
   // 3) Jamais exploré → recherche animethemes (une seule fois).
-  const themes = await fetchThemesFromAnimeThemes(animeTitle, synonyms);
+  const themes = await fetchThemesFromAnimeThemes(animeTitle, synonyms, anilistId);
   const cleanTitle = normalizeAnimeName(animeTitle);
+  // Précision des réponses : un synonyme déjà utilisé par un AUTRE anime du
+  // catalogue (ex. « Pokemon » sur chaque saison) rendrait celui-ci interchangeable
+  // avec l'autre — on ne le catalogue pas. (Inutile si 0 thème trouvé.)
+  const safeAltTitles = themes.length ? await filterAmbiguousAltTitles(altTitles, anilistId) : altTitles;
   const rows = [];
   for (const t of themes) {
     const row = await prisma.song.upsert({
@@ -170,7 +283,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
           title: t.title,
         },
       },
-      update: { videoUrl: t.videoUrl, artist: t.artist, popularity, altTitles, ...(format ? { format } : {}) },
+      update: { videoUrl: t.videoUrl, artist: t.artist, popularity, altTitles: safeAltTitles, ...(format ? { format } : {}) },
       create: {
         anilistId,
         animeTitle: cleanTitle,
@@ -180,7 +293,7 @@ async function getOrCreateSongsForAnime(anilistId, animeTitle, synonyms = [], po
         artist: t.artist,
         videoUrl: t.videoUrl,
         popularity,
-        altTitles,
+        altTitles: safeAltTitles,
         format,
       },
     });
@@ -261,7 +374,7 @@ async function scanEndingsBatch(limit = 20) {
   let added = 0;
   for (const a of batch) {
     try {
-      const themes = await fetchThemesFromAnimeThemes(a.animeTitle, []);
+      const themes = await fetchThemesFromAnimeThemes(a.animeTitle, [], a.anilistId);
       const eds = themes.filter((t) => t.type === 'ED');
       if (eds.length) {
         const ref = await prisma.song.findFirst({ where: { anilistId: a.anilistId }, select: { popularity: true, altTitles: true } });
@@ -343,7 +456,7 @@ async function repairBrokenTitlesBatch(limit = 50) {
     const raw = m.title?.romaji || m.title?.english || m.title?.native;
     const animeTitle = normalizeAnimeName(raw);
     if (isSeasonFragment(animeTitle)) continue; // toujours pas exploitable → on laisse
-    const data = { animeTitle, altTitles: buildAltTitles(m) };
+    const data = { animeTitle, altTitles: await filterAmbiguousAltTitles(buildAltTitles(m), id) };
     if (m.format) data.format = m.format;
     await prisma.song.updateMany({ where: { anilistId: id }, data });
     // Garder le titre du cache d'exploration cohérent
@@ -353,4 +466,18 @@ async function repairBrokenTitlesBatch(limit = 50) {
   return { processed: slice.length, fixed, remaining: Math.max(0, badIds.length - slice.length) };
 }
 
-module.exports = { importUserList, getOrCreateSongsForAnime, normalizeAnimeName, isSeasonFragment, buildAltTitles, scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch };
+module.exports = {
+  importUserList,
+  getOrCreateSongsForAnime,
+  normalizeAnimeName,
+  isSeasonFragment,
+  buildAltTitles,
+  scanEndingsBatch,
+  backfillFormatsBatch,
+  repairBrokenTitlesBatch,
+  fetchThemesFromAnimeThemes,
+  computeAmbiguousTitleKeys,
+  stripAmbiguousAltTitles,
+  filterAmbiguousAltTitles,
+  dedupeAmbiguousAltTitles,
+};

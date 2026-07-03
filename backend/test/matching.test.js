@@ -58,6 +58,22 @@ test('rejects partial fragments that are not a majority prefix', () => {
   assert.equal(isCorrectGuess('sword', { animeTitle: 'Sword Art Online', altTitles: [] }), false);
 });
 
+test('does not confuse a title with its apostrophe-suffixed sequel (Gintama vs Gintama\')', () => {
+  // « Gintama' » est une suite distincte de « Gintama », pas une simple variante
+  // de saison : les deux ne doivent pas se valider l'un l'autre.
+  const gintama = { animeTitle: 'Gintama', altTitles: [] };
+  const gintamaPrime = { animeTitle: "Gintama'", altTitles: [] };
+  assert.equal(isCorrectGuess("Gintama'", gintama), false);
+  assert.equal(isCorrectGuess('Gintama', gintamaPrime), false);
+  // La suite plus longue (« Gintama': Enchousen ») ne doit pas non plus passer
+  // pour « Gintama » via le préfixe majoritaire.
+  const enchousen = { animeTitle: "Gintama': Enchousen", altTitles: [] };
+  assert.equal(isCorrectGuess('Gintama', enchousen), false);
+  // Les deux restent bien sûr reconnaissables par leur propre nom exact.
+  assert.ok(isCorrectGuess('Gintama', gintama));
+  assert.ok(isCorrectGuess("Gintama'", gintamaPrime));
+});
+
 test('rejects empty, too-short or wrong guesses', () => {
   const song = { animeTitle: 'Naruto', altTitles: ['ナルト'] };
   assert.equal(isCorrectGuess('', song), false);
