@@ -23,6 +23,7 @@ const VALID_ROUNDS = [5, 10, 15, 20];
 const VALID_ROUNDMS = [15000, 25000, 40000];
 const VALID_MODES = ['classic', 'teams', 'elim', 'coop'];
 const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
+const VALID_SONG_SOURCES = ['global', 'lists'];
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
 // Coop (Tour en équipe) : vies partagées, étages infinis, l'étage est validé si
@@ -144,7 +145,11 @@ function newRoom({ isPublic, ranked }) {
   const room = {
     id, isPublic, ranked: !!ranked, code: isPublic ? null : genCode(),
     hostId: null, players: new Map(),
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' },
+    // songSource : 'lists' pioche dans l'union des catalogues AniList des joueurs
+    // présents (par défaut en partie rapide, comme avant) ; 'global' pioche dans
+    // tout le catalogue (par défaut en salon privé, comme avant). Modifiable par
+    // l'hôte dans les deux cas (hors classé, toujours 'global', figé).
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global' },
     status: 'lobby', chat: [], round: 0, current: null,
     spectators: new Set(), // userIds qui regardent (pas des joueurs)
     usedSongIds: new Set(), usedAnilistIds: new Set(),
@@ -265,6 +270,7 @@ function applySettings(room, s) {
   if (VALID_ROUNDMS.includes(s.roundMs)) room.settings.roundMs = s.roundMs;
   if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
   if (VALID_THEME_TYPES.includes(s.themeType)) room.settings.themeType = s.themeType;
+  if (VALID_SONG_SOURCES.includes(s.songSource)) room.settings.songSource = s.songSource;
 }
 function setSettings(socket, s) {
   const room = rooms.get(socket.data.roomId);
@@ -301,10 +307,12 @@ async function startGame(room) {
   if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
   room.countdownEndsAt = 0;
 
-  // Partie rapide non classée : pool commun = union des listes des joueurs
-  // présents au lancement. Le classé et les salons privés gardent le catalogue global.
+  // Pool commun = union des listes AniList des joueurs présents, si l'hôte a
+  // choisi « listes des joueurs » (settings.songSource) — par défaut en partie
+  // rapide, modifiable en salon privé aussi. Le classé garde toujours le
+  // catalogue global (réglages figés, cf. applySettings).
   room.songPoolIds = null;
-  if (room.isPublic && !room.ranked) {
+  if (!room.ranked && room.settings.songSource === 'lists') {
     try {
       const entries = await prisma.userCatalogEntry.findMany({
         where: { userId: { in: [...room.players.keys()] } },

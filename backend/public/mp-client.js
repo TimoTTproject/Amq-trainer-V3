@@ -524,8 +524,10 @@ function renderRoom(d) {
     document.getElementById('mp-set-speed').value = String(d.settings.roundMs);
     document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
+    document.getElementById('mp-set-source').value = d.settings.songSource || (d.isPublic ? 'lists' : 'global');
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
+    document.getElementById('mp-set-source').disabled = !isHost;
     // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto → on
     // masque les champs Mode, Manches et Temps (l'encart coop explique tout).
     document.getElementById('mp-field-mode').classList.toggle('hidden', isCoop);
@@ -784,6 +786,7 @@ function mpSettingsPayload() {
     roundMs: parseInt(document.getElementById('mp-set-speed').value),
     mode: document.getElementById('mp-set-mode').value,
     themeType: document.getElementById('mp-set-theme').value,
+    songSource: document.getElementById('mp-set-source').value,
   };
 }
 
@@ -836,6 +839,7 @@ function initMpUI() {
   document.getElementById('mp-set-speed').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-mode').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-theme').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-source').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {
