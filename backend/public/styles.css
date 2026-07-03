@@ -1513,7 +1513,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .home-recent-pulls { margin: 0 0 26px; }
 .home-recent-pulls:empty { display: none; }
 .recent-pulls-strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
-.recent-pull-card { flex: 0 0 140px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+.recent-pull-card { flex: 0 0 140px; min-width: 0; max-width: 140px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
   background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 10px; text-align: left; cursor: pointer;
   transition: transform .15s, box-shadow .15s; }
 .recent-pull-card:hover { transform: translateY(-2px); }
