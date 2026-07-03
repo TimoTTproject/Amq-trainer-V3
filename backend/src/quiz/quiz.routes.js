@@ -311,30 +311,50 @@ router.get('/training-stats', requireAuth, async (req, res) => {
   res.json({ review: reviewIds.length, missed, liked, mine, due, scheduled, mastered });
 });
 
+// Rafraîchit (si expiré) le cache des séries : titre + synonymes normalisés de
+// chaque anime distinct du catalogue. Partagé par /series (recherche serveur,
+// entraînement ciblé) et /series-all (liste complète, autocomplétion de réponse).
+async function ensureSeriesSearchCache() {
+  if (seriesSearchCache.expiresAt >= Date.now()) return;
+  const rows = await prisma.song.findMany({
+    where: { videoUrl: { not: null } },
+    select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
+    orderBy: { popularity: 'desc' },
+  });
+  const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
+  seriesSearchCache = {
+    expiresAt: Date.now() + 5 * 60 * 1000,
+    entries: uniqueRows.map((row) => {
+      const englishTitle = englishTitleFor(row);
+      return {
+        title: row.animeTitle,
+        englishTitle,
+        popularity: row.popularity || 0,
+        searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
+      };
+    }),
+  };
+}
+
+// Liste complète (titre + synonymes normalisés) pour l'autocomplétion de réponse
+// pendant le quiz : chargée UNE FOIS côté client puis filtrée localement (cf.
+// anime-autocomplete.js), pour éliminer l'aller-retour réseau à chaque frappe —
+// c'est ce qui rendait l'autocomplétion perceptiblement plus lente que sur AMQ,
+// qui filtre entièrement côté client (indépendant de la qualité de connexion).
+router.get('/series-all', requirePlayer, async (req, res) => {
+  await ensureSeriesSearchCache();
+  res.json({
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, popularity, searchTitles }) => ({
+      title, englishTitle, popularity, searchTitles,
+    })),
+  });
+});
+
 // Recherche de séries (animes) pour l'entraînement ciblé
 router.get('/series', requirePlayer, async (req, res) => {
   const q = (req.query.q || '').trim();
   if (q.length < 1) return res.json({ series: [], suggestions: [] });
-  if (seriesSearchCache.expiresAt < Date.now()) {
-    const rows = await prisma.song.findMany({
-      where: { videoUrl: { not: null } },
-      select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
-      orderBy: { popularity: 'desc' },
-    });
-    const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
-    seriesSearchCache = {
-      expiresAt: Date.now() + 5 * 60 * 1000,
-      entries: uniqueRows.map((row) => {
-        const englishTitle = englishTitleFor(row);
-        return {
-          title: row.animeTitle,
-          englishTitle,
-          popularity: row.popularity || 0,
-          searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
-        };
-      }),
-    };
-  }
+  await ensureSeriesSearchCache();
   const needle = q.toLocaleLowerCase();
   // Un seul passage par entrée pour calculer l'index de correspondance (au lieu de
   // le refaire à chaque comparaison du tri, ce qui rend la frappe saccadée quand le

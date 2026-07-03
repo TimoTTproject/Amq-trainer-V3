@@ -1,5 +1,17 @@
 // Autocomplétion partagée par le quiz solo et le multijoueur.
-const animeAutocompleteCache = new Map();
+// Filtrage 100% côté client : la liste complète (titre + synonymes normalisés)
+// est chargée UNE FOIS puis filtrée/triée en JS à chaque frappe — pas d'aller-
+// retour réseau par frappe, contrairement à l'ancienne version qui interrogeait
+// le serveur à chaque saisie (perceptiblement plus lent sur mauvaise connexion,
+// alors qu'AMQ filtre entièrement côté client).
+let animeFullListPromise = null;
+function loadAnimeFullList() {
+  if (!animeFullListPromise) {
+    animeFullListPromise = api('/api/quiz/series-all').then((data) => data.entries || []).catch(() => []);
+  }
+  return animeFullListPromise;
+}
+
 const animeAutocompleteStates = new Map();
 
 function closeAnimeAutocomplete(inputId) {
@@ -11,6 +23,22 @@ function closeAnimeAutocomplete(inputId) {
   state.list.innerHTML = '';
   state.list.classList.add('hidden');
   state.input.setAttribute('aria-expanded', 'false');
+}
+
+// Filtre/trie la liste complète en mémoire : même algorithme que le serveur
+// (index de correspondance le plus tôt, puis popularité, puis alphabétique).
+function filterAnimeEntries(entries, needle) {
+  const scored = [];
+  for (const entry of entries) {
+    let matchIndex = -1;
+    for (const title of entry.searchTitles) {
+      const index = title.indexOf(needle);
+      if (index >= 0 && (matchIndex < 0 || index < matchIndex)) matchIndex = index;
+    }
+    if (matchIndex >= 0) scored.push({ entry, matchIndex });
+  }
+  scored.sort((a, b) => a.matchIndex - b.matchIndex || (b.entry.popularity || 0) - (a.entry.popularity || 0) || a.entry.title.localeCompare(b.entry.title));
+  return scored.slice(0, 20).map(({ entry }) => ({ title: entry.title, englishTitle: entry.englishTitle }));
 }
 
 function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
@@ -56,29 +84,21 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const search = async (rawQuery) => {
     const query = rawQuery.trim();
     if (!query) return closeAnimeAutocomplete(inputId);
-    const key = query.toLocaleLowerCase();
     const request = ++state.request;
-    try {
-      let suggestions = animeAutocompleteCache.get(key);
-      if (!suggestions) {
-        const data = await api(`/api/quiz/series?q=${encodeURIComponent(query)}`);
-        suggestions = data.suggestions || (data.series || []).map((title) => ({ title, englishTitle: null }));
-        animeAutocompleteCache.set(key, suggestions);
-      }
-      if (request !== state.request || input.value.trim() !== query || input.disabled) return;
-      state.suggestions = suggestions;
-      state.activeIndex = -1;
-      render();
-    } catch {
-      closeAnimeAutocomplete(inputId);
-    }
+    const entries = await loadAnimeFullList();
+    if (request !== state.request || input.value.trim() !== query || input.disabled) return;
+    state.suggestions = filterAnimeEntries(entries, query.toLocaleLowerCase());
+    state.activeIndex = -1;
+    render();
   };
 
   input.addEventListener('input', () => {
     clearTimeout(state.timer);
     const query = input.value;
     if (!query.trim()) return closeAnimeAutocomplete(inputId);
-    state.timer = setTimeout(() => search(query), 120);
+    // Filtrage local (pas de réseau à masquer) : un très léger debounce suffit,
+    // juste pour ne pas re-rendre la liste à chaque caractère tapé très vite.
+    state.timer = setTimeout(() => search(query), 30);
   });
   input.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' && state.suggestions.length) {
@@ -107,6 +127,7 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
 }
 
 function initAnimeAutocompleteUI() {
+  loadAnimeFullList(); // préchauffe le cache avant la première frappe
   setupAnimeAutocomplete({ inputId: 'answer-input', listId: 'answer-suggestions', onSubmit: () => guessAnswer() });
   setupAnimeAutocomplete({ inputId: 'mp-input', listId: 'mp-suggestions', onSubmit: () => mpSubmitGuess() });
 }
