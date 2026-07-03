@@ -480,6 +480,11 @@
           <h3>Boutique</h3>
           <p>Cosmétiques : dos de cartes, bordures, bannières</p>
         </button>
+        <button class="home-card" id="card-economy">
+          <i class="fas fa-coins"></i>
+          <h3>Économie</h3>
+          <p>Ton solde, ce que rapporte chaque mode, tes plafonds en cours</p>
+        </button>
       </div>
     </div>
 
@@ -714,6 +719,16 @@
       <div id="shop-licenses-panel" class="shop-panel hidden"></div>
       <div id="shop-emotes" class="shop-panel hidden"></div>
       <div id="shop-characters" class="shop-panel hidden"></div>
+    </div>
+
+    <!-- VUE ÉCONOMIE -->
+    <div id="view-economy" class="hidden">
+      <button class="btn-back" id="back-home-economy"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-coins"></i> Économie</h2>
+      </div>
+      <p class="gacha-sub">Ton solde, ce que rapporte chaque mode et où en sont tes plafonds anti-farm.</p>
+      <div id="economy-body"></div>
     </div>
 
     <!-- Modale stats de tirage -->
@@ -1328,7 +1343,8 @@
         <li><b>Classique</b> : gagne des <b>tokens 🪙</b> en trouvant les bonnes réponses (bonus si l'anime est peu connu).</li>
         <li><b>Entraînement</b> : révise sans enjeu (séries, répétition espacée), vidéo et réponse visibles.</li>
         <li><b>Château de l'Infini</b> : survie en QCM, 3 vies, chrono dégressif — monte le plus haut possible.</li>
-        <li><b>Multijoueur</b> : affronte d'autres joueurs en temps réel. Score = <code>300 + 700 × temps restant</code> par bonne réponse ; classique / équipes / élimination. Récompenses en tokens (plafonnées/jour).</li>
+        <li><b>Multijoueur</b> : affronte d'autres joueurs en temps réel. Score = <code>300 + 700 × temps restant</code> par bonne réponse ; classique / équipes / élimination / Tour en équipe (coop). Récompenses en tokens (plafonnées, fenêtre glissante de 6h).</li>
+        <li><b>Défi du jour</b> : 10 musiques identiques pour tout le monde, une tentative par jour — le gain (jusqu'à 100 🪙) augmente avec ta série de jours consécutifs.</li>
       </ul>
 
       <h3>🪙 Comment gagner des tokens</h3>
@@ -1340,12 +1356,13 @@
       </ul>
       <p class="about-sub">En <b>multijoueur</b> (toutes les parties : rapide, classée, privée) :</p>
       <ul>
-        <li><b>+2 🪙</b> par bonne réponse sur la partie.</li>
-        <li><b>Bonus de classement</b> : <b>+20</b> (1ᵉʳ) · <b>+10</b> (2ᵉ) · <b>+5</b> (3ᵉ).</li>
-        <li>Maximum <b>40 🪙</b> par partie · nécessite au moins <b>2 joueurs</b> distincts · plafond <b>200 🪙/jour</b> issus du multi.</li>
+        <li><b>Classique / équipes / élimination</b> — <b>+2 🪙</b> par bonne réponse sur la partie, plus un <b>bonus de classement</b> : <b>+20</b> (1ᵉʳ) · <b>+10</b> (2ᵉ) · <b>+5</b> (3ᵉ). Maximum <b>40 🪙</b> par partie.</li>
+        <li><b>Tour en équipe (coop)</b> — <b>+1 🪙</b> par étage franchi, maximum <b>30 🪙</b> par partie.</li>
+        <li>Nécessite au moins <b>2 joueurs</b> distincts · plafond partagé <b>200 🪙 / 6h</b> (multi + coop confondus, même mécanique que le quiz solo).</li>
       </ul>
       <p class="about-sub">Autres sources :</p>
       <ul>
+        <li><b>Défi du jour</b> : <b>20 à 100 🪙</b> selon ta série de jours consécutifs, une fois par jour.</li>
         <li><b>Bonus quotidien</b> : <b>50 🪙</b> une fois par jour.</li>
         <li><b>Paliers de niveau</b> (XP) et <b>quêtes quotidiennes</b> : récompenses à réclamer.</li>
         <li><b>Doublons gacha</b> : remboursement en tokens selon la rareté.</li>

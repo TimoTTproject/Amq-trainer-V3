@@ -532,6 +532,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .reward-cap-fill { height: 100%; background: var(--accent); border-radius: 4px; }
 .reward-cap-fill.full { background: var(--red, #ff6b6b); }
 .reward-cap-reset { font-size: .78rem; color: var(--text-2); margin-top: 3px; }
+.reward-caps-more { display: block; width: 100%; margin-top: 12px; padding: 7px 0; text-align: center;
+  background: none; border: none; border-top: 1px solid #2a2f42; color: var(--accent-2); font-size: .82rem;
+  font-weight: 700; cursor: pointer; }
+.reward-caps-more:hover { color: var(--accent); }
+
+/* Page Économie */
+.economy-balance { display: flex; gap: 14px; margin: 6px 0 22px; }
+.eco-balance-item { flex: 1; text-align: center; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px; }
+.eco-balance-val { display: block; font-size: 1.6rem; font-weight: 800; color: var(--text); }
+.eco-balance-label { font-size: .8rem; color: var(--text-2); }
+.economy-section-title { font-size: 1.05rem; font-weight: 800; margin: 26px 0 12px; display: flex; align-items: center; gap: 9px; }
+.economy-section-title i { color: var(--accent); }
+.economy-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 4px; }
+.economy-source { display: flex; gap: 12px; align-items: flex-start; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; }
+.eco-src-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+.eco-src-title { font-weight: 700; font-size: .92rem; margin-bottom: 4px; }
+.eco-src-desc { font-size: .82rem; color: var(--text-2); line-height: 1.4; }
+#view-economy .btn-secondary { margin-top: 24px; }
 
 body.guest-mode .navbar .nav-item:not([data-nav="play"]),
 body.guest-mode .token-badge,
