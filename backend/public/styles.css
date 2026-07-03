@@ -1491,6 +1491,25 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .quest-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; transition: width .4s; }
 .quest-prog { color: var(--text-2); font-size: .75rem; margin-top: 5px; text-align: right; }
 
+/* Hub d'accueil : derniers tirages Légendaire+ */
+.home-recent-pulls { margin: 0 0 26px; }
+.home-recent-pulls:empty { display: none; }
+.recent-pulls-strip { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.recent-pull-card { flex: 0 0 140px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 10px; text-align: left; cursor: pointer;
+  transition: transform .15s, box-shadow .15s; }
+.recent-pull-card:hover { transform: translateY(-2px); }
+.rp-img { width: 100%; aspect-ratio: 3/4; border-radius: 8px; background-size: cover; background-position: center top;
+  background-color: var(--bg-3); margin-bottom: 2px; }
+.rp-rarity { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.rp-rarity.r-legendary { color: #ffb648; }
+.rp-rarity.r-mythic { color: #ff5d8f; }
+.rp-name { font-size: .82rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.rp-series { font-size: .7rem; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.rp-user { font-size: .74rem; color: var(--text-2); display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; margin-top: 2px; }
+.rp-avatar { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.rp-time { font-size: .7rem; color: var(--text-3, var(--text-2)); opacity: .75; }
+
 /* Amis */
 .friends-search { margin-bottom: 18px; }
 .friends-search input { width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; }
