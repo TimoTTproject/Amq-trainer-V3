@@ -44,27 +44,24 @@ const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '�
 const ANIME_EMOTE_BY_ID = new Map(ANIME_EMOTES.map((item) => [item.id, item]));
 const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
 
-// Récompense en tokens (perf + plafond quotidien anti-abus). Le farm entre amis
-// est toléré (jeu pour s'amuser) ; le plafond/jour borne les dérives (bots/nuit).
+// Récompense en tokens (perf + plafond anti-abus). Le farm entre amis est
+// toléré (jeu pour s'amuser) ; le plafond borne les dérives (bots/nuit).
+// Fenêtre glissante de 6h, budget partagé multi + coop — même mécanique que le
+// quiz solo (cf. quizCapState) pour que le comportement soit cohérent partout.
 const MP_TOKENS_PER_CORRECT = 2; // par bonne réponse sur la partie
 const MP_PLACEMENT_BONUS = [20, 10, 5]; // 1er / 2e / 3e
 const MP_GAME_CAP = 40; // max de tokens gagnés en une partie
-const MP_DAILY_CAP = 200; // max de tokens multi par jour
+const MP_REWARD_CAP = 200; // max de tokens multi/coop par fenêtre glissante
+const MP_REWARD_WINDOW_MS = 6 * 3600 * 1000; // 6 heures
 const MP_MIN_PLAYERS_REWARD = 2; // au moins 2 comptes distincts pour récompenser
 
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// État du plafond quotidien (multi + coop, budget partagé) pour un utilisateur.
-// `resetAt` = minuit prochain (heure serveur), cohérent avec todayStr().
+// État de la fenêtre courante (multi + coop, budget partagé) pour un utilisateur.
 function mpCapState(user) {
-  const today = todayStr();
-  const used = user.mpRewardDay === today ? (user.mpRewardToday || 0) : 0;
-  const now = new Date();
-  const resetAt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
-  return { used, max: MP_DAILY_CAP, resetAt };
+  const now = Date.now();
+  const start = user.mpRewardAt ? new Date(user.mpRewardAt).getTime() : 0;
+  const active = now - start < MP_REWARD_WINDOW_MS;
+  const used = active ? (user.mpRewardWindow || 0) : 0;
+  return { active, used, left: Math.max(0, MP_REWARD_CAP - used), max: MP_REWARD_CAP, resetAt: (active ? start : now) + MP_REWARD_WINDOW_MS };
 }
 
 function shuffle(a) {
@@ -643,7 +640,7 @@ async function persistResults(room, ordered) {
   const ids = ordered.map((p) => p.userId);
   const users = await prisma.user.findMany({
     where: { id: { in: ids } },
-    select: { id: true, mmr: true, mpRewardDay: true, mpRewardToday: true },
+    select: { id: true, mmr: true, mpRewardAt: true, mpRewardWindow: true },
   });
   const byId = Object.fromEntries(users.map((u) => [u.id, u]));
   const mmrById = Object.fromEntries(users.map((u) => [u.id, u.mmr]));
@@ -654,7 +651,6 @@ async function persistResults(room, ordered) {
 
   // Récompense seulement si au moins 2 comptes distincts (pas de solo en boucle)
   const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD;
-  const today = todayStr();
   const rewardById = {};
 
   await prisma.$transaction(
@@ -664,14 +660,10 @@ async function persistResults(room, ordered) {
       const delta = room.ranked ? deltaById[p.userId]?.delta || 0 : 0;
       const after = before + delta;
 
-      // Token reward avec plafond quotidien
+      // Token reward avec plafond (fenêtre glissante de 6h)
+      const cap = mpCapState(byId[p.userId] || {});
       let granted = 0;
-      if (rewardEnabled) {
-        const u = byId[p.userId] || {};
-        const usedToday = u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0;
-        const dailyLeft = Math.max(0, MP_DAILY_CAP - usedToday);
-        granted = Math.min(rawReward(p, placement), dailyLeft);
-      }
+      if (rewardEnabled) granted = Math.min(rawReward(p, placement), cap.left);
       rewardById[p.userId] = granted;
 
       const ops = [
@@ -691,10 +683,9 @@ async function persistResults(room, ordered) {
         data.rankedWins = { increment: placement === 1 ? 1 : 0 };
       }
       if (granted > 0) {
-        const usedToday = byId[p.userId]?.mpRewardDay === today ? (byId[p.userId]?.mpRewardToday || 0) : 0;
         data.tokens = { increment: granted };
-        data.mpRewardDay = today;
-        data.mpRewardToday = usedToday + granted;
+        data.mpRewardAt = cap.active ? byId[p.userId]?.mpRewardAt : new Date();
+        data.mpRewardWindow = cap.used + granted;
       }
       if (Object.keys(data).length) ops.push(prisma.user.update({ where: { id: p.userId }, data }));
       if (granted > 0) ops.push(prisma.tokenTransaction.create({ data: { userId: p.userId, amount: granted, reason: 'mp_reward' } }));
@@ -719,26 +710,26 @@ async function endCoopGame(room) {
       const ids = ordered.map((p) => p.userId);
       const users = await prisma.user.findMany({
         where: { id: { in: ids } },
-        select: { id: true, coopBestFloor: true, mpRewardDay: true, mpRewardToday: true },
+        select: { id: true, coopBestFloor: true, mpRewardAt: true, mpRewardWindow: true },
       });
       bestBy = Object.fromEntries(users.map((u) => [u.id, u.coopBestFloor || 0]));
       const byId = Object.fromEntries(users.map((u) => [u.id, u]));
-      // Gain plafonné (≥ 2 comptes distincts), partageant le budget quotidien du multi.
+      // Gain plafonné (≥ 2 comptes distincts), partageant le budget (fenêtre 6h) du multi.
       const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD && floor > 0;
-      const today = todayStr();
       await prisma.$transaction(
         ordered.flatMap((p) => {
           const u = byId[p.userId] || {};
+          const cap = mpCapState(u);
           const data = {};
           if ((bestBy[p.userId] || 0) < floor) data.coopBestFloor = floor; // record perso
           let granted = 0;
-          if (rewardEnabled) {
-            const usedToday = u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0;
-            const dailyLeft = Math.max(0, MP_DAILY_CAP - usedToday);
-            granted = Math.min(floor * COOP_TOKENS_PER_FLOOR, COOP_GAME_CAP, dailyLeft);
-          }
+          if (rewardEnabled) granted = Math.min(floor * COOP_TOKENS_PER_FLOOR, COOP_GAME_CAP, cap.left);
           rewardBy[p.userId] = granted;
-          if (granted > 0) { data.tokens = { increment: granted }; data.mpRewardDay = today; data.mpRewardToday = (u.mpRewardDay === today ? (u.mpRewardToday || 0) : 0) + granted; }
+          if (granted > 0) {
+            data.tokens = { increment: granted };
+            data.mpRewardAt = cap.active ? u.mpRewardAt : new Date();
+            data.mpRewardWindow = cap.used + granted;
+          }
           const ops = [];
           if (Object.keys(data).length) ops.push(prisma.user.update({ where: { id: p.userId }, data }));
           if (granted > 0) ops.push(prisma.tokenTransaction.create({ data: { userId: p.userId, amount: granted, reason: 'coop_reward' } }));
@@ -1085,5 +1076,5 @@ function initMp(server) {
 
 module.exports = {
   initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound,
-  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_DAILY_CAP,
+  rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_REWARD_CAP,
 };

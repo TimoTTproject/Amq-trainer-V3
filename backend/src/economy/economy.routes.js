@@ -3,7 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { quizCapState, QUIZ_CAP } = require('../quiz/quiz.routes');
-const { mpCapState, MP_DAILY_CAP } = require('../mp/mp');
+const { mpCapState, MP_REWARD_CAP } = require('../mp/mp');
 
 const router = express.Router();
 
@@ -64,19 +64,19 @@ router.get('/balance', requireAuth, async (req, res) => {
   res.json(user);
 });
 
-// État des plafonds anti-farm (quiz solo : fenêtre glissante 6h ; multi/coop :
-// quotidien) — consultable hors quiz (ex. clic sur la monnaie dans l'en-tête).
+// État des plafonds anti-farm (quiz solo + multi/coop : tous deux en fenêtre
+// glissante de 6h) — consultable hors quiz (ex. clic sur la monnaie dans l'en-tête).
 router.get('/reward-caps', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { quizRewardAt: true, quizRewardWindow: true, mpRewardDay: true, mpRewardToday: true },
+    select: { quizRewardAt: true, quizRewardWindow: true, mpRewardAt: true, mpRewardWindow: true },
   });
   if (!user) return res.status(404).json({ error: 'Compte introuvable' });
   const quiz = quizCapState(user);
   const multiplayer = mpCapState(user);
   res.json({
     quiz: { used: quiz.used, max: QUIZ_CAP, resetAt: quiz.resetAt },
-    multiplayer: { used: multiplayer.used, max: MP_DAILY_CAP, resetAt: multiplayer.resetAt },
+    multiplayer: { used: multiplayer.used, max: MP_REWARD_CAP, resetAt: multiplayer.resetAt },
   });
 });
 

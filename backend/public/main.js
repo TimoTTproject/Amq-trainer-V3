@@ -517,6 +517,7 @@ function showView(name, options = {}) {
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
+  document.getElementById('view-economy').classList.toggle('hidden', name !== 'economy');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
   document.getElementById('view-tower').classList.toggle('hidden', name !== 'tower');
   document.getElementById('view-daily').classList.toggle('hidden', name !== 'daily');
@@ -569,6 +570,7 @@ function navTo(name) {
   if (name === 'craft') return openCraft();
   if (name === 'gacha') return openGacha();
   if (name === 'shop') return openShop();
+  if (name === 'economy') return openEconomy();
   if (name === 'catalog') return openCatalog();
   if (name === 'tower') return openTower();
   if (name === 'daily') return openDaily();
@@ -1190,6 +1192,63 @@ async function chooseInitialMode() {
 }
 
 // ── APP UI ──
+// Ligne de jauge d'un plafond anti-farm (barre + reset) — partagée entre le
+// popover d'en-tête et la page Économie.
+function rewardCapRow(label, cap) {
+  const pct = cap.max ? Math.min(100, Math.round((cap.used / cap.max) * 100)) : 0;
+  const msLeft = Math.max(0, cap.resetAt - Date.now());
+  const h = Math.floor(msLeft / 3600000);
+  const m = Math.floor((msLeft % 3600000) / 60000);
+  const resetTxt = h > 0 ? `reset dans ${h} h ${String(m).padStart(2, '0')}` : `reset dans ${m} min`;
+  return `<div class="reward-cap-row">
+      <div class="reward-cap-label"><span>${label}</span><span>${cap.used}/${cap.max} 🪙</span></div>
+      <div class="reward-cap-bar"><div class="reward-cap-fill${pct >= 100 ? ' full' : ''}" style="width:${pct}%"></div></div>
+      <div class="reward-cap-reset">${resetTxt}</div>
+    </div>`;
+}
+
+// ── Page Économie : vue d'ensemble des gains/plafonds, en un coup d'œil ──
+const ECONOMY_EARN_SOURCES = [
+  { icon: '🎯', title: 'Quiz classique (solo)', desc: "10 🪙 à la 1ʳᵉ bonne réponse (+5/+2 si l'anime est peu connu), 2 🪙 en rejouant une musique déjà trouvée. Multiplié par le niveau d'aide (Cash ×1 · Carré ×0,5 · Duo ×0,3)." },
+  { icon: '🎓', title: 'Entraînement', desc: 'Aucun token — sert à réviser sans enjeu (séries, répétition espacée).' },
+  { icon: '🏰', title: 'Château de l\'Infini', desc: 'Entrée 40 🪙 (1 gratuite/jour). Gain de fin = étages × 5, +25 🪙 tous les 10 étages — rentable dès ~8 étages.' },
+  { icon: '🎮', title: 'Multijoueur (classique / équipes / élim.)', desc: '+2 🪙 par bonne réponse + bonus de classement (+20/+10/+5 pour le podium), max 40 🪙/partie.' },
+  { icon: '🤝', title: 'Tour en équipe (coop)', desc: '+1 🪙 par étage franchi, max 30 🪙/partie. Partage le même plafond que le multijoueur.' },
+  { icon: '📅', title: 'Défi du jour', desc: '20 à 100 🪙 selon ta série de jours consécutifs — une tentative par jour.' },
+  { icon: '🎁', title: 'Bonus quotidien, quêtes & niveaux', desc: '50 🪙 de connexion par jour, + récompenses de quêtes et de paliers d\'XP à réclamer.' },
+  { icon: '♻️', title: 'Doublons gacha', desc: 'Chaque doublon obtenu au tirage rembourse des tokens selon la rareté de la carte.' },
+];
+const ECONOMY_SPEND_SOURCES = [
+  { icon: '🎴', title: 'Tirages gacha', desc: 'Dépense tes tokens pour tirer des cartes de personnages (5 raretés, stock limité).' },
+  { icon: '🔨', title: 'Atelier (craft)', desc: 'Fabrique une carte précise avec de la poussière 🌟 (doublons recyclés).' },
+  { icon: '🛍️', title: 'Boutique', desc: 'Cosmétiques : dos de cartes, bordures, bannières, cadres d\'avatar.' },
+];
+
+async function openEconomy() {
+  showView('economy');
+  const box = document.getElementById('economy-body');
+  box.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const caps = await api('/api/economy/reward-caps');
+    const sourceCard = (s) => `<div class="economy-source"><div class="eco-src-icon">${s.icon}</div><div><div class="eco-src-title">${escapeHtml(s.title)}</div><div class="eco-src-desc">${escapeHtml(s.desc)}</div></div></div>`;
+    box.innerHTML = `
+      <div class="economy-balance">
+        <div class="eco-balance-item"><span class="eco-balance-val">${currentUser.tokens}</span><span class="eco-balance-label">🪙 tokens</span></div>
+        <div class="eco-balance-item"><span class="eco-balance-val">${currentUser.dust || 0}</span><span class="eco-balance-label">🌟 poussière</span></div>
+      </div>
+      <h3 class="economy-section-title"><i class="fas fa-gauge-high"></i> Plafonds anti-farm en cours</h3>
+      ${rewardCapRow('🎯 Quiz solo (6h)', caps.quiz)}
+      ${rewardCapRow('🎮 Multi / Coop (6h)', caps.multiplayer)}
+      <h3 class="economy-section-title"><i class="fas fa-coins"></i> Comment gagner des tokens</h3>
+      <div class="economy-sources">${ECONOMY_EARN_SOURCES.map(sourceCard).join('')}</div>
+      <h3 class="economy-section-title"><i class="fas fa-cart-shopping"></i> À quoi servent les tokens</h3>
+      <div class="economy-sources">${ECONOMY_SPEND_SOURCES.map(sourceCard).join('')}</div>
+      <button class="btn-secondary" data-about><i class="fas fa-circle-info"></i> Voir toutes les règles</button>`;
+  } catch (e) {
+    box.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
 function setupAppUI() {
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/auth/logout', { method: 'POST' });
@@ -1221,25 +1280,14 @@ function setupAppUI() {
     }
   });
 
-  // Plafonds anti-farm (quiz solo 6h glissant + multi/coop quotidien) : popup au
-  // clic sur la monnaie, hors quiz — jusque-là seulement visible pendant une manche.
+  // Plafonds anti-farm (quiz solo + multi/coop, tous deux en fenêtre glissante
+  // de 6h) : popup au clic sur la monnaie, hors quiz — jusque-là seulement
+  // visible pendant une manche.
   const rewardCapsBtn = document.getElementById('reward-caps-btn');
   const rewardCapsPopover = document.getElementById('reward-caps-popover');
   const setRewardCapsPopover = (open) => {
     rewardCapsPopover.classList.toggle('hidden', !open);
     rewardCapsBtn.setAttribute('aria-expanded', String(open));
-  };
-  const rewardCapRow = (label, cap) => {
-    const pct = cap.max ? Math.min(100, Math.round((cap.used / cap.max) * 100)) : 0;
-    const msLeft = Math.max(0, cap.resetAt - Date.now());
-    const h = Math.floor(msLeft / 3600000);
-    const m = Math.floor((msLeft % 3600000) / 60000);
-    const resetTxt = h > 0 ? `reset dans ${h} h ${String(m).padStart(2, '0')}` : `reset dans ${m} min`;
-    return `<div class="reward-cap-row">
-      <div class="reward-cap-label"><span>${label}</span><span>${cap.used}/${cap.max} 🪙</span></div>
-      <div class="reward-cap-bar"><div class="reward-cap-fill${pct >= 100 ? ' full' : ''}" style="width:${pct}%"></div></div>
-      <div class="reward-cap-reset">${resetTxt}</div>
-    </div>`;
   };
   rewardCapsBtn.addEventListener('click', async (event) => {
     event.stopPropagation();
@@ -1249,10 +1297,13 @@ function setupAppUI() {
     setRewardCapsPopover(true);
     try {
       const data = await api('/api/economy/reward-caps');
-      rewardCapsPopover.innerHTML = `<h4>Plafonds anti-farm</h4>${rewardCapRow('🎯 Quiz solo (6h)', data.quiz)}${rewardCapRow('🎮 Multi / Coop (jour)', data.multiplayer)}`;
+      rewardCapsPopover.innerHTML = `<h4>Plafonds anti-farm</h4>${rewardCapRow('🎯 Quiz solo (6h)', data.quiz)}${rewardCapRow('🎮 Multi / Coop (6h)', data.multiplayer)}<button type="button" class="reward-caps-more" id="reward-caps-goto-economy">Voir toute l'économie →</button>`;
     } catch (e) {
       rewardCapsPopover.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
     }
+  });
+  rewardCapsPopover.addEventListener('click', (event) => {
+    if (event.target.closest('#reward-caps-goto-economy')) { setRewardCapsPopover(false); navTo('economy'); }
   });
   document.addEventListener('click', (event) => {
     if (!rewardCapsPopover.classList.contains('hidden') && !event.target.closest('.user-section')) setRewardCapsPopover(false);
@@ -1303,6 +1354,8 @@ function setupAppUI() {
   document.getElementById('card-profile').addEventListener('click', openProfile);
   document.getElementById('card-gacha').addEventListener('click', openGacha);
   document.getElementById('card-shop').addEventListener('click', openShop);
+  document.getElementById('card-economy').addEventListener('click', openEconomy);
+  document.getElementById('back-home-economy').addEventListener('click', () => showView('home'));
   document.getElementById('card-catalog').addEventListener('click', openCatalog);
   document.getElementById('card-tower').addEventListener('click', openTower);
   document.getElementById('card-mp').addEventListener('click', openMultiplayer);
