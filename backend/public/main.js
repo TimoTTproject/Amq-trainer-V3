@@ -486,6 +486,38 @@ function setupGlobalAccessibility() {
     }
   });
 
+  // Jouable 100% au clavier : 1-9 choisit une réponse en QCM (Carré/Duo), Échap
+  // passe la manche (solo + multi), Maj+Échap vote pour passer (multi). Un Échap
+  // ferme d'abord les suggestions d'autocomplétion si elles sont ouvertes, comme
+  // avant — ce n'est que sans suggestions ouvertes qu'il déclenche « Passer ».
+  document.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+    if (document.querySelector('.modal-overlay:not(.hidden)')) return;
+
+    if (event.key === 'Escape') {
+      const suggList = document.getElementById(currentView === 'mp' ? 'mp-suggestions' : 'answer-suggestions');
+      if (suggList && !suggList.classList.contains('hidden')) return;
+      if (currentView === 'quiz') {
+        const btn = document.getElementById('skip-btn');
+        if (btn && !btn.classList.contains('hidden') && !btn.disabled) { event.preventDefault(); btn.click(); }
+      } else if (currentView === 'mp') {
+        const game = document.getElementById('mp-game');
+        if (!game || game.classList.contains('hidden')) return;
+        const btn = document.getElementById(event.shiftKey ? 'mp-voteskip' : 'mp-skip');
+        if (btn && !btn.disabled) { event.preventDefault(); btn.click(); }
+      }
+      return;
+    }
+
+    if (currentView !== 'quiz' || !/^[1-9]$/.test(event.key)) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+    const box = document.getElementById('choice-buttons');
+    if (!box || box.classList.contains('hidden')) return;
+    const btn = box.querySelectorAll('.choice-opt')[+event.key - 1];
+    if (btn && !btn.disabled) { event.preventDefault(); btn.click(); }
+  });
+
   window.addEventListener('popstate', (event) => {
     if (!currentUser) return;
     const target = event.state?.view || location.hash.replace(/^#/, '') || 'play';
@@ -1588,7 +1620,7 @@ function setupAppUI() {
   document.getElementById('assist-duo').addEventListener('click', () => requestChoices('duo'));
   document.getElementById('choice-buttons').addEventListener('click', (e) => {
     const b = e.target.closest('.choice-opt');
-    if (b && !b.disabled) guessAnswer(b.textContent);
+    if (b && !b.disabled) guessAnswer(b.dataset.answer);
   });
   document.getElementById('reveal-video-btn').addEventListener('click', toggleVideo);
   document.getElementById('show-answer-btn').addEventListener('click', showAnswerCasual);
@@ -2325,7 +2357,7 @@ async function requestChoices(level) {
     hideAssist();
     document.getElementById('answer-area').classList.add('hidden');
     const box = document.getElementById('choice-buttons');
-    box.innerHTML = r.options.map((o) => `<button class="choice-opt">${escapeHtml(o)}</button>`).join('');
+    box.innerHTML = r.options.map((o, i) => `<button class="choice-opt" data-answer="${escapeHtml(o)}"><span class="choice-num">${i + 1}</span>${escapeHtml(o)}</button>`).join('');
     box.classList.remove('hidden');
   } catch (e) { setHint(e.message); }
 }
