@@ -116,6 +116,28 @@ test('deduplicates identical candidates catalogued under different anilistIds', 
   assert.equal(ranked[0].id, 1); // garde la version "série principale", pas le film
 });
 
+test('deprioritizes (but does not exclude) songs recently shown, so the list rotates', () => {
+  const candidates = [
+    { id: 1, anilistId: 10, animeTitle: 'Anime A', artist: 'Artist A', type: 'OP', popularity: 50 },
+    { id: 2, anilistId: 20, animeTitle: 'Anime B', artist: 'Artist B', type: 'OP', popularity: 48 },
+  ];
+  // Sans historique : la popularité brute départage (id 1 devant).
+  const fresh = rankRecommendations({ candidates, limit: 2 });
+  assert.equal(fresh[0].id, 1);
+
+  // Id 1 a déjà été suggéré récemment → il passe derrière, sans disparaître.
+  const rotated = rankRecommendations({ candidates, recentlyShownIds: new Set([1]), limit: 2 });
+  assert.equal(rotated[0].id, 2);
+  assert.equal(rotated.length, 2); // toujours présent, juste rétrogradé
+});
+
+test('still recommends recently shown songs when nothing else is available', () => {
+  const candidates = [{ id: 1, anilistId: 10, animeTitle: 'Anime A', artist: 'Artist A', type: 'OP', popularity: 50 }];
+  const ranked = rankRecommendations({ candidates, recentlyShownIds: new Set([1]), limit: 5 });
+  assert.equal(ranked.length, 1); // catalogue restreint : pas de trou dans la liste
+  assert.equal(ranked[0].id, 1);
+});
+
 test('songKey ignores case/whitespace and identifies the same track regardless of anilistId', () => {
   assert.equal(
     songKey({ type: 'OP', number: 1, title: ' Sorairo Days ', artist: 'Shouko Nakagawa' }),

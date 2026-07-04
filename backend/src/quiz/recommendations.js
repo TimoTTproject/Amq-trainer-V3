@@ -63,7 +63,7 @@ function dedupeSongs(songs) {
   return [...byKey.values()];
 }
 
-function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCounts = new Map(), limit = 8 }) {
+function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCounts = new Map(), recentlyShownIds = new Set(), limit = 8 }) {
   const artistLikes = new Map();
   const seriesLikes = new Map();
   const typeLikes = new Map();
@@ -96,13 +96,20 @@ function rankRecommendations({ likedSongs = [], candidates = [], collaborativeCo
     const knownFormat = song.format && song.format !== 'UNKNOWN';
     const side = !sameSeries && (knownFormat ? !isMainFormat(song.format) : isSideContent(song.animeTitle));
 
+    // Déjà suggéré récemment : on ne l'exclut pas (les catalogues restreints
+    // manqueraient de recommandations), mais on le fait passer après les
+    // inédits pour que la sélection tourne au fil des visites au lieu de
+    // rester figée sur le même top fixe (classement sinon 100% déterministe).
+    const recentlyShown = recentlyShownIds.has(song.id);
+
     const score =
       (sameSeries ? 7 + Math.min(3, sameSeries - 1) : 0) +
       (sameArtist ? 6 + Math.min(2, sameArtist - 1) : 0) +
       (collaborative / maxCollaborative) * 5 +
       typeAffinity * 1.5 +
       popularity * 1.5 -
-      (side ? 4 : 0);
+      (side ? 4 : 0) -
+      (recentlyShown ? 3 : 0);
 
     let reason = 'Populaire sur AniList';
     if (collaborative) reason = 'Aimé par des joueurs aux goûts proches';

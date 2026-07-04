@@ -393,6 +393,7 @@ model UserSongStat {
   rating       Int? // note 1-5 donnée par l'utilisateur
   liked        Boolean   @default(false) // ajouté à la playlist perso
   recHidden    Boolean   @default(false) // « pas intéressé » : exclu des recommandations
+  recShownAt   DateTime? // dernière fois recommandé (anti-répétition à court terme, cf. recommendations.js)
   // Répétition espacée (SRS)
   srsStreak    Int       @default(0) // bonnes réponses consécutives
   srsInterval  Int       @default(0) // jours jusqu'à la prochaine révision

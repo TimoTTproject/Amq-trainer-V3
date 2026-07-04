@@ -17,6 +17,10 @@ const router = express.Router();
 // Multiplicateur de récompense selon le niveau d'aide (Duo/Carré/Cash)
 const LEVEL_MULT = { cash: 1, carre: 0.5, duo: 0.3 };
 const LEVEL_COUNT = { carre: 4, duo: 2 };
+// Anti-répétition des recommandations playlist : au-delà de « pas intéressé »
+// (exclusion permanente), on déprioritise aussi ce qui a déjà été suggéré
+// récemment, pour que la liste tourne au lieu de rester figée.
+const REC_SHOWN_COOLDOWN_MS = 3 * 24 * 3600 * 1000; // 3 jours
 let seriesSearchCache = { expiresAt: 0, entries: [] };
 
 function shuffle(arr) {
@@ -409,6 +413,13 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
   // Sons que l'utilisateur a explicitement retirés des recommandations (« pas intéressé »)
   const hiddenStats = await prisma.userSongStat.findMany({ where: { userId, recHidden: true }, select: { songId: true } });
   const excludeIds = [...new Set([...likedIds, ...hiddenStats.map((s) => s.songId)])];
+  // Sons suggérés récemment (hors dismiss) : déprioritisés (pas exclus) pour que
+  // la sélection tourne au lieu de rester figée sur le même classement déterministe.
+  const shownRecently = await prisma.userSongStat.findMany({
+    where: { userId, recShownAt: { gte: new Date(Date.now() - REC_SHOWN_COOLDOWN_MS) } },
+    select: { songId: true },
+  });
+  const recentlyShownIds = new Set(shownRecently.map((s) => s.songId));
   const artists = [...new Set(likedSongs.map((song) => song.artist).filter(Boolean))];
   const anilistIds = [...new Set(likedSongs.map((song) => song.anilistId))];
 
@@ -504,6 +515,7 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     likedSongs,
     candidates: [...byId.values()],
     collaborativeCounts,
+    recentlyShownIds,
     limit,
   });
   res.json({
@@ -514,6 +526,21 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
     })),
     personalized: likedSongs.length > 0,
   });
+
+  // Marque ces sons comme suggérés (anti-répétition à la prochaine visite) —
+  // en tâche de fond, après la réponse, pour ne pas ajouter de latence.
+  if (recommendations.length) {
+    const now = new Date();
+    Promise.all(
+      recommendations.map((song) =>
+        prisma.userSongStat.upsert({
+          where: { userId_songId: { userId, songId: song.id } },
+          update: { recShownAt: now },
+          create: { userId, songId: song.id, recShownAt: now },
+        })
+      )
+    ).catch((e) => console.error('recShownAt update:', e.message));
+  }
 });
 
 // « Pas intéressé » : masque définitivement un son des recommandations.
