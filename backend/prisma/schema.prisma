@@ -108,6 +108,7 @@ model User {
   friendsSent     Friendship[]         @relation("FriendReq")
   friendsReceived Friendship[]         @relation("FriendAdr")
   passwordResets  PasswordResetToken[]
+  playlists       Playlist[]
 }
 
 model PasswordResetToken {
@@ -351,10 +352,48 @@ model Song {
 
   stats          UserSongStat[]
   catalogEntries UserCatalogEntry[]
+  playlistEntries PlaylistSong[]
 
   // Un même opening n'existe qu'une fois dans le catalogue global
   @@unique([anilistId, type, number, title])
   @@index([anilistId])
+}
+
+// ─────────────────────────────────────────────
+// LISTES DE LECTURE (playlists nommées, partageables entre joueurs)
+// ─────────────────────────────────────────────
+
+// Distinct de UserSongStat.liked (le cœur ❤ = « Ma playlist » unique, favoris
+// personnels utilisés partout dans le quiz/reco). Une Playlist est une liste
+// nommée que le joueur crée volontairement, éventuellement publique, que
+// d'autres joueurs peuvent parcourir et cloner dans leur propre compte.
+model Playlist {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  songs PlaylistSong[]
+
+  @@index([userId])
+  @@index([isPublic])
+}
+
+model PlaylistSong {
+  id         Int      @id @default(autoincrement())
+  playlistId Int
+  songId     Int
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song     Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, songId])
+  @@index([playlistId])
 }
 
 // Analytics léger : 1 ligne par visiteur (id anonyme localStorage) et par jour.

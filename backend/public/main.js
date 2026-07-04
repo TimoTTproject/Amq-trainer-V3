@@ -61,7 +61,7 @@ function ensureAppReady() {
   if (appReadyPromise) return appReadyPromise;
   appReadyPromise = (async () => {
     await Promise.all([
-      'tower.js', 'admin.js', 'playlist.js', 'daily.js', 'gacha.js',
+      'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'daily.js', 'gacha.js',
       'catalog.js', 'community.js', 'profile.js', 'anime-autocomplete.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
@@ -565,6 +565,7 @@ function showView(name, options = {}) {
   if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
+  if (name !== 'playlist-detail' && typeof stopPlaylistDetailAudio === 'function') stopPlaylistDetailAudio();
   if (name !== 'quiz') {
     const qv = video();
     if (qv && !qv.paused) qv.pause();
@@ -592,6 +593,8 @@ function showView(name, options = {}) {
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
+  document.getElementById('view-playlists').classList.toggle('hidden', name !== 'playlists');
+  document.getElementById('view-playlist-detail').classList.toggle('hidden', name !== 'playlist-detail');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
   // Les sous-vues gardent leur hub parent en surbrillance dans la navbar
@@ -621,6 +624,7 @@ function showView(name, options = {}) {
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play', daily: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
+  playlists: 'collection', 'playlist-detail': 'collection',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
 
@@ -644,6 +648,7 @@ function navTo(name) {
   if (name === 'mp') return openMultiplayer();
   if (name === 'coop') return startCoop();
   if (name === 'playlist') return openPlaylist();
+  if (name === 'playlists') return openPlaylists();
   if (name === 'quiz') return openQuiz();
   if (name === 'training') return openTraining();
   if (name === 'friends') return openFriends();

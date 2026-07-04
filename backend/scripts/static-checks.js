@@ -24,7 +24,7 @@ const EXCLUDE_DIRS = new Set(['node_modules', 'legacy']);
 // donc il est exclu du contrôle de redéclaration.
 const BROWSER_BUNDLE = [
   'public/i18n.js', 'public/sfx.js', 'public/main.js',
-  'public/tower.js', 'public/admin.js', 'public/playlist.js', 'public/daily.js',
+  'public/tower.js', 'public/admin.js', 'public/playlist.js', 'public/playlists.js', 'public/daily.js',
   'public/gacha.js', 'public/catalog.js', 'public/community.js', 'public/profile.js',
   'public/anime-autocomplete.js', 'public/mp-client.js',
 ];

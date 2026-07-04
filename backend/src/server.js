@@ -51,6 +51,7 @@ const dailyRoutes = require('./daily/daily.routes');
 const seasonRoutes = require('./season/season.routes');
 const pushRoutes = require('./push/push.routes');
 const mpRoutes = require('./mp/mp.routes');
+const playlistsRoutes = require('./playlists/playlists.routes');
 const { isEnabled: pushEnabled, sendDailyReminder } = require('./push/push');
 const store = require('./util/store');
 const { initMp } = require('./mp/mp');
@@ -125,6 +126,7 @@ app.use('/api/daily', dailyRoutes.router);
 app.use('/api/season', seasonRoutes.router);
 app.use('/api/push', pushRoutes.router);
 app.use('/api/mp', mpRoutes.router);
+app.use('/api/playlists', playlistsRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Aperçu de partage personnalisé : sur /?u=<id>, on sert le HTML avec des balises
