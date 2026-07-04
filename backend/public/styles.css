@@ -636,6 +636,29 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .tower-media-controls input[type=range] { flex: 1; max-width: 220px; }
 .mp-media-controls { margin-bottom: 12px; }
 .mp-media-controls i { opacity: .65; font-size: .9rem; }
+
+/* ── Playlist : identité visuelle par licence + volume ── */
+.pl-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px; flex: 0 0 26px;
+  font-size: .68rem; font-weight: 800; letter-spacing: .3px;
+  background: hsl(var(--h) 55% 26%); color: hsl(var(--h) 90% 82%);
+  border: 1px solid hsl(var(--h) 55% 38%);
+}
+.pl-anime { display: inline-flex; align-items: center; gap: 8px; }
+.pl-type {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .3px;
+}
+.pl-type.op { background: #3a2c14; color: #ffc46b; border: 1px solid #6b4d1e; }
+.pl-type.ed { background: #14263a; color: #7db8ff; border: 1px solid #1e4a6b; }
+.pl-format { font-size: .75rem; opacity: .55; margin-left: 6px; }
+.pl-search-row .pl-chip { margin-right: 2px; }
+.playlist-rec-id { display: inline-flex; align-items: center; gap: 6px; }
+.playlist-player-volume { display: flex; align-items: center; gap: 6px; margin-left: 10px; }
+.playlist-player-volume i { opacity: .6; font-size: .85rem; }
+.playlist-player-volume input[type=range] { width: 90px; }
+@media (max-width: 560px) { .playlist-player-volume { display: none; } }
 .mp-seen { font-size: .8rem; opacity: .85; cursor: help; }
 .tower-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
 .tower-choice { background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: center; }

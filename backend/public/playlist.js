@@ -28,6 +28,41 @@ function allPlaylistTracks() {
   return [...playlistSongs, ...playlistRecommendations, ...playlistSearchResults];
 }
 
+// ── Identité visuelle par licence ──
+// Pastille colorée stable par franchise : même couleur pour toutes les saisons
+// d'une même licence (base = titre sans marqueurs de saison/partie).
+function plFranchiseBase(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/[[\]()]/g, ' ')
+    .replace(/\b(\d+(st|nd|rd|th)\s+season|season\s*\d+|part\s*\d+|cour\s*\d+|final\s+season|the\s+final|s\d+|2nd|3rd|movie|ova|oad|special)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+function plFranchiseChip(animeTitle) {
+  const base = plFranchiseBase(animeTitle) || '?';
+  let h = 0;
+  for (let i = 0; i < base.length; i++) h = ((h * 31) + base.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  const words = base.split(' ').filter((w) => w.length > 1);
+  const initials = (words.length >= 2 ? words[0][0] + words[1][0] : base.slice(0, 2)).toUpperCase();
+  return `<span class="pl-chip" style="--h:${hue}" title="${escapeHtml(animeTitle)}">${escapeHtml(initials)}</span>`;
+}
+// Badge OP/ED coloré + icône de format (TV/Film/OAV) si connu.
+function plTypeBadge(s) {
+  const t = (s.type || '').toUpperCase();
+  return `<span class="pl-type ${t === 'ED' ? 'ed' : 'op'}">${t}${s.number || ''}</span>`;
+}
+const PL_FORMAT_ICONS = {
+  TV: ['fa-tv', 'Série TV'], TV_SHORT: ['fa-tv', 'Série courte'], ONA: ['fa-wifi', 'ONA (web)'],
+  MOVIE: ['fa-film', 'Film'], OVA: ['fa-compact-disc', 'OAV'], SPECIAL: ['fa-star', 'Épisode spécial'],
+  MUSIC: ['fa-record-vinyl', 'Clip musical'],
+};
+function plFormatIcon(format) {
+  const def = PL_FORMAT_ICONS[format];
+  return def ? ` <i class="fas ${def[0]} pl-format" title="${def[1]}"></i>` : '';
+}
+
 async function loadPlaylist() {
   const tbody = document.getElementById('playlist-tbody');
   tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
@@ -77,8 +112,8 @@ function renderPlaylistRows() {
         : '';
       return `<tr data-sid="${s.id}" class="${s.id === playlistTrackId ? 'playing' : ''}">
         <td class="cat-play-cell">${playBtn}</td>
-        <td>${escapeHtml(s.animeTitle)}</td>
-        <td class="nowrap">${s.type}${s.number}</td>
+        <td><span class="pl-anime">${plFranchiseChip(s.animeTitle)}<span>${escapeHtml(s.animeTitle)}${plFormatIcon(s.format)}</span></span></td>
+        <td class="nowrap">${plTypeBadge(s)}</td>
         <td>${escapeHtml(s.title)}</td>
         <td>${escapeHtml(s.artist || '—')}</td>
         <td class="cat-play-cell"><button class="btn-play-row pl-remove" data-remove title="Retirer"><i class="fas fa-heart-crack"></i></button></td>
@@ -97,7 +132,7 @@ function renderPlaylistRecommendations(personalized = true) {
   grid.innerHTML = playlistRecommendations
     .map((song) => `<article class="playlist-rec-card" data-rec-id="${song.id}">
       <div class="playlist-rec-top">
-        <span>${song.type}${song.number}</span>
+        <span class="playlist-rec-id">${plFranchiseChip(song.animeTitle)}${plTypeBadge(song)}</span>
         <div class="playlist-rec-actions">
           <button type="button" data-rec-play data-sid="${song.id}" aria-label="Écouter ${escapeHtml(song.title)}" title="Écouter"><i class="fas fa-play"></i></button>
           <button type="button" class="playlist-rec-dismiss" data-rec-dismiss data-sid="${song.id}" aria-label="Pas intéressé" title="Pas intéressé · masquer"><i class="fas fa-xmark"></i></button>
@@ -295,7 +330,8 @@ function renderPlaylistSearch() {
           : `<button class="pl-search-add" data-search-add data-sid="${s.id}"><i class="fas fa-plus"></i> Ajouter</button>`;
         return `<div class="pl-search-row" data-sid="${s.id}">
           ${playBtn}
-          <div class="pl-search-info"><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(s.animeTitle)} · ${s.type}${s.number}${s.artist ? ` · ${escapeHtml(s.artist)}` : ''}</span></div>
+          ${plFranchiseChip(s.animeTitle)}
+          <div class="pl-search-info"><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(s.animeTitle)} · ${plTypeBadge(s)}${s.artist ? ` · ${escapeHtml(s.artist)}` : ''}</span></div>
           ${addBtn}
         </div>`;
       }).join('')
@@ -403,6 +439,13 @@ function initPlaylistUI() {
   });
   document.querySelector('[data-player-prev]').addEventListener('click', () => changePlaylistTrack(-1));
   document.querySelector('[data-player-next]').addEventListener('click', () => changePlaylistTrack(1));
+  // Volume dans le lecteur : pilote le volume GLOBAL (synchro avec le header,
+  // le quiz et le Château via la liste de curseurs de setVolume dans main.js).
+  const vol = document.getElementById('playlist-volume');
+  if (vol) {
+    vol.value = getVolume();
+    vol.addEventListener('input', (e) => setVolume(+e.target.value));
+  }
   seek.addEventListener('input', () => {
     if (Number.isFinite(audio.duration)) audio.currentTime = parseFloat(seek.value);
   });

@@ -127,7 +127,7 @@ function setVolume(v) {
   localStorage.setItem('amq_volume', String(v));
   applyVolume();
   // garde tous les curseurs de volume (header + en-vue) synchronisés
-  ['header-volume', 'volume', 'tower-volume', 'mp-volume'].forEach((id) => {
+  ['header-volume', 'volume', 'tower-volume', 'mp-volume', 'playlist-volume'].forEach((id) => {
     const el = document.getElementById(id);
     if (el && +el.value !== v) el.value = v;
   });

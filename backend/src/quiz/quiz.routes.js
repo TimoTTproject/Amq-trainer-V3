@@ -389,6 +389,7 @@ router.get('/playlist', requireAuth, async (req, res) => {
     songs: stats.map((s) => ({
       id: s.song.id, animeTitle: s.song.animeTitle, type: s.song.type, number: s.song.number,
       title: s.song.title, artist: s.song.artist, videoUrl: preferredMediaUrl(s.song),
+      format: s.song.format || null, // TV/MOVIE/OVA… → icône côté client
     })),
   });
 });

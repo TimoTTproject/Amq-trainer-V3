@@ -1094,6 +1094,10 @@
           <button type="button" data-player-prev title="Précédent" aria-label="Morceau précédent"><i class="fas fa-backward-step"></i></button>
           <button type="button" class="playlist-player-main" data-player-toggle title="Lecture / pause" aria-label="Lecture ou pause"><i class="fas fa-play"></i></button>
           <button type="button" data-player-next title="Suivant" aria-label="Morceau suivant"><i class="fas fa-forward-step"></i></button>
+          <div class="playlist-player-volume">
+            <i class="fas fa-volume-high" aria-hidden="true"></i>
+            <input type="range" id="playlist-volume" min="0" max="1" step="0.05" value="0.8" title="Volume" aria-label="Volume de la musique" />
+          </div>
         </div>
       </div>
       <section class="playlist-recs hidden" id="playlist-recs">
