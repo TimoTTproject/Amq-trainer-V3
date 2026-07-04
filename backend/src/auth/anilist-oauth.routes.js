@@ -11,7 +11,6 @@ const router = express.Router();
 const CLIENT_ID = (process.env.ANILIST_CLIENT_ID || '').trim();
 const CLIENT_SECRET = (process.env.ANILIST_CLIENT_SECRET || '').trim();
 const REDIRECT_URI = (process.env.ANILIST_REDIRECT_URI || '').trim();
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5500';
 
 function isConfigured() {
   return Boolean(CLIENT_ID && CLIENT_SECRET && REDIRECT_URI);

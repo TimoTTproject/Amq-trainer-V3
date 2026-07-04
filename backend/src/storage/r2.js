@@ -7,7 +7,6 @@ const { fetchVideoUpstream } = require('../util/stream');
 
 const failedSongIds = new Set();
 let client = null;
-let migrationPromise = null;
 const migrationState = {
   running: false,
   uploaded: 0,
@@ -164,7 +163,6 @@ async function runContinuousMigration() {
     migrationState.lastError = error.message;
   } finally {
     migrationState.running = false;
-    migrationPromise = null;
   }
 }
 
@@ -175,7 +173,7 @@ function startContinuousMigration() {
   migrationState.failed = 0;
   migrationState.startedAt = Date.now();
   migrationState.lastError = null;
-  migrationPromise = runContinuousMigration();
+  runContinuousMigration(); // tourne en tâche de fond ; suivi via migrationState
   return { ...migrationState };
 }
 

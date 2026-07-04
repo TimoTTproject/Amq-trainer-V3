@@ -143,7 +143,6 @@ function roomSnapshot(room) {
   };
 }
 function broadcastRoom(room) { io.to(room.id).emit('mp:room', roomSnapshot(room)); }
-function playersPublic(room) { return [...room.players.values()].map((p) => ({ name: p.name, avatarUrl: p.avatarUrl })); }
 function sysChat(room, text) { room.chat.push({ system: true, text }); }
 
 // ── Salles ──

@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node scripts/static-checks.js",
+    "lint": "eslint .",
     "test": "node --test",
     "db:push": "prisma db push",
     "studio": "prisma studio",
@@ -36,5 +37,9 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0"
+  }
 }

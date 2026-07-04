@@ -27,7 +27,7 @@ const router = express.Router();
 function franchiseKey(title) {
   return (title || '')
     .toLowerCase()
-    .replace(/[\[\]()]/g, ' ')
+    .replace(/[[\]()]/g, ' ')
     .replace(/\b(\d+(st|nd|rd|th)\s+season|season\s*\d+|\d+(st|nd|rd|th)\s+cour|cour\s*\d+|part\s*\d+|the\s+final\s+season|final\s+season|the\s+final|kanketsu-?hen|s\d+|2nd|3rd|the\s+movie|movie|tv|ova|oad|special)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, '');
 }

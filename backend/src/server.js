@@ -123,7 +123,6 @@ app.use(express.static(FRONTEND_DIR));
 // Gestion centralisée des erreurs : on logge côté serveur et on renvoie un JSON
 // générique (jamais de stack au client). Express 5 capture aussi les rejets des
 // handlers async, donc une route qui oublie son try/catch ne tue plus le process.
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('Erreur non gérée:', req.method, req.originalUrl, '-', err && err.message);
   if (res.headersSent) return next(err);

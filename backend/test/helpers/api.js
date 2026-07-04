@@ -82,7 +82,6 @@ async function createApp(mount) {
   app.use(attachUser);
   mount(app);
   // Même contrat qu'en prod : JSON générique, jamais de stack au client.
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     if (res.headersSent) return;
     res.status(500).json({ error: 'Erreur serveur. Réessaie dans un instant.' });

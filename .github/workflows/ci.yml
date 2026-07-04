@@ -29,6 +29,10 @@ jobs:
       # scope global partagé du front. Sans navigateur ni base de données.
       - run: npm run check
 
+      # Lint ciblé « vrais bugs » (voir eslint.config.js : règles relâchées sur
+      # public/ à cause du scope global partagé entre fichiers front).
+      - run: npm run lint
+
       # Tests de logique pure — pas de base de données requise
       # (le `prestart` qui fait `prisma db push` n'est PAS déclenché par `npm test`).
       - run: npm test
