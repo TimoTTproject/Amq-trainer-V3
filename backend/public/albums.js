@@ -179,7 +179,7 @@ async function openAlbumDetail(id) {
   aldOwnedCards = null; aldSearchQuery = '';
   const searchInput = document.getElementById('ald-search-input');
   if (searchInput) searchInput.value = '';
-  document.getElementById('ald-search-results').innerHTML = '';
+  if (aldCurrent.isOwner) renderAldSearch();
   renderAldGrid();
 }
 
@@ -242,8 +242,7 @@ async function loadAldOwnedCards() {
 async function renderAldSearch() {
   const results = document.getElementById('ald-search-results');
   if (!results) return;
-  if (!aldSearchQuery) { results.innerHTML = ''; return; }
-  results.innerHTML = '<p class="muted">Recherche…</p>';
+  results.innerHTML = '<p class="muted">Chargement…</p>';
   let owned;
   try {
     owned = await loadAldOwnedCards();
@@ -251,8 +250,9 @@ async function renderAldSearch() {
     results.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
     return;
   }
-  const q = aldSearchQuery.toLowerCase();
-  const matches = owned.filter((c) => c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q));
+  if (!owned.length) { results.innerHTML = '<p class="muted">Tu ne possèdes encore aucune carte — direction le tirage !</p>'; return; }
+  const q = aldSearchQuery.trim().toLowerCase();
+  const matches = q ? owned.filter((c) => c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q)) : owned;
   if (!matches.length) { results.innerHTML = '<p class="muted">Aucune carte possédée ne correspond.</p>'; return; }
   const inAlbum = new Set((aldCurrent?.cards || []).map((c) => c.id));
   results.innerHTML = matches.map((c) => {
