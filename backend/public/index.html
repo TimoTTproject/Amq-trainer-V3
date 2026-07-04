@@ -650,6 +650,8 @@
         <button class="shop-tab active" data-gtab="pull"><i class="fas fa-ticket"></i> Tirage</button>
         <button class="shop-tab" data-gtab="events"><i class="fas fa-star"></i> Vedettes &amp; vote</button>
         <button class="shop-tab" data-gtab="collection"><i class="fas fa-images"></i> Collection</button>
+        <button class="shop-tab" data-gtab="series"><i class="fas fa-clapperboard"></i> Par série</button>
+        <button class="shop-tab" data-gtab="albums"><i class="fas fa-book"></i> Albums</button>
       </div>
 
       <!-- Onglet Tirage : ressources (pitié / poussière) → tirage → résultat -->
@@ -708,6 +710,86 @@
         <div id="collection-grid" class="card-grid"></div>
       </div>
       </div><!-- /gacha-panel-collection -->
+
+      <!-- Onglet Par série : progression de complétion, anime par anime -->
+      <div id="gacha-panel-series" class="gacha-panel hidden">
+        <p class="hint" style="margin-bottom:14px">Ta progression de collection, anime par anime. Clique une série pour ne voir que ses personnages.</p>
+        <div class="series-toolbar">
+          <input type="search" id="series-search" placeholder="Rechercher une série…" autocomplete="off" />
+          <button class="btn-secondary hidden" id="series-clear-filter"><i class="fas fa-xmark"></i> Retour à toutes les séries</button>
+        </div>
+        <div id="series-progress-list" class="series-progress-list"></div>
+        <div id="series-filtered-grid" class="card-grid hidden"></div>
+      </div><!-- /gacha-panel-series -->
+
+      <!-- Onglet Albums : collections personnalisées de cartes, partageables -->
+      <div id="gacha-panel-albums" class="gacha-panel hidden">
+        <p class="hint" style="margin-bottom:14px">Range tes cartes possédées dans des albums thématiques et partage-les — ou pioche dans ceux des autres joueurs.</p>
+        <div class="shop-tabs" id="albs-tabs">
+          <button class="shop-tab active" data-albtab="mine"><i class="fas fa-user"></i> Mes albums</button>
+          <button class="shop-tab" data-albtab="discover"><i class="fas fa-compass"></i> Découvrir</button>
+        </div>
+
+        <div id="albs-panel-mine" class="gacha-panel">
+          <div class="pls-mine-actions">
+            <button class="btn-primary" id="albs-create-btn"><i class="fas fa-plus"></i> Créer un album</button>
+          </div>
+          <div id="albs-mine-grid" class="pls-grid"></div>
+        </div>
+
+        <div id="albs-panel-discover" class="gacha-panel hidden">
+          <div class="catalog-search">
+            <input type="text" id="albs-discover-search" placeholder="Rechercher un album ou un créateur…" />
+          </div>
+          <div id="albs-discover-grid" class="pls-grid"></div>
+          <div class="catalog-pager">
+            <button class="btn-secondary" id="albs-discover-prev"><i class="fas fa-chevron-left"></i></button>
+            <span id="albs-discover-pageinfo">—</span>
+            <button class="btn-secondary" id="albs-discover-next"><i class="fas fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div><!-- /gacha-panel-albums -->
+    </div>
+
+    <!-- Modale création / édition d'album -->
+    <div id="albs-edit-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Album de cartes">
+      <div class="modal-card">
+        <button class="modal-close" id="albs-edit-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3 id="albs-edit-title"><i class="fas fa-book"></i> Nouvel album</h3>
+        <label class="field-label">Nom</label>
+        <input type="text" id="albs-edit-name" maxlength="60" placeholder="Ex. Mes personnages 5 étoiles" />
+        <label class="field-label">Description (optionnel)</label>
+        <textarea id="albs-edit-desc" maxlength="200" rows="2" placeholder="Quelques mots sur cet album…"></textarea>
+        <label class="pls-public-toggle"><input type="checkbox" id="albs-edit-public" checked /> Album public (visible des autres joueurs, cloneable)</label>
+        <p id="albs-edit-error" class="form-error"></p>
+        <button class="btn-primary" id="albs-edit-save"><i class="fas fa-check"></i> Enregistrer</button>
+      </div>
+    </div>
+
+    <!-- VUE DÉTAIL D'UN ALBUM -->
+    <div id="view-album-detail" class="hidden">
+      <button class="btn-back" id="back-albums-detail"><i class="fas fa-arrow-left"></i> Mes albums</button>
+      <div class="gacha-top">
+        <h2 id="ald-name"><i class="fas fa-book"></i> —</h2>
+        <span class="catalog-info" id="ald-count"></span>
+      </div>
+      <p class="hint" id="ald-creator"></p>
+      <p class="hint hidden" id="ald-desc"></p>
+      <div class="pld-actions" id="ald-owner-actions">
+        <button class="btn-secondary" id="ald-edit-btn"><i class="fas fa-pen"></i> Modifier</button>
+        <button class="btn-secondary" id="ald-delete-btn"><i class="fas fa-trash"></i> Supprimer</button>
+      </div>
+      <div class="pld-actions hidden" id="ald-clone-wrap">
+        <button class="btn-primary" id="ald-clone-btn"><i class="fas fa-clone"></i> Cloner dans mes albums</button>
+      </div>
+
+      <section class="playlist-search hidden" id="ald-search-section">
+        <h3><i class="fas fa-magnifying-glass"></i> Ajouter des cartes possédées</h3>
+        <input type="search" id="ald-search-input" placeholder="Rechercher parmi tes cartes…" autocomplete="off" />
+        <div id="ald-search-results" class="card-grid"></div>
+      </section>
+
+      <div id="ald-grid" class="card-grid"></div>
     </div>
 
     <!-- VUE BOUTIQUE -->

@@ -607,6 +607,7 @@ router.get('/collection', requireAuth, async (req, res) => {
       name: c.character.name,
       imageUrl: c.character.imageUrl,
       rarity: c.character.rarity,
+      series: c.character.series || null,
       copies: c.copies,
       stars: c.stars || 1,
     })),
@@ -614,6 +615,36 @@ router.get('/collection', requireAuth, async (req, res) => {
     ownedByRarity,
     labels: RARITY_LABELS,
   });
+});
+
+// ── Progression « par série » : pour chaque anime du pool, combien de
+// personnages le joueur possède sur le total existant. Sert à l'onglet
+// « Par série » de la collection (barres de progression, tri par avancement).
+router.get('/collection/series', requireAuth, async (req, res) => {
+  const [all, owned] = await Promise.all([
+    prisma.character.findMany({
+      select: { id: true, series: true, imageUrl: true, favourites: true },
+    }),
+    prisma.userCard.findMany({
+      where: { userId: req.user.id },
+      select: { characterId: true },
+    }),
+  ]);
+  const ownedSet = new Set(owned.map((c) => c.characterId));
+  const bySeries = new Map();
+  for (const c of all) {
+    const key = c.series || 'Autre';
+    if (!bySeries.has(key)) bySeries.set(key, { series: key, total: 0, owned: 0, cover: c.imageUrl || null, topFav: -1 });
+    const g = bySeries.get(key);
+    g.total += 1;
+    if (ownedSet.has(c.id)) g.owned += 1;
+    // Couverture = personnage le plus populaire de la série
+    if ((c.favourites || 0) > g.topFav) { g.topFav = c.favourites || 0; g.cover = c.imageUrl || g.cover; }
+  }
+  const series = [...bySeries.values()]
+    .map(({ topFav, ...s }) => s)
+    .sort((a, b) => (b.owned / b.total) - (a.owned / a.total) || b.total - a.total);
+  res.json({ series });
 });
 
 // ── Vote pour la vedette de la semaine prochaine ──

@@ -17,6 +17,10 @@ function setGachaTab(name) {
   document.getElementById('gacha-panel-pull').classList.toggle('hidden', name !== 'pull');
   document.getElementById('gacha-panel-events').classList.toggle('hidden', name !== 'events');
   document.getElementById('gacha-panel-collection').classList.toggle('hidden', name !== 'collection');
+  document.getElementById('gacha-panel-series').classList.toggle('hidden', name !== 'series');
+  document.getElementById('gacha-panel-albums').classList.toggle('hidden', name !== 'albums');
+  if (name === 'series') loadSeriesProgress();
+  if (name === 'albums' && typeof loadMyAlbums === 'function') loadMyAlbums();
 }
 function onGachaTabClick(e) {
   const b = e.target.closest('.shop-tab');
@@ -306,6 +310,60 @@ function renderCollection() {
   grid.innerHTML = list.length
     ? list.map((c) => cardHTML(c)).join('')
     : '<p class="muted">Aucune carte dans ce filtre.</p>';
+}
+
+// ── Onglet « Par série » : progression de complétion, anime par anime ──
+let seriesProgressData = [];
+let seriesSearch = '';
+
+async function loadSeriesProgress() {
+  const list = document.getElementById('series-progress-list');
+  list.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const { series } = await api('/api/gacha/collection/series');
+    seriesProgressData = series;
+    renderSeriesProgressList();
+  } catch (e) {
+    list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderSeriesProgressList() {
+  const list = document.getElementById('series-progress-list');
+  const q = seriesSearch.trim().toLowerCase();
+  const rows = q ? seriesProgressData.filter((s) => s.series.toLowerCase().includes(q)) : seriesProgressData;
+  if (!rows.length) { list.innerHTML = '<p class="muted">Aucune série ne correspond.</p>'; return; }
+  list.innerHTML = rows.map((s) => {
+    const pct = s.total ? Math.round((s.owned / s.total) * 100) : 0;
+    const complete = s.owned >= s.total && s.total > 0;
+    const img = s.cover ? `style="background-image:url('${s.cover}')"` : '';
+    return `<button type="button" class="series-row${complete ? ' complete' : ''}" data-series="${escapeHtml(s.series)}">
+      <div class="series-row-cover" ${img}></div>
+      <div class="series-row-body">
+        <div class="series-row-top"><span class="series-row-name">${escapeHtml(s.series)}</span><span class="series-row-count">${s.owned}/${s.total}${complete ? ' <i class="fas fa-check-circle"></i>' : ''}</span></div>
+        <div class="series-row-bar"><span style="width:${pct}%"></span></div>
+      </div>
+    </button>`;
+  }).join('');
+}
+
+function openSeriesFilter(series) {
+  const grid = document.getElementById('series-filtered-grid');
+  const list = collectionCards.filter((c) => (c.series || 'Autre') === series);
+  document.getElementById('series-progress-list').classList.add('hidden');
+  document.getElementById('series-clear-filter').classList.remove('hidden');
+  grid.classList.remove('hidden');
+  grid.innerHTML = list.length
+    ? list.map((c) => cardHTML(c)).join('')
+    : '<p class="muted">Aucune carte possédée de cette série pour l\'instant.</p>';
+}
+
+function closeSeriesFilter() {
+  document.getElementById('series-progress-list').classList.remove('hidden');
+  document.getElementById('series-clear-filter').classList.add('hidden');
+  const grid = document.getElementById('series-filtered-grid');
+  grid.classList.add('hidden');
+  grid.innerHTML = '';
 }
 
 // ── Boutique de cosmétiques ─────────────────────────────────
@@ -676,6 +734,10 @@ async function openCharacter(id) {
       ${d.owned > 1 ? `<button class="btn-secondary char-recycle" id="char-recycle-btn">
         <i class="fas fa-recycle"></i> Recycler ${d.owned - 1} doublon(s) · +${(d.owned - 1) * d.dustGain} 🌟
       </button>` : ''}
+      ${d.owned ? `<button class="btn-secondary char-album-toggle" id="char-album-btn" data-cid="${c.id}">
+        <i class="fas fa-book"></i> Ranger dans un album
+      </button>
+      <div class="char-album-picker hidden" id="char-album-picker"></div>` : ''}
       <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
         <i class="fas fa-external-link-alt"></i> Voir sur AniList
       </a>`;
@@ -763,8 +825,56 @@ async function openCharacter(id) {
         finally { favBtn.disabled = false; }
       });
     }
+    const albumBtn = document.getElementById('char-album-btn');
+    if (albumBtn) {
+      albumBtn.addEventListener('click', () => toggleCharAlbumPicker(c.id));
+    }
   } catch (e) {
     body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }
 }
 function closeCharacter() { document.getElementById('character-modal').classList.add('hidden'); }
+
+// Picker « Ranger dans un album » : liste des albums du joueur, chacun
+// cochable/décochable indépendamment (une carte peut vivre dans plusieurs albums).
+function toggleCharAlbumPicker(characterId) {
+  const picker = document.getElementById('char-album-picker');
+  if (!picker.classList.contains('hidden')) { picker.classList.add('hidden'); return; }
+  picker.classList.remove('hidden');
+  loadCharAlbumPicker(characterId);
+}
+async function loadCharAlbumPicker(characterId) {
+  const picker = document.getElementById('char-album-picker');
+  picker.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const { albums } = await api(`/api/albums/mine?characterId=${characterId}`);
+    const rows = albums.map((a) => `
+      <label class="char-album-row">
+        <input type="checkbox" data-albid="${a.id}" ${a.has ? 'checked' : ''} />
+        ${escapeHtml(a.name)} <span class="muted">(${a.cardCount})</span>
+      </label>`).join('');
+    picker.innerHTML = `${rows || '<p class="muted">Aucun album pour l\'instant.</p>'}
+      <button class="btn-secondary char-album-create" id="char-album-create-inline"><i class="fas fa-plus"></i> Nouvel album</button>`;
+    picker.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', async () => {
+        const albId = parseInt(cb.dataset.albid);
+        cb.disabled = true;
+        try {
+          if (cb.checked) await api(`/api/albums/${albId}/cards`, { method: 'POST', body: JSON.stringify({ characterId }) });
+          else await api(`/api/albums/${albId}/cards/${characterId}`, { method: 'DELETE' });
+        } catch (e) { alert(e.message); cb.checked = !cb.checked; }
+        finally { cb.disabled = false; }
+      });
+    });
+    document.getElementById('char-album-create-inline').addEventListener('click', () => {
+      openAlbsEditModal(null, {
+        onCreated: async (album) => {
+          await api(`/api/albums/${album.id}/cards`, { method: 'POST', body: JSON.stringify({ characterId }) });
+          loadCharAlbumPicker(characterId);
+        },
+      });
+    });
+  } catch (e) {
+    picker.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}

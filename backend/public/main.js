@@ -61,13 +61,14 @@ function ensureAppReady() {
   if (appReadyPromise) return appReadyPromise;
   appReadyPromise = (async () => {
     await Promise.all([
-      'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'daily.js', 'gacha.js',
+      'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'albums.js', 'daily.js', 'gacha.js',
       'catalog.js', 'community.js', 'profile.js', 'anime-autocomplete.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');
     if (typeof initPlaylistUI === 'function') initPlaylistUI();
     if (typeof initPlaylistsUI === 'function') initPlaylistsUI();
+    if (typeof initAlbumsUI === 'function') initAlbumsUI();
     if (typeof initDailyUI === 'function') initDailyUI();
     if (typeof initAnimeAutocompleteUI === 'function') initAnimeAutocompleteUI();
     if (typeof initMpUI === 'function') initMpUI();
@@ -595,6 +596,7 @@ function showView(name, options = {}) {
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
   document.getElementById('view-playlist-detail').classList.toggle('hidden', name !== 'playlist-detail');
+  document.getElementById('view-album-detail').classList.toggle('hidden', name !== 'album-detail');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
   // Les sous-vues gardent leur hub parent en surbrillance dans la navbar
@@ -625,7 +627,7 @@ function showView(name, options = {}) {
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play', daily: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
-  'playlist-detail': 'collection',
+  'playlist-detail': 'collection', 'album-detail': 'collection',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
 
@@ -1227,6 +1229,19 @@ function setupAppUI() {
     if (card) openCharacter(card.dataset.cid);
   };
   document.getElementById('collection-grid').addEventListener('click', openCardFromEvent);
+  document.getElementById('series-filtered-grid').addEventListener('click', openCardFromEvent);
+  // Par série : recherche, clic sur une série → filtre, bouton retour
+  let seriesSearchTimer;
+  document.getElementById('series-search').addEventListener('input', (e) => {
+    clearTimeout(seriesSearchTimer);
+    const v = e.target.value;
+    seriesSearchTimer = setTimeout(() => { seriesSearch = v; renderSeriesProgressList(); }, 250);
+  });
+  document.getElementById('series-progress-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-series]');
+    if (row) openSeriesFilter(row.dataset.series);
+  });
+  document.getElementById('series-clear-filter').addEventListener('click', closeSeriesFilter);
   // Tirage : clic = retourner la carte (puis ouvrir la fiche une fois révélée)
   document.getElementById('pull-result').addEventListener('click', (e) => {
     const card = e.target.closest('.flip-card[data-cid]');

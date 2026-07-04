@@ -109,6 +109,7 @@ model User {
   friendsReceived Friendship[]         @relation("FriendAdr")
   passwordResets  PasswordResetToken[]
   playlists       Playlist[]
+  cardAlbums      CardAlbum[]
 }
 
 model PasswordResetToken {
@@ -498,6 +499,7 @@ model Character {
   instances CardInstance[]
   votes     FeaturedVote[]
   wishedBy  Wishlist[]
+  albumEntries CardAlbumItem[]
 
   @@index([rarity])
   @@index([series])
@@ -542,6 +544,37 @@ model Pack {
   name       String
   costTokens Int
   cardCount  Int    @default(5)
+}
+
+// Album personnalisé de cartes (perso, par série, ou thématique) — partageable
+// entre joueurs, sur le même principe que les Playlist de musiques.
+model CardAlbum {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards CardAlbumItem[]
+
+  @@index([userId])
+  @@index([isPublic])
+}
+
+model CardAlbumItem {
+  id          Int      @id @default(autoincrement())
+  albumId     Int
+  characterId Int
+  addedAt     DateTime @default(now())
+
+  album     CardAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, characterId])
+  @@index([albumId])
 }
 
 // ─────────────────────────────────────────────

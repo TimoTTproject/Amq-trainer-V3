@@ -52,6 +52,7 @@ const seasonRoutes = require('./season/season.routes');
 const pushRoutes = require('./push/push.routes');
 const mpRoutes = require('./mp/mp.routes');
 const playlistsRoutes = require('./playlists/playlists.routes');
+const albumsRoutes = require('./albums/albums.routes');
 const changelogRoutes = require('./changelog/changelog.routes');
 const { isEnabled: pushEnabled, sendDailyReminder } = require('./push/push');
 const store = require('./util/store');
@@ -128,6 +129,7 @@ app.use('/api/season', seasonRoutes.router);
 app.use('/api/push', pushRoutes.router);
 app.use('/api/mp', mpRoutes.router);
 app.use('/api/playlists', playlistsRoutes.router);
+app.use('/api/albums', albumsRoutes.router);
 app.use('/api/changelog', changelogRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
