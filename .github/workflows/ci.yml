@@ -24,6 +24,11 @@ jobs:
       # qui n'a pas besoin de base de données).
       - run: npm ci
 
+      # Checks statiques : syntaxe de TOUS les .js (dont les modules front
+      # lazy-loadés, jamais require par les tests) + redéclarations dans le
+      # scope global partagé du front. Sans navigateur ni base de données.
+      - run: npm run check
+
       # Tests de logique pure — pas de base de données requise
       # (le `prestart` qui fait `prisma db push` n'est PAS déclenché par `npm test`).
       - run: npm test

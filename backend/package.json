@@ -8,6 +8,7 @@
     "prestart": "prisma db push --skip-generate --accept-data-loss && node scripts/backfill-supply.js && node scripts/fix-supply-mismatch.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "check": "node scripts/static-checks.js",
     "test": "node --test",
     "db:push": "prisma db push",
     "studio": "prisma studio",
