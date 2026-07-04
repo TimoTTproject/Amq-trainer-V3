@@ -1562,6 +1562,36 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .onboard-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .onboard-actions button { flex: 1; justify-content: center; min-width: 150px; }
 
+/* Nouveautés (changelog mis en avant sur l'accueil) */
+.home-changelog { margin: 18px 0 26px; }
+.home-changelog:empty { display: none; }
+.changelog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.changelog-head h3 { font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 9px; margin: 0; }
+.changelog-head h3 i { color: var(--accent); }
+.changelog-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.changelog-card {
+  position: relative; background: linear-gradient(160deg, var(--bg-2), var(--bg));
+  border: 1px solid #2a2f42; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px;
+}
+.changelog-card.is-new { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.changelog-card.feat { border-left: 4px solid #8a6cff; }
+.changelog-card.imp { border-left: 4px solid #4db8ff; }
+.changelog-card.fix { border-left: 4px solid #ff9a4d; }
+.changelog-new-dot {
+  position: absolute; top: 12px; right: 12px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent); animation: questPulse 1.6s ease-in-out infinite;
+}
+.changelog-tag { font-size: .72rem; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .03em; }
+.changelog-card h4, .changelog-row-body h4 { font-size: .95rem; margin: 2px 0 0; }
+.changelog-card p, .changelog-row-body p { font-size: .85rem; color: var(--text-2); line-height: 1.4; margin: 0; }
+.changelog-date { font-size: .75rem; color: var(--text-2); opacity: .8; margin-top: auto; }
+.changelog-list { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; }
+.changelog-row { display: flex; gap: 14px; align-items: flex-start; padding: 12px 4px; border-bottom: 1px solid #2a2f42; }
+.changelog-row:last-child { border-bottom: none; }
+.changelog-row .changelog-tag { flex: 0 0 auto; white-space: nowrap; padding-top: 2px; }
+.changelog-row-body { flex: 1; min-width: 0; }
+.changelog-row .changelog-date { flex: 0 0 auto; white-space: nowrap; }
+
 /* Quêtes du jour (accueil) */
 .home-quests { margin: 18px 0 26px; padding: 18px; border-radius: 16px;
   background: linear-gradient(160deg, var(--bg-2), var(--bg));

@@ -618,6 +618,7 @@ function showView(name, options = {}) {
   }
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
   if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
+  if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
 }
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
@@ -685,6 +686,7 @@ function showApp(user) {
     if (typeof connectMp === 'function') connectMp();
     if (typeof loadTradesBadge === 'function') loadTradesBadge();
     loadQuestsBadge();
+    if (typeof loadChangelogBadge === 'function') loadChangelogBadge();
     maybeOnboard();
   }
   if (requested && requested !== defaultView && (!guest || requested === 'quiz')) {
@@ -2251,6 +2253,87 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Nouveautés (changelog mis en avant sur l'accueil) ──
+let changelogCache = null;
+async function fetchChangelog() {
+  if (changelogCache) return changelogCache;
+  try { changelogCache = (await api('/api/changelog?limit=20')).entries; } catch { changelogCache = []; }
+  return changelogCache;
+}
+function changelogSeenId() { return parseInt(localStorage.getItem('amq_changelog_seen') || '0', 10); }
+function markChangelogSeen(id) {
+  if (id > changelogSeenId()) localStorage.setItem('amq_changelog_seen', String(id));
+  updateChangelogBadge();
+}
+function changelogTagMeta(tag) {
+  if (tag === 'feature') return { icon: '✨', label: 'Nouveau', cls: 'feat' };
+  if (tag === 'fix') return { icon: '🐛', label: 'Correction', cls: 'fix' };
+  return { icon: '🔧', label: 'Amélioration', cls: 'imp' };
+}
+function changelogDate(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+}
+function updateChangelogBadge() {
+  const badge = document.getElementById('changelog-nav-badge');
+  if (!badge || !changelogCache) return;
+  const unseen = changelogCache.filter((e) => e.id > changelogSeenId()).length;
+  badge.textContent = unseen > 9 ? '9+' : String(unseen);
+  badge.classList.toggle('hidden', unseen === 0);
+}
+async function loadChangelogBadge() {
+  await fetchChangelog();
+  updateChangelogBadge();
+}
+async function loadChangelog() {
+  const box = document.getElementById('home-changelog');
+  if (!box) return;
+  const entries = await fetchChangelog();
+  if (!entries.length) { box.innerHTML = ''; return; }
+  const seen = changelogSeenId();
+  const latest = entries.slice(0, 3);
+  box.innerHTML = `
+    <div class="changelog-head">
+      <h3><i class="fas fa-bullhorn"></i> Nouveautés</h3>
+      <button class="btn-link" id="changelog-see-all">Tout voir <i class="fas fa-arrow-right"></i></button>
+    </div>
+    <div class="changelog-cards">
+      ${latest.map((e) => {
+        const meta = changelogTagMeta(e.tag);
+        const isNew = e.id > seen;
+        return `<div class="changelog-card ${meta.cls}${isNew ? ' is-new' : ''}">
+          ${isNew ? '<span class="changelog-new-dot" title="Nouveau depuis ta dernière visite"></span>' : ''}
+          <span class="changelog-tag">${meta.icon} ${meta.label}</span>
+          <h4>${escapeHtml(e.title)}</h4>
+          <p>${escapeHtml(e.description)}</p>
+          <span class="changelog-date">${changelogDate(e.date)}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  markChangelogSeen(latest[0].id); // affiché en avant sur l'accueil = considéré comme vu
+}
+function renderChangelogModalBody(entries) {
+  return entries.map((e) => {
+    const meta = changelogTagMeta(e.tag);
+    return `<div class="changelog-row ${meta.cls}">
+      <span class="changelog-tag">${meta.icon} ${meta.label}</span>
+      <div class="changelog-row-body">
+        <h4>${escapeHtml(e.title)}</h4>
+        <p>${escapeHtml(e.description)}</p>
+      </div>
+      <span class="changelog-date">${changelogDate(e.date)}</span>
+    </div>`;
+  }).join('');
+}
+async function openChangelogModal() {
+  const modal = document.getElementById('changelog-modal');
+  const body = document.getElementById('changelog-modal-body');
+  body.innerHTML = '<p class="muted">Chargement…</p>';
+  modal.classList.remove('hidden');
+  const entries = await fetchChangelog();
+  body.innerHTML = entries.length ? renderChangelogModalBody(entries) : '<p class="muted">Rien à afficher pour l’instant.</p>';
+  if (entries.length) markChangelogSeen(entries[0].id);
+}
+
 // ── Hub d'accueil : derniers tirages Légendaire+ (tous joueurs) ──
 function timeAgo(iso) {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -2288,6 +2371,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('home-recent-pulls').addEventListener('click', (e) => {
     const b = e.target.closest('.recent-pull-card');
     if (b && typeof openCharacter === 'function') openCharacter(b.dataset.cid);
+  });
+  document.getElementById('home-changelog').addEventListener('click', (e) => {
+    if (e.target.closest('#changelog-see-all')) openChangelogModal();
+  });
+  document.getElementById('changelog-modal-close').addEventListener('click', () => {
+    document.getElementById('changelog-modal').classList.add('hidden');
+  });
+  document.getElementById('changelog-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'changelog-modal') e.currentTarget.classList.add('hidden');
   });
 });
 
