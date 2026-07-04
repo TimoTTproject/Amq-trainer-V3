@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "postinstall": "prisma generate",
-    "prestart": "node scripts/deploy-migrations.js && node scripts/backfill-supply.js && node scripts/fix-supply-mismatch.js",
+    "prestart": "prisma generate && node scripts/deploy-migrations.js && node scripts/backfill-supply.js && node scripts/fix-supply-mismatch.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node scripts/static-checks.js",
