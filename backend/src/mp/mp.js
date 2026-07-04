@@ -400,10 +400,15 @@ async function pickSong(room) {
 }
 
 function availableSongWhere(room) {
+  // Coop = openings UNIQUEMENT (les endings rendent la montée trop punitive
+  // pour un mode pensé « fun à deux ») — quel que soit le réglage du salon.
+  const themeType = room.mode === 'coop'
+    ? 'OP'
+    : (room.settings?.themeType && room.settings.themeType !== 'all' ? room.settings.themeType : null);
   return {
     videoUrl: { not: null },
     ...(Array.isArray(room.songPoolIds) ? { id: { in: room.songPoolIds } } : {}),
-    ...(room.settings?.themeType && room.settings.themeType !== 'all' ? { type: room.settings.themeType } : {}),
+    ...(themeType ? { type: themeType } : {}),
     ...(room.usedAnilistIds.size ? { anilistId: { notIn: [...room.usedAnilistIds] } } : {}),
   };
 }
@@ -746,7 +751,15 @@ async function persistResults(room, ordered) {
 // Fin de la Tour en équipe (coop) : pas de MMR/récompense, on retient l'étage et
 // le record perso, puis retour au lobby (le salon coop est toujours privé).
 async function endCoopGame(room) {
-  const floor = room.coopCleared || 0;
+  // `floor` = étage ATTEINT (dernier étage joué) — même sémantique que le
+  // Château solo ; c'est lui qui fait le record perso et le classement hebdo.
+  // `cleared` = étages réellement franchis — c'est lui qui paie les tokens.
+  const floor = room.round || 0;
+  const cleared = room.coopCleared || 0;
+  // Classement hebdo réservé au CATALOGUE GLOBAL : sur « listes des joueurs »,
+  // on ne joue que ses propres animes → trop facile à farmer pour des
+  // récompenses hebdo élevées (1000/500). La partie reste jouable et payée.
+  const weeklyEligible = !Array.isArray(room.songPoolIds);
   let ranking = [];
   try {
     const ordered = [...room.players.values()]
@@ -763,7 +776,7 @@ async function endCoopGame(room) {
       bestBy = Object.fromEntries(users.map((u) => [u.id, u.coopBestFloor || 0]));
       const byId = Object.fromEntries(users.map((u) => [u.id, u]));
       // Gain plafonné (≥ 2 comptes distincts), partageant le budget (fenêtre 6h) du multi.
-      const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD && floor > 0;
+      const rewardEnabled = ordered.length >= MP_MIN_PLAYERS_REWARD && cleared > 0;
       await prisma.$transaction(
         ordered.flatMap((p) => {
           const u = byId[p.userId] || {};
@@ -771,7 +784,7 @@ async function endCoopGame(room) {
           const data = {};
           if ((bestBy[p.userId] || 0) < floor) data.coopBestFloor = floor; // record perso
           let granted = 0;
-          if (rewardEnabled) granted = Math.min(floor * COOP_TOKENS_PER_FLOOR, COOP_GAME_CAP, cap.left);
+          if (rewardEnabled) granted = Math.min(cleared * COOP_TOKENS_PER_FLOOR, COOP_GAME_CAP, cap.left);
           rewardBy[p.userId] = granted;
           if (granted > 0) {
             data.tokens = { increment: granted };
@@ -784,8 +797,9 @@ async function endCoopGame(room) {
           return ops;
         })
       );
-      // Score hebdomadaire (classement coop + récompense aux 2 meilleurs en fin de semaine)
-      if (floor > 0) {
+      // Score hebdomadaire (classement coop + récompense aux 2 meilleurs en fin
+      // de semaine) — catalogue global uniquement (cf. weeklyEligible ci-dessus).
+      if (floor > 0 && weeklyEligible) {
         const week = weekKey();
         await prisma.coopWeeklyScore.createMany({ data: ids.map((uid) => ({ userId: uid, week, floor: 0 })), skipDuplicates: true });
         await prisma.coopWeeklyScore.updateMany({ where: { userId: { in: ids }, week, floor: { lt: floor } }, data: { floor } });
@@ -797,10 +811,10 @@ async function endCoopGame(room) {
     console.error('mp endCoopGame prep error:', e && (e.stack || e.message) || e);
   }
   try {
-    io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, ranking });
+    io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, cleared, weeklyEligible, ranking });
   } catch (e) {
     console.error('coop game:over emit error:', e && (e.stack || e.message) || e);
-    try { io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, ranking: [] }); } catch {}
+    try { io.to(room.id).emit('mp:game:over', { coop: true, mode: 'coop', floor, cleared, weeklyEligible, ranking: [] }); } catch {}
   }
   // Coop = toujours privé → retour au lobby pour rejouer
   room.status = 'lobby';

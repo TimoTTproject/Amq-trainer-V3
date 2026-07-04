@@ -405,8 +405,12 @@ function connectMp() {
       if (floor > 0) { sfx.win(); burstConfetti(floor >= 10 ? 60 : 30); } else { sfx.lose(); }
       document.querySelector('#mp-over h3').textContent = `🏯 Tour en équipe — Étage ${floor}`;
       const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+      const cleared = d.cleared != null ? d.cleared : floor;
+      const weeklyNote = d.weeklyEligible === false
+        ? '<p class="hint">ⓘ Partie sur les listes des joueurs — ne compte pas pour le classement hebdo (catalogue global uniquement).</p>'
+        : '';
       document.getElementById('mp-ranking').innerHTML =
-        `<p class="mp-coop-recap">Votre équipe a franchi <b>${floor}</b> étage${floor > 1 ? 's' : ''} ensemble !${iRecord ? ' <span class="mp-record">🎉 Nouveau record perso</span>' : ''}</p>`
+        `<p class="mp-coop-recap">Votre équipe a atteint l'étage <b>${floor}</b> (${cleared} étage${cleared > 1 ? 's' : ''} franchi${cleared > 1 ? 's' : ''}) !${iRecord ? ' <span class="mp-record">🎉 Nouveau record perso</span>' : ''}</p>${weeklyNote}`
         + (d.ranking || []).map((p, i) => {
           const isMe = p.name === currentUser.displayName;
           const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');

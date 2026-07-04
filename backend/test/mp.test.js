@@ -53,6 +53,18 @@ test('filters multiplayer songs by opening or ending', () => {
   });
 });
 
+test('coop is openings-only, whatever the room setting says', () => {
+  const room = roomWithTwoPlayers();
+  room.mode = 'coop';
+  room.settings.themeType = 'ED'; // le réglage du salon est ignoré en coop
+  assert.deepEqual(availableSongWhere(room), {
+    videoUrl: { not: null },
+    type: 'OP',
+  });
+  room.settings.themeType = 'all';
+  assert.equal(availableSongWhere(room).type, 'OP');
+});
+
 test('limits quick matches to the combined song lists of present players', () => {
   const room = roomWithTwoPlayers();
   room.songPoolIds = [12, 34, 56];
