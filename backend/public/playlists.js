@@ -1,18 +1,15 @@
-// Mes listes — playlists nommées, partageables entre joueurs (distinct de
-// « Ma playlist » = favoris ❤, géré dans playlist.js). Script classique à scope
-// global partagé, chargé après playlist.js (réutilise plCover/plTypeBadge/
-// plFormatIcon) et après main.js (currentUser, api, escapeHtml, otherAvatar,
-// getVolume, showView, navTo…). Ne pas charger comme module ES.
+// Mes listes — playlists nommées, partageables entre joueurs. Vit dans l'onglet
+// « Mes listes » de la vue Playlist (#pl-panel-lists, cf. playlist.js pour
+// l'onglet « Favoris » ❤ et le bascule d'onglets externe). Script classique à
+// scope global partagé, chargé après playlist.js (réutilise plCover/
+// plTypeBadge/plFormatIcon) et après main.js (currentUser, api, escapeHtml,
+// otherAvatar, getVolume, showView…). Ne pas charger comme module ES.
 
 let plsTab = 'mine';
 let plsDiscoverPage = 1, plsDiscoverPages = 1, plsDiscoverSearch = '';
 let plsDiscoverSearchTimer = null;
-let plsEditingId = null; // null = création
-
-function openPlaylists() {
-  showView('playlists');
-  switchPlsTab('mine');
-}
+let plsEditingId = null; // id de la liste en édition (mode 'edit')
+let plsEditMode = 'create'; // 'create' | 'edit' | 'import'
 
 function switchPlsTab(tab) {
   plsTab = tab;
@@ -77,13 +74,17 @@ async function loadDiscoverPlaylists(page) {
   }
 }
 
-// ── Modale création / édition ──
-function openPlsEditModal(playlist) {
+// ── Modale création / édition / import ──
+// opts.importMode = true → préremplit pour importer la playlist de favoris ❤
+// dans une nouvelle liste nommée (endpoint dédié /import-favorites).
+function openPlsEditModal(playlist, opts = {}) {
+  plsEditMode = playlist ? 'edit' : (opts.importMode ? 'import' : 'create');
   plsEditingId = playlist ? playlist.id : null;
-  document.getElementById('pls-edit-title').innerHTML = playlist
-    ? '<i class="fas fa-pen"></i> Modifier la liste'
-    : '<i class="fas fa-list-ul"></i> Nouvelle liste';
-  document.getElementById('pls-edit-name').value = playlist ? playlist.name : '';
+  const titleEl = document.getElementById('pls-edit-title');
+  if (plsEditMode === 'edit') titleEl.innerHTML = '<i class="fas fa-pen"></i> Modifier la liste';
+  else if (plsEditMode === 'import') titleEl.innerHTML = '<i class="fas fa-file-import"></i> Importer ma playlist';
+  else titleEl.innerHTML = '<i class="fas fa-list-ul"></i> Nouvelle liste';
+  document.getElementById('pls-edit-name').value = playlist ? playlist.name : (plsEditMode === 'import' ? 'Ma playlist' : '');
   document.getElementById('pls-edit-desc').value = playlist ? (playlist.description || '') : '';
   document.getElementById('pls-edit-public').checked = playlist ? playlist.isPublic : true;
   document.getElementById('pls-edit-error').textContent = '';
@@ -103,10 +104,14 @@ async function savePlsEdit() {
   const btn = document.getElementById('pls-edit-save');
   btn.disabled = true;
   try {
-    if (plsEditingId) {
+    if (plsEditMode === 'edit') {
       await api(`/api/playlists/${plsEditingId}`, { method: 'PATCH', body: JSON.stringify({ name, description, isPublic }) });
       closePlsEditModal();
       await openPlaylistDetail(plsEditingId);
+    } else if (plsEditMode === 'import') {
+      const { playlist } = await api('/api/playlists/import-favorites', { method: 'POST', body: JSON.stringify({ name, description, isPublic }) });
+      closePlsEditModal();
+      await openPlaylistDetail(playlist.id);
     } else {
       const { playlist } = await api('/api/playlists', { method: 'POST', body: JSON.stringify({ name, description, isPublic }) });
       closePlsEditModal();
@@ -218,7 +223,7 @@ async function deleteCurrentPlaylist() {
   if (!confirm(`Supprimer définitivement la liste « ${pldCurrent.name} » ?`)) return;
   try {
     await api(`/api/playlists/${pldCurrent.id}`, { method: 'DELETE' });
-    openPlaylists();
+    openPlaylistLists();
   } catch (e) {
     alert(e.message);
   }
@@ -307,6 +312,7 @@ function initPlaylistsUI() {
     if (b) switchPlsTab(b.dataset.pltab);
   });
   document.getElementById('pls-create-btn').addEventListener('click', () => openPlsEditModal(null));
+  document.getElementById('pls-import-btn').addEventListener('click', () => openPlsEditModal(null, { importMode: true }));
   document.getElementById('pls-edit-close').addEventListener('click', closePlsEditModal);
   document.getElementById('pls-edit-save').addEventListener('click', savePlsEdit);
   document.getElementById('pls-mine-grid').addEventListener('click', (e) => {
@@ -325,8 +331,7 @@ function initPlaylistsUI() {
   document.getElementById('pls-discover-prev').addEventListener('click', () => loadDiscoverPlaylists(plsDiscoverPage - 1));
   document.getElementById('pls-discover-next').addEventListener('click', () => loadDiscoverPlaylists(plsDiscoverPage + 1));
 
-  document.getElementById('back-collection-playlists').addEventListener('click', () => showView('collection'));
-  document.getElementById('back-playlists-detail').addEventListener('click', openPlaylists);
+  document.getElementById('back-playlists-detail').addEventListener('click', openPlaylistLists);
   document.getElementById('pld-edit-btn').addEventListener('click', () => openPlsEditModal(pldCurrent));
   document.getElementById('pld-delete-btn').addEventListener('click', deleteCurrentPlaylist);
   document.getElementById('pld-clone-btn').addEventListener('click', clonePlaylistToMine);

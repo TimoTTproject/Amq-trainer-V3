@@ -2,10 +2,24 @@
 // Chargé APRÈS main.js dans index.html : réutilise ses globals (currentUser, api,
 // settings, escapeHtml, otherAvatar, getVolume…). Ne pas charger comme module ES.
 
-// ── PLAYLIST ──
+// ── PLAYLIST (deux onglets : Favoris ❤ / Mes listes — cf. playlists.js) ──
 function openPlaylist() {
   showView('playlist');
-  loadPlaylist();
+  switchPlaylistOuterTab('favoris');
+}
+
+// Entrée directe sur l'onglet « Mes listes » (ex. retour depuis le détail d'une liste).
+function openPlaylistLists() {
+  showView('playlist');
+  switchPlaylistOuterTab('lists');
+}
+
+function switchPlaylistOuterTab(tab) {
+  document.querySelectorAll('#pl-outer-tabs .shop-tab').forEach((b) => b.classList.toggle('active', b.dataset.poltab === tab));
+  document.getElementById('pl-panel-favoris').classList.toggle('hidden', tab !== 'favoris');
+  document.getElementById('pl-panel-lists').classList.toggle('hidden', tab !== 'lists');
+  if (tab === 'favoris') loadPlaylist();
+  else if (typeof switchPlsTab === 'function') switchPlsTab(plsTab || 'mine');
 }
 
 let playlistSongs = [];
@@ -398,6 +412,10 @@ async function removeFromPlaylist(tr) {
 function initPlaylistUI() {
   const audio = document.getElementById('playlist-audio');
   const seek = document.getElementById('playlist-player-seek');
+  document.getElementById('pl-outer-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-poltab]');
+    if (b) switchPlaylistOuterTab(b.dataset.poltab);
+  });
   document.getElementById('playlist-tbody').addEventListener('click', (e) => {
     const rm = e.target.closest('[data-remove]');
     if (rm) return removeFromPlaylist(rm.closest('tr'));

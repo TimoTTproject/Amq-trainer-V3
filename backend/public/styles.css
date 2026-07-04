@@ -686,6 +686,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .pls-badge.priv { background: #2a2530; color: #c9a8ff; border: 1px solid #4a3a6b; }
 .pls-public-toggle { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: .9rem; color: var(--text-2); }
 .pld-actions { display: flex; gap: 10px; margin: 10px 0 16px; }
+.pls-mine-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .mp-seen { font-size: .8rem; opacity: .85; cursor: help; }
 .tower-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
 .tower-choice { background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: center; }

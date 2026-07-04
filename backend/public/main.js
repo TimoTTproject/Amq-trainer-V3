@@ -67,6 +67,7 @@ function ensureAppReady() {
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');
     if (typeof initPlaylistUI === 'function') initPlaylistUI();
+    if (typeof initPlaylistsUI === 'function') initPlaylistsUI();
     if (typeof initDailyUI === 'function') initDailyUI();
     if (typeof initAnimeAutocompleteUI === 'function') initAnimeAutocompleteUI();
     if (typeof initMpUI === 'function') initMpUI();
@@ -593,7 +594,6 @@ function showView(name, options = {}) {
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
-  document.getElementById('view-playlists').classList.toggle('hidden', name !== 'playlists');
   document.getElementById('view-playlist-detail').classList.toggle('hidden', name !== 'playlist-detail');
   document.getElementById('view-training').classList.toggle('hidden', name !== 'training');
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
@@ -624,7 +624,7 @@ function showView(name, options = {}) {
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play', daily: 'play',
   gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
-  playlists: 'collection', 'playlist-detail': 'collection',
+  'playlist-detail': 'collection',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
 
@@ -648,7 +648,6 @@ function navTo(name) {
   if (name === 'mp') return openMultiplayer();
   if (name === 'coop') return startCoop();
   if (name === 'playlist') return openPlaylist();
-  if (name === 'playlists') return openPlaylists();
   if (name === 'quiz') return openQuiz();
   if (name === 'training') return openTraining();
   if (name === 'friends') return openFriends();

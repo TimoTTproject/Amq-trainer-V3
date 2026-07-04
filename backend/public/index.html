@@ -238,12 +238,7 @@
         </button>
         <button class="hub-card" data-nav="playlist" style="--c:#ff6b6b">
           <span class="hub-ico"><i class="fas fa-heart"></i></span>
-          <span class="hub-txt"><h3>Playlist</h3><p>Tes openings favoris likés</p></span>
-          <i class="fas fa-chevron-right hub-go"></i>
-        </button>
-        <button class="hub-card" data-nav="playlists" style="--c:#7fd858">
-          <span class="hub-ico"><i class="fas fa-list-ul"></i></span>
-          <span class="hub-txt"><h3>Mes listes</h3><p>Crée des listes thématiques, découvre celles des autres joueurs</p></span>
+          <span class="hub-txt"><h3>Playlist</h3><p>Favoris likés et listes thématiques à partager</p></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
       </div>
@@ -1080,9 +1075,15 @@
     <div id="view-playlist" class="hidden">
       <button class="btn-back" id="back-collection-playlist"><i class="fas fa-arrow-left"></i> Collection</button>
       <div class="gacha-top">
-        <h2><i class="fas fa-heart"></i> Ma playlist</h2>
+        <h2><i class="fas fa-heart"></i> Playlist</h2>
         <span class="catalog-info" id="playlist-total"></span>
       </div>
+      <div class="shop-tabs" id="pl-outer-tabs">
+        <button class="shop-tab active" data-poltab="favoris"><i class="fas fa-heart"></i> Favoris</button>
+        <button class="shop-tab" data-poltab="lists"><i class="fas fa-list-ul"></i> Mes listes</button>
+      </div>
+
+      <div id="pl-panel-favoris" class="gacha-panel">
       <p class="hint" style="margin-bottom:14px">Like un son pendant le quiz (bouton ❤) pour l'ajouter ici.</p>
       <div class="playlist-player hidden" id="playlist-player">
         <div class="playlist-player-icon"><i class="fas fa-music"></i></div>
@@ -1129,22 +1130,20 @@
         <tbody id="playlist-tbody"></tbody>
       </table>
       <audio id="playlist-audio" preload="none"></audio>
-    </div>
+      </div><!-- /pl-panel-favoris -->
 
-    <!-- VUE MES LISTES (hub : mes listes / découvrir celles des autres) -->
-    <div id="view-playlists" class="hidden">
-      <button class="btn-back" id="back-collection-playlists"><i class="fas fa-arrow-left"></i> Collection</button>
-      <div class="gacha-top">
-        <h2><i class="fas fa-list-ul"></i> Mes listes</h2>
-      </div>
-      <p class="hint" style="margin-bottom:14px">Crée des listes thématiques et partage-les — ou pioche dans celles des autres joueurs.</p>
+      <div id="pl-panel-lists" class="gacha-panel hidden">
+      <p class="hint" style="margin-bottom:14px">Crée des listes thématiques et partage-les, importe ta playlist de favoris — ou pioche dans celles des autres joueurs.</p>
       <div class="shop-tabs" id="pls-tabs">
         <button class="shop-tab active" data-pltab="mine"><i class="fas fa-user"></i> Mes listes</button>
         <button class="shop-tab" data-pltab="discover"><i class="fas fa-compass"></i> Découvrir</button>
       </div>
 
       <div id="pls-panel-mine" class="gacha-panel">
-        <button class="btn-primary" id="pls-create-btn" style="margin-bottom:14px"><i class="fas fa-plus"></i> Créer une liste</button>
+        <div class="pls-mine-actions">
+          <button class="btn-primary" id="pls-create-btn"><i class="fas fa-plus"></i> Créer une liste</button>
+          <button class="btn-secondary" id="pls-import-btn"><i class="fas fa-file-import"></i> Importer ma playlist actuelle</button>
+        </div>
         <div id="pls-mine-grid" class="pls-grid"></div>
       </div>
 
@@ -1159,9 +1158,10 @@
           <button class="btn-secondary" id="pls-discover-next"><i class="fas fa-chevron-right"></i></button>
         </div>
       </div>
+      </div><!-- /pl-panel-lists -->
     </div>
 
-    <!-- Modale création / édition de liste -->
+    <!-- Modale création / édition / import de liste -->
     <div id="pls-edit-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Liste de lecture">
       <div class="modal-card">
         <button class="modal-close" id="pls-edit-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>

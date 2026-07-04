@@ -103,6 +103,36 @@ test('ajout de son : owner only, 404 si musique inconnue', async () => {
   assert.equal(forbidden.status, 404);
 });
 
+test('import-favorites : refuse si la playlist de favoris est vide', async () => {
+  prisma.userSongStat.findMany = async () => [];
+  const res = await app.request('/api/playlists/import-favorites', { method: 'POST', cookie: app.authCookie(OWNER.id), body: {} });
+  assert.equal(res.status, 400);
+});
+
+test('import-favorites : crée une liste à partir des favoris actuels', async () => {
+  prisma.userSongStat.findMany = async () => [{ songId: 5 }, { songId: 6 }, { songId: 7 }];
+  prisma.playlist.count = async () => 0;
+  let createdData = null;
+  prisma.playlist.create = async ({ data }) => { createdData = data; return { id: 7, name: data.name, description: data.description, isPublic: data.isPublic, _count: { songs: 3 } }; };
+  const res = await app.request('/api/playlists/import-favorites', {
+    method: 'POST', cookie: app.authCookie(OWNER.id), body: { name: 'Mes favoris', isPublic: false },
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.json.playlist.songCount, 3);
+  assert.equal(createdData.userId, OWNER.id);
+  assert.equal(createdData.songs.create.length, 3);
+});
+
+test('import-favorites : nom par défaut si non fourni', async () => {
+  prisma.userSongStat.findMany = async () => [{ songId: 1 }];
+  prisma.playlist.count = async () => 0;
+  let createdData = null;
+  prisma.playlist.create = async ({ data }) => { createdData = data; return { id: 8, ...data, _count: { songs: 1 } }; };
+  const res = await app.request('/api/playlists/import-favorites', { method: 'POST', cookie: app.authCookie(OWNER.id), body: {} });
+  assert.equal(res.status, 201);
+  assert.equal(createdData.name, 'Ma playlist');
+});
+
 test('clone : copie une liste publique dans son propre compte, privée par défaut', async () => {
   prisma.playlist.findUnique = async () => ({ ...playlist({ userId: OTHER.id, isPublic: true }), songs: [{ songId: 5 }, { songId: 6 }] });
   prisma.playlist.count = async () => 0;

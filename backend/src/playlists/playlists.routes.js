@@ -71,6 +71,35 @@ router.post('/', requireAuth, rateLimit({ windowMs: 3600000, max: 20, name: 'pla
   res.status(201).json({ playlist: { id: playlist.id, name: playlist.name, description: playlist.description, isPublic: playlist.isPublic, songCount: 0 } });
 });
 
+// Importe la playlist de favoris ❤ (UserSongStat.liked) dans une NOUVELLE liste
+// nommée — copie ponctuelle, pas de lien vivant (les favoris continuent leur vie
+// à part, comme avant ; la liste créée est un instantané au moment de l'import).
+router.post('/import-favorites', requireAuth, rateLimit({ windowMs: 3600000, max: 10, name: 'playlist-import-favorites' }), async (req, res) => {
+  const name = String(req.body?.name || '').trim() || 'Ma playlist';
+  if (name.length > MAX_NAME_LEN) return res.status(400).json({ error: `Nom trop long (max ${MAX_NAME_LEN} caractères)` });
+  const description = String(req.body?.description || '').trim().slice(0, MAX_DESC_LEN) || null;
+  const isPublic = req.body?.isPublic !== false;
+
+  const count = await prisma.playlist.count({ where: { userId: req.user.id } });
+  if (count >= MAX_PLAYLISTS_PER_USER) {
+    return res.status(400).json({ error: `Maximum ${MAX_PLAYLISTS_PER_USER} listes par compte` });
+  }
+  const liked = await prisma.userSongStat.findMany({ where: { userId: req.user.id, liked: true }, select: { songId: true } });
+  if (!liked.length) {
+    return res.status(400).json({ error: 'Ta playlist de favoris est vide — like des sons pendant le quiz avant d\'importer.' });
+  }
+  const playlist = await prisma.playlist.create({
+    data: {
+      userId: req.user.id, name, description, isPublic,
+      songs: { create: liked.map((s) => ({ songId: s.songId })) },
+    },
+    include: { _count: { select: { songs: true } } },
+  });
+  res.status(201).json({
+    playlist: { id: playlist.id, name: playlist.name, description: playlist.description, isPublic: playlist.isPublic, songCount: playlist._count.songs },
+  });
+});
+
 // Parcourir les listes publiques des autres joueurs (recherche par nom ou créateur)
 router.get('/public', requireAuth, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
