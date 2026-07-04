@@ -317,9 +317,11 @@ async function startGame(room) {
   // Pool commun = union des listes AniList des joueurs présents, si l'hôte a
   // choisi « listes des joueurs » (settings.songSource) — par défaut en partie
   // rapide, modifiable en salon privé aussi. Le classé garde toujours le
-  // catalogue global (réglages figés, cf. applySettings).
+  // catalogue global (réglages figés, cf. applySettings). Le COOP aussi :
+  // catalogue global imposé (le classement hebdo récompense la performance,
+  // pas la connaissance de sa propre liste).
   room.songPoolIds = null;
-  if (!room.ranked && room.settings.songSource === 'lists') {
+  if (!room.ranked && room.settings.mode !== 'coop' && room.settings.songSource === 'lists') {
     try {
       const entries = await prisma.userCatalogEntry.findMany({
         where: { userId: { in: [...room.players.keys()] } },

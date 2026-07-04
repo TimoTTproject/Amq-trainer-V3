@@ -550,11 +550,14 @@ function renderRoom(d) {
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
     document.getElementById('mp-set-source').disabled = !isHost;
-    // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto → on
-    // masque les champs Mode, Manches et Temps (l'encart coop explique tout).
+    // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto +
+    // catalogue global et openings IMPOSÉS par le serveur → on masque tous les
+    // champs de réglage (l'encart coop explique tout).
     document.getElementById('mp-field-mode').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-rounds').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-speed').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-theme').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-source').classList.toggle('hidden', isCoop);
   }
   // Encart explicatif du mode Coop (Tour en équipe)
   const coopInfo = document.getElementById('mp-coop-info');
@@ -567,6 +570,7 @@ function renderRoom(d) {
         <li><i class="fas fa-stairs"></i> Étages <b>infinis</b> — le temps se réduit en montant</li>
         <li><i class="fas fa-users"></i> Étage validé si <b>au moins un joueur</b> trouve, sinon −1 vie</li>
         <li><i class="fas fa-trophy"></i> Score = l'<b>étage atteint</b> ensemble (record perso au profil)</li>
+        <li><i class="fas fa-globe"></i> <b>Catalogue global · Openings uniquement</b> — classement hebdo : 800/400 🪙 pour le top 2</li>
       </ul>`;
   }
 

@@ -152,14 +152,15 @@ if (pushEnabled()) {
 }
 
 // Récompense coop hebdomadaire : les 2 meilleurs étages de la SEMAINE écoulée
-// gagnent 1000 / 500 🪙. Idempotent (store partagé + flag `rewarded` en BDD).
+// gagnent 800 / 400 🪙. Idempotent (store partagé + flag `rewarded` en BDD).
+// NB : le coop est TOUJOURS en catalogue global (pas de farm sur ses listes).
 const { previousWeekKey } = require('./util/week');
 async function payCoopWeekly(week) {
   const top = await prisma.coopWeeklyScore.findMany({
     where: { week, floor: { gt: 0 }, rewarded: false },
     orderBy: { floor: 'desc' }, take: 2,
   });
-  const amounts = [1000, 500];
+  const amounts = [800, 400];
   for (let i = 0; i < top.length; i++) {
     const amt = amounts[i]; const row = top[i];
     try {
