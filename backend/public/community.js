@@ -138,13 +138,19 @@ async function loadPlayers(page) {
     if (!r.players.length) {
       list.innerHTML = '<p class="muted">Aucun joueur trouvé.</p>';
     } else {
+      const isAdmin = currentUser && currentUser.isAdmin;
       list.innerHTML = r.players.map((p) => {
         const tier = p.tier ? tierBadge(p.tier) : '';
         const floor = p.towerBestFloor ? `<span class="pl-floor"><i class="fas fa-chess-rook"></i> ${p.towerBestFloor}</span>` : '';
+        // Suppression de compte (admin only, ex. comptes de test/diagnostic) — jamais sur soi.
+        const del = isAdmin && !p.isMe
+          ? `<button type="button" class="pl-delete" data-del-userid="${p.userId}" data-del-name="${escapeHtml(p.displayName)}" title="Supprimer ce compte"><i class="fas fa-trash"></i></button>`
+          : '';
         return `<div class="pl-row${p.isMe ? ' me' : ''}" data-userid="${p.userId}">
           ${otherAvatar(p, 'avatar-sm')}
           <span class="pl-name">${escapeHtml(p.displayName)}${p.isMe ? ' <span class="hint">(toi)</span>' : ''}</span>
           ${tier}${floor}
+          ${del}
           <i class="fas fa-chevron-right pl-go"></i>
         </div>`;
       }).join('');
@@ -154,6 +160,18 @@ async function loadPlayers(page) {
     document.getElementById('players-next').disabled = playersPage >= playersPages;
   } catch (e) {
     list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// Suppression de compte (admin) : ex. comptes de test/diagnostic créés en prod
+// pendant le développement. Cascade totale côté serveur (relations Prisma).
+async function deletePlayerAccount(userId, name) {
+  if (!confirm(`Supprimer définitivement le compte « ${name} » ?\n\nTous ses tokens, cartes, historiques et échanges seront perdus. Action irréversible.`)) return;
+  try {
+    await api(`/api/admin/user/${userId}`, { method: 'DELETE' });
+    loadPlayers(playersPage);
+  } catch (e) {
+    alert(e.message);
   }
 }
 

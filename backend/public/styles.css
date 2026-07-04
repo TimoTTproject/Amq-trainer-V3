@@ -1121,6 +1121,12 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .pl-floor { color: var(--text-2); font-size: .82rem; }
 .pl-floor i { color: var(--accent); }
 .pl-go { color: var(--text-2); }
+.pl-delete {
+  background: none; border: 1px solid #4a2530; color: #e88; border-radius: 8px;
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex: 0 0 auto; font-size: .8rem;
+}
+.pl-delete:hover { background: #3a1620; border-color: var(--red); color: #ffc4ce; }
 
 /* ── Rareté réelle (stock + n° de série) ── */
 .gcard-serial { color: #ffd34d; font-weight: 700; }

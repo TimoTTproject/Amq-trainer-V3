@@ -1063,6 +1063,8 @@ function setupAppUI() {
   document.getElementById('players-prev').addEventListener('click', () => loadPlayers(playersPage - 1));
   document.getElementById('players-next').addEventListener('click', () => loadPlayers(playersPage + 1));
   document.getElementById('players-list').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-userid]');
+    if (del) { e.stopPropagation(); return deletePlayerAccount(del.dataset.delUserid, del.dataset.delName); }
     const row = e.target.closest('[data-userid]');
     if (row) openPlayer(row.dataset.userid);
   });

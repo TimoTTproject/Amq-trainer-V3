@@ -317,6 +317,33 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Supprime un compte (ex. comptes de test/diagnostic créés en prod pendant le
+// développement) : n'apparaît plus dans l'annuaire des joueurs, le classement,
+// les échanges, etc. Cascade totale via les relations Prisma (onDelete: Cascade
+// sur tous les modèles liés à User). On rend d'abord au stock les exemplaires
+// de cartes possédés (CardInstance) pour ne pas fausser les compteurs de rareté
+// dynamique (minted/soldOut), avant que la cascade ne les supprime.
+router.delete('/user/:id', requireAuth, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (id === req.user.id) return res.status(400).json({ error: 'Impossible de supprimer son propre compte admin ici.' });
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, displayName: true, email: true } });
+  if (!target) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const instances = await prisma.cardInstance.groupBy({
+    by: ['characterId'], where: { userId: id }, _count: { _all: true },
+  });
+  await prisma.$transaction([
+    ...instances.map((row) =>
+      prisma.character.update({
+        where: { id: row.characterId },
+        data: { minted: { decrement: row._count._all }, soldOut: false },
+      })
+    ),
+    prisma.user.delete({ where: { id } }),
+  ]);
+  res.json({ ok: true, deleted: { id: target.id, displayName: target.displayName, email: target.email } });
+});
+
 // Reset GLOBAL : remet à zéro la progression de TOUS les comptes (avant un lancement).
 // Garde les comptes, profils, « Ma liste », et le pool de personnages/musiques.
 // Protégé : nécessite body.confirm === 'RESET'.
