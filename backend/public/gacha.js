@@ -329,13 +329,14 @@ async function loadSeriesProgress() {
   }
 }
 
-// Met en avant la série la plus « remplie » (le % de progression le plus haut,
-// franchise la plus grande en cas d'égalité) — motive à finir celle-ci en premier.
+// Met en avant la série la plus « remplie » (le plus de cartes possédées EN
+// VALEUR ABSOLUE, pas en % — une 8/20 passe avant une 2/2) — motive à
+// continuer celle-ci en premier.
 function renderSeriesSpotlight() {
   const box = document.getElementById('series-spotlight');
   const owned = seriesProgressData.filter((s) => s.owned > 0);
   if (!owned.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-  const best = [...owned].sort((a, b) => (b.owned / b.total) - (a.owned / a.total) || b.total - a.total)[0];
+  const best = [...owned].sort((a, b) => b.owned - a.owned || b.total - a.total)[0];
   const pct = Math.round((best.owned / best.total) * 100);
   const complete = best.owned >= best.total;
   const img = best.cover ? `style="background-image:url('${best.cover}')"` : '';

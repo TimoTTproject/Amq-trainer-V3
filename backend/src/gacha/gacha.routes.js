@@ -648,10 +648,12 @@ router.get('/collection/series', requireAuth, async (req, res) => {
     .filter((s) => s.total >= 2)
     .map(({ topFav, ...s }) => s)
     // À faire d'abord (les moins avancées), les séries déjà complètes en bas.
+    // Tri par nombre de cartes possédées EN VALEUR ABSOLUE (pas en %) : une
+    // série 8/20 passe avant une 1/1... pardon, une 2/2 (100 % mais 2 cartes).
     .sort((a, b) => {
       const aDone = a.owned >= a.total, bDone = b.owned >= b.total;
       if (aDone !== bDone) return aDone ? 1 : -1;
-      return (b.owned / b.total) - (a.owned / a.total) || b.total - a.total;
+      return b.owned - a.owned || b.total - a.total;
     });
   res.json({ series });
 });
