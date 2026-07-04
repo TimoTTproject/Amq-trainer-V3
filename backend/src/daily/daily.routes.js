@@ -134,6 +134,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
   const tooLate = elapsedMs > DAILY_DURATION_MS + DAILY_GRACE_MS;
   const correct = !tooLate && isCorrectGuess(String(guess || ''), song);
   const points = scoreSong({ correct, elapsedMs, durationMs: DAILY_DURATION_MS });
+  if (correct) progressQuests(req.user.id, 'correct', 1); // quête « bonnes réponses » (texte libre)
 
   const nextIndex = run.index + 1;
   const newScore = run.score + points;

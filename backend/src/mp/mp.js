@@ -501,6 +501,7 @@ function onGuess(socket, text) {
   if (correct) {
     player.score += points;
     player.correct = (player.correct || 0) + 1;
+    progressQuests(uid, 'correct', 1); // quête « bonnes réponses » (texte libre, comme le quiz)
   }
   socket.emit('mp:guess:ack', { correct, final: true });
   emitProgress(room);
