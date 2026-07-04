@@ -210,9 +210,9 @@ router.get('/random', requirePlayer, async (req, res) => {
     ? null
     : await prisma.userSongStat.findUnique({
         where: { userId_songId: { userId: req.user.id, songId: song.id } },
-        select: { liked: true, correctCount: true },
+        select: { liked: true, rankedCorrectCount: true },
       });
-  const firstCorrect = !stat || stat.correctCount === 0;
+  const firstCorrect = !stat || stat.rankedCorrectCount === 0;
   // Infos pour la jauge « tokens en jeu » : récompense max au niveau cash, et la
   // courbe de vitesse. `timed` = false en entraînement/rejeu (gain figé, sans chrono).
   const reward = {
@@ -279,9 +279,9 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   if (round.ranked) {
     const stat = await prisma.userSongStat.findUnique({
       where: { userId_songId: { userId: req.user.id, songId: round.sid } },
-      select: { correctCount: true },
+      select: { rankedCorrectCount: true },
     });
-    reward = { max: maxRewardFor(song, !stat || stat.correctCount === 0, level) };
+    reward = { max: maxRewardFor(song, !stat || stat.rankedCorrectCount === 0, level) };
   }
   res.json({ options, roundToken, level, reward });
 });
@@ -591,7 +591,9 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   const prev = await prisma.userSongStat.findUnique({
     where: { userId_songId: { userId, songId } },
   });
-  const firstCorrect = correct && (!prev || prev.correctCount === 0);
+  // Le gain réduit (anti-farm) ne doit sanctionner que le rejeu en mode classé :
+  // l'entraînement (non classé) ne doit jamais faire baisser le gain d'une future partie classée.
+  const firstCorrect = correct && ranked && (!prev || prev.rankedCorrectCount === 0);
   // Les tokens ne sont gagnés qu'en mode classé, pondérés par le niveau (cash/carré/duo)
   // et par la vitesse de réponse (uniquement à la première bonne réponse).
   const levelMult = LEVEL_MULT[round?.level] ?? 1;
@@ -611,10 +613,12 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
       update: {
         playCount: { increment: 1 },
         ...(correct ? { correctCount: { increment: 1 } } : {}),
+        ...(correct && ranked ? { rankedCorrectCount: { increment: 1 } } : {}),
         srsStreak: srs.srsStreak, srsInterval: srs.srsInterval, srsDueAt: srs.srsDueAt,
       },
       create: {
         userId, songId, playCount: 1, correctCount: correct ? 1 : 0,
+        rankedCorrectCount: correct && ranked ? 1 : 0,
         srsStreak: srs.srsStreak, srsInterval: srs.srsInterval, srsDueAt: srs.srsDueAt,
       },
     });

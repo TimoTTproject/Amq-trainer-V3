@@ -429,6 +429,7 @@ model UserSongStat {
   againCount   Int       @default(0)
   playCount    Int       @default(0)
   correctCount Int       @default(0)
+  rankedCorrectCount Int @default(0) // bonnes réponses en mode classé (jetons en jeu) uniquement — l'entraînement ne doit pas déclencher le gain réduit anti-farm
   rating       Int? // note 1-5 donnée par l'utilisateur
   liked        Boolean   @default(false) // ajouté à la playlist perso
   recHidden    Boolean   @default(false) // « pas intéressé » : exclu des recommandations
