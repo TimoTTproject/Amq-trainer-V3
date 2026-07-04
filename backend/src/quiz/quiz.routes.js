@@ -390,6 +390,7 @@ router.get('/playlist', requireAuth, async (req, res) => {
       id: s.song.id, animeTitle: s.song.animeTitle, type: s.song.type, number: s.song.number,
       title: s.song.title, artist: s.song.artist, videoUrl: preferredMediaUrl(s.song),
       format: s.song.format || null, // TV/MOVIE/OVA… → icône côté client
+      coverUrl: s.song.coverUrl || null, // jaquette AniList (identité par licence)
     })),
   });
 });
@@ -464,7 +465,7 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
 
   const select = {
     id: true, anilistId: true, animeTitle: true, type: true, number: true,
-    title: true, artist: true, videoUrl: true, audioUrl: true, popularity: true, format: true,
+    title: true, artist: true, videoUrl: true, audioUrl: true, popularity: true, format: true, coverUrl: true,
   };
   let tasteCandidates = [];
   let popularCandidates = [];

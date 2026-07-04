@@ -237,7 +237,7 @@ setInterval(async () => {
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
 // Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
-const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch } = require('./catalog/catalog.service');
+const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch, backfillCoversBatch } = require('./catalog/catalog.service');
 
 // Backfill AUTOMATIQUE des formats (TV/Film/OAV…) : tant que des musiques ont
 // `format: null`, elles passent le filtre « série principale » et polluent les
@@ -257,6 +257,19 @@ async function autoBackfillFormats() {
     }
     if (total) console.log(`  → Backfill formats terminé : ${total} musique(s) taguée(s).`);
   } catch (e) { console.error('backfill formats:', e && e.message); }
+  // Puis les jaquettes AniList (même passe, même throttle).
+  try {
+    let covers = 0;
+    for (let guard = 0; guard < 120; guard++) {
+      const r = await backfillCoversBatch(50);
+      if (!r.processed) break;
+      covers += r.updated;
+      if (r.remaining) console.log(`  → Jaquettes : ${r.updated} récupérées (${r.remaining} restants)`);
+      if (!r.remaining) break;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    if (covers) console.log(`  → Backfill jaquettes terminé : ${covers} musique(s).`);
+  } catch (e) { console.error('backfill jaquettes:', e && e.message); }
 }
 setTimeout(() => {
   // Verrou court partagé : évite deux passes simultanées (multi-instance/redémarrages rapprochés).

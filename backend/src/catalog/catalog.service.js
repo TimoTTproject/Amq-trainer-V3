@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime, getAnimeFormatsByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds, getAnimeCoversByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
 const { norm } = require('../quiz/matching');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
@@ -437,6 +437,38 @@ async function backfillFormatsBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
+// Backfill des jaquettes AniList (`coverUrl`) — identité visuelle par licence
+// (playlist, recherche…). Même mécanique que les formats : lot d'anilistId
+// distincts encore sans jaquette, sentinelle '' pour les introuvables.
+async function backfillCoversBatch(limit = 50) {
+  const rows = await prisma.song.findMany({
+    where: { coverUrl: null },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const ids = rows.map((r) => r.anilistId);
+  let updated = 0;
+  try {
+    const media = await getAnimeCoversByIds(ids);
+    const coverById = new Map(media.map((m) => [m.id, m.coverImage?.medium]).filter(([, c]) => c));
+    for (const [anilistId, coverUrl] of coverById) {
+      const res = await prisma.song.updateMany({ where: { anilistId, coverUrl: null }, data: { coverUrl } });
+      updated += res.count;
+    }
+    const missing = ids.filter((id) => !coverById.has(id));
+    if (missing.length) {
+      await prisma.song.updateMany({ where: { anilistId: { in: missing }, coverUrl: null }, data: { coverUrl: '' } });
+    }
+  } catch (err) {
+    console.warn('backfill covers error:', err.message);
+  }
+  const remaining = await prisma.song.count({ where: { coverUrl: null } });
+  return { processed: ids.length, updated, remaining };
+}
+
 // Répare les `animeTitle` corrompus (fragments de saison « 2nd Season », titres
 // vides « Anime inconnu »…) : re-récupère le vrai titre sur AniList par anilistId
 // et recalcule animeTitle + altTitles (+ format). À appeler en boucle jusqu'à
@@ -481,6 +513,7 @@ module.exports = {
   buildAltTitles,
   scanEndingsBatch,
   backfillFormatsBatch,
+  backfillCoversBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,
   computeAmbiguousTitleKeys,

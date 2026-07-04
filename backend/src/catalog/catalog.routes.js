@@ -109,7 +109,7 @@ router.get('/list', requireAuth, async (req, res) => {
       orderBy: [{ animeTitle: 'asc' }, { type: 'asc' }, { number: 'asc' }],
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, animeTitle: true, type: true, number: true, title: true, artist: true, videoUrl: true, audioUrl: true },
+      select: { id: true, animeTitle: true, type: true, number: true, title: true, artist: true, videoUrl: true, audioUrl: true, coverUrl: true, format: true },
     }),
   ]);
   res.json({

@@ -48,6 +48,14 @@ function plFranchiseChip(animeTitle) {
   const initials = (words.length >= 2 ? words[0][0] + words[1][0] : base.slice(0, 2)).toUpperCase();
   return `<span class="pl-chip" style="--h:${hue}" title="${escapeHtml(animeTitle)}">${escapeHtml(initials)}</span>`;
 }
+// Vraie jaquette AniList quand on l'a ; repli sur la pastille d'initiales sinon
+// (jaquette pas encore backfillée, ou introuvable sur AniList).
+function plCover(s) {
+  if (s.coverUrl) {
+    return `<img class="pl-cover" src="${escapeHtml(s.coverUrl)}" alt="" loading="lazy" title="${escapeHtml(s.animeTitle)}" onerror="this.style.display='none'" />`;
+  }
+  return plFranchiseChip(s.animeTitle);
+}
 // Badge OP/ED coloré + icône de format (TV/Film/OAV) si connu.
 function plTypeBadge(s) {
   const t = (s.type || '').toUpperCase();
@@ -112,7 +120,7 @@ function renderPlaylistRows() {
         : '';
       return `<tr data-sid="${s.id}" class="${s.id === playlistTrackId ? 'playing' : ''}">
         <td class="cat-play-cell">${playBtn}</td>
-        <td><span class="pl-anime">${plFranchiseChip(s.animeTitle)}<span>${escapeHtml(s.animeTitle)}${plFormatIcon(s.format)}</span></span></td>
+        <td><span class="pl-anime">${plCover(s)}<span>${escapeHtml(s.animeTitle)}${plFormatIcon(s.format)}</span></span></td>
         <td class="nowrap">${plTypeBadge(s)}</td>
         <td>${escapeHtml(s.title)}</td>
         <td>${escapeHtml(s.artist || '—')}</td>
@@ -132,7 +140,7 @@ function renderPlaylistRecommendations(personalized = true) {
   grid.innerHTML = playlistRecommendations
     .map((song) => `<article class="playlist-rec-card" data-rec-id="${song.id}">
       <div class="playlist-rec-top">
-        <span class="playlist-rec-id">${plFranchiseChip(song.animeTitle)}${plTypeBadge(song)}</span>
+        <span class="playlist-rec-id">${plCover(song)}${plTypeBadge(song)}</span>
         <div class="playlist-rec-actions">
           <button type="button" data-rec-play data-sid="${song.id}" aria-label="Écouter ${escapeHtml(song.title)}" title="Écouter"><i class="fas fa-play"></i></button>
           <button type="button" class="playlist-rec-dismiss" data-rec-dismiss data-sid="${song.id}" aria-label="Pas intéressé" title="Pas intéressé · masquer"><i class="fas fa-xmark"></i></button>
@@ -330,7 +338,7 @@ function renderPlaylistSearch() {
           : `<button class="pl-search-add" data-search-add data-sid="${s.id}"><i class="fas fa-plus"></i> Ajouter</button>`;
         return `<div class="pl-search-row" data-sid="${s.id}">
           ${playBtn}
-          ${plFranchiseChip(s.animeTitle)}
+          ${plCover(s)}
           <div class="pl-search-info"><strong>${escapeHtml(s.title)}</strong><span>${escapeHtml(s.animeTitle)} · ${plTypeBadge(s)}${s.artist ? ` · ${escapeHtml(s.artist)}` : ''}</span></div>
           ${addBtn}
         </div>`;

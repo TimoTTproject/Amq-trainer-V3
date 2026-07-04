@@ -149,4 +149,16 @@ async function getAnimeFormatsByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
+// Jaquettes (coverImage) d'un lot d'animes — identité visuelle par licence.
+async function getAnimeCoversByIds(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(id_in: $ids, type: ANIME) { id coverImage { medium } }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.media || [];
+}
+
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeCoversByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
