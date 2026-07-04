@@ -310,6 +310,7 @@ function hostStart(socket) {
 async function startGame(room) {
   if (room.status !== 'lobby') return;
   room.status = 'starting';
+  room.startingAt = Date.now(); // pour le watchdog anti-gel
   if (room.countdownTimer) { clearTimeout(room.countdownTimer); room.countdownTimer = null; }
   room.countdownEndsAt = 0;
 
@@ -625,6 +626,41 @@ function endRound(room) {
       if (!matchOver) Promise.resolve(endGame(room)).catch(() => {});
     });
   }, RESULT_MS);
+}
+
+// ── Watchdog anti-gel ──
+// Filet de sécurité : si un timer de manche se perd (exception isolée, bug de
+// transition…), la partie resterait figée pour tous les joueurs. Ce scan force
+// la progression de toute salle dont l'échéance est dépassée depuis trop
+// longtemps. En temps normal il ne fait jamais rien.
+const WATCHDOG_INTERVAL_MS = 10000;
+const WATCHDOG_SLACK_MS = 5000; // marge au-delà de l'échéance normale
+
+function watchdogTick() {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    try {
+      if (room.status === 'starting' && now > (room.startingAt || 0) + 30000) {
+        // startGame n'a jamais abouti → on rend la main au salon.
+        console.warn(`mp watchdog: salle ${room.id} figée en 'starting', retour au lobby`);
+        room.status = 'lobby';
+        broadcastRoom(room);
+      } else if (room.status === 'playing' && room.current && now > room.current.endsAt + WATCHDOG_SLACK_MS) {
+        // Le timer de fin de manche s'est perdu → on termine la manche nous-mêmes.
+        console.warn(`mp watchdog: manche ${room.round} expirée sans fin dans ${room.id}, endRound forcé`);
+        clearTimeout(room.timer);
+        endRound(room);
+      } else if (room.status === 'playing' && !room.current && room.round > 0
+                 && now > (room.revealUntil || 0) + RESULT_MS + 10000) {
+        // La transition après l'écran de résultat ne s'est jamais faite → fin propre.
+        console.warn(`mp watchdog: transition perdue après la manche ${room.round} dans ${room.id}, endGame forcé`);
+        clearTimeout(room.timer);
+        Promise.resolve(endGame(room)).catch((e) => console.error('mp watchdog endGame:', e && e.message));
+      }
+    } catch (e) {
+      console.error('mp watchdog:', e && e.message);
+    }
+  }
 }
 
 // Récompense brute (avant plafond quotidien) d'un joueur selon perf + placement
@@ -1012,6 +1048,7 @@ function getCurrentVideo(roomId, userId, requestedRound) {
 function initMp(server) {
   const { Server } = require('socket.io');
   io = new Server(server, { path: '/socket.io' });
+  setInterval(watchdogTick, WATCHDOG_INTERVAL_MS).unref();
   io.use(async (socket, next) => {
     try {
       const cookies = parseCookies(socket.handshake.headers.cookie);
@@ -1027,7 +1064,11 @@ function initMp(server) {
   });
   io.on('connection', (socket) => {
     addOnline(socket);
-    reattach(socket); // restaure une partie en cours si l'utilisateur en avait une
+    // Restaure une partie en cours si l'utilisateur en avait une. Sinon on le
+    // signale explicitement : après un redéploiement (état mémoire perdu), un
+    // client resté sur l'écran de jeu doit savoir que sa partie n'existe plus
+    // au lieu de rester figé sur une manche fantôme (« Son indisponible »).
+    if (!reattach(socket)) socket.emit('mp:none');
     socket.on('mp:invite', (toUserId) => invite(socket, String(toUserId || '')));
     socket.on('mp:quick', (opts, ack) => {
       // Compat : si appelé avec seulement le callback (ancien client).

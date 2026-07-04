@@ -207,6 +207,24 @@ function connectMp() {
     const coop = document.getElementById('mp-coop-msg'); if (coop) coop.textContent = m;
   });
   mpSocket.on('mp:info', (d) => mpToast(d.msg));
+  // Reconnexion sans partie côté serveur (ex. redéploiement pendant une manche) :
+  // si on est resté sur un écran de salle/jeu, la partie n'existe plus → on sort
+  // proprement au lieu de rester figé sur une manche fantôme (« Son indisponible »).
+  mpSocket.on('mp:none', () => {
+    if (mpLeft || !mpEngaged || mpSpectating) return;
+    const inRoomOrGame = ['room', 'game', 'over'].some((p) => {
+      const el = document.getElementById('mp-' + p);
+      return el && !el.classList.contains('hidden');
+    });
+    if (!inRoomOrGame) return;
+    mpStopClip();
+    mpRoom = null;
+    mpEngaged = false;
+    mpShow('menu');
+    const msg = document.getElementById('mp-menu-msg');
+    if (msg) msg.textContent = '⚠️ La partie a été interrompue par une mise à jour du serveur — désolé ! Relance une partie.';
+    if (typeof loadMpRooms === 'function') loadMpRooms();
+  });
   mpSocket.on('mp:invited', (d) => {
     mpToast(`🎮 <b>${escapeHtml(d.from)}</b> t'invite à jouer !`, 'Rejoindre', () => {
       openMultiplayer();
