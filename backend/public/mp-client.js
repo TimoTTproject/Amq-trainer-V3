@@ -660,8 +660,12 @@ function renderMpScores(results, withPoints) {
         else if (p.passed) guess = '<span class="mp-guess skip">a passé</span>';
         else guess = '<span class="mp-guess none">pas de réponse</span>';
       }
+      // 👁 : ce joueur a l'anime dans sa liste AniList (envoyé seulement à la révélation)
+      const seen = p.seenAnime
+        ? ' <span class="mp-seen" title="A cet anime dans sa liste AniList">👁</span>'
+        : '';
       return `<div class="mp-score-row${p.correct ? ' ok' : ''}${p.eliminated ? ' elim' : ''}">
-        <span class="mp-name"><span class="mp-name-top">${av}${escapeHtml(p.name)}${team}</span>${guess}</span>
+        <span class="mp-name"><span class="mp-name-top">${av}${escapeHtml(p.name)}${seen}${team}</span>${guess}</span>
         ${lives}
         ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
         <span class="mp-total">${p.score}</span>

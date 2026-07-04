@@ -417,11 +417,23 @@ async function startRound(room) {
   room.nextSongPromise = null;
   if (!song) song = await pickSong(room);
   if (!song) return endGame(room);
+  // Qui a cet anime dans sa liste AniList importée ? Révélé UNIQUEMENT à l'écran
+  // de résultat (jamais pendant la manche, sinon indice de triche).
+  let seenBy = new Set();
+  try {
+    const entries = await prisma.userCatalogEntry.findMany({
+      where: { userId: { in: [...room.players.keys()] }, song: { anilistId: song.anilistId } },
+      select: { userId: true },
+    });
+    seenBy = new Set(entries.map((e) => e.userId));
+  } catch (e) {
+    console.error('mp seenBy:', e && e.message);
+  }
   const prepMs = room.round === 1 ? FIRST_ROUND_PREP_MS : PRELOADED_ROUND_PREP_MS;
   const durationMs = roundDurationMs(room);
   const startAt = Date.now() + prepMs;
   const endsAt = startAt + durationMs;
-  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set() };
+  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set(), seenBy };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
     coop: room.mode === 'coop', teamLives: room.teamLives,
@@ -590,6 +602,7 @@ function endRound(room) {
           name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
           correct: !!a?.correct, points: a?.points || 0,
           guess: a?.guess || null, passed: cur.passed.has(p.userId), // réponse saisie par le joueur (révélée à tous)
+          seenAnime: !!cur.seenBy?.has(p.userId), // a cet anime dans sa liste AniList
           score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
         };
       })
