@@ -184,7 +184,33 @@ setInterval(async () => {
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
 // Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
-const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('./catalog/catalog.service');
+const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch } = require('./catalog/catalog.service');
+
+// Backfill AUTOMATIQUE des formats (TV/Film/OAV…) : tant que des musiques ont
+// `format: null`, elles passent le filtre « série principale » et polluent les
+// modes de jeu avec des OP d'OAV/spéciaux (faux positifs). Plus besoin du clic
+// admin : on tague le restant en tâche de fond à chaque démarrage, par lots
+// throttlés AniList. Idempotent (ne traite que format: null).
+async function autoBackfillFormats() {
+  try {
+    let total = 0;
+    for (let guard = 0; guard < 120; guard++) {
+      const r = await backfillFormatsBatch(50);
+      if (!r.processed) break;
+      total += r.updated;
+      if (r.remaining) console.log(`  → Formats : ${r.updated} tagués (${r.remaining} restants)`);
+      if (!r.remaining) break;
+      await new Promise((res) => setTimeout(res, 1500)); // limite de débit AniList
+    }
+    if (total) console.log(`  → Backfill formats terminé : ${total} musique(s) taguée(s).`);
+  } catch (e) { console.error('backfill formats:', e && e.message); }
+}
+setTimeout(() => {
+  // Verrou court partagé : évite deux passes simultanées (multi-instance/redémarrages rapprochés).
+  store.setIfAbsent('format-backfill-run', 3600)
+    .then((ok) => { if (ok) autoBackfillFormats(); })
+    .catch(() => {});
+}, 35000);
 async function repairCatalogTitles() {
   try {
     let total = 0;

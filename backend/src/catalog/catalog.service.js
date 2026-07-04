@@ -137,9 +137,15 @@ function extractThemes(animeData, displayTitle) {
   const out = [];
   if (!Array.isArray(animeData.animethemes)) return out;
   for (const theme of animeData.animethemes) {
-    if (theme.type !== 'OP' && theme.type !== 'ED') continue; // openings + endings
-    for (const entry of theme.animethemeentries || []) {
-      const video = (entry.videos || []).find((v) => v.link && v.basename !== 'NC');
+    if (theme.type !== 'OP' && theme.type !== 'ED') continue; // openings + endings (jamais d'insert songs)
+    // Versions non-spoiler d'abord (une entry « spoiler » = variante d'épisode
+    // spécial/final avec visuels divulgâcheurs — souvent atypique musicalement).
+    const entries = [...(theme.animethemeentries || [])].sort((a, b) => (a.spoiler === b.spoiler ? 0 : a.spoiler ? 1 : -1));
+    for (const entry of entries) {
+      const videos = (entry.videos || []).filter((v) => v.link && v.basename !== 'NC');
+      // Préfère un extrait « propre » : overlap None = pas de dialogues/bruitages
+      // de l'épisode par-dessus la musique (faux airs d'insert song sinon).
+      const video = videos.find((v) => v.overlap === 'None') || videos[0];
       if (!video) continue;
       const title = getSongTitle(theme);
       const artist = getArtistName(theme);
@@ -469,6 +475,7 @@ async function repairBrokenTitlesBatch(limit = 50) {
 module.exports = {
   importUserList,
   getOrCreateSongsForAnime,
+  extractThemes,
   normalizeAnimeName,
   isSeasonFragment,
   buildAltTitles,
