@@ -397,7 +397,7 @@ function shopEmoteHtml(item) {
   return `<div class="shop-item shop-emote-item${item.owned ? ' is-equipped' : ''}">
     <span class="shop-emote-preview">
       <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" loading="lazy"
-        onerror="this.remove();this.parentElement.textContent='${escapeHtml(item.symbol)}'">
+        data-fallback-symbol="${escapeHtml(item.symbol)}">
     </span>
     <div class="shop-name">${escapeHtml(item.name)}</div>
     ${action}

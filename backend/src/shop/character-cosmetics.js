@@ -89,6 +89,6 @@ function query({ series, q, page }) {
 
 // Branche le résolveur dynamique + chauffe le cache au démarrage (non bloquant).
 cosmetics.registerDynamicResolver(get);
-ensureFresh();
+if (process.env.SKIP_BACKGROUND_REFRESH !== 'true') ensureFresh();
 
 module.exports = { ensureFresh, get, query, PAGE_SIZE };

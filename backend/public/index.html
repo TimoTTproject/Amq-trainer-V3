@@ -46,6 +46,9 @@
         <span class="auth-kicker">AMQ / TRAINER</span>
         <h1><i class="fas fa-wave-square"></i> <span data-i18n="Reconnais l'anime.">Reconnais l'anime.</span><br /><em data-i18n="Dès la première note.">Dès la première note.</em></h1>
         <p class="auth-sub" data-i18n="Openings, endings, duel entre amis et collection. Pas de blabla : lance un extrait et joue.">Openings, endings, duel entre amis et collection. Pas de blabla : lance un extrait et joue.</p>
+        <button id="auth-quick-guest" class="btn-primary auth-quick-guest">
+          <i class="fas fa-play"></i> Jouer sans compte
+        </button>
 
         <div class="auth-features">
           <span class="af"><b>01</b> <span data-i18n="Solo & multi">Solo & multi</span></span>
@@ -80,8 +83,8 @@
           <input type="text" id="register-name" placeholder="Pseudo (optionnel)" data-i18n-ph="Pseudo (optionnel)" autocomplete="nickname" />
           <label class="sr-only" for="register-email">Adresse e-mail</label>
           <input type="email" id="register-email" placeholder="Email" data-i18n-ph="Email" autocomplete="email" required />
-          <label class="sr-only" for="register-password">Mot de passe, 6 caractères minimum</label>
-          <input type="password" id="register-password" placeholder="Mot de passe (min. 6)" data-i18n-ph="Mot de passe (min. 6)" autocomplete="new-password" minlength="6" required />
+          <label class="sr-only" for="register-password">Mot de passe, 8 caractères minimum</label>
+          <input type="password" id="register-password" placeholder="Mot de passe (min. 8)" data-i18n-ph="Mot de passe (min. 8)" autocomplete="new-password" minlength="8" maxlength="128" required />
           <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> <span data-i18n="Créer un compte">Créer un compte</span></button>
         </form>
 
@@ -95,8 +98,8 @@
 
         <form id="reset-password-form" class="auth-form hidden">
           <p class="auth-form-copy">Choisis ton nouveau mot de passe.</p>
-          <label class="sr-only" for="reset-password">Nouveau mot de passe, 6 caractères minimum</label>
-          <input type="password" id="reset-password" placeholder="Nouveau mot de passe (min. 6)" autocomplete="new-password" minlength="6" required />
+          <label class="sr-only" for="reset-password">Nouveau mot de passe, 8 caractères minimum</label>
+          <input type="password" id="reset-password" placeholder="Nouveau mot de passe (min. 8)" autocomplete="new-password" minlength="8" maxlength="128" required />
           <button type="submit" class="btn-primary"><i class="fas fa-key"></i> Modifier le mot de passe</button>
           <button type="button" class="btn-link auth-back-login">Retour à la connexion</button>
         </form>
@@ -503,7 +506,7 @@
       </div>
 
       <div class="gamemode-switch">
-        <span class="gm-tag"><i class="fas fa-trophy"></i> Mode classique</span>
+        <span class="gm-tag" id="gm-tag"><i class="fas fa-trophy"></i> Mode classique</span>
         <span class="gm-hint" id="gm-hint"></span>
         <div class="type-filter" id="type-filter" title="Filtrer openings / endings">
           <button class="tf-btn active" data-type="all">Tout</button>
@@ -1345,47 +1348,45 @@
 
       <h3>🎮 Modes de jeu</h3>
       <ul>
-        <li><b>Classique</b> : gagne des <b>tokens 🪙</b> en trouvant les bonnes réponses (bonus si l'anime est peu connu).</li>
-        <li><b>Entraînement</b> : révise sans enjeu (séries, répétition espacée), vidéo et réponse visibles.</li>
-        <li><b>Château de l'Infini</b> : survie en QCM, 3 vies, chrono dégressif — monte le plus haut possible.</li>
-        <li><b>Multijoueur</b> : affronte d'autres joueurs en temps réel. Score = <code>300 + 700 × temps restant</code> par bonne réponse ; classique / équipes / élimination / Tour en équipe (coop). Récompenses en tokens (plafonnées, fenêtre glissante de 6h).</li>
-        <li><b>Défi du jour</b> : 10 musiques identiques pour tout le monde, une tentative par jour — le gain (jusqu'à 100 🪙) augmente avec ta série de jours consécutifs.</li>
+        <li><b>Classique</b> : devine les titres et gagne des tokens.</li>
+        <li><b>Entraînement</b> : révise librement ou avec la répétition espacée.</li>
+        <li><b>Château</b> : 3 vies, un chrono et des étages à gravir.</li>
+        <li><b>Multijoueur</b> : parties rapides, classées, privées ou coop.</li>
+        <li><b>Défi du jour</b> : 10 musiques identiques pour tout le monde.</li>
       </ul>
 
-      <h3>🪙 Comment gagner des tokens</h3>
-      <p class="about-sub">En <b>solo</b> (le mode classé crédite, l'entraînement non) :</p>
-      <ul>
-        <li><b>Quiz classique</b> — 1ʳᵉ bonne réponse : <b>10 🪙</b>, <b>+5</b> si l'anime est peu connu, <b>+2</b> s'il est moyennement connu. Rejouer une musique déjà trouvée : <b>2 🪙</b>.</li>
-        <li><b>Niveau d'aide</b> (multiplie le gain) : <b>Cash</b> (texte libre) <b>×1</b> · <b>Carré</b> (4 propositions) <b>×0,5</b> · <b>Duo</b> (2 propositions) <b>×0,3</b> — minimum 1 🪙.</li>
-        <li><b>Château de l'Infini</b> — entrée <b>40 🪙</b> (1 gratuite/jour) ; gain de fin = <b>étages × 5</b> <b>+ 25 🪙</b> par palier de 10 étages (rentable dès ~8 étages).</li>
-      </ul>
-      <p class="about-sub">En <b>multijoueur</b> (toutes les parties : rapide, classée, privée) :</p>
-      <ul>
-        <li><b>Classique / équipes / élimination</b> — <b>+2 🪙</b> par bonne réponse sur la partie, plus un <b>bonus de classement</b> : <b>+20</b> (1ᵉʳ) · <b>+10</b> (2ᵉ) · <b>+5</b> (3ᵉ). Maximum <b>40 🪙</b> par partie.</li>
-        <li><b>Tour en équipe (coop)</b> — <b>+1 🪙</b> par étage franchi, maximum <b>30 🪙</b> par partie.</li>
-        <li>Nécessite au moins <b>2 joueurs</b> distincts · plafond partagé <b>200 🪙 / 6h</b> (multi + coop confondus, même mécanique que le quiz solo).</li>
-      </ul>
-      <p class="about-sub">Autres sources :</p>
-      <ul>
-        <li><b>Défi du jour</b> : <b>20 à 100 🪙</b> selon ta série de jours consécutifs, une fois par jour.</li>
-        <li><b>Bonus quotidien</b> : <b>50 🪙</b> une fois par jour.</li>
-        <li><b>Paliers de niveau</b> (XP) et <b>quêtes quotidiennes</b> : récompenses à réclamer.</li>
-        <li><b>Doublons gacha</b> : remboursement en tokens selon la rareté.</li>
-      </ul>
+      <details class="about-section">
+        <summary>🪙 Gains et économie</summary>
+        <p class="about-sub">En <b>solo</b> (le mode classé crédite, l'entraînement non) :</p>
+        <ul>
+          <li><b>Quiz classique</b> — 1ʳᵉ bonne réponse : <b>10 🪙</b>, <b>+5</b> si l'anime est peu connu, <b>+2</b> s'il est moyennement connu. Rejouer une musique déjà trouvée : <b>2 🪙</b>.</li>
+          <li><b>Niveau d'aide</b> : Cash <b>×1</b> · Carré <b>×0,5</b> · Duo <b>×0,3</b> — minimum 1 🪙.</li>
+          <li><b>Château</b> — entrée <b>40 🪙</b> (1 gratuite/jour) ; gain = <b>étages × 5</b> + <b>25 🪙</b> par palier de 10.</li>
+        </ul>
+        <p class="about-sub">En <b>multijoueur</b> :</p>
+        <ul>
+          <li>Classique / équipes / élimination — <b>+2 🪙</b> par bonne réponse + bonus de podium, maximum <b>40 🪙</b> par partie.</li>
+          <li>Tour en équipe — <b>+1 🪙</b> par étage, maximum <b>30 🪙</b> par partie.</li>
+          <li>Au moins 2 joueurs · plafond partagé <b>200 🪙 / 6h</b>.</li>
+        </ul>
+        <p class="about-sub">Aussi : défi du jour, bonus quotidien, quêtes, niveaux et remboursements de doublons gacha.</p>
+      </details>
 
-      <h3>🎴 Cartes & gacha</h3>
-      <ul>
-        <li>Dépense tes tokens pour <b>tirer</b> des cartes de personnages (5 raretés : Commun → Mythique).</li>
-        <li>Chaque carte est un <b>exemplaire numéroté</b> (#série) à stock limité : les plus rares se raréfient avec le temps.</li>
-        <li><b>Doublons</b> → <b>poussière 🌟</b> (recyclage) qui sert à <b>fabriquer</b> une carte précise à l'Atelier.</li>
-        <li><b>Pitié</b> : un Légendaire+ garanti au bout de 60 tirages sans en obtenir.</li>
-      </ul>
+      <details class="about-section">
+        <summary>🎴 Collection et communauté</summary>
+        <ul>
+          <li>Tire des cartes de personnages, de Commun à Mythique.</li>
+          <li>Chaque carte est un exemplaire numéroté à stock limité.</li>
+          <li>Les doublons donnent de la poussière 🌟 pour fabriquer une carte précise.</li>
+          <li>Un Légendaire+ est garanti après 60 tirages sans en obtenir.</li>
+        </ul>
+        <p>Échange tes cartes, ajoute des amis, grimpe aux classements et personnalise ton profil à la Boutique.</p>
+      </details>
 
-      <h3>🔄 Échange & communauté</h3>
-      <p>Propose des <b>échanges</b> de cartes (par n° de série) à d'autres joueurs depuis leur profil, ajoute des <b>amis</b>, grimpe aux <b>classements</b> (classé, Château, collection). Personnalise ton style à la <b>Boutique</b> (dos de cartes, bordures, bannières, cadres d'avatar).</p>
-
-      <h3>ℹ️ À propos</h3>
-      <p class="hint">Anime Music Quiz est un projet de fan, gratuit, sans publicité. Les extraits proviennent d'<a href="https://animethemes.moe" target="_blank" rel="noopener">AnimeThemes</a> et les données de personnages d'<a href="https://anilist.co" target="_blank" rel="noopener">AniList</a>. Tous droits réservés à leurs ayants droit respectifs.</p>
+      <details class="about-section">
+        <summary>ℹ️ Crédits</summary>
+        <p class="hint">Projet de fan gratuit, sans publicité. Extraits par <a href="https://animethemes.moe" target="_blank" rel="noopener">AnimeThemes</a>, données de personnages par <a href="https://anilist.co" target="_blank" rel="noopener">AniList</a>. Tous droits réservés à leurs ayants droit respectifs.</p>
+      </details>
     </div>
   </div>
 

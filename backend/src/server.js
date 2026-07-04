@@ -5,20 +5,30 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const compression = require('compression');
+const helmet = require('helmet');
 const path = require('path');
 
 const { validateEnv } = require('./util/env');
 // Vérifie la configuration avant toute initialisation (arrête le serveur si la prod est dangereuse).
 validateEnv();
 
-// Filet de sécurité : une erreur asynchrone isolée (ex. dans un timer de partie)
-// ne doit PAS tuer le process et figer toutes les parties en cours. On logue.
-process.on('unhandledRejection', (reason) => {
-  console.error('UnhandledRejection:', reason && reason.stack ? reason.stack : reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('UncaughtException:', err && err.stack ? err.stack : err);
-});
+let server;
+let shuttingDown = false;
+
+// Après une erreur non récupérable, un redémarrage propre est plus sûr que de
+// continuer avec un processus potentiellement incohérent. Railway le relance.
+function shutdownAfterFatal(label, error) {
+  console.error(`${label}:`, error && error.stack ? error.stack : error);
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const exit = () => process.exit(1);
+  if (server?.listening) server.close(exit);
+  else exit();
+  setTimeout(exit, 10000).unref();
+}
+process.on('unhandledRejection', (reason) => shutdownAfterFatal('UnhandledRejection', reason));
+process.on('uncaughtException', (error) => shutdownAfterFatal('UncaughtException', error));
 
 const { attachUser } = require('./auth/auth.middleware');
 const authRoutes = require('./auth/auth.routes');
@@ -47,9 +57,39 @@ const { initMp } = require('./mp/mp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.disable('x-powered-by');
 
 // Derrière le proxy Cloudflare/Railway : nécessaire pour les cookies "secure"
 app.set('trust proxy', 1);
+
+const cspDirectives = {
+  defaultSrc: ["'self'"],
+  baseUri: ["'self'"],
+  connectSrc: ["'self'", 'https:', 'wss:'],
+  fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com', 'data:'],
+  formAction: ["'self'"],
+  frameAncestors: ["'none'"],
+  imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+  mediaSrc: ["'self'", 'blob:', 'https:'],
+  objectSrc: ["'none'"],
+  scriptSrc: ["'self'"],
+  styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
+  upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+};
+const secureHeaders = helmet({
+  contentSecurityPolicy: { directives: cspDirectives },
+  crossOriginEmbedderPolicy: false,
+});
+const legacyHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: { ...cspDirectives, scriptSrc: ["'self'", "'unsafe-inline'"] },
+  },
+  crossOriginEmbedderPolicy: false,
+});
+app.use((req, res, next) =>
+  (req.path.startsWith('/legacy/') ? legacyHeaders : secureHeaders)(req, res, next)
+);
+app.use(compression());
 
 // Le frontend est servi par Express → même origine, cookies simples.
 // CORS autorisé quand même pour un éventuel front séparé (Live Server, etc.).
@@ -118,7 +158,20 @@ app.get('/', async (req, res, next) => {
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)
 const FRONTEND_DIR = path.join(__dirname, '..', 'public');
-app.use(express.static(FRONTEND_DIR));
+app.use(express.static(FRONTEND_DIR, {
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    const base = path.basename(filePath);
+    if (base === 'index.html' || base === 'sw.js') {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  },
+}));
 
 // Gestion centralisée des erreurs : on logge côté serveur et on renvoie un JSON
 // générique (jamais de stack au client). Express 5 capture aussi les rejets des
@@ -130,7 +183,7 @@ app.use((err, req, res, next) => {
 });
 
 // Serveur HTTP + Socket.io (multijoueur temps réel)
-const server = http.createServer(app);
+server = http.createServer(app);
 initMp(server);
 
 // Rappel quotidien du Défi du jour (si push activé). On vérifie toutes les 5 min ;

@@ -34,5 +34,10 @@ jobs:
       - run: npm run lint
 
       # Tests de logique pure — pas de base de données requise
-      # (le `prestart` qui fait `prisma db push` n'est PAS déclenché par `npm test`).
+      # (les migrations du `prestart` ne sont PAS déclenchées par `npm test`).
       - run: npm test
+
+      # Parcours public/invité réel, en bureau et mobile. Le serveur de test utilise
+      # une URL PostgreSQL factice : ces scénarios ne lisent ni n'écrivent en BDD.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

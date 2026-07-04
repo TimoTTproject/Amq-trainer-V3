@@ -12,6 +12,19 @@ const { rateLimit } = require('../util/ratelimit');
 const { sendPasswordResetEmail } = require('./email');
 
 const router = express.Router();
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 128;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function passwordError(password) {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Mot de passe trop court (min. ${MIN_PASSWORD_LENGTH} caractères)`;
+  }
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return `Mot de passe trop long (max. ${MAX_PASSWORD_LENGTH} caractères)`;
+  }
+  return null;
+}
 
 function dailyAvailable(last) {
   if (!last) return true;
@@ -56,44 +69,56 @@ function publicUser(u) {
   };
 }
 
-router.post('/register', async (req, res) => {
-  const { password, displayName } = req.body || {};
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email et mot de passe requis' });
+router.post(
+  '/register',
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: 'register' }),
+  async (req, res) => {
+    const password = String(req.body?.password || '');
+    const displayName = String(req.body?.displayName || '').trim().slice(0, 40);
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    }
+    if (email.length > 254 || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'Adresse e-mail invalide' });
+    const invalidPassword = passwordError(password);
+    if (invalidPassword) return res.status(400).json({ error: invalidPassword });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'Cet email est déjà utilisé' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, passwordHash, displayName: displayName || email.split('@')[0] },
+    });
+    setAuthCookie(res, user.id, req);
+    res.status(201).json({ user: publicUser(user) });
   }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Mot de passe trop court (min. 6 caractères)' });
-  }
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return res.status(409).json({ error: 'Cet email est déjà utilisé' });
-  }
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: { email, passwordHash, displayName: displayName || email.split('@')[0] },
-  });
-  setAuthCookie(res, user.id, req);
-  res.status(201).json({ user: publicUser(user) });
-});
+);
 
-router.post('/login', async (req, res) => {
-  const password = req.body?.password;
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email et mot de passe requis' });
+router.post(
+  '/login',
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: 'login' }),
+  async (req, res) => {
+    const password = String(req.body?.password || '');
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
+    }
+    if (email.length > 254 || password.length > MAX_PASSWORD_LENGTH) {
+      return res.status(401).json({ error: 'Identifiants invalides' });
+    }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ error: 'Identifiants invalides' });
+    }
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Identifiants invalides' });
+    }
+    setAuthCookie(res, user.id, req);
+    res.json({ user: publicUser(user) });
   }
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !user.passwordHash) {
-    return res.status(401).json({ error: 'Identifiants invalides' });
-  }
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({ error: 'Identifiants invalides' });
-  }
-  setAuthCookie(res, user.id, req);
-  res.json({ user: publicUser(user) });
-});
+);
 
 router.post('/logout', (req, res) => {
   clearAuthCookie(res);
@@ -147,8 +172,9 @@ router.post(
   async (req, res) => {
     const token = String(req.body?.token || '');
     const password = String(req.body?.password || '');
-    if (!token || password.length < 6) {
-      return res.status(400).json({ error: 'Lien invalide ou mot de passe trop court (min. 6 caractères)' });
+    const invalidPassword = passwordError(password);
+    if (!token || invalidPassword) {
+      return res.status(400).json({ error: !token ? 'Lien invalide' : invalidPassword });
     }
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const reset = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
@@ -168,4 +194,4 @@ router.get('/me', requirePlayer, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-module.exports = { router, publicUser };
+module.exports = { router, publicUser, MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH, passwordError };

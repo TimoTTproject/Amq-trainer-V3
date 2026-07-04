@@ -619,7 +619,7 @@ function renderEmotesBar() {
   document.getElementById('mp-emotes').innerHTML = mpEmotes
     .map((e) => `<button class="mp-emote-btn" data-emote="${escapeHtml(e.id)}" title="${escapeHtml(e.name || '')}">
       ${e.imageUrl
-        ? `<img src="${escapeHtml(e.imageUrl)}" alt="${escapeHtml(e.name || e.symbol)}" onerror="this.replaceWith(document.createTextNode('${escapeHtml(e.symbol)}'))">`
+        ? `<img src="${escapeHtml(e.imageUrl)}" alt="${escapeHtml(e.name || e.symbol)}" data-fallback-symbol="${escapeHtml(e.symbol)}">`
         : escapeHtml(e.symbol)}
     </button>`)
     .join('');

@@ -26,6 +26,7 @@ let clipTimer = null; // coupe l'extrait après la durée choisie
 let clipEndsAt = 0; // horodatage de coupure de l'extrait (pour geler/reprendre en alt-tab)
 let clipRemainingMs = 0; // temps d'extrait restant mémorisé pendant l'arrière-plan
 let clipResumeOnShow = false; // l'extrait jouait quand on a quitté l'onglet → reprendre au retour
+let roundClipStart = null; // réécouter rejoue exactement le même passage
 let appReadyPromise = null;
 let appUiReady = false;
 let currentView = null;
@@ -330,10 +331,14 @@ function setupAuthUI() {
     }
   });
 
-  document.getElementById('guest-login-btn').addEventListener('click', async (e) => {
-    const button = e.currentTarget;
-    button.disabled = true;
-    button.setAttribute('aria-busy', 'true');
+  const startGuestSession = async () => {
+    const guestButtons = ['guest-login-btn', 'auth-quick-guest']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    guestButtons.forEach((control) => {
+      control.disabled = true;
+      control.setAttribute('aria-busy', 'true');
+    });
     showAuthError('');
     try {
       const { user } = await api('/api/auth/guest', { method: 'POST' });
@@ -341,9 +346,14 @@ function setupAuthUI() {
     } catch (err) {
       showAuthError(err.message);
     } finally {
-      button.disabled = false;
-      button.removeAttribute('aria-busy');
+      guestButtons.forEach((control) => {
+        control.disabled = false;
+        control.removeAttribute('aria-busy');
+      });
     }
+  };
+  ['guest-login-btn', 'auth-quick-guest'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', startGuestSession);
   });
 
   document.getElementById('anilist-login-btn').addEventListener('click', () => {
@@ -403,17 +413,40 @@ function showAuth() {
 }
 
 function setupGlobalAccessibility() {
+  document.addEventListener('error', (event) => {
+    const image = event.target;
+    if (image?.tagName !== 'IMG' || !image.dataset.fallbackSymbol) return;
+    image.replaceWith(document.createTextNode(image.dataset.fallbackSymbol));
+  }, true);
+
+  const aboutModal = document.getElementById('about-modal');
+  let aboutTrigger = null;
+  const openAbout = (trigger) => {
+    aboutTrigger = trigger || document.activeElement;
+    aboutModal.classList.remove('hidden');
+    document.getElementById('about-close').focus();
+  };
+  const closeAbout = () => {
+    aboutModal.classList.add('hidden');
+    aboutTrigger?.focus?.();
+    aboutTrigger = null;
+  };
+
   document.addEventListener('click', (event) => {
     if (event.target.closest('[data-about]')) {
       event.preventDefault();
-      document.getElementById('about-modal').classList.remove('hidden');
+      openAbout(event.target.closest('[data-about]'));
     }
   });
-  document.getElementById('about-close').addEventListener('click', () =>
-    document.getElementById('about-modal').classList.add('hidden')
-  );
-  document.getElementById('about-modal').addEventListener('click', (event) => {
-    if (event.target.id === 'about-modal') event.currentTarget.classList.add('hidden');
+  document.getElementById('about-close').addEventListener('click', closeAbout);
+  aboutModal.addEventListener('click', (event) => {
+    if (event.target.id === 'about-modal') closeAbout();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || aboutModal.classList.contains('hidden')) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeAbout();
   });
 
   const iconLabels = {
@@ -622,7 +655,7 @@ function showApp(user) {
   const guest = !!user.isGuest;
   const requestedHash = location.hash.replace(/^#/, '');
   const requested = requestedHash;
-  const defaultView = guest ? 'play' : 'home'; // les invités atterrissent sur le hub Jouer
+  const defaultView = guest ? 'quiz' : 'home'; // l'essai démarre directement sur le quiz
   document.body.classList.toggle('guest-mode', guest);
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
@@ -633,7 +666,8 @@ function showApp(user) {
     document.querySelector('#logout-btn span').textContent = 'Quitter l’essai';
     document.querySelector('#view-play [data-nav="quiz"] p').textContent = 'Teste le catalogue global sans créer de compte';
   }
-  showView(defaultView, { replace: true });
+  if (guest) openQuiz();
+  else showView(defaultView, { replace: true });
   applyGameModeUI();
   renderHeaderUser();
   const linked = user.anilistListName || user.anilistName;
@@ -1322,9 +1356,18 @@ function applyModeUI() {
 
 function applyGameModeUI() {
   const ranked = gameMode === 'ranked' && !isTraining; // l'entraînement est toujours casual
-  document.getElementById('gm-hint').textContent = ranked
-    ? 'Gagne des tokens — vidéo et réponse cachées avant validation.'
-    : '🎓 Entraînement libre — vidéo et réponse accessibles, aucun token.';
+  const guest = !!currentUser?.isGuest;
+  const tag = document.getElementById('gm-tag');
+  if (tag) {
+    tag.innerHTML = guest
+      ? '<i class="fas fa-headphones"></i> Mode découverte'
+      : '<i class="fas fa-trophy"></i> Mode classique';
+  }
+  document.getElementById('gm-hint').textContent = guest
+    ? 'Essaie le catalogue librement — aucun score ni progrès sauvegardé.'
+    : ranked
+      ? 'Gagne des tokens — vidéo et réponse cachées avant validation.'
+      : '🎓 Entraînement libre — vidéo et réponse accessibles, aucun token.';
   document.getElementById('show-answer-btn').classList.toggle('hidden', ranked);
   updateVideoButtonVisibility();
 }
@@ -1362,6 +1405,7 @@ function resetQuizToStart() {
   clearTimeout(autoNextTimer);
   stopRewardGauge();
   clipResumeOnShow = false; clipRemainingMs = 0; clipEndsAt = 0;
+  roundClipStart = null;
   answered = false;
   currentSong = null;
   currentRoundToken = null;
@@ -1680,6 +1724,7 @@ async function nextSong() {
   }
   prefetchedRound = null; // consommée (ou jamais eue) : plus valable pour la manche suivante
   currentSong = song;
+  roundClipStart = null;
   currentRoundToken = roundToken;
   roundReward = reward || null;
   roundStartAt = Date.now(); // référence vitesse : aligne la jauge sur le `sat` serveur
@@ -1723,15 +1768,19 @@ async function startClip() {
   if (!clipUrl) return;
 
   const seek = () => {
-    if (settings.randomStart && v.duration && isFinite(v.duration)) {
-      const clip = settings.clipSeconds || 20;
-      const max = Math.max(0, v.duration - clip);
-      v.currentTime = Math.random() * max;
-    } else {
-      v.currentTime = 0;
+    if (roundClipStart == null) {
+      if (settings.randomStart && v.duration && isFinite(v.duration)) {
+        const clip = settings.clipSeconds || 20;
+        const max = Math.max(0, v.duration - clip);
+        roundClipStart = Math.random() * max;
+      } else {
+        roundClipStart = 0;
+      }
     }
+    v.currentTime = Math.min(roundClipStart, Math.max(0, (v.duration || roundClipStart) - 0.1));
   };
   let playing = false;
+  let lastPlayError = null;
   for (let attempt = 0; attempt < 3 && !playing; attempt++) {
     try {
       if (attempt > 0) {
@@ -1747,6 +1796,7 @@ async function startClip() {
       await v.play();
       playing = true;
     } catch (error) {
+      lastPlayError = error;
       if (error?.name === 'NotAllowedError') {
         setHint('▶ Lecture bloquée par le navigateur — clique sur le bouton lecture.');
         break;
@@ -1755,7 +1805,11 @@ async function startClip() {
   }
   if (!playing && !v.paused) playing = true;
   if (!playing) {
-    setHint('⚠️ Le son ne charge pas. Clique sur réécouter pour relancer.');
+    const mediaReady = v.readyState >= 2 && !v.error;
+    setHint(mediaReady
+      ? '▶ Son prêt — appuie sur lecture pour démarrer.'
+      : '⚠️ Le son ne charge pas. Clique sur réécouter pour relancer.');
+    if (!mediaReady && lastPlayError) console.warn('Lecture du quiz impossible :', lastPlayError.name || lastPlayError.message);
     setPlayIcon();
     return;
   }
@@ -1794,8 +1848,24 @@ function armClipCutoff(ms) {
   }, ms);
 }
 
-function replayClip() {
-  if (currentSong) startClip();
+async function replayClip() {
+  if (!currentSong) return;
+  const v = video();
+  clearTimeout(clipTimer);
+  if (v.readyState >= 2 && !v.error && roundClipStart != null) {
+    try {
+      v.currentTime = roundClipStart;
+      await v.play();
+      setHint("🎵 Devine l'anime à partir de l'extrait.");
+      if (settings.clipSeconds > 0) {
+        startQuizTimebar(settings.clipSeconds);
+        armClipCutoff(settings.clipSeconds * 1000);
+      }
+      setPlayIcon();
+      return;
+    } catch {}
+  }
+  await startClip();
 }
 
 // Barre de temps de l'extrait (solo) : se vide sur la durée d'écoute.
@@ -2090,11 +2160,17 @@ function escapeHtml(s) {
 }
 
 // ── lecteur média ──
-function togglePlay() {
+async function togglePlay() {
   const v = video();
   if (!v.src) return;
-  if (v.paused) v.play(); else v.pause();
-  setPlayIcon();
+  try {
+    if (v.paused) await v.play();
+    else v.pause();
+  } catch {
+    setHint('⚠️ Lecture impossible pour cet extrait. Essaie la manche suivante.');
+  } finally {
+    setPlayIcon();
+  }
 }
 function setPlayIcon() {
   const i = document.querySelector('#play-btn i');

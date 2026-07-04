@@ -1,5 +1,7 @@
 # Dépendances
 node_modules/
+backend/test-results/
+backend/playwright-report/
 
 # Secrets / config locale — NE JAMAIS committer
 .env

@@ -20,6 +20,7 @@ const http = require('http');
 
 // Un secret déterministe AVANT tout require de src/util/env (lu à l'import).
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+process.env.SKIP_BACKGROUND_REFRESH = 'true';
 
 const DB_PATH = path.join(__dirname, '..', '..', 'src', 'db.js');
 

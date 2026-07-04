@@ -32,10 +32,18 @@ test('register : refuse un mot de passe trop court', async () => {
   assert.equal(res.status, 400);
 });
 
+test('register : valide aussi le format de l’email', async () => {
+  const res = await app.request('/api/auth/register', {
+    method: 'POST', body: { email: 'pas-un-email', password: 'secret68' },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /e-mail invalide/i);
+});
+
 test('register : refuse un email déjà utilisé', async () => {
   prisma.user.findUnique = async () => dbUser();
   const res = await app.request('/api/auth/register', {
-    method: 'POST', body: { email: 'a@b.fr', password: 'secret6' },
+    method: 'POST', body: { email: 'a@b.fr', password: 'secret68' },
   });
   assert.equal(res.status, 409);
 });
@@ -46,11 +54,11 @@ test('register : crée le compte, pose le cookie, ne renvoie aucun secret', asyn
   prisma.user.create = async ({ data }) => { created = data; return dbUser({ ...data, id: 'u-new' }); };
 
   const res = await app.request('/api/auth/register', {
-    method: 'POST', body: { email: '  New@B.FR ', password: 'secret6' },
+    method: 'POST', body: { email: '  New@B.FR ', password: 'secret68' },
   });
   assert.equal(res.status, 201);
   assert.equal(created.email, 'new@b.fr'); // normalisé (trim + minuscules)
-  assert.ok(created.passwordHash && created.passwordHash !== 'secret6'); // jamais en clair
+  assert.ok(created.passwordHash && created.passwordHash !== 'secret68'); // jamais en clair
   assert.equal(created.displayName, 'new'); // déduit de l'email normalisé si absent
   assert.match(res.headers.get('set-cookie') || '', /amq_token=/);
   assert.equal(res.json.user.passwordHash, undefined); // publicUser filtre les secrets
@@ -100,4 +108,17 @@ test('me : 401 sans cookie, profil avec cookie, invité reconnu', async () => {
   assert.equal(guestMe.status, 200);
   assert.equal(guestMe.json.user.isGuest, true);
   assert.equal(guestMe.json.user.tokens, 0);
+});
+
+test('login : bloque les tentatives répétées', async () => {
+  prisma.user.findUnique = async () => null;
+  const statuses = [];
+  for (let i = 0; i < 12; i++) {
+    const res = await app.request('/api/auth/login', {
+      method: 'POST', body: { email: 'bruteforce@example.com', password: 'incorrect' },
+    });
+    statuses.push(res.status);
+  }
+  assert.ok(statuses.includes(429));
+  assert.equal(statuses.at(-1), 429);
 });

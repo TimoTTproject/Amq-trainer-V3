@@ -77,6 +77,22 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .about-card li { font-size: .9rem; line-height: 1.55; }
 .about-card .about-sub { color: var(--text-2); font-size: .85rem; font-weight: 600; margin: 10px 0 2px; }
 .about-card a { color: var(--accent); }
+.about-section {
+  margin-top: 12px;
+  border: 1px solid #303540;
+  border-radius: 6px;
+  background: #111319;
+}
+.about-section summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 800;
+  list-style-position: inside;
+}
+.about-section[open] summary { border-bottom: 1px solid #303540; }
+.about-section > :not(summary) { margin-inline: 14px; }
+.about-section > :last-child { margin-bottom: 14px; }
 
 /* ── Tableau de bord admin ── */
 .admin-stats { margin-bottom: 18px; }
@@ -1851,6 +1867,7 @@ h1, h2, h3, .hub-title, .gm-tag {
 .auth-sep::before, .auth-sep::after { width: 27%; background: #30343d; }
 .auth-access .btn-google, .auth-access .btn-anilist { min-height: 42px; border-radius: 5px; margin-bottom: 9px; font-weight: 700; }
 .auth-access .btn-anilist { background: #12a8e6; }
+.auth-quick-guest { display: none; }
 
 /* Application : surfaces plus nettes, hiérarchie moins générique */
 .container { max-width: 1080px; padding-top: 20px; }
@@ -1959,7 +1976,16 @@ header h1 i { color: var(--accent); }
   .auth-card { display: block; min-height: 0; box-shadow: 6px 6px 0 #050609; }
   .auth-intro { padding: 42px 26px 30px; border-right: 0; border-bottom: 1px solid #2c3038; }
   .auth-card h1 { font-size: clamp(2.8rem, 14vw, 4rem); }
-  .auth-sub { margin: 20px 0 26px; }
+  .auth-sub { margin: 20px 0 18px; }
+  .auth-quick-guest {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-self: stretch;
+    justify-content: center;
+    min-height: 48px;
+    margin-bottom: 24px;
+  }
   .auth-features { margin-top: 0; }
   .auth-intro .about-link { margin-top: 20px; }
   .auth-access { padding: 32px 26px 28px; }
@@ -2156,6 +2182,8 @@ button, a, .nav-item, .hub-card, .home-card, .gcard, .tower-choice {
 
   /* — Mode classique / filtre OP-ED : enroulement propre, filtre pleine largeur — */
   .gamemode-switch { gap: 8px; }
+  .gamemode-switch .gm-tag { flex: 0 0 auto; }
+  .gamemode-switch .gm-hint { flex: 1 1 100%; min-width: 0; }
   .type-filter { width: 100%; margin-left: 0; justify-content: stretch; }
   .type-filter .tf-btn { flex: 1; }
 

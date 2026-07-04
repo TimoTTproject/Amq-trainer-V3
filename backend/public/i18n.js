@@ -31,7 +31,7 @@ const I18N = {
     'Email': 'Email',
     'Mot de passe': 'Password',
     'Pseudo (optionnel)': 'Username (optional)',
-    'Mot de passe (min. 6)': 'Password (min. 6)',
+    'Mot de passe (min. 8)': 'Password (min. 8)',
   },
 };
 

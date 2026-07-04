@@ -1,6 +1,6 @@
 // Anime Music Quiz + Gacha — schéma de données
-// SQLite en dev (1 fichier), migrable vers PostgreSQL plus tard.
-// Tables Phase 1 (comptes, catalogue, quiz) + stubs Phase 2-4 (tokens, gacha).
+// PostgreSQL, déployé par migrations versionnées.
+// Comptes, catalogue, quiz, économie, gacha et fonctions sociales.
 
 generator client {
   provider = "prisma-client-js"

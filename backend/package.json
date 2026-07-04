@@ -5,13 +5,16 @@
   "main": "src/server.js",
   "scripts": {
     "postinstall": "prisma generate",
-    "prestart": "prisma db push --skip-generate --accept-data-loss && node scripts/backfill-supply.js && node scripts/fix-supply-mismatch.js",
+    "prestart": "node scripts/deploy-migrations.js && node scripts/backfill-supply.js && node scripts/fix-supply-mismatch.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node scripts/static-checks.js",
     "lint": "eslint .",
     "test": "node --test",
+    "test:e2e": "playwright test",
     "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "node scripts/deploy-migrations.js",
     "studio": "prisma studio",
     "import-top": "node scripts/import-top.js"
   },
@@ -23,10 +26,12 @@
     "@aws-sdk/lib-storage": "^3.1075.0",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "prisma": "^6.19.3",
@@ -40,6 +45,7 @@
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "eslint": "^10.6.0"
   }
 }

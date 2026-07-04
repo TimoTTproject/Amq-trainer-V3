@@ -61,12 +61,15 @@ sont loggés si quelque chose manque, sans jamais bloquer le démarrage.
 ```bash
 cd backend
 npm test
+npm run test:e2e  # parcours public/invité, bureau + mobile (Chromium)
 ```
 
 Tests de **logique pure** (sans base de données), via `node:test` :
 matching de réponses, raretés gacha, MMR classé, recommandations, flux médias,
-boucle multijoueur. La CI GitHub Actions (`.github/workflows/ci.yml`) les lance
-sur chaque push `main` et chaque pull request.
+boucle multijoueur. Les tests Playwright couvrent aussi l'entrée publique,
+le parcours invité direct, le responsive et les headers de sécurité. La CI
+GitHub Actions (`.github/workflows/ci.yml`) lance l'ensemble sur chaque push
+`main` et chaque pull request.
 
 ## Structure
 
@@ -92,10 +95,13 @@ backend/
 ## Déploiement
 
 - **Hébergement** : Railway (root directory = `backend`), auto-deploy sur `git push main`.
-- **Base** : PostgreSQL Railway. Le schéma est synchronisé via `prisma db push`
-  (script `prestart`), **pas** de migrations versionnées.
-  ⚠️ Le `prestart` utilise `--accept-data-loss` → garder les changements de
-  schéma **additifs** (un rename/suppression de colonne peut perdre des données).
+- **Base** : PostgreSQL Railway. Le schéma est déployé via des migrations Prisma
+  versionnées (`prisma/migrations`, script `prestart`).
+- La première migration sert de **baseline** : le script reconnaît automatiquement
+  la base historique déjà remplie et la marque comme appliquée avant le premier
+  `prisma migrate deploy`. Une base neuve reçoit le schéma complet.
+- Pour modifier le schéma : lancer `npm run db:migrate -- --name description`,
+  relire le SQL généré, puis versionner simultanément le schéma et la migration.
 - **DNS** : domaine OVH délégué à Cloudflare, CNAME apex en **DNS only (gris)**
   pour que Railway émette son certificat HTTPS.
 - **Auto-deploy capricieux** : si Railway ne redéploie pas sur push, pousser un
