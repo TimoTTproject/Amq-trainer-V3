@@ -126,7 +126,7 @@ function setVolume(v) {
   localStorage.setItem('amq_volume', String(v));
   applyVolume();
   // garde tous les curseurs de volume (header + en-vue) synchronisés
-  ['header-volume', 'volume', 'tower-volume'].forEach((id) => {
+  ['header-volume', 'volume', 'tower-volume', 'mp-volume'].forEach((id) => {
     const el = document.getElementById(id);
     if (el && +el.value !== v) el.value = v;
   });
@@ -953,6 +953,8 @@ function setupAppUI() {
   muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
   const headerVol = document.getElementById('header-volume');
   if (headerVol) headerVol.addEventListener('input', (e) => setVolume(+e.target.value));
+  const mpVol = document.getElementById('mp-volume');
+  if (mpVol) mpVol.addEventListener('input', (e) => setVolume(+e.target.value));
   setVolume(getVolume()); // synchronise tous les curseurs au volume sauvegardé
   // Filtre OP/ED du quiz
   syncTypeFilter();
