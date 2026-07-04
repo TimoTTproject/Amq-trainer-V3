@@ -322,10 +322,33 @@ async function loadSeriesProgress() {
   try {
     const { series } = await api('/api/gacha/collection/series');
     seriesProgressData = series;
+    renderSeriesSpotlight();
     renderSeriesProgressList();
   } catch (e) {
     list.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }
+}
+
+// Met en avant la série la plus « remplie » (le % de progression le plus haut,
+// franchise la plus grande en cas d'égalité) — motive à finir celle-ci en premier.
+function renderSeriesSpotlight() {
+  const box = document.getElementById('series-spotlight');
+  const owned = seriesProgressData.filter((s) => s.owned > 0);
+  if (!owned.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const best = [...owned].sort((a, b) => (b.owned / b.total) - (a.owned / a.total) || b.total - a.total)[0];
+  const pct = Math.round((best.owned / best.total) * 100);
+  const complete = best.owned >= best.total;
+  const img = best.cover ? `style="background-image:url('${best.cover}')"` : '';
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <span class="series-spotlight-kicker">${complete ? '<i class="fas fa-trophy"></i> Série complétée' : '<i class="fas fa-fire"></i> Ta série la plus avancée'}</span>
+    <button type="button" class="series-spotlight-row" data-series="${escapeHtml(best.series)}">
+      <div class="series-spotlight-cover" ${img}></div>
+      <div class="series-row-body">
+        <div class="series-row-top"><span class="series-row-name">${escapeHtml(best.series)}</span><span class="series-row-count">${best.owned}/${best.total} · ${pct}%</span></div>
+        <div class="series-row-bar"><span style="width:${pct}%"></span></div>
+      </div>
+    </button>`;
 }
 
 function renderSeriesProgressList() {
@@ -351,6 +374,7 @@ function openSeriesFilter(series) {
   const grid = document.getElementById('series-filtered-grid');
   const list = collectionCards.filter((c) => (c.series || 'Autre') === series);
   document.getElementById('series-progress-list').classList.add('hidden');
+  document.getElementById('series-spotlight').classList.add('hidden');
   document.getElementById('series-clear-filter').classList.remove('hidden');
   grid.classList.remove('hidden');
   grid.innerHTML = list.length
@@ -360,6 +384,7 @@ function openSeriesFilter(series) {
 
 function closeSeriesFilter() {
   document.getElementById('series-progress-list').classList.remove('hidden');
+  if (document.getElementById('series-spotlight').innerHTML) document.getElementById('series-spotlight').classList.remove('hidden');
   document.getElementById('series-clear-filter').classList.add('hidden');
   const grid = document.getElementById('series-filtered-grid');
   grid.classList.add('hidden');

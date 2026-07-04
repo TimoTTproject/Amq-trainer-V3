@@ -715,9 +715,10 @@
       <div id="gacha-panel-series" class="gacha-panel hidden">
         <p class="hint" style="margin-bottom:14px">Ta progression sur les animes à plusieurs personnages à collectionner. Clique une série pour ne voir que ses personnages.</p>
         <div class="series-toolbar">
-          <input type="search" id="series-search" placeholder="Rechercher une série…" autocomplete="off" />
+          <input type="search" id="sprog-search" placeholder="Rechercher une série…" autocomplete="off" />
           <button class="btn-secondary hidden" id="series-clear-filter"><i class="fas fa-xmark"></i> Retour à toutes les séries</button>
         </div>
+        <div id="series-spotlight" class="series-spotlight hidden"></div>
         <div id="series-progress-list" class="series-progress-list"></div>
         <div id="series-filtered-grid" class="card-grid hidden"></div>
       </div><!-- /gacha-panel-series -->
@@ -733,6 +734,20 @@
         <div id="albs-panel-mine" class="gacha-panel">
           <div class="pls-mine-actions">
             <button class="btn-primary" id="albs-create-btn"><i class="fas fa-plus"></i> Créer un album</button>
+          </div>
+          <div class="collection-toolbar">
+            <div class="coll-filters" id="albs-filters">
+              <button class="coll-chip active" data-albfilter="all">Tous</button>
+              <button class="coll-chip" data-albfilter="public"><i class="fas fa-globe"></i> Publics</button>
+              <button class="coll-chip" data-albfilter="private"><i class="fas fa-lock"></i> Privés</button>
+            </div>
+            <label class="coll-sort">Trier :
+              <select id="albs-sort">
+                <option value="recent">Récents</option>
+                <option value="name">Nom (A→Z)</option>
+                <option value="count">Nb de cartes</option>
+              </select>
+            </label>
           </div>
           <div id="albs-mine-grid" class="pls-grid"></div>
         </div>

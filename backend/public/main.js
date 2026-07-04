@@ -1232,12 +1232,16 @@ function setupAppUI() {
   document.getElementById('series-filtered-grid').addEventListener('click', openCardFromEvent);
   // Par série : recherche, clic sur une série → filtre, bouton retour
   let seriesSearchTimer;
-  document.getElementById('series-search').addEventListener('input', (e) => {
+  document.getElementById('sprog-search').addEventListener('input', (e) => {
     clearTimeout(seriesSearchTimer);
     const v = e.target.value;
     seriesSearchTimer = setTimeout(() => { seriesSearch = v; renderSeriesProgressList(); }, 250);
   });
   document.getElementById('series-progress-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-series]');
+    if (row) openSeriesFilter(row.dataset.series);
+  });
+  document.getElementById('series-spotlight').addEventListener('click', (e) => {
     const row = e.target.closest('[data-series]');
     if (row) openSeriesFilter(row.dataset.series);
   });

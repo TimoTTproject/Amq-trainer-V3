@@ -12,6 +12,9 @@ let albsDiscoverSearchTimer = null;
 let albsEditingId = null; // id de l'album en édition (mode 'edit')
 let albsEditMode = 'create'; // 'create' | 'edit'
 let albsEditOnCreated = null; // callback optionnel après création (picker de la fiche carte)
+let albsMineData = []; // cache brut de « Mes albums » (pour filtrer/trier sans recharger)
+let albsFilter = 'all'; // 'all' | 'public' | 'private'
+let albsSort = 'recent'; // 'recent' | 'name' | 'count'
 
 function switchAlbsTab(tab) {
   albsTab = tab;
@@ -33,19 +36,38 @@ async function loadMyAlbums() {
   grid.innerHTML = '<p class="muted">Chargement…</p>';
   try {
     const { albums } = await api('/api/albums/mine');
-    if (!albums.length) {
-      grid.innerHTML = '<p class="muted">Aucun album pour l\'instant. Crée-en un pour commencer !</p>';
-      return;
-    }
-    grid.innerHTML = albums.map((a) => `
+    albsMineData = albums;
+    renderMyAlbums();
+  } catch (e) {
+    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// Filtre (public/privé) et tri (récent/nom/nb de cartes), appliqués côté
+// client sur le cache déjà chargé — même mécanique que le filtre de rareté
+// de la Collection (pas besoin de retaper le serveur pour ça).
+function renderMyAlbums() {
+  const grid = document.getElementById('albs-mine-grid');
+  if (!albsMineData.length) {
+    grid.innerHTML = '<p class="muted">Aucun album pour l\'instant. Crée-en un pour commencer !</p>';
+    return;
+  }
+  let list = albsMineData.filter((a) => {
+    if (albsFilter === 'public') return a.isPublic;
+    if (albsFilter === 'private') return !a.isPublic;
+    return true;
+  });
+  if (albsSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  else if (albsSort === 'count') list = [...list].sort((a, b) => b.cardCount - a.cardCount);
+  else list = [...list].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  grid.innerHTML = list.length
+    ? list.map((a) => `
       <button type="button" class="pls-card" data-albid="${a.id}">
         <div class="pls-card-top"><h4>${escapeHtml(a.name)}</h4>${albsBadge(a)}</div>
         ${a.description ? `<p class="pls-card-desc">${escapeHtml(a.description)}</p>` : ''}
         <span class="pls-card-count"><i class="fas fa-layer-group"></i> ${a.cardCount} carte${a.cardCount > 1 ? 's' : ''}</span>
-      </button>`).join('');
-  } catch (e) {
-    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
-  }
+      </button>`).join('')
+    : '<p class="muted">Aucun album dans ce filtre.</p>';
 }
 
 async function loadDiscoverAlbums(page) {
@@ -262,6 +284,17 @@ function initAlbumsUI() {
     if (b) switchAlbsTab(b.dataset.albtab);
   });
   document.getElementById('albs-create-btn').addEventListener('click', () => openAlbsEditModal(null));
+  document.getElementById('albs-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-albfilter]');
+    if (!btn) return;
+    albsFilter = btn.dataset.albfilter;
+    document.querySelectorAll('#albs-filters .coll-chip').forEach((c) => c.classList.toggle('active', c.dataset.albfilter === albsFilter));
+    renderMyAlbums();
+  });
+  document.getElementById('albs-sort').addEventListener('change', (e) => {
+    albsSort = e.target.value;
+    renderMyAlbums();
+  });
   document.getElementById('albs-edit-close').addEventListener('click', closeAlbsEditModal);
   document.getElementById('albs-edit-save').addEventListener('click', saveAlbsEdit);
   document.getElementById('albs-mine-grid').addEventListener('click', (e) => {
