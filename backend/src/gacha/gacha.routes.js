@@ -641,9 +641,18 @@ router.get('/collection/series', requireAuth, async (req, res) => {
     // Couverture = personnage le plus populaire de la série
     if ((c.favourites || 0) > g.topFav) { g.topFav = c.favourites || 0; g.cover = c.imageUrl || g.cover; }
   }
+  // Une « série » d'un seul personnage n'a rien à compléter (c'est juste une
+  // carte comme une autre) : on l'exclut pour ne pas noyer les vraies franchises
+  // à plusieurs personnages sous des dizaines de lignes triviales « 1/1 ✓ ».
   const series = [...bySeries.values()]
+    .filter((s) => s.total >= 2)
     .map(({ topFav, ...s }) => s)
-    .sort((a, b) => (b.owned / b.total) - (a.owned / a.total) || b.total - a.total);
+    // À faire d'abord (les moins avancées), les séries déjà complètes en bas.
+    .sort((a, b) => {
+      const aDone = a.owned >= a.total, bDone = b.owned >= b.total;
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      return (b.owned / b.total) - (a.owned / a.total) || b.total - a.total;
+    });
   res.json({ series });
 });
 
