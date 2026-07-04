@@ -204,6 +204,23 @@ setTimeout(() => {
     .catch(() => {});
 }, 25000);
 
+// Migration R2 : REPRISE AUTOMATIQUE au démarrage s'il reste des musiques à
+// migrer (sinon chaque redéploiement Railway l'interrompait jusqu'au prochain
+// clic dans l'admin). Désactivable via R2_AUTO_MIGRATE=0.
+const { isR2Configured, startContinuousMigration } = require('./storage/r2');
+if (isR2Configured() && process.env.R2_AUTO_MIGRATE !== '0') {
+  setTimeout(async () => {
+    try {
+      const remaining = await prisma.song.count({ where: { videoUrl: { not: null }, audioUrl: null } });
+      if (!remaining) return;
+      startContinuousMigration();
+      console.log(`  → Migration R2 reprise automatiquement : ${remaining} musique(s) restantes`);
+    } catch (e) {
+      console.error('reprise migration R2:', e.message);
+    }
+  }, 20000); // laisse le serveur démarrer tranquillement d'abord
+}
+
 // Nettoyage unique des synonymes ambigus (franchises à nombreuses saisons — le
 // nom générique de la franchise, ex. « Pokemon », listé comme synonyme AniList
 // de chaque saison, rendait n'importe laquelle acceptée comme réponse pour

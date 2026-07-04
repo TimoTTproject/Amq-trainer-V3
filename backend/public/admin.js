@@ -30,6 +30,8 @@ async function loadR2Status() {
     status.textContent = r.connected
       ? `${r.uploaded}/${r.total} sons sur le CDN · ${r.remaining} restants`
         + (running ? ` · migration active (+${r.migration.uploaded}, ${r.migration.failed} échec(s))` : '')
+        + (running && r.migration?.retryWaves ? ` · ${r.migration.retryWaves} vague(s) de retry` : '')
+        + (r.migration?.permanentFailures ? ` · ${r.migration.permanentFailures} en échec définitif` : '')
         + (!running && r.migration?.lastError ? ` · dernier problème : ${r.migration.lastError}` : '')
       : r.configured
         ? `R2 configuré mais inaccessible : ${r.error || 'vérifie les identifiants'}`

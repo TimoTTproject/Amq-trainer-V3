@@ -5,12 +5,22 @@ const { Upload } = require('@aws-sdk/lib-storage');
 const { prisma } = require('../db');
 const { fetchVideoUpstream } = require('../util/stream');
 
-const failedSongIds = new Set();
+// Échecs par musique DANS CE PROCESSUS : on n'insiste pas en boucle sur un titre
+// qui vient d'échouer, mais on le retente par « vagues » (animethemes rend des
+// 403/429/timeout passagers). Au-delà de MAX_ATTEMPTS, le titre est mis de côté
+// jusqu'au prochain redémarrage.
+const failedAttempts = new Map(); // songId → nombre d'échecs
+const MAX_ATTEMPTS = 4;
+const STEP_MS = 400; // souffle entre deux fichiers
+const RETRY_WAVE_MS = 30000; // pause avant de retenter les titres en échec
+const MAX_CONSECUTIVE_ERRORS = 10; // erreurs de boucle (BDD…) avant abandon
+
 let client = null;
 const migrationState = {
   running: false,
   uploaded: 0,
   failed: 0,
+  retryWaves: 0,
   startedAt: null,
   lastError: null,
 };
@@ -67,7 +77,7 @@ async function migrateOneSongToR2() {
   const where = {
     videoUrl: { not: null },
     audioUrl: null,
-    ...(failedSongIds.size ? { id: { notIn: [...failedSongIds] } } : {}),
+    ...(failedAttempts.size ? { id: { notIn: [...failedAttempts.keys()] } } : {}),
   };
   const song = await prisma.song.findFirst({
     where,
@@ -112,7 +122,7 @@ async function migrateOneSongToR2() {
     const remaining = await prisma.song.count({ where: { videoUrl: { not: null }, audioUrl: null } });
     return { processed: 1, uploaded: 1, remaining };
   } catch (error) {
-    failedSongIds.add(song.id);
+    failedAttempts.set(song.id, (failedAttempts.get(song.id) || 0) + 1);
     const remaining = await prisma.song.count({ where: { videoUrl: { not: null }, audioUrl: null } });
     return { processed: 1, uploaded: 0, failed: 1, remaining, error: error.message };
   }
@@ -141,7 +151,10 @@ async function r2Status() {
     total,
     uploaded,
     remaining: Math.max(0, total - uploaded),
-    migration: { ...migrationState },
+    migration: {
+      ...migrationState,
+      permanentFailures: [...failedAttempts.values()].filter((n) => n >= MAX_ATTEMPTS).length,
+    },
   };
 }
 
@@ -149,15 +162,50 @@ function preferredMediaUrl(song) {
   return song?.audioUrl || song?.videoUrl || null;
 }
 
-async function runContinuousMigration() {
+// Boucle de migration « incassable » : elle ne s'arrête QUE quand tout est migré
+// ou qu'il ne reste que des titres en échec définitif (MAX_ATTEMPTS). Un raté
+// passager (403/429/timeout animethemes) est retenté par vagues espacées, et une
+// erreur de boucle (BDD…) fait patienter au lieu de tout stopper.
+// `migrateOnce`/`delays` sont injectables pour les tests.
+async function runContinuousMigration(migrateOnce = migrateOneSongToR2, delays = {}) {
+  const stepMs = delays.stepMs ?? STEP_MS;
+  const waveMs = delays.waveMs ?? RETRY_WAVE_MS;
+  let consecutiveErrors = 0;
   try {
     while (migrationState.running) {
-      const result = await migrateOneSongToR2();
+      let result;
+      try {
+        result = await migrateOnce();
+        consecutiveErrors = 0;
+      } catch (error) {
+        // Erreur hors upload (ex. hoquet BDD) : on patiente puis on réessaie,
+        // au lieu de tuer la migration entière.
+        consecutiveErrors++;
+        migrationState.lastError = error.message;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) break;
+        await sleep(waveMs);
+        continue;
+      }
       migrationState.uploaded += result.uploaded || 0;
       migrationState.failed += result.failed || 0;
-      migrationState.lastError = result.error || null;
-      if (!result.processed || !result.remaining) break;
-      await sleep(400);
+      if (result.error) migrationState.lastError = result.error;
+      if (!result.remaining) break; // ✅ terminé
+
+      if (!result.processed) {
+        // Plus aucun candidat hors exclusions : tout ce qui reste a déjà échoué.
+        const retryable = [...failedAttempts].filter(([, n]) => n < MAX_ATTEMPTS);
+        if (!retryable.length) {
+          migrationState.lastError =
+            `${failedAttempts.size} musique(s) en échec après ${MAX_ATTEMPTS} tentatives — redémarre la migration pour réessayer.`;
+          break;
+        }
+        // Nouvelle vague : on redonne leur chance aux échecs passagers.
+        retryable.forEach(([id]) => failedAttempts.delete(id));
+        migrationState.retryWaves++;
+        await sleep(waveMs);
+        continue;
+      }
+      await sleep(stepMs);
     }
   } catch (error) {
     migrationState.lastError = error.message;
@@ -171,8 +219,10 @@ function startContinuousMigration() {
   migrationState.running = true;
   migrationState.uploaded = 0;
   migrationState.failed = 0;
+  migrationState.retryWaves = 0;
   migrationState.startedAt = Date.now();
   migrationState.lastError = null;
+  failedAttempts.clear(); // un (re)démarrage manuel redonne sa chance à tout
   runContinuousMigration(); // tourne en tâche de fond ; suivi via migrationState
   return { ...migrationState };
 }
@@ -188,6 +238,8 @@ module.exports = {
   preferredMediaUrl,
   r2Config,
   r2Status,
+  runContinuousMigration, // exporté pour les tests (worker injectable)
   startContinuousMigration,
   stopContinuousMigration,
+  _migrationInternals: { migrationState, failedAttempts, MAX_ATTEMPTS }, // tests
 };
