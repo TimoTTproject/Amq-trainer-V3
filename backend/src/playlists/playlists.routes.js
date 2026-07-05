@@ -9,6 +9,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { rateLimit } = require('../util/ratelimit');
 const { preferredMediaUrl } = require('../storage/r2');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
+const { songKey } = require('../quiz/recommendations');
 
 const router = express.Router();
 const MAX_NAME_LEN = 60;
@@ -190,6 +191,17 @@ router.post('/:id/songs', requireAuth, async (req, res) => {
   if (!playlist) return res.status(404).json({ error: 'Liste introuvable' });
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
+  // Le catalogue contient parfois le même opening/ending sous deux Song.id
+  // distincts (film/compilation mal matché à l'import) — la contrainte unique
+  // (playlistId, songId) ne suffit donc pas à éviter un doublon « visuel ».
+  // On compare par songKey (même logique que les recommandations).
+  const existing = await prisma.playlistSong.findMany({
+    where: { playlistId: id }, select: { song: true },
+  });
+  const newKey = songKey(song);
+  if (existing.some((row) => songKey(row.song) === newKey)) {
+    return res.status(409).json({ error: 'Ce morceau est déjà dans la liste' });
+  }
   await prisma.playlistSong.upsert({
     where: { playlistId_songId: { playlistId: id, songId } },
     update: {},

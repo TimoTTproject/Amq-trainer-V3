@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 36, date: '2026-07-05', tag: 'fix',
+    title: 'Recommandations plus variées, playlists sans doublon',
+    description: "Les recommandations excluent maintenant les morceaux déjà suggérés récemment (au lieu de les remontrer quand même) pour proposer de vraies nouveautés. Impossible aussi d'ajouter deux fois le même morceau à une playlist, même quand le catalogue le liste sous deux fiches différentes.",
+  },
+  {
     id: 35, date: '2026-07-05', tag: 'improvement',
     title: 'Le craft respecte maintenant le tirage',
     description: "Un personnage doit avoir été obtenu au moins une fois par tirage (par n'importe quel joueur) avant de pouvoir être fabriqué en poussière — plus de personnage qui n'existerait que par craft.",

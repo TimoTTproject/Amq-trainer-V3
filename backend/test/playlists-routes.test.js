@@ -92,6 +92,7 @@ test('ajout de son : owner only, 404 si musique inconnue', async () => {
   assert.equal(notFound.status, 404);
 
   prisma.song.findUnique = async () => song();
+  prisma.playlistSong.findMany = async () => [];
   prisma.playlistSong.upsert = async () => ({});
   prisma.playlist.update = async () => ({});
   const ok = await app.request('/api/playlists/1/songs', { method: 'POST', cookie: app.authCookie(OWNER.id), body: { songId: 5 } });
@@ -101,6 +102,16 @@ test('ajout de son : owner only, 404 si musique inconnue', async () => {
   // Un non-propriétaire ne peut pas ajouter
   const forbidden = await app.request('/api/playlists/1/songs', { method: 'POST', cookie: app.authCookie(OTHER.id), body: { songId: 5 } });
   assert.equal(forbidden.status, 404);
+});
+
+test('ajout de son : refuse un doublon catalogue (même morceau, autre songId)', async () => {
+  prisma.playlist.findUnique = async () => playlist();
+  // Même titre/type/n°/artiste que song(), mais un id de catalogue différent
+  // (cas réel : film/compilation mal matché à l'import).
+  prisma.song.findUnique = async () => song({ id: 42, anilistId: 999 });
+  prisma.playlistSong.findMany = async () => [{ song: song() }];
+  const res = await app.request('/api/playlists/1/songs', { method: 'POST', cookie: app.authCookie(OWNER.id), body: { songId: 42 } });
+  assert.equal(res.status, 409);
 });
 
 test('import-favorites : refuse si la playlist de favoris est vide', async () => {

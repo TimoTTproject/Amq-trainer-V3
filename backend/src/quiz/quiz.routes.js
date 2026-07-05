@@ -551,12 +551,19 @@ router.get('/playlist/recommendations', requireAuth, rateLimit({ max: 30, name: 
   }
 
   const byId = new Map([...tasteCandidates, ...popularCandidates].map((song) => [song.id, song]));
+  const allCandidates = [...byId.values()];
   const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 8));
+  // Quand le catalogue le permet, on exclut carrément les sons suggérés
+  // récemment plutôt que de simplement les déprioriser — sinon les mêmes
+  // recommandations reviennent visite après visite tant que le cooldown de
+  // REC_SHOWN_COOLDOWN_MS n'est pas écoulé (le tri en dessous reste déterministe).
+  const freshCandidates = allCandidates.filter((song) => !recentlyShownIds.has(song.id));
+  const useOnlyFresh = freshCandidates.length >= limit;
   const recommendations = rankRecommendations({
     likedSongs,
-    candidates: [...byId.values()],
+    candidates: useOnlyFresh ? freshCandidates : allCandidates,
     collaborativeCounts,
-    recentlyShownIds,
+    recentlyShownIds: useOnlyFresh ? new Set() : recentlyShownIds,
     limit,
   });
   res.json({
