@@ -29,7 +29,7 @@
   </g>
 
   <!-- titre -->
-  <text x="260" y="225" fill="#ffffff" font-size="78" font-weight="800">Anime Music Quiz</text>
+  <text x="260" y="225" fill="#ffffff" font-size="78" font-weight="800">AMQTrainer</text>
   <text x="262" y="285" fill="#9aa0b4" font-size="34" font-weight="500">Devine l'anime à son opening (ou ending)</text>
 
   <!-- chips features -->

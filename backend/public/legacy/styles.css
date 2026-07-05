@@ -1015,3 +1015,12 @@ header h1 i {
 #song-details div:last-child {
     margin-bottom: 0;
 }
+/* Identité AMQTrainer officielle */
+.legacy-brand-logo {
+    display: block;
+    width: min(330px, 78vw);
+    height: auto;
+    max-height: 78px;
+    object-fit: contain;
+    object-position: left center;
+}

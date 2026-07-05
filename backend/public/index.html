@@ -3,29 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Anime Music Quiz — Devine l'anime à son opening</title>
+  <title>AMQTrainer — Devine l'anime à son opening</title>
   <meta name="description" content="Devine l'anime à partir de son opening ou ending ! Quiz multijoueur en temps réel, collection de cartes gacha, mode survie Château, classements et progression. Gratuit." />
   <!-- Partage social (Open Graph / Twitter) -->
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Anime Music Quiz" />
-  <meta property="og:title" content="Anime Music Quiz — Devine l'anime à son opening" />
+  <meta property="og:site_name" content="AMQTrainer" />
+  <meta property="og:title" content="AMQTrainer — Devine l'anime à son opening" />
   <meta property="og:description" content="Quiz d'openings d'anime multijoueur, collection de cartes gacha, mode survie et classements. Joue gratuitement !" />
   <meta property="og:url" content="https://amqtrainer.fr" />
   <meta property="og:image" content="https://amqtrainer.fr/og.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Anime Music Quiz — Devine l'anime à son opening" />
+  <meta name="twitter:title" content="AMQTrainer — Devine l'anime à son opening" />
   <meta name="twitter:description" content="Quiz d'openings d'anime multijoueur, collection gacha, mode survie et classements. Gratuit !" />
   <meta name="twitter:image" content="https://amqtrainer.fr/og.png" />
   <link rel="canonical" href="https://amqtrainer.fr" />
   <meta name="robots" content="index, follow" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0f1117" />
-  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="icon" href="/assets/brand/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" sizes="180x180" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="AMQ" />
+  <meta name="apple-mobile-web-app-title" content="AMQTrainer" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -43,7 +43,7 @@
     <div class="auth-card">
       <button class="btn-secondary lang-toggle auth-lang" title="Langue / Language">EN</button>
       <section class="auth-intro">
-        <span class="auth-kicker">AMQ / TRAINER</span>
+        <img class="brand-logo-auth" src="/assets/brand/logo-horizontal-on-dark.png" alt="AMQTrainer" />
         <h1><i class="fas fa-wave-square"></i> <span data-i18n="Reconnais l'anime.">Reconnais l'anime.</span><br /><em data-i18n="Dès la première note.">Dès la première note.</em></h1>
         <p class="auth-sub" data-i18n="Openings, endings, duel entre amis et collection. Pas de blabla : lance un extrait et joue.">Openings, endings, duel entre amis et collection. Pas de blabla : lance un extrait et joue.</p>
         <button id="auth-quick-guest" class="btn-primary auth-quick-guest">
@@ -131,7 +131,9 @@
   <!-- APPLICATION (connecté) -->
   <div id="app" class="container hidden">
     <header>
-      <h1><i class="fas fa-music"></i> Anime Music Quiz</h1>
+      <a class="brand-home" href="/" aria-label="AMQTrainer — Accueil">
+        <img src="/assets/brand/logo-horizontal-on-dark.png" alt="AMQTrainer" />
+      </a>
       <div class="user-section">
         <a id="header-discord-btn" class="btn-discord" href="https://discord.gg/qsbn3bQh5K" target="_blank" rel="noopener" title="Rejoins le Discord"><i class="fab fa-discord"></i> <span class="btn-discord-txt">Discord</span></a>
         <button id="daily-btn" class="btn-primary daily-btn hidden" title="Bonus quotidien"><i class="fas fa-gift"></i> Bonus</button>
@@ -1544,7 +1546,7 @@
   <div id="about-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div class="modal-card about-card">
       <button class="modal-close" id="about-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
-      <h2 class="about-title" id="about-title"><i class="fas fa-music"></i> Anime Music Quiz — Règles</h2>
+      <h2 class="about-title" id="about-title"><img class="brand-mark-inline" src="/assets/brand/logo-mark.png" alt="" /> AMQTrainer — Règles</h2>
 
       <h3>🎯 Le principe</h3>
       <p>Un extrait d'<b>opening</b> (ou d'<b>ending</b>) d'anime est joué : devine de quel anime il s'agit en tapant son titre. L'orthographe approximative et les titres alternatifs (romaji, anglais…) sont acceptés.</p>

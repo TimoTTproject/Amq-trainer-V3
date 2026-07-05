@@ -1,4 +1,4 @@
-// Anime Music Quiz — frontend (Phase 1 : auth + quiz solo)
+// AMQTrainer — frontend (Phase 1 : auth + quiz solo)
 const API = ''; // même origine que le serveur Express
 
 // ── état ──
@@ -1660,7 +1660,7 @@ async function shareGame() {
   const btn = document.getElementById('share-btn');
   try {
     if (navigator.share) {
-      await navigator.share({ title: 'Anime Music Quiz', text: "Devine l'anime à son opening — rejoins-moi !", url });
+      await navigator.share({ title: 'AMQTrainer', text: "Devine l'anime à son opening — rejoins-moi !", url });
       return;
     }
     await navigator.clipboard.writeText(url);

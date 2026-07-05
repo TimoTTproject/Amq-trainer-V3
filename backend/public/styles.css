@@ -7,8 +7,8 @@
   --bg-3: #1c1f27;
   --text: #f2f0eb;
   --text-2: #9ba1ad;
-  --accent: #ff5c7a;
-  --accent-2: #38d6ff;
+  --accent: #d01624;
+  --accent-2: #08aee8;
   --green: #3ec98a;
   --red: #ff6b6b;
   --orange: #ffb648;
@@ -1977,6 +1977,16 @@ h1, h2, h3, .hub-title, .gm-tag {
   letter-spacing: .18em;
   margin-bottom: 28px;
 }
+.brand-logo-auth {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(390px, 92%);
+  height: auto;
+  margin: 0 0 24px;
+  object-fit: contain;
+  object-position: left center;
+}
 .auth-card h1 {
   position: relative;
   z-index: 1;
@@ -2059,6 +2069,27 @@ h1, h2, h3, .hub-title, .gm-tag {
 header { padding-bottom: 16px; border-bottom: 1px solid #282c34; }
 header h1 { font-size: 1.65rem; text-transform: uppercase; letter-spacing: .04em; }
 header h1 i { color: var(--accent); }
+.brand-home {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 290px;
+  min-width: 190px;
+  text-decoration: none;
+}
+.brand-home img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 66px;
+  object-fit: contain;
+  object-position: left center;
+}
+.brand-mark-inline {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
 .token-badge, .profile-chip { border-radius: 5px; border: 1px solid #30343d; background: #15171d; }
 
 .navbar {
@@ -2191,6 +2222,11 @@ header h1 i { color: var(--accent); }
   .auth-intro .about-link { margin-top: 20px; }
   .auth-access { padding: 32px 26px 28px; }
   .container { padding-inline: 12px; }
+}
+@media (max-width: 600px) {
+  .brand-home { flex-basis: 205px; min-width: 150px; }
+  .brand-home img { max-height: 50px; }
+  .brand-logo-auth { width: min(330px, 94%); margin-bottom: 20px; }
 }
 
 @media (max-width: 420px) {

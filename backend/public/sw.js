@@ -1,11 +1,13 @@
 // Service worker : network-first (évite le contenu périmé après déploiement),
 // repli sur le cache hors-ligne, et précache de la coquille applicative pour un
 // démarrage instantané / hors-ligne. N'intercepte ni l'API, ni les flux, ni Socket.io.
-const CACHE = 'amq-v5';
+const CACHE = 'amq-v6';
 
 // Coquille applicative : tout le statique nécessaire au 1er rendu.
 const SHELL = [
-  '/', '/index.html', '/styles.css', '/manifest.webmanifest', '/icon.svg',
+  '/', '/index.html', '/styles.css', '/manifest.webmanifest',
+  '/assets/brand/favicon-32.png', '/assets/brand/icon-192.png',
+  '/assets/brand/icon-512.png', '/assets/brand/logo-horizontal-on-dark.png',
   '/i18n.js', '/sfx.js', '/main.js',
 ];
 
@@ -26,11 +28,11 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('push', (e) => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch {}
-  const title = data.title || 'Anime Music Quiz';
+  const title = data.title || 'AMQTrainer';
   e.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
+    icon: '/assets/brand/icon-192.png',
+    badge: '/assets/brand/icon-192.png',
     data: { url: data.url || '/' },
   }));
 });

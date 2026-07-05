@@ -111,10 +111,10 @@ function renderDailyBoard(d, containerId) {
 }
 
 function shareDaily() {
-  const text = `J'ai marqué ${dailyMyScore} pts au Défi du jour sur Anime Music Quiz 🎵 — bats-moi !`;
+  const text = `J'ai marqué ${dailyMyScore} pts au Défi du jour sur AMQTrainer 🎵 — bats-moi !`;
   const url = location.origin;
   if (navigator.share) {
-    navigator.share({ title: 'Anime Music Quiz', text, url }).catch(() => {});
+    navigator.share({ title: 'AMQTrainer', text, url }).catch(() => {});
   } else if (navigator.clipboard) {
     navigator.clipboard.writeText(`${text} ${url}`).then(() => {
       const b = document.getElementById('daily-share');
