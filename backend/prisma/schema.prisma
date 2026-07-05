@@ -309,20 +309,32 @@ model Wishlist {
   @@index([userId])
 }
 
-// Vote pour la vedette de la semaine suivante (1 vote par joueur et par semaine).
+// Vote pour la vedette de la semaine suivante — 1 vote par joueur, par semaine
+// ET par rareté (mythique/légendaire/épique votent séparément).
 // `week` = n° de semaine où le vote est émis ; il décide de la semaine `week+1`.
 model FeaturedVote {
   id          Int      @id @default(autoincrement())
   userId      String
   week        Int
+  rarity      String
   characterId Int
   createdAt   DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, week])
+  @@unique([userId, week, rarity])
   @@index([week])
+}
+
+// Petit magasin clé/valeur générique pour des réglages ponctuels (ex. suppression
+// manuelle de la bannière vedette en cours) — évite d'ajouter une colonne dédiée
+// à chaque besoin ad hoc, et persiste entre les redéploiements (contrairement
+// aux caches en mémoire du process).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 // Abonnement aux notifications push (Web Push) — un par navigateur/appareil.

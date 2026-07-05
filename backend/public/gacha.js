@@ -49,37 +49,46 @@ async function openGacha() {
   loadCollection();
 }
 
-// Panneau de vote : classement des votes pour la vedette de la semaine prochaine.
-let voteMyChoice = null;
+// Panneau de vote : un vote par rareté (mythique/légendaire/épique), un petit
+// cadre par catégorie — chaque joueur choisit un candidat dans chacun.
+const VOTE_RARITY_ORDER = ['mythic', 'legendary', 'epic'];
 async function loadVotePanel() {
   const el = document.getElementById('gacha-vote');
   if (!el) return;
   let d;
   try { d = await api('/api/gacha/vote'); } catch { el.innerHTML = ''; return; }
-  voteMyChoice = d.myVote;
   const left = Math.max(0, (d.closesAt || 0) - Date.now());
   const days = Math.floor(left / 86400000);
   const hours = Math.floor((left % 86400000) / 3600000);
   const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
-  const cards = d.standings.length
-    ? d.standings.map((c) => `
-        <button class="vote-cand${c.id === d.myVote ? ' mine' : ''}" data-vote-id="${c.id}">
-          <span class="avatar avatar-sm" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></span>
-          <span class="vote-cand-name">${escapeHtml(c.name)}</span>
-          <small class="r-${c.rarity}">${RARITY_LABELS[c.rarity] || c.rarity}</small>
-          <span class="vote-count">${c.votes} ✋</span>
-        </button>`).join('')
-    : '<p class="muted">Candidats indisponibles pour l\'instant.</p>';
-  const mine = d.myVote
-    ? `Ton vote : <b>${escapeHtml((d.standings.find((c) => c.id === d.myVote) || {}).name || 'enregistré')}</b>`
-    : 'Choisis un des candidats ci-dessus pour voter.';
+
+  const frames = VOTE_RARITY_ORDER.map((rarity) => {
+    const group = (d.byRarity && d.byRarity[rarity]) || { candidates: [], myVote: null };
+    const cards = group.candidates.length
+      ? group.candidates.map((c) => `
+          <button class="vote-cand${c.id === group.myVote ? ' mine' : ''}" data-vote-id="${c.id}">
+            <span class="avatar avatar-sm" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></span>
+            <span class="vote-cand-name">${escapeHtml(c.name)}</span>
+            <span class="vote-count">${c.votes} ✋</span>
+          </button>`).join('')
+      : '<p class="muted">Candidats indisponibles pour l\'instant.</p>';
+    const mine = group.myVote
+      ? `Ton vote : <b>${escapeHtml((group.candidates.find((c) => c.id === group.myVote) || {}).name || 'enregistré')}</b>`
+      : 'Choisis un candidat pour voter.';
+    return `
+      <div class="vote-frame">
+        <div class="vote-frame-head r-${rarity}">${RARITY_LABELS[rarity] || rarity}</div>
+        <div class="vote-list">${cards}</div>
+        <p class="vote-mine">${mine}</p>
+      </div>`;
+  }).join('');
+
   el.innerHTML = `
     <div class="vote-head">
-      <span><i class="fas fa-check-to-slot"></i> Vote : vedette de la semaine prochaine</span>
+      <span><i class="fas fa-check-to-slot"></i> Vote : vedettes de la semaine prochaine</span>
       <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
     </div>
-    <div class="vote-list">${cards}</div>
-    <p class="vote-mine">${mine}</p>`;
+    <div class="vote-frames">${frames}</div>`;
   el.querySelectorAll('[data-vote-id]').forEach((b) =>
     b.addEventListener('click', () => castVote(parseInt(b.dataset.voteId)))
   );
@@ -88,7 +97,6 @@ async function loadVotePanel() {
 async function castVote(characterId) {
   try {
     await api('/api/gacha/vote', { method: 'POST', body: JSON.stringify({ characterId }) });
-    voteMyChoice = characterId;
     if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
     loadVotePanel();
   } catch (e) { alert(e.message); }

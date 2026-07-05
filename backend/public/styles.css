@@ -1363,6 +1363,12 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .vote-cand .avatar-sm { width: 56px; height: 56px; }
 .vote-cand-name { font-size: .9rem; font-weight: 700; }
 .vote-count { font-weight: 700; font-size: .85rem; color: var(--accent); }
+.vote-frames { display: flex; flex-direction: column; gap: 16px; }
+.vote-frame { border: 1px solid #242a3d; border-radius: 12px; padding: 12px; background: var(--bg-3); }
+.vote-frame-head { font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 10px; }
+.vote-frame-head.r-mythic { color: #ff5d8f; }
+.vote-frame-head.r-legendary { color: #ffb648; }
+.vote-frame-head.r-epic { color: #b06cff; }
 .vote-mine { font-size: .82rem; color: var(--text-2); margin-top: 8px; }
 
 /* ── Filtre OP/ED ── */

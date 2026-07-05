@@ -2,6 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { requireAdmin } = require('../admin/admin');
 const { rollRarity, DUPLICATE_REFUND, DUST_GAIN, CRAFT_COST, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
@@ -65,13 +66,13 @@ function nextMondayResetAt() {
   return wallToRealMs(mondayWallMs(new Date()) + 7 * 86400000);
 }
 
-// Tirage au sort pondéré par les votes d'une semaine donnée (chaque vote = un
-// ticket ; plus un perso a de votes, plus il a de chances, sans que ce soit
-// automatique). Déterministe (même graine que le reste) → pas de vrai hasard,
-// reproductible pour tous. Renvoie null si aucun vote.
-async function drawWeightedWinner(week) {
+// Tirage au sort pondéré par les votes d'une semaine/rareté donnée (chaque
+// vote = un ticket ; plus un perso a de votes, plus il a de chances, sans que
+// ce soit automatique). Déterministe (même graine que le reste) → pas de vrai
+// hasard, reproductible pour tous. Renvoie null si aucun vote pour cette rareté.
+async function drawWeightedWinner(week, rarity) {
   const votes = await prisma.featuredVote.groupBy({
-    by: ['characterId'], where: { week },
+    by: ['characterId'], where: { week, rarity },
     _count: { characterId: true },
   });
   if (!votes.length) return null;
@@ -85,9 +86,20 @@ async function drawWeightedWinner(week) {
   return votes[votes.length - 1].characterId;
 }
 
+// Suppression manuelle (admin) de la bannière en cours : persistée en DB pour
+// survivre aux redéploiements, contrairement à weeklyCache.
+async function bannerSuppressedWeek() {
+  const s = await prisma.appSetting.findUnique({ where: { key: 'bannerSuppressedWeek' } });
+  return s ? parseInt(s.value) : null;
+}
+
 async function getWeeklyFeatured() {
   const wk = currentWeek();
   if (weeklyCache.week === wk) return weeklyCache;
+  if ((await bannerSuppressedWeek()) === wk) {
+    weeklyCache = { week: wk, byRarity: {}, chars: [], resetAt: nextMondayResetAt() };
+    return weeklyCache;
+  }
   const chars = [];
   const byRarity = {};
   const salts = { mythic: 101, legendary: 211, epic: 307 };
@@ -101,26 +113,39 @@ async function getWeeklyFeatured() {
     });
     if (c) { chars.push(c); byRarity[r] = c.id; }
   }
-  // Vedette élue par les votes de la semaine PRÉCÉDENTE : remplace le slot de sa
-  // rareté (ou s'ajoute), avec le même rate-up. Repli sur le déterministe sinon.
+  // Vedette élue par les votes de la semaine PRÉCÉDENTE, PAR RARETÉ : remplace
+  // le slot de sa rareté, avec le même rate-up. Repli sur le déterministe sinon.
   try {
-    const winnerId = await drawWeightedWinner(wk - 1);
-    if (winnerId) {
+    for (const r of ['mythic', 'legendary', 'epic']) {
+      const winnerId = await drawWeightedWinner(wk - 1, r);
+      if (!winnerId) continue;
       const w = await prisma.character.findUnique({
         where: { id: winnerId }, select: { id: true, name: true, imageUrl: true, rarity: true },
       });
-      if (w) {
-        byRarity[w.rarity] = w.id;
-        const i = chars.findIndex((c) => c.rarity === w.rarity);
-        const entry = { ...w, voted: true };
-        if (i >= 0) chars[i] = entry; else chars.push(entry);
-      }
+      if (!w) continue;
+      byRarity[w.rarity] = w.id;
+      const i = chars.findIndex((c) => c.rarity === w.rarity);
+      const entry = { ...w, voted: true };
+      if (i >= 0) chars[i] = entry; else chars.push(entry);
     }
   } catch (e) { console.warn('weekly vote winner unavailable:', e.message); }
 
   weeklyCache = { week: wk, byRarity, chars, resetAt: nextMondayResetAt() };
   return weeklyCache;
 }
+
+// Efface la bannière en cours jusqu'au prochain reset (lundi). N'affecte pas
+// les votes déjà en cours pour la semaine prochaine.
+router.post('/banner-suppress', requireAuth, requireAdmin, async (req, res) => {
+  const wk = currentWeek();
+  await prisma.appSetting.upsert({
+    where: { key: 'bannerSuppressedWeek' },
+    update: { value: String(wk) },
+    create: { key: 'bannerSuppressedWeek', value: String(wk) },
+  });
+  weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
+  res.json({ ok: true, week: wk });
+});
 
 // ── Candidats du vote hebdomadaire (légendaires/mythiques/épiques tirés au sort) ──
 // La liste est PROPRE À CHAQUE JOUEUR (graine = semaine + son userId) : deux
@@ -795,13 +820,15 @@ router.get('/collection/series', requireAuth, async (req, res) => {
 });
 
 // ── Vote pour la vedette de la semaine prochaine ──
-// Statut : mon vote, classement en cours, échéance, et la vedette élue en cours.
+// Un vote par joueur, par semaine ET par rareté (mythique/légendaire/épique
+// votent séparément) : un petit cadre par catégorie côté client.
 router.get('/vote', requireAuth, async (req, res) => {
   const wk = currentWeek();
-  const mine = await prisma.featuredVote.findUnique({
-    where: { userId_week: { userId: req.user.id, week: wk } },
-    select: { characterId: true },
+  const mine = await prisma.featuredVote.findMany({
+    where: { userId: req.user.id, week: wk },
+    select: { rarity: true, characterId: true },
   });
+  const mineByRarity = Object.fromEntries(mine.map((m) => [m.rarity, m.characterId]));
   const { chars: candidates } = await getWeeklyCandidatesFor(req.user.id);
   const counts = await prisma.featuredVote.groupBy({
     by: ['characterId'],
@@ -809,35 +836,40 @@ router.get('/vote', requireAuth, async (req, res) => {
     _count: { characterId: true },
   });
   const votesById = Object.fromEntries(counts.map((g) => [g.characterId, g._count.characterId]));
-  const standings = candidates
-    .map((c) => ({ ...c, votes: votesById[c.id] || 0 }))
-    .sort((a, b) => b.votes - a.votes);
+  const byRarity = {};
+  for (const rarity of Object.keys(CANDIDATES_PER_RARITY)) {
+    const list = candidates
+      .filter((c) => c.rarity === rarity)
+      .map((c) => ({ ...c, votes: votesById[c.id] || 0 }))
+      .sort((a, b) => b.votes - a.votes);
+    byRarity[rarity] = { candidates: list, myVote: mineByRarity[rarity] || null };
+  }
   const weekly = await getWeeklyFeatured();
   res.json({
     week: wk,
     closesAt: nextMondayResetAt(),
-    myVote: mine?.characterId || null,
-    standings,
+    byRarity,
     current: weekly.chars, // vedettes en cours (dont le gagnant du vote précédent)
   });
 });
 
-// Émet/modifie mon vote pour la semaine en cours parmi les candidats tirés au sort
-// (décide la vedette de la semaine suivante).
+// Émet/modifie mon vote pour une rareté de la semaine en cours, parmi les
+// candidats tirés au sort (décide la vedette de cette rareté la semaine suivante).
 router.post('/vote', requireAuth, rateLimit({ max: 30, name: 'gacha-vote' }), async (req, res) => {
   const characterId = parseInt(req.body?.characterId);
   if (!characterId) return res.status(400).json({ error: 'characterId requis' });
-  const { ids: candidateIds } = await getWeeklyCandidatesFor(req.user.id);
-  if (!candidateIds.includes(characterId)) {
+  const { chars: candidates } = await getWeeklyCandidatesFor(req.user.id);
+  const candidate = candidates.find((c) => c.id === characterId);
+  if (!candidate) {
     return res.status(400).json({ error: 'Ce personnage ne fait pas partie des candidats de cette semaine' });
   }
   const wk = currentWeek();
   await prisma.featuredVote.upsert({
-    where: { userId_week: { userId: req.user.id, week: wk } },
+    where: { userId_week_rarity: { userId: req.user.id, week: wk, rarity: candidate.rarity } },
     update: { characterId },
-    create: { userId: req.user.id, week: wk, characterId },
+    create: { userId: req.user.id, week: wk, rarity: candidate.rarity, characterId },
   });
-  res.json({ ok: true, characterId });
+  res.json({ ok: true, characterId, rarity: candidate.rarity });
 });
 
 module.exports = { router };
