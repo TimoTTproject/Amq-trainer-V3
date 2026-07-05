@@ -2136,6 +2136,16 @@ header h1 i { color: var(--accent); }
 }
 .home-card:not(.disabled):hover i { color: var(--accent); -webkit-text-fill-color: var(--accent); }
 .home-card h3 { margin-top: 10px; letter-spacing: .01em; }
+/* Hauteur de cellule uniforme : sans ça, une description sur 2 lignes force
+   toute la rangée à s'étirer et les cartes voisines à texte court laissent un
+   vide sous leur description — visuellement cassé dans une grille en cellules
+   jointes (contrairement à des cartes indépendantes, où ça ne se voit pas). */
+.home-card p {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  min-height: 2.9em; /* réserve 2 lignes même pour un texte court : sans ça, le
+    clamp limite le débordement mais ne comble pas le vide sous une description
+    plus courte que ses voisines de la même rangée. */
+}
 @media (max-width: 720px) { .home-grid { grid-template-columns: 1fr; } }
 .home-hero > * { position: relative; z-index: 1; }
 
