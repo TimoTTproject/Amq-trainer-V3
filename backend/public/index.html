@@ -448,9 +448,9 @@
         <button class="btn-secondary home-share" id="share-btn"><i class="fas fa-share-nodes"></i> Partager le jeu</button>
         <button class="btn-secondary home-share" data-about><i class="fas fa-circle-info"></i> Règles</button>
       </div>
-      <div class="home-changelog" id="home-changelog"></div>
-      <div class="home-quests" id="home-quests"></div>
-      <div class="home-recent-pulls" id="home-recent-pulls"></div>
+      <!-- Accès rapides en premier : c'est l'action qu'on vient chercher sur
+           l'accueil, pas les infos secondaires (nouveautés, quêtes, tirages)
+           qui suivent plus bas. -->
       <div class="home-grid">
         <button class="home-card" id="card-play">
           <i class="fas fa-play-circle"></i>
@@ -498,6 +498,9 @@
           <p>Ton solde, ce que rapporte chaque mode, tes plafonds en cours</p>
         </button>
       </div>
+      <div class="home-quests" id="home-quests"></div>
+      <div class="home-recent-pulls" id="home-recent-pulls"></div>
+      <div class="home-changelog" id="home-changelog"></div>
     </div>
 
     <!-- VUE QUIZ -->
