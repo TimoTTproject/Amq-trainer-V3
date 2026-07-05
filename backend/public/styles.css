@@ -15,6 +15,20 @@
   --radius: 8px;
 }
 
+/* Principes de la passe « professionnalisation » (2026-07) :
+   1. --accent/--accent-2 marquent une action ou un état, jamais une
+      décoration passive (pas de teinte sur un texte/bordure qui ne réagit à
+      rien).
+   2. Un seul niveau d'« éclat » par écran : ombre colorée/glow réservée à
+      l'élément qui doit vraiment capter l'œil, pas répétée sur chaque bouton/
+      badge (les ombres de boutons/chrome sont neutres — noir translucide —
+      pas teintées, sauf l'élément mis en avant).
+   3. Rayons : var(--radius) pour les blocs/cartes, valeurs ad hoc à éviter
+      sauf cas réellement spécifique (pastille ronde, icône).
+   4. Titres en 'Barlow Condensed' (cf. règle plus bas), corps en 'Manrope' —
+      garder un contraste net de poids/taille entre les deux, pas de tailles
+      proches qui aplatissent la hiérarchie. */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
@@ -41,14 +55,8 @@ input { font-family: inherit; }
   border: none; border-radius: 10px; padding: 10px 16px; font-size: 0.95rem;
   display: inline-flex; align-items: center; gap: 8px; transition: filter .15s, transform .05s;
   background: #5865f2; color: #fff; text-decoration: none; font-weight: 600;
-  box-shadow: 0 0 0 rgba(88,101,242,.6);
-  animation: discordPulse 2.4s ease-in-out infinite;
 }
 .btn-discord:hover { filter: brightness(1.1); transform: translateY(-1px); }
-@keyframes discordPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(88,101,242,.55); }
-  50% { box-shadow: 0 0 0 6px rgba(88,101,242,0); }
-}
 
 /* ── Confettis ── */
 .confetti-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 200; }
@@ -853,8 +861,8 @@ body.guest-mode .feedback-buttons { display: none !important; }
 
 /* ── Bannières de section (gacha, catalogue, tower, classement…) ── */
 .gacha-top {
-  background: linear-gradient(135deg, rgba(108,140,255,.16), rgba(138,108,255,.16));
-  border: 1px solid #2a2f42; border-radius: 16px; padding: 16px 20px; margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(255,92,122,.14), rgba(56,214,255,.12));
+  border: 1px solid #2a2f42; border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px;
 }
 .gacha-top h2 { display: flex; align-items: center; gap: 10px; }
 
@@ -1540,7 +1548,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 }
 .nav-item { padding: 9px 16px; border-radius: 11px; font-weight: 500; }
 .nav-item:hover { background: var(--bg-3); color: var(--text); transform: translateY(-1px); }
-.nav-item.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; box-shadow: 0 5px 16px rgba(108,140,255,.4); }
+.nav-item.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; box-shadow: 0 5px 16px rgba(0,0,0,.35); }
 .nav-item.active i { color: #fff; }
 @media (max-width: 560px) { .nav-item span { display: inline; } } /* garde le texte : la barre s'enroule */
 
@@ -1908,10 +1916,12 @@ h1, h2, h3, .hub-title, .gm-tag {
   border: 1px solid #ff8ca1;
   border-radius: 6px;
   font-weight: 800;
-  box-shadow: 3px 3px 0 rgba(56, 214, 255, .55);
+  /* Ombre portée neutre (pas teintée) : lecture graphique nette plutôt qu'un
+     halo néon — cf. principe « un seul niveau d'éclat » en tête de fichier. */
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .5);
 }
 .btn-primary:hover { filter: none; background: #ff7891; transform: translate(-1px, -1px); }
-.btn-primary:active { box-shadow: 1px 1px 0 rgba(56, 214, 255, .45); transform: translate(1px, 1px); }
+.btn-primary:active { box-shadow: 1px 1px 0 rgba(0, 0, 0, .4); transform: translate(1px, 1px); }
 .btn-secondary { border-radius: 6px; border: 1px solid #303540; background: #171920; }
 
 /* Connexion : affiche de jeu, pas carte SaaS */
@@ -2079,7 +2089,7 @@ header h1 i { color: var(--accent); }
 .hub-card, .home-card {
   background: #13151a;
   border-color: #2c3038;
-  border-radius: 7px;
+  border-radius: var(--radius);
   box-shadow: inset 4px 0 var(--c, #30343d);
 }
 .hub-card:hover, .home-card:not(.disabled):hover {
@@ -2123,13 +2133,13 @@ header h1 i { color: var(--accent); }
 /* Hero d'accueil : panneau dégradé + lueur d'angle */
 .home-hero {
   position: relative; overflow: hidden;
-  padding: 22px 24px; border-radius: 14px;
-  background: linear-gradient(135deg, rgba(108, 140, 255, .14), rgba(138, 108, 255, .05) 55%, transparent);
+  padding: 22px 24px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255, 92, 122, .13), rgba(56, 214, 255, .05) 55%, transparent);
   border: 1px solid #2a2f42;
 }
 .home-hero::after {
   content: ''; position: absolute; top: -45px; right: -25px; width: 170px; height: 170px;
-  background: radial-gradient(circle, rgba(138, 108, 255, .22), transparent 70%); pointer-events: none;
+  background: radial-gradient(circle, rgba(56, 214, 255, .18), transparent 70%); pointer-events: none;
 }
 .home-hero h2 { font-size: 2rem; letter-spacing: .2px; }
 .home-hero > * { position: relative; z-index: 1; }
