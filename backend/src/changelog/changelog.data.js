@@ -4,6 +4,46 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 30, date: '2026-07-05', tag: 'feature',
+    title: 'Nouvelle identité visuelle AMQTrainer',
+    description: "Nouveau logo, favicon et palette (rouge/cyan) sur tout le site : en-tête, écran de connexion, icônes PWA et aperçu de partage.",
+  },
+  {
+    id: 29, date: '2026-07-05', tag: 'feature',
+    title: 'Menu latéral personnalisable',
+    description: "La navigation passe en menu latéral, et tu peux épingler jusqu'à 8 raccourcis (Classement, Gacha, Amis…) depuis Jouer/Collection/Communauté pour les retrouver directement dans ta sidebar.",
+  },
+  {
+    id: 28, date: '2026-07-05', tag: 'feature',
+    title: "Qui a ajouté ce son au catalogue ?",
+    description: "Chaque opening/ending affiche maintenant le joueur qui l'a fait entrer dans le catalogue via son import AniList — visible dans le Catalogue et à la révélation de chaque manche en multijoueur.",
+  },
+  {
+    id: 27, date: '2026-07-05', tag: 'improvement',
+    title: "Numéros de saison dans les propositions du quiz",
+    description: "Les choix (Carré/Duo) et l'autocomplétion affichent un repère S1/S2… quand une chaîne de saisons est détectée, et préfèrent le titre anglais quand il existe — Kaguya-sama S1/S2 ne se confondent plus.",
+  },
+  {
+    id: 26, date: '2026-07-05', tag: 'improvement',
+    title: "Accueil : le catalogue en chiffres",
+    description: "Nouvelle section mettant en avant les sons les plus difficiles, les plus faciles et les plus joués, tous joueurs confondus.",
+  },
+  {
+    id: 25, date: '2026-07-05', tag: 'improvement',
+    title: "Ajouter un ami directement depuis un profil",
+    description: "Bouton « Ajouter en ami » sur toute fiche publique, à côté de « Proposer un échange » — plus besoin de passer par Communauté → Amis → recherche.",
+  },
+  {
+    id: 24, date: '2026-07-05', tag: 'fix',
+    title: "Multijoueur : le vote pour passer un son exigeait un vote de trop peu",
+    description: "À 2 joueurs, un seul vote suffisait à écourter la manche unilatéralement. Le vote-skip demande maintenant une vraie majorité (les deux joueurs à 2, 2 sur 3, etc.).",
+  },
+  {
+    id: 23, date: '2026-07-05', tag: 'fix',
+    title: "Consulter un profil en multijoueur ne quitte plus la partie",
+    description: "Cliquer sur un joueur du salon ou sur « ajouté par » à la révélation ouvre sa fiche en fenêtre, sans jamais donner l'impression d'avoir quitté la partie en cours.",
+  },
+  {
     id: 22, date: '2026-07-04', tag: 'feature',
     title: 'Mes listes : des playlists à partager entre joueurs',
     description: "Crée des listes thématiques (nom, description, publique ou privée), parcours celles des autres joueurs dans l'onglet Découvrir, et clone-les dans ton compte. Importe aussi ta playlist de favoris en un clic.",
