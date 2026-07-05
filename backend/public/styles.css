@@ -2086,62 +2086,57 @@ header h1 i { color: var(--accent); }
 .gacha-top h2 { text-transform: uppercase; font-size: 1.8rem; letter-spacing: .04em; }
 .gacha-top h2 i { color: var(--accent); }
 
-.hub-card, .home-card {
+.hub-card {
   background: #13151a;
   border-color: #2c3038;
   border-radius: var(--radius);
   box-shadow: inset 4px 0 var(--c, #30343d);
 }
-.hub-card:hover, .home-card:not(.disabled):hover {
+.hub-card:hover {
   border-color: #4a4f59;
   box-shadow: inset 4px 0 var(--c, var(--accent)), 7px 7px 0 #07080a;
   transform: translate(-2px, -2px);
 }
 .hub-ico { border-radius: 5px; background: #1a1d23; border: 1px solid #343943; }
-.home-card i {
-  color: var(--accent);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-}
 
-/* ── Accueil : polish (identité couleur par mode, pastilles d'icône, hero) ── */
-/* Couleur d'identité par carte → barre latérale + icône + accent au survol */
-#card-play { --c: #6c8cff; }
-#card-training { --c: #3ec98a; }
-#card-profile { --c: #8a6cff; }
-#card-gacha { --c: #ff8fab; }
-#card-tower { --c: #38d6d6; }
-#card-catalog { --c: #7d8bb0; }
-#card-mp { --c: #ff6b6b; }
-#card-shop { --c: #ffb648; }
-
-.home-card { position: relative; }
-.home-card i {
-  display: inline-grid; place-items: center; width: 48px; height: 48px;
-  border-radius: 13px; font-size: 1.5rem;
-  color: var(--c, var(--accent)); -webkit-text-fill-color: var(--c, var(--accent));
-  background: rgba(255, 255, 255, .045); border: 1px solid #2a2f3a;
-  transition: transform .18s ease, background .18s, box-shadow .18s;
-}
-.home-card:not(.disabled):hover i {
-  transform: scale(1.08) rotate(-3deg);
-  background: rgba(255, 255, 255, .08);
-  box-shadow: 0 0 0 1px var(--c, var(--accent));
-}
-.home-card h3 { letter-spacing: .2px; }
-
-/* Hero d'accueil : panneau dégradé + lueur d'angle */
+/* ── Accueil : direction éditoriale (grille en cellules, icônes neutres,
+   hero sans encadré) — cf. principes en tête de fichier : l'accent ne
+   s'allume qu'au survol, pas de couleur par carte au repos. ── */
 .home-hero {
-  position: relative; overflow: hidden;
-  padding: 22px 24px; border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(255, 92, 122, .13), rgba(56, 214, 255, .05) 55%, transparent);
-  border: 1px solid #2a2f42;
+  padding: 0 0 26px; margin: 6px 0 28px; border-radius: 0;
+  background: none; border: none; border-bottom: 1px solid #232733;
 }
-.home-hero::after {
-  content: ''; position: absolute; top: -45px; right: -25px; width: 170px; height: 170px;
-  background: radial-gradient(circle, rgba(56, 214, 255, .18), transparent 70%); pointer-events: none;
+.home-hero h2 {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 800;
+  font-size: 2.4rem; line-height: 1.05; letter-spacing: .01em; text-transform: uppercase;
 }
-.home-hero h2 { font-size: 2rem; letter-spacing: .2px; }
+.home-hero p { font-size: 1.05rem; margin-top: 8px; }
+.home-hero .home-share {
+  background: none; border: none; padding: 0; margin: 16px 22px 0 0;
+  color: var(--text-2); font-size: .88rem; text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: #383e4c;
+}
+.home-hero .home-share:first-of-type { color: var(--text); font-weight: 700; text-decoration: none; }
+.home-hero .home-share:hover { color: var(--accent); }
+
+.home-grid {
+  grid-template-columns: repeat(3, 1fr); gap: 1px;
+  background: #20242e; border: 1px solid #20242e; border-radius: var(--radius);
+  overflow: hidden;
+}
+.home-card {
+  position: relative; background: var(--bg); border: none; border-radius: 0;
+  box-shadow: none; padding: 24px 20px; text-align: left; transform: none !important;
+}
+.home-card:not(.disabled):hover { background: #14161c; box-shadow: none; }
+.home-card i {
+  display: inline-flex; width: auto; height: auto; font-size: 1.3rem;
+  color: var(--text-2); background: none; border: none;
+  -webkit-text-fill-color: var(--text-2); transition: color .15s;
+}
+.home-card:not(.disabled):hover i { color: var(--accent); -webkit-text-fill-color: var(--accent); }
+.home-card h3 { margin-top: 10px; letter-spacing: .01em; }
+@media (max-width: 720px) { .home-grid { grid-template-columns: 1fr; } }
 .home-hero > * { position: relative; z-index: 1; }
 
 .panel, .quiz-panel, .stats-panel, .modal-card, .quest-item, .srs-stat {
