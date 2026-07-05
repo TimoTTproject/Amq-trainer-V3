@@ -373,7 +373,16 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 #progress-status { color: var(--text-2); font-size: .85rem; }
 
 /* ── Quiz ── */
-.quiz-panel { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 22px; margin-bottom: 18px; }
+.quiz-panel {
+  position: relative; overflow: hidden;
+  background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 22px; margin-bottom: 18px;
+}
+/* Filet de marque en tête du panneau principal — même signature que le
+   bandeau de l'écran de connexion et le hero d'accueil. */
+.quiz-panel::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0 64%, var(--accent-2) 64%);
+}
 .media-wrapper { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
 .quiz-video-el { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .audio-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; font-size: 3rem; color: var(--accent); }
@@ -602,7 +611,7 @@ body.guest-mode #view-play .hub-grid { grid-template-columns: minmax(0, 540px); 
 .guest-banner {
   display: none; align-items: center; justify-content: space-between; gap: 12px;
   margin: 0 0 16px; padding: 10px 12px;
-  background: rgba(56, 214, 255, .08); border: 1px solid rgba(56, 214, 255, .35); border-radius: 6px;
+  background: rgba(8, 174, 232, .08); border: 1px solid rgba(8, 174, 232, .35); border-radius: 6px;
   color: var(--text-2); font-size: .85rem;
 }
 body.guest-mode .guest-banner { display: flex; }
@@ -646,7 +655,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .tower-entry-notice div { display: flex; flex-direction: column; gap: 2px; }
 .tower-entry-notice strong { font-size: .88rem; }
 .tower-entry-notice span { color: var(--text-2); font-size: .72rem; }
-.tower-entry-notice.paid { border-color: rgba(255, 92, 122, .55); border-left-color: var(--accent); background: rgba(255, 92, 122, .07); }
+.tower-entry-notice.paid { border-color: rgba(208, 22, 36, .55); border-left-color: var(--accent); background: rgba(208, 22, 36, .07); }
 .tower-entry-notice.paid > i, .tower-entry-notice.paid strong { color: var(--accent); }
 .tower-entry-notice.free { border-color: rgba(62, 201, 138, .45); border-left-color: var(--green); background: rgba(62, 201, 138, .07); }
 .tower-entry-notice.free > i, .tower-entry-notice.free strong { color: var(--green); }
@@ -747,7 +756,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
   flex: 1; min-width: 180px; background: var(--bg); border: 1px solid #323640; color: var(--text);
   border-radius: 5px; padding: 10px 14px; font-size: .92rem;
 }
-.series-toolbar input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(56, 214, 255, .08); }
+.series-toolbar input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(8, 174, 232, .08); }
 .series-progress-list { display: flex; flex-direction: column; gap: 8px; }
 .series-row {
   display: flex; align-items: center; gap: 12px; text-align: left;
@@ -777,7 +786,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .series-spotlight-kicker i { color: var(--accent); }
 .series-spotlight-row {
   display: flex; align-items: center; gap: 16px; width: 100%; text-align: left; cursor: pointer;
-  background: linear-gradient(135deg, rgba(255, 92, 122, .14), rgba(56, 214, 255, .06) 60%, transparent), #13151a;
+  background: linear-gradient(135deg, rgba(208, 22, 36, .14), rgba(8, 174, 232, .06) 60%, transparent), #13151a;
   border: 1px solid #4a4f59; border-radius: 7px; padding: 16px 18px;
   transition: transform .12s, box-shadow .12s;
 }
@@ -861,7 +870,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 
 /* ── Bannières de section (gacha, catalogue, tower, classement…) ── */
 .gacha-top {
-  background: linear-gradient(135deg, rgba(255,92,122,.14), rgba(56,214,255,.12));
+  background: linear-gradient(135deg, rgba(208,22,36,.14), rgba(8,174,232,.12));
   border: 1px solid #2a2f42; border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px;
 }
 .gacha-top h2 { display: flex; align-items: center; gap: 10px; }
@@ -1769,7 +1778,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
   border-radius: 6px; background: var(--bg-3); color: var(--text-2); font-size: .75rem; font-weight: 800; }
 .choice-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .choice-season { align-self: flex-start; font-size: .68rem; font-weight: 800; letter-spacing: .04em; line-height: 1;
-  color: var(--accent-2); background: rgba(56, 214, 255, .16); padding: 3px 7px; border-radius: 999px; }
+  color: var(--accent-2); background: rgba(8, 174, 232, .16); padding: 3px 7px; border-radius: 999px; }
 .choice-title { font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .choice-buttons { grid-template-columns: 1fr; } }
 
@@ -1901,7 +1910,7 @@ body {
   background-image:
     linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px),
-    radial-gradient(900px 500px at 85% -10%, rgba(56, 214, 255, .08), transparent 65%);
+    radial-gradient(900px 500px at 85% -10%, rgba(8, 174, 232, .08), transparent 65%);
   background-size: 34px 34px, 34px 34px, auto;
 }
 
@@ -1954,7 +1963,7 @@ h1, h2, h3, .hub-title, .gm-tag {
   flex-direction: column;
   padding: 58px 56px 46px;
   background:
-    linear-gradient(145deg, transparent 62%, rgba(255, 92, 122, .08) 62%),
+    linear-gradient(145deg, transparent 62%, rgba(208, 22, 36, .08) 62%),
     #0d0f13;
   border-right: 1px solid #2c3038;
 }
@@ -1971,7 +1980,7 @@ h1, h2, h3, .hub-title, .gm-tag {
 .auth-kicker {
   align-self: flex-start;
   color: var(--accent-2);
-  border: 1px solid rgba(56, 214, 255, .55);
+  border: 1px solid rgba(8, 174, 232, .55);
   padding: 5px 9px;
   font: 700 .72rem/1 'Manrope', sans-serif;
   letter-spacing: .18em;
@@ -2056,7 +2065,7 @@ h1, h2, h3, .hub-title, .gm-tag {
   border: 1px solid #323640;
   border-radius: 5px;
 }
-.auth-form input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(56, 214, 255, .08); }
+.auth-form input:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(8, 174, 232, .08); }
 .auth-form .btn-primary { min-height: 48px; margin-top: 7px; }
 .auth-sep { margin: 24px 0 18px; font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; }
 .auth-sep::before, .auth-sep::after { width: 27%; background: #30343d; }
@@ -2135,7 +2144,11 @@ header h1 i { color: var(--accent); }
    s'allume qu'au survol, pas de couleur par carte au repos. ── */
 .home-hero {
   padding: 0 0 26px; margin: 6px 0 28px; border-radius: 0;
-  background: none; border: none; border-bottom: 1px solid #232733;
+  background: none; border: none;
+  /* Filet de marque (repris du bandeau de l'écran de connexion) : rouge/cyan,
+     coupe franche plutôt qu'un dégradé doux — écho du logo AMQTrainer. */
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--accent) 0 64%, var(--accent-2) 64%) 1;
 }
 .home-hero h2 {
   font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 800;
@@ -2258,7 +2271,7 @@ header h1 i { color: var(--accent); }
   height: 70px;
   right: -36px;
   bottom: -40px;
-  border: 1px solid rgba(56, 214, 255, .13);
+  border: 1px solid rgba(8, 174, 232, .13);
   transform: rotate(45deg);
   pointer-events: none;
 }
