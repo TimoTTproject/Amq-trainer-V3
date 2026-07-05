@@ -96,6 +96,18 @@ function hashUserId(userId) {
   return h >>> 0;
 }
 
+// Combine semaine + hash(userId) + sel en un index 0..mod-1, en arithmétique
+// 32 bits (Math.imul) — seededIndex() ci-dessus multiplie par 2654435761 en
+// virgule flottante, ce qui perd de la précision (donc du "hasard") dès que
+// l'entrée dépasse ~2^32 ; ici les opérandes restent toujours des int32.
+function seededIndexForUser(wk, userHash, salt, mod) {
+  let h = Math.imul(wk ^ userHash, 2654435761) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h ^ salt, 2246822519) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h % mod;
+}
+
 async function getWeeklyCandidatesFor(userId) {
   const wk = currentWeek();
   if (candidatesWeek !== wk) {
@@ -104,7 +116,7 @@ async function getWeeklyCandidatesFor(userId) {
     candidatesByUser = new Map();
   }
   if (candidatesByUser.has(userId)) return candidatesByUser.get(userId);
-  const seed = (wk * 2654435761 + hashUserId(userId)) >>> 0;
+  const userHash = hashUserId(userId);
   const chars = [];
   let saltBase = 400;
   for (const [rarity, n] of Object.entries(CANDIDATES_PER_RARITY)) {
@@ -118,7 +130,7 @@ async function getWeeklyCandidatesFor(userId) {
       let idx;
       let guard = 0;
       do {
-        idx = seededIndex(seed, saltBase + i * 37, count);
+        idx = seededIndexForUser(wk, userHash, saltBase + i * 37, count);
         guard++;
       } while (picked.has(idx) && guard < 20);
       picked.add(idx);
