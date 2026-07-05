@@ -691,6 +691,7 @@ function showApp(user) {
     refreshStats();
     if (typeof connectMp === 'function') connectMp();
     if (typeof loadTradesBadge === 'function') loadTradesBadge();
+    if (typeof loadFriendsOnlineCount === 'function') loadFriendsOnlineCount();
     loadQuestsBadge();
     if (typeof loadChangelogBadge === 'function') loadChangelogBadge();
     maybeOnboard();
@@ -986,6 +987,40 @@ function setupAppUI() {
     if (event.key === 'Escape' && !rewardCapsPopover.classList.contains('hidden')) {
       setRewardCapsPopover(false);
       rewardCapsBtn.focus();
+    }
+  });
+
+  // Amis : petit panneau toujours accessible depuis l'en-tête (n'importe quel
+  // écran, y compris en pleine partie) — jusqu'ici il fallait quitter ce
+  // qu'on faisait pour aller sur Communauté → Amis.
+  const friendsBtn = document.getElementById('friends-popover-btn');
+  const friendsPopover = document.getElementById('friends-popover');
+  const setFriendsPopover = (open) => {
+    friendsPopover.classList.toggle('hidden', !open);
+    friendsBtn.setAttribute('aria-expanded', String(open));
+  };
+  friendsBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!friendsPopover.classList.contains('hidden')) return setFriendsPopover(false);
+    setHeaderMenu(false);
+    setRewardCapsPopover(false);
+    friendsPopover.innerHTML = '<p class="hint">Chargement…</p>';
+    setFriendsPopover(true);
+    if (typeof renderFriendsPopover === 'function') renderFriendsPopover();
+  });
+  friendsPopover.addEventListener('click', (event) => {
+    const goto = event.target.closest('#friends-popover-goto');
+    if (goto) { setFriendsPopover(false); navTo('friends'); return; }
+    const row = event.target.closest('[data-userid]');
+    if (row && typeof openPlayerModal === 'function') openPlayerModal(row.dataset.userid);
+  });
+  document.addEventListener('click', (event) => {
+    if (!friendsPopover.classList.contains('hidden') && !event.target.closest('.user-section')) setFriendsPopover(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !friendsPopover.classList.contains('hidden')) {
+      setFriendsPopover(false);
+      friendsBtn.focus();
     }
   });
 
@@ -2492,6 +2527,41 @@ async function loadFriends() {
           </div>`).join('')
       : '<p class="muted">Aucun ami pour l\'instant. Cherche un joueur ci-dessus !</p>';
   } catch (e) { document.getElementById('friends-list').innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`; }
+}
+
+// Badge « X en ligne » sur le bouton d'en-tête, dès la connexion (sans
+// attendre la première ouverture du panneau).
+async function loadFriendsOnlineCount() {
+  try {
+    const d = await api('/api/friends');
+    const el = document.getElementById('friends-online-count');
+    if (el) el.textContent = d.friends.filter((u) => u.online).length;
+  } catch {}
+}
+
+// Panneau compact (en-tête) : liste d'amis toujours accessible sans quitter
+// l'écran/la partie en cours. Réutilise la même API que la page Amis
+// complète (loadFriends), juste un rendu plus court + clic → profil en modale.
+async function renderFriendsPopover() {
+  const box = document.getElementById('friends-popover');
+  try {
+    const d = await api('/api/friends');
+    const online = d.friends.filter((u) => u.online).length;
+    document.getElementById('friends-online-count').textContent = online;
+    const rows = d.friends.length
+      ? d.friends.slice(0, 8).map((u) => `
+          <button type="button" class="friend-pop-row" data-userid="${u.id}">
+            ${friendAvatar(u)}
+            <span class="friend-name">${escapeHtml(u.displayName)}</span>
+            <span class="friend-dot ${u.online ? 'on' : 'off'}" title="${u.online ? 'En ligne' : 'Hors ligne'}"></span>
+          </button>`).join('')
+      : '<p class="hint">Aucun ami pour l\'instant.</p>';
+    box.innerHTML = `<h4>Amis <span class="hint">· ${online} en ligne</span></h4>
+      <div class="friends-pop-list">${rows}</div>
+      <button type="button" class="reward-caps-more" id="friends-popover-goto">Voir tous mes amis →</button>`;
+  } catch (e) {
+    box.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
+  }
 }
 
 let friendsSearchTimer;

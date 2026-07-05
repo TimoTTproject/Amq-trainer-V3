@@ -599,6 +599,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   font-weight: 700; cursor: pointer; }
 .reward-caps-more:hover { color: var(--accent); }
 
+/* Panneau « Amis » d'en-tête (cf. .reward-caps-popover pour le positionnement
+   partagé) : liste compacte, toujours accessible sans changer de vue. */
+.friends-popover { min-width: 260px; max-width: 320px; }
+.friends-popover h4 { margin: 0 0 10px; font-size: .9rem; }
+.friends-pop-list { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; }
+.friend-pop-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none;
+  padding: 6px 8px; border-radius: 8px; color: var(--text); text-align: left; font-size: .85rem;
+}
+.friend-pop-row:hover { background: var(--bg-3); }
+.friend-pop-row .friend-name { flex: 1; font-weight: 600; }
+
 /* Page Économie */
 .economy-balance { display: flex; gap: 14px; margin: 6px 0 22px; }
 .eco-balance-item { flex: 1; text-align: center; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px; }
