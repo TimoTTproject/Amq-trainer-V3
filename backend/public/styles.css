@@ -395,7 +395,10 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
   border-radius: var(--radius) var(--radius) 0 0;
   background: linear-gradient(90deg, var(--accent) 0 64%, var(--accent-2) 64%);
 }
-.media-wrapper { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
+.media-wrapper {
+  position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9;
+  max-width: 640px; margin: 0 auto;
+}
 .quiz-video-el { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .audio-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; font-size: 3rem; color: var(--accent); }
 .audio-overlay i { animation: pulse 2s ease-in-out infinite; }
