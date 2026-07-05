@@ -1210,6 +1210,7 @@ function setupAppUI() {
   document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
+  document.getElementById('admin-suppress-banner-btn').addEventListener('click', runSuppressBanner);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
   document.querySelectorAll('.lb-tab').forEach((b) =>

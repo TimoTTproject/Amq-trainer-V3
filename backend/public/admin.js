@@ -244,6 +244,21 @@ async function runRecomputeRarities() {
   }
 }
 
+async function runSuppressBanner() {
+  const btn = document.getElementById('admin-suppress-banner-btn');
+  const status = document.getElementById('admin-suppress-banner-status');
+  btn.disabled = true;
+  status.textContent = 'Suppression…';
+  try {
+    const r = await api('/api/gacha/banner-suppress', { method: 'POST' });
+    status.textContent = `✅ Bannière supprimée pour la semaine ${r.week} — retour à la normale au reset de lundi.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function setCharacterRarity(id, rarity, sel) {
   sel.disabled = true;
   try {
