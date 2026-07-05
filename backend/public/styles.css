@@ -2166,28 +2166,35 @@ header h1 i { color: var(--accent); }
 .home-hero .home-share:first-of-type { color: var(--text); font-weight: 700; text-decoration: none; }
 .home-hero .home-share:hover { color: var(--accent); }
 
-/* Tuiles de lancement rapide, denses : la navigation complète vit déjà dans
-   le menu latéral (Jouer/Collection/Communauté ouvrent les mêmes modes en
-   détail) — l'accueil n'a pas besoin de réexpliquer chaque mode avec une
-   description sur 2 lignes, juste un accès direct compact. */
+/* Tuiles de lancement rapide : la navigation complète vit déjà dans le menu
+   latéral (Jouer/Collection/Communauté ouvrent les mêmes modes en détail) —
+   l'accueil n'a pas besoin de réexpliquer chaque mode avec une description,
+   juste un accès direct. Cartes individuelles (pas de cellules jointes en
+   table) avec icône en pastille, dans l'esprit de .hub-card déjà utilisé
+   ailleurs dans l'appli, pour une cohérence visuelle avec Jouer/Collection. */
 .home-grid {
-  display: flex; flex-wrap: wrap; gap: 0;
-  background: none; border: 1px solid #20242e; border-radius: var(--radius);
-  overflow: hidden;
+  display: flex; flex-wrap: wrap; gap: 10px;
+  background: none; border: none; border-radius: 0; overflow: visible;
 }
 .home-card {
-  position: relative; background: var(--bg); border: 1px solid #20242e; border-radius: 0;
-  box-shadow: none; padding: 14px 16px; text-align: left; transform: none !important;
+  position: relative; background: var(--bg-2); border: 1px solid #232733; border-radius: 10px;
+  box-shadow: none; padding: 12px 16px; text-align: left; transform: none !important;
   display: flex; align-items: center; gap: 10px;
   flex: 1 1 auto; min-width: 150px; /* largeur au contenu (pas de troncature), tap-target correct */
+  transition: transform .12s ease, border-color .12s, background .12s, box-shadow .12s;
 }
-.home-card:not(.disabled):hover { background: #14161c; box-shadow: none; }
+.home-card:not(.disabled):hover {
+  background: #171a21; border-color: var(--accent);
+  transform: translateY(-2px) !important; box-shadow: 0 10px 22px rgba(0,0,0,.35);
+}
 .home-card i {
-  display: inline-flex; width: auto; height: auto; font-size: 1.05rem; flex: none;
-  color: var(--text-2); background: none; border: none;
-  -webkit-text-fill-color: var(--text-2); transition: color .15s;
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 30px; height: 30px; font-size: .95rem; border-radius: 8px;
+  background: rgba(255,255,255,.04); border: 1px solid #262b35;
+  color: var(--text-2); -webkit-text-fill-color: var(--text-2);
+  transition: color .15s, border-color .15s;
 }
-.home-card:not(.disabled):hover i { color: var(--accent); -webkit-text-fill-color: var(--accent); }
+.home-card:not(.disabled):hover i { color: var(--accent); -webkit-text-fill-color: var(--accent); border-color: var(--accent); }
 .home-card h3 {
   margin: 0; letter-spacing: .01em; font-size: .92rem; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
