@@ -104,26 +104,34 @@ async function castVote(characterId) {
 
 // Bannière « vedettes de la semaine » + compte à rebours
 function renderWeeklyBanner(info) {
-  const el = document.getElementById('gacha-weekly');
-  if (!el) return;
+  // Affichée à la fois dans l'onglet Tirage (pour la voir avant de dépenser
+  // ses tokens) et dans Vedettes & vote — deux éléments `.gacha-weekly`, donc
+  // pas d'id unique pour le contenu généré (querySelector scopé à chaque élément).
+  const els = document.querySelectorAll('.gacha-weekly');
+  if (!els.length) return;
   const chars = info.weeklyFeatured || [];
-  if (!chars.length) { el.innerHTML = ''; return; }
-  const left = Math.max(0, (info.weeklyResetAt || 0) - Date.now());
-  const days = Math.floor(left / 86400000);
-  const hours = Math.floor((left % 86400000) / 3600000);
-  const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
-  const boostOn = currentUser.bannerBoostEnabled !== false;
-  el.innerHTML = `
-    <div class="weekly-head">
-      <span><i class="fas fa-star"></i> Vedettes de la semaine <span class="weekly-boost">+${info.weeklyBoost || 60}% de chance</span></span>
-      <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
-    </div>
-    <div class="featured-row">${chars.map((c) => cardHTML(c)).join('')}</div>
-    <label class="weekly-boost-toggle">
-      <input type="checkbox" id="weekly-boost-toggle" ${boostOn ? 'checked' : ''}>
-      Utiliser le rate-up de cette bannière sur mes tirages
-    </label>`;
-  document.getElementById('weekly-boost-toggle')?.addEventListener('change', (e) => toggleBannerBoost(e.target.checked));
+  let html = '';
+  if (chars.length) {
+    const left = Math.max(0, (info.weeklyResetAt || 0) - Date.now());
+    const days = Math.floor(left / 86400000);
+    const hours = Math.floor((left % 86400000) / 3600000);
+    const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
+    const boostOn = currentUser.bannerBoostEnabled !== false;
+    html = `
+      <div class="weekly-head">
+        <span><i class="fas fa-star"></i> Vedettes de la semaine <span class="weekly-boost">+${info.weeklyBoost || 60}% de chance</span></span>
+        <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
+      </div>
+      <div class="featured-row">${chars.map((c) => cardHTML(c)).join('')}</div>
+      <label class="weekly-boost-toggle">
+        <input type="checkbox" class="weekly-boost-input" ${boostOn ? 'checked' : ''}>
+        Utiliser le rate-up de cette bannière sur mes tirages
+      </label>`;
+  }
+  els.forEach((el) => {
+    el.innerHTML = html;
+    el.querySelector('.weekly-boost-input')?.addEventListener('change', (e) => toggleBannerBoost(e.target.checked));
+  });
 }
 
 async function toggleBannerBoost(enabled) {
