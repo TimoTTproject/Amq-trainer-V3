@@ -6,7 +6,7 @@ const ENTRIES = [
   {
     id: 31, date: '2026-07-05', tag: 'improvement',
     title: 'Vote de la vedette : un vrai sondage',
-    description: "Fini le vote ouvert sur n'importe quel personnage : chaque semaine, 4 candidats (légendaires/mythiques) sont tirés au sort et tu choisis parmi eux qui sera la prochaine vedette. Le compte à rebours est aussi mieux placé dans le panneau.",
+    description: "Fini le vote ouvert sur n'importe quel personnage : chaque semaine, une sélection de candidats épiques/légendaires/mythiques (différente pour chaque joueur) t'est proposée, et la vedette suivante est tirée au sort au prorata des votes reçus. Le compte à rebours est aussi mieux placé dans le panneau.",
   },
   {
     id: 30, date: '2026-07-05', tag: 'feature',
