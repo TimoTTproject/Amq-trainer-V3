@@ -127,8 +127,22 @@ async function getWeeklyFeatured() {
 // joueurs ne voient pas forcément les mêmes candidats la même semaine.
 const CANDIDATES_PER_RARITY = { mythic: 4, legendary: 4, epic: 4 };
 let candidatesWeek = -1;
-let rarityCountCache = {};
+let rarityPoolCache = {}; // rarity -> tous les persos de cette rareté (1 requête/semaine, partagée par tous)
 let candidatesByUser = new Map(); // userId -> { ids, chars }
+
+// Liste complète d'une rareté, mise en cache pour la semaine (une seule requête
+// pour TOUS les joueurs, au lieu d'un findFirst par candidat et par joueur —
+// ça évite de saturer le pool de connexions DB quand beaucoup de joueurs
+// ouvrent le gacha en même temps).
+async function getRarityPool(rarity) {
+  if (!rarityPoolCache[rarity]) {
+    rarityPoolCache[rarity] = await prisma.character.findMany({
+      where: { rarity }, orderBy: { favourites: 'desc' },
+      select: { id: true, name: true, imageUrl: true, rarity: true },
+    });
+  }
+  return rarityPoolCache[rarity];
+}
 
 function hashUserId(userId) {
   let h = 0;
@@ -153,7 +167,7 @@ async function getWeeklyCandidatesFor(userId) {
   const wk = currentWeek();
   if (candidatesWeek !== wk) {
     candidatesWeek = wk;
-    rarityCountCache = {};
+    rarityPoolCache = {};
     candidatesByUser = new Map();
   }
   if (candidatesByUser.has(userId)) return candidatesByUser.get(userId);
@@ -161,10 +175,8 @@ async function getWeeklyCandidatesFor(userId) {
   const chars = [];
   let saltBase = 400;
   for (const [rarity, n] of Object.entries(CANDIDATES_PER_RARITY)) {
-    if (rarityCountCache[rarity] == null) {
-      rarityCountCache[rarity] = await prisma.character.count({ where: { rarity } });
-    }
-    const count = rarityCountCache[rarity];
+    const pool = await getRarityPool(rarity);
+    const count = pool.length;
     if (!count) continue;
     const picked = new Set();
     for (let i = 0; i < n && picked.size < count; i++) {
@@ -175,11 +187,7 @@ async function getWeeklyCandidatesFor(userId) {
         guard++;
       } while (picked.has(idx) && guard < 20);
       picked.add(idx);
-      const c = await prisma.character.findFirst({
-        where: { rarity }, orderBy: { favourites: 'desc' }, skip: idx,
-        select: { id: true, name: true, imageUrl: true, rarity: true },
-      });
-      if (c) chars.push(c);
+      chars.push(pool[idx]);
     }
     saltBase += 1000;
   }
