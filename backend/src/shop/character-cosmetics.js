@@ -16,17 +16,22 @@ const PRICE = { common: 250, rare: 500, epic: 900, legendary: 1500, mythic: 2500
 let cache = { byId: new Map(), list: [], series: [], builtAt: 0 };
 let building = null;
 
-// 2 cosmétiques (dos + bannière) pour un personnage.
+// 2 cosmétiques (dos + bannière) pour un personnage. L'artwork AniList est un
+// portrait : bien adapté au format carte (cardBack), mais un simple
+// `center/cover` sur le format large de la bannière de profil zoome sur le
+// milieu du corps et coupe le visage. On biaise le recadrage vers le haut
+// pour la bannière (même technique que LICENSE_CHARACTER_ART dans cosmetics.js).
 function cosmeticsForChar(ch) {
   const price = PRICE[ch.rarity] || 500;
-  const bg = `background:#0c0e12 url('${ch.imageUrl}') center/cover`;
+  const cardBg = `background:#0c0e12 url('${ch.imageUrl}') center/cover`;
+  const bannerBg = `background:#0c0e12 url('${ch.imageUrl}') center 12%/cover`;
   const common = {
     image: true, charId: ch.id, charName: ch.name, charSeries: ch.series,
     charRarity: ch.rarity, charFav: ch.favourites || 0,
   };
   return [
-    { ...common, id: `char:${ch.id}:cardBack`, slot: 'cardBack', name: `${ch.name} — Dos`, price, css: bg },
-    { ...common, id: `char:${ch.id}:profileBanner`, slot: 'profileBanner', name: `${ch.name} — Bannière`, price, css: bg },
+    { ...common, id: `char:${ch.id}:cardBack`, slot: 'cardBack', name: `${ch.name} — Dos`, price, css: cardBg },
+    { ...common, id: `char:${ch.id}:profileBanner`, slot: 'profileBanner', name: `${ch.name} — Bannière`, price, css: bannerBg },
   ];
 }
 
