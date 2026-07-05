@@ -299,7 +299,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hub-title { font-size: 1.6rem; display: flex; align-items: center; gap: 10px; }
 .hub-title i { color: var(--accent); }
 .hub-sub { color: var(--text-2); margin-top: 4px; }
-.hub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .hub-card {
   display: flex; align-items: center; gap: 16px; text-align: left;
   background: var(--bg-2); border: 1px solid #2a2f42;
