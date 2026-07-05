@@ -310,10 +310,10 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hub-ico {
   flex-shrink: 0; width: 56px; height: 56px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center; font-size: 1.55rem;
-  color: var(--text-2); background: rgba(255,255,255,.04); box-shadow: none;
-  transition: color .15s;
+  color: var(--c, var(--text-2)); background: color-mix(in srgb, var(--c, var(--text-2)) 16%, transparent);
+  box-shadow: none; transition: transform .15s;
 }
-.hub-card:hover .hub-ico { color: var(--accent); }
+.hub-card:hover .hub-ico { transform: scale(1.06); }
 .hub-txt { flex: 1; min-width: 0; }
 .hub-txt h3 { font-size: 1.15rem; margin-bottom: 4px; }
 .hub-txt p { color: var(--text-2); font-size: .88rem; line-height: 1.4; }
@@ -2211,14 +2211,17 @@ header h1 i { color: var(--accent); }
   background: #13151a;
   border-color: #2c3038;
   border-radius: var(--radius);
-  box-shadow: inset 4px 0 #30343d;
+  box-shadow: inset 4px 0 var(--c, #30343d);
 }
 .hub-card:hover {
   border-color: #4a4f59;
-  box-shadow: inset 4px 0 var(--accent), 7px 7px 0 #07080a;
+  box-shadow: inset 4px 0 var(--c, var(--accent)), 7px 7px 0 #07080a;
   transform: translate(-2px, -2px);
 }
-.hub-ico { border-radius: 5px; background: #1a1d23; border: 1px solid #343943; }
+.hub-ico {
+  border-radius: 5px; border: 1px solid #343943;
+  background: color-mix(in srgb, var(--c, #8a93a6) 20%, #1a1d23);
+}
 
 /* ── Accueil : direction éditoriale (grille en cellules, icônes neutres,
    hero sans encadré) — cf. principes en tête de fichier : l'accent ne
