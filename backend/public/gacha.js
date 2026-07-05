@@ -75,11 +75,26 @@ async function loadVotePanel() {
     const mine = group.myVote
       ? `Ton vote : <b>${escapeHtml((group.candidates.find((c) => c.id === group.myVote) || {}).name || 'enregistré')}</b>`
       : 'Choisis un candidat pour voter.';
+    // Vote de TOUS les joueurs : chacun a des candidats tirés au sort différents,
+    // donc sans ça on ne voit jamais ce que les autres joueurs ont sous les yeux.
+    const globalList = (d.globalByRarity && d.globalByRarity[rarity]) || [];
+    const globalRows = globalList.length
+      ? globalList.map((c) => `
+          <div class="vote-global-row">
+            <span class="avatar avatar-xs" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></span>
+            <span class="vote-global-name">${escapeHtml(c.name)}</span>
+            <span class="vote-count">${c.votes} ✋</span>
+          </div>`).join('')
+      : '<p class="hint">Personne n\'a encore voté.</p>';
     return `
       <div class="vote-frame">
         <div class="vote-frame-head r-${rarity}">${RARITY_LABELS[rarity] || rarity}</div>
         <div class="vote-list">${cards}</div>
         <p class="vote-mine">${mine}</p>
+        <div class="vote-global">
+          <h5>Vote de tous les joueurs</h5>
+          <div class="vote-global-list">${globalRows}</div>
+        </div>
       </div>`;
   }).join('');
 

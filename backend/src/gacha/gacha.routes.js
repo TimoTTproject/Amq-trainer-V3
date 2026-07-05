@@ -836,19 +836,41 @@ router.get('/vote', requireAuth, async (req, res) => {
     _count: { characterId: true },
   });
   const votesById = Object.fromEntries(counts.map((g) => [g.characterId, g._count.characterId]));
+
+  // Vote GLOBAL (tous les joueurs confondus, y compris les candidats qui ne sont
+  // PAS dans MA liste personnalisée) : chacun a une sélection différente, donc
+  // sans ça on ne voit jamais comment les autres joueurs votent.
+  const globalCounts = await prisma.featuredVote.groupBy({
+    by: ['characterId', 'rarity'],
+    where: { week: wk },
+    _count: { characterId: true },
+    orderBy: { _count: { characterId: 'desc' } },
+  });
+  const globalIds = globalCounts.map((g) => g.characterId);
+  const globalChars = globalIds.length
+    ? await prisma.character.findMany({ where: { id: { in: globalIds } }, select: { id: true, name: true, imageUrl: true, rarity: true } })
+    : [];
+  const globalCharById = Object.fromEntries(globalChars.map((c) => [c.id, c]));
+
   const byRarity = {};
+  const globalByRarity = {};
   for (const rarity of Object.keys(CANDIDATES_PER_RARITY)) {
     const list = candidates
       .filter((c) => c.rarity === rarity)
       .map((c) => ({ ...c, votes: votesById[c.id] || 0 }))
       .sort((a, b) => b.votes - a.votes);
     byRarity[rarity] = { candidates: list, myVote: mineByRarity[rarity] || null };
+    globalByRarity[rarity] = globalCounts
+      .filter((g) => g.rarity === rarity && globalCharById[g.characterId])
+      .slice(0, 6)
+      .map((g) => ({ ...globalCharById[g.characterId], votes: g._count.characterId }));
   }
   const weekly = await getWeeklyFeatured();
   res.json({
     week: wk,
     closesAt: nextMondayResetAt(),
     byRarity,
+    globalByRarity,
     current: weekly.chars, // vedettes en cours (dont le gagnant du vote précédent)
   });
 });

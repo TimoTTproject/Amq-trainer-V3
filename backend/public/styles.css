@@ -1385,6 +1385,11 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .vote-frame-head.r-legendary { color: #ffb648; }
 .vote-frame-head.r-epic { color: #b06cff; }
 .vote-mine { font-size: .82rem; color: var(--text-2); margin-top: 8px; }
+.vote-global { margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a2f42; }
+.vote-global h5 { margin: 0 0 8px; font-size: .78rem; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .02em; }
+.vote-global-list { display: flex; flex-direction: column; gap: 6px; }
+.vote-global-row { display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+.vote-global-name { flex: 1; }
 
 /* ── Filtre OP/ED ── */
 .type-filter { display: inline-flex; gap: 4px; margin-left: auto; background: var(--bg-3); border-radius: 999px; padding: 3px; }
