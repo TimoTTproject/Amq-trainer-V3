@@ -72,6 +72,39 @@ async function getWeeklyFeatured() {
   return weeklyCache;
 }
 
+// ── Candidats du vote hebdomadaire (quelques légendaires/mythiques tirés au sort) ──
+const CANDIDATES_PER_RARITY = { legendary: 2, mythic: 2 };
+let candidatesCache = { week: -1, ids: [], chars: [] };
+
+async function getWeeklyCandidates() {
+  const wk = currentWeek();
+  if (candidatesCache.week === wk) return candidatesCache;
+  const chars = [];
+  let saltBase = 400;
+  for (const [rarity, n] of Object.entries(CANDIDATES_PER_RARITY)) {
+    const count = await prisma.character.count({ where: { rarity } });
+    if (!count) continue;
+    const picked = new Set();
+    for (let i = 0; i < n && picked.size < count; i++) {
+      let idx;
+      let guard = 0;
+      do {
+        idx = seededIndex(wk, saltBase + i * 37, count);
+        guard++;
+      } while (picked.has(idx) && guard < 20);
+      picked.add(idx);
+      const c = await prisma.character.findFirst({
+        where: { rarity }, orderBy: { favourites: 'desc' }, skip: idx,
+        select: { id: true, name: true, imageUrl: true, rarity: true },
+      });
+      if (c) chars.push(c);
+    }
+    saltBase += 1000;
+  }
+  candidatesCache = { week: wk, ids: chars.map((c) => c.id), chars };
+  return candidatesCache;
+}
+
 // Infos pour l'UI : prix, taille du pool, répartition par rareté
 router.get('/info', async (req, res) => {
   const total = await prisma.character.count();
@@ -666,20 +699,16 @@ router.get('/vote', requireAuth, async (req, res) => {
     where: { userId_week: { userId: req.user.id, week: wk } },
     select: { characterId: true },
   });
-  const grouped = await prisma.featuredVote.groupBy({
-    by: ['characterId'], where: { week: wk },
+  const { chars: candidates } = await getWeeklyCandidates();
+  const counts = await prisma.featuredVote.groupBy({
+    by: ['characterId'],
+    where: { week: wk, characterId: { in: candidates.map((c) => c.id) } },
     _count: { characterId: true },
-    orderBy: { _count: { characterId: 'desc' } },
-    take: 8,
   });
-  const chars = await prisma.character.findMany({
-    where: { id: { in: grouped.map((g) => g.characterId) } },
-    select: { id: true, name: true, imageUrl: true, rarity: true },
-  });
-  const byId = Object.fromEntries(chars.map((c) => [c.id, c]));
-  const standings = grouped
-    .filter((g) => byId[g.characterId])
-    .map((g) => ({ ...byId[g.characterId], votes: g._count.characterId }));
+  const votesById = Object.fromEntries(counts.map((g) => [g.characterId, g._count.characterId]));
+  const standings = candidates
+    .map((c) => ({ ...c, votes: votesById[c.id] || 0 }))
+    .sort((a, b) => b.votes - a.votes);
   const weekly = await getWeeklyFeatured();
   res.json({
     week: wk,
@@ -690,12 +719,15 @@ router.get('/vote', requireAuth, async (req, res) => {
   });
 });
 
-// Émet/modifie mon vote pour la semaine en cours (décide la vedette de la suivante).
+// Émet/modifie mon vote pour la semaine en cours parmi les candidats tirés au sort
+// (décide la vedette de la semaine suivante).
 router.post('/vote', requireAuth, rateLimit({ max: 30, name: 'gacha-vote' }), async (req, res) => {
   const characterId = parseInt(req.body?.characterId);
   if (!characterId) return res.status(400).json({ error: 'characterId requis' });
-  const c = await prisma.character.findUnique({ where: { id: characterId }, select: { id: true } });
-  if (!c) return res.status(404).json({ error: 'Personnage introuvable' });
+  const { ids: candidateIds } = await getWeeklyCandidates();
+  if (!candidateIds.includes(characterId)) {
+    return res.status(400).json({ error: 'Ce personnage ne fait pas partie des candidats de cette semaine' });
+  }
   const wk = currentWeek();
   await prisma.featuredVote.upsert({
     where: { userId_week: { userId: req.user.id, week: wk } },

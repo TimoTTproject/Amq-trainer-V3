@@ -1353,14 +1353,13 @@ body.guest-mode .feedback-buttons { display: none !important; }
 /* Panneau de vote « vedette de la semaine prochaine » */
 .gacha-vote { margin: 14px 0; }
 .gacha-vote:empty { display: none; }
-.vote-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; padding: 9px 13px; border-radius: 10px; background: var(--bg-2); border: 1px solid #2a2f42; font-weight: 700; }
-.vote-list { display: flex; flex-direction: column; gap: 6px; }
-.vote-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--bg-2); border: 1px solid #242a3d; border-radius: 10px; padding: 6px 10px; color: var(--text); cursor: pointer; transition: border-color .15s, transform .05s; }
-.vote-row:hover { border-color: var(--accent); }
-.vote-row.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.vote-rank { width: 18px; text-align: center; color: var(--text-2); font-weight: 700; font-size: .85rem; }
-.vote-name { flex: 1; font-size: .9rem; }
-.vote-name small { font-size: .72rem; }
+.vote-head { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-bottom: 10px; padding: 9px 13px; border-radius: 10px; background: var(--bg-2); border: 1px solid #2a2f42; font-weight: 700; }
+.vote-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.vote-cand { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; background: var(--bg-2); border: 1px solid #242a3d; border-radius: 10px; padding: 12px 8px; color: var(--text); cursor: pointer; transition: border-color .15s, transform .05s; }
+.vote-cand:hover { border-color: var(--accent); }
+.vote-cand.mine { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.vote-cand .avatar-sm { width: 56px; height: 56px; }
+.vote-cand-name { font-size: .9rem; font-weight: 700; }
 .vote-count { font-weight: 700; font-size: .85rem; color: var(--accent); }
 .vote-mine { font-size: .82rem; color: var(--text-2); margin-top: 8px; }
 
