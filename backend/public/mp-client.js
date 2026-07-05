@@ -873,15 +873,17 @@ function initMpUI() {
     if (b) spectateRoom(b.dataset.spectate);
   });
   document.getElementById('mp-spectator-leave').addEventListener('click', stopSpectate);
-  // Salon : clic sur un joueur (chip) → sa fiche profil
+  // Salon : clic sur un joueur (chip) → sa fiche profil, en modale (pas
+  // openPlayer/showView : on ne veut pas donner l'impression de quitter le
+  // salon/la partie en cours).
   document.getElementById('mp-room-players').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-userid]');
-    if (chip && typeof openPlayer === 'function') openPlayer(chip.dataset.userid);
+    if (chip && typeof openPlayerModal === 'function') openPlayerModal(chip.dataset.userid);
   });
-  // Réponse : « Ajouté au catalogue par X » → sa fiche profil
+  // Réponse : « Ajouté au catalogue par X » → sa fiche profil, même raison.
   document.getElementById('mp-result').addEventListener('click', (e) => {
     const b = e.target.closest('[data-userid]');
-    if (b && typeof openPlayer === 'function') openPlayer(b.dataset.userid);
+    if (b && typeof openPlayerModal === 'function') openPlayerModal(b.dataset.userid);
   });
   document.getElementById('mp-leave').addEventListener('click', () => {
     mpEngaged = false;

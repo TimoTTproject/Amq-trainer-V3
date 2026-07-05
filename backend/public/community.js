@@ -396,6 +396,14 @@ async function loadTradesBadge() {
 async function openPlayer(userId) {
   // Affiche la fiche joueur via la vue profil complète (plus jolie que la modale).
   if (typeof openPublicProfile === 'function') return openPublicProfile(userId);
+  return openPlayerModal(userId);
+}
+
+// Variante modale (overlay, ne change pas de vue) : utilisée pendant une
+// partie multijoueur pour consulter un profil SANS quitter le salon/la
+// partie en cours (openPlayer/openPublicProfile changerait de vue et
+// masquerait #view-mp, donnant l'impression d'avoir quitté la partie).
+async function openPlayerModal(userId) {
   const modal = document.getElementById('player-modal');
   const body = document.getElementById('player-body');
   body.innerHTML = '<p class="muted">Chargement…</p>';
