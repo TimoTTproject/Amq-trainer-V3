@@ -449,60 +449,14 @@
         <button class="btn-secondary home-share" id="share-btn"><i class="fas fa-share-nodes"></i> Partager le jeu</button>
         <button class="btn-secondary home-share" data-about><i class="fas fa-circle-info"></i> Règles</button>
       </div>
-      <!-- Accès rapides en premier : c'est l'action qu'on vient chercher sur
-           l'accueil, pas les infos secondaires (nouveautés, quêtes, tirages)
-           qui suivent plus bas. -->
-      <div class="home-grid">
-        <button class="home-card" id="card-play">
-          <i class="fas fa-play-circle"></i>
-          <h3>Jouer</h3>
-          <p>Quiz classique, entraînement, Château, multi, coop…</p>
-        </button>
-        <button class="home-card" id="card-training">
-          <i class="fas fa-graduation-cap"></i>
-          <h3>Entraînement</h3>
-          <p>Révise tes sons ratés, à revoir, ta playlist… sans enjeu</p>
-        </button>
-        <button class="home-card" id="card-profile">
-          <i class="fas fa-user"></i>
-          <h3>Mon profil</h3>
-          <p>Photo, bio et statistiques</p>
-        </button>
-        <button class="home-card" id="card-gacha">
-          <i class="fas fa-layer-group"></i>
-          <h3>Gacha</h3>
-          <p>Dépense tes tokens pour collectionner des cartes</p>
-        </button>
-        <button class="home-card" id="card-tower">
-          <i class="fas fa-chess-rook"></i>
-          <h3>Château de l'Infini</h3>
-          <p>QCM en survie : 3 vies, monte le plus haut possible</p>
-        </button>
-        <button class="home-card" id="card-catalog">
-          <i class="fas fa-list"></i>
-          <h3>Catalogue</h3>
-          <p>Parcours tous les openings (anime, titre, artiste)</p>
-        </button>
-        <button class="home-card" id="card-mp">
-          <i class="fas fa-users"></i>
-          <h3>Multijoueur</h3>
-          <p>Affronte d'autres joueurs en temps réel</p>
-        </button>
-        <button class="home-card" id="card-shop">
-          <i class="fas fa-store"></i>
-          <h3>Boutique</h3>
-          <p>Cosmétiques : dos de cartes, bordures, bannières</p>
-        </button>
-        <button class="home-card" id="card-economy">
-          <i class="fas fa-coins"></i>
-          <h3>Économie</h3>
-          <p>Ton solde, ce que rapporte chaque mode, tes plafonds en cours</p>
-        </button>
-      </div>
+      <!-- Les raccourcis de mode de jeu vivent déjà dans le menu latéral
+           (Jouer/Collection/Communauté) — l'accueil met plutôt en avant des
+           stats/contenus qu'on ne voit nulle part ailleurs. -->
       <div class="home-secondary-row">
         <div class="home-quests" id="home-quests"></div>
         <div class="home-recent-pulls" id="home-recent-pulls"></div>
       </div>
+      <div class="home-highlights" id="home-highlights"></div>
       <div class="home-changelog" id="home-changelog"></div>
     </div>
 

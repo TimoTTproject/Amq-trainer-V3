@@ -621,6 +621,7 @@ function showView(name, options = {}) {
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
   if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
   if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
+  if (name === 'home' && typeof loadHighlights === 'function') loadHighlights();
 }
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
@@ -1020,17 +1021,7 @@ function setupAppUI() {
 
   setupProfileUI();
 
-  // Navigation accueil ⇄ quiz ⇄ gacha
-  document.getElementById('card-play').addEventListener('click', () => navTo('play'));
-  document.getElementById('card-training').addEventListener('click', openTraining);
-  document.getElementById('card-profile').addEventListener('click', openProfile);
-  document.getElementById('card-gacha').addEventListener('click', openGacha);
-  document.getElementById('card-shop').addEventListener('click', openShop);
-  document.getElementById('card-economy').addEventListener('click', openEconomy);
   document.getElementById('back-home-economy').addEventListener('click', () => showView('home'));
-  document.getElementById('card-catalog').addEventListener('click', openCatalog);
-  document.getElementById('card-tower').addEventListener('click', openTower);
-  document.getElementById('card-mp').addEventListener('click', openMultiplayer);
   document.getElementById('back-home-shop').addEventListener('click', () => showView('collection'));
   document.getElementById('shop-tabs').addEventListener('click', onShopTabClick);
   document.getElementById('shop-cosmetics').addEventListener('click', onShopClick);
@@ -2376,7 +2367,7 @@ async function loadRecentPulls() {
   const box = document.getElementById('home-recent-pulls');
   if (!box) return;
   try {
-    const { pulls } = await api('/api/gacha/recent-pulls?limit=12');
+    const { pulls } = await api('/api/gacha/recent-pulls?limit=6');
     if (!pulls || !pulls.length) { box.innerHTML = ''; return; }
     box.innerHTML =
       `<h3 class="quests-title"><i class="fas fa-bolt"></i> Derniers tirages Légendaire+</h3>
@@ -2391,6 +2382,34 @@ async function loadRecentPulls() {
           <span class="rp-time">${timeAgo(p.obtainedAt)}</span>
         </button>`;
       }).join('')}</div>`;
+  } catch { box.innerHTML = ''; }
+}
+
+// Accueil : sons les plus/moins réussis et les plus joués (tous joueurs).
+async function loadHighlights() {
+  const box = document.getElementById('home-highlights');
+  if (!box) return;
+  try {
+    const d = await api('/api/quiz/highlights');
+    const col = (title, icon, list, valueFn) => `
+      <div class="highlight-col">
+        <h4><i class="fas ${icon}"></i> ${title}</h4>
+        ${list.length
+          ? list.slice(0, 5).map((s) => `
+            <div class="highlight-row">
+              <span class="highlight-anime">${escapeHtml(s.animeTitle)} <small>${s.type}${s.number}</small></span>
+              <b>${valueFn(s)}</b>
+            </div>`).join('')
+          : '<p class="muted">Pas encore assez de données.</p>'}
+      </div>`;
+    if (!d || (!d.hardest.length && !d.easiest.length && !d.mostPlayed.length)) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <h3 class="quests-title"><i class="fas fa-chart-line"></i> Le catalogue en chiffres</h3>
+      <div class="highlights-grid">
+        ${col('Les plus difficiles', 'fa-skull', d.hardest, (s) => `${s.rate}%`)}
+        ${col('Les plus faciles', 'fa-face-smile', d.easiest, (s) => `${s.rate}%`)}
+        ${col('Les plus jouées', 'fa-fire', d.mostPlayed, (s) => `${s.plays}×`)}
+      </div>`;
   } catch { box.innerHTML = ''; }
 }
 

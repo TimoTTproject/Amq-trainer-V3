@@ -762,4 +762,43 @@ router.get('/stats', requireAuth, async (req, res) => {
   res.json({ played, correct, rate: played ? Math.round((correct / played) * 100) : 0 });
 });
 
+// Mise en avant (accueil) : sons les plus/moins réussis et les plus joués,
+// tous joueurs confondus. Seuil de parties minimum pour ne pas laisser un son
+// joué 1-2 fois fausser un taux à 0 % ou 100 %.
+const HIGHLIGHTS_MIN_PLAYS = 15;
+const HIGHLIGHTS_CACHE_MS = 5 * 60 * 1000;
+let highlightsCache = { expiresAt: 0, data: null };
+router.get('/highlights', requirePlayer, async (req, res) => {
+  if (highlightsCache.expiresAt < Date.now()) {
+    const grouped = await prisma.userSongStat.groupBy({
+      by: ['songId'],
+      _sum: { playCount: true, correctCount: true },
+      having: { playCount: { _sum: { gte: HIGHLIGHTS_MIN_PLAYS } } },
+    });
+    const withRate = grouped.map((g) => ({
+      songId: g.songId,
+      plays: g._sum.playCount || 0,
+      rate: g._sum.playCount ? (g._sum.correctCount || 0) / g._sum.playCount : 0,
+    }));
+    const top = (arr) => arr.slice(0, 8).map(({ songId, plays, rate }) => ({ songId, plays, rate: Math.round(rate * 100) }));
+    const hardest = top([...withRate].sort((a, b) => a.rate - b.rate || b.plays - a.plays));
+    const easiest = top([...withRate].sort((a, b) => b.rate - a.rate || b.plays - a.plays));
+    const mostPlayed = top([...withRate].sort((a, b) => b.plays - a.plays));
+    const ids = [...new Set([...hardest, ...easiest, ...mostPlayed].map((x) => x.songId))];
+    const songs = ids.length
+      ? await prisma.song.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, animeTitle: true, title: true, artist: true, type: true, number: true, coverUrl: true },
+        })
+      : [];
+    const bySongId = new Map(songs.map((s) => [s.id, s]));
+    const attach = (list) => list.filter((x) => bySongId.has(x.songId)).map((x) => ({ ...bySongId.get(x.songId), plays: x.plays, rate: x.rate }));
+    highlightsCache = {
+      expiresAt: Date.now() + HIGHLIGHTS_CACHE_MS,
+      data: { hardest: attach(hardest), easiest: attach(easiest), mostPlayed: attach(mostPlayed) },
+    };
+  }
+  res.json(highlightsCache.data);
+});
+
 module.exports = { router, quizCapState, QUIZ_CAP };
