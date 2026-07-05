@@ -7,6 +7,7 @@ const { proxyVideo } = require('../util/stream');
 const { preferredMediaUrl } = require('../storage/r2');
 const { progressQuests } = require('../quests/quests');
 const { preferMainContent } = require('../catalog/format');
+const { englishTitleFor } = require('../quiz/anime-titles');
 const {
   ENTRY_COST,
   START_LIVES,
@@ -58,30 +59,36 @@ async function buildFloor(excludeId) {
   const correct = await prisma.song.findFirst({
     where: useExcl ? correctWhere : where,
     skip: Math.floor(Math.random() * (useExcl ? correctTotal : total)),
-    select: { id: true, animeTitle: true },
+    select: { id: true, animeTitle: true, altTitles: true },
   });
   if (!correct) return null;
 
+  // Titre anglais quand il existe (romaji seul est souvent illisible) — même
+  // logique que le reste du quiz (cf. englishTitleFor), jamais appliquée ici
+  // jusqu'à présent : le Château pioche ses propositions indépendamment.
+  const displayTitle = (s) => englishTitleFor(s) || s.animeTitle;
+
   // 3 distracteurs : franchises différentes du bon anime ET entre elles.
   const usedKeys = new Set([franchiseKey(correct.animeTitle)]);
-  const options = [correct.animeTitle];
+  const correctLabel = displayTitle(correct);
+  const options = [correctLabel];
   let guard = 0;
   while (options.length < 4 && guard++ < 80) {
     const s = await prisma.song.findFirst({
       where,
       skip: Math.floor(Math.random() * total),
-      select: { animeTitle: true },
+      select: { animeTitle: true, altTitles: true },
     });
     if (!s) continue;
     const key = franchiseKey(s.animeTitle);
     if (usedKeys.has(key)) continue; // même franchise (ou bon anime) → on saute
     usedKeys.add(key);
-    options.push(s.animeTitle);
+    options.push(displayTitle(s));
   }
   if (options.length < 4) return null;
 
   const shuffled = shuffle(options);
-  return { songId: correct.id, options: shuffled, answer: shuffled.indexOf(correct.animeTitle) };
+  return { songId: correct.id, options: shuffled, answer: shuffled.indexOf(correctLabel) };
 }
 
 // Représentation cliente d'un étage (sans révéler la bonne réponse).
