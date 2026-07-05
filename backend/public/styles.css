@@ -374,13 +374,16 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 
 /* ── Quiz ── */
 .quiz-panel {
-  position: relative; overflow: hidden;
+  position: relative;
   background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 22px; margin-bottom: 18px;
 }
 /* Filet de marque en tête du panneau principal — même signature que le
-   bandeau de l'écran de connexion et le hero d'accueil. */
+   bandeau de l'écran de connexion et le hero d'accueil. Arrondi sur ses
+   propres coins (pas d'overflow:hidden sur .quiz-panel : ça découperait le
+   menu d'autocomplétion de la réponse, positionné en absolu à l'intérieur). */
 .quiz-panel::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
   background: linear-gradient(90deg, var(--accent) 0 64%, var(--accent-2) 64%);
 }
 .media-wrapper { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
