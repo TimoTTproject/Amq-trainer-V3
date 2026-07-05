@@ -363,9 +363,12 @@ function connectMp() {
       ? ` <span class="mp-answer-english">(${escapeHtml(d.answer.englishTitle)})</span>`
       : '';
     const skippedBanner = d.skipped ? '<div class="mp-coop-banner">⏭️ Extrait passé au vote</div>' : '';
+    const addedBy = d.answer.addedBy
+      ? ` <span class="hint">· Ajouté au catalogue par <button type="button" class="btn-link" data-userid="${d.answer.addedBy.id}">${escapeHtml(d.answer.addedBy.displayName)}</button></span>`
+      : '';
     res.innerHTML = `${skippedBanner}<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
-      <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span></div>`;
+      <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span>${addedBy}</div>`;
     // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
     if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('mp-like'), d.answer.songId);
     if (d.coop) {
@@ -874,6 +877,11 @@ function initMpUI() {
   document.getElementById('mp-room-players').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-userid]');
     if (chip && typeof openPlayer === 'function') openPlayer(chip.dataset.userid);
+  });
+  // Réponse : « Ajouté au catalogue par X » → sa fiche profil
+  document.getElementById('mp-result').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-userid]');
+    if (b && typeof openPlayer === 'function') openPlayer(b.dataset.userid);
   });
   document.getElementById('mp-leave').addEventListener('click', () => {
     mpEngaged = false;

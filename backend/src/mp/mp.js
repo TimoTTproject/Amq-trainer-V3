@@ -393,6 +393,7 @@ async function pickSong(room) {
     select: {
       id: true, anilistId: true, animeTitle: true, altTitles: true,
       title: true, artist: true, type: true, number: true, videoUrl: true, audioUrl: true,
+      addedBy: { select: { id: true, displayName: true } },
     },
   });
   if (!song) return null;
@@ -628,6 +629,7 @@ function endRound(room) {
         songId: s.id,
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
         title: s.title, artist: s.artist, type: s.type, number: s.number,
+        addedBy: s.addedBy ? { id: s.addedBy.id, displayName: s.addedBy.displayName } : null,
       },
       results,
       teams: room.mode === 'teams' ? teamTotals(room) : null,
