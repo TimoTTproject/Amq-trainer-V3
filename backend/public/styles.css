@@ -1754,11 +1754,15 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .assist-btn { font-size: .85rem; }
 .assist-btn b { color: var(--orange); }
 .choice-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 6px; }
-.choice-opt { background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: center; }
+.choice-opt { display: flex; align-items: center; gap: 10px; background: var(--bg-2); border: 2px solid #2a2f42; color: var(--text); padding: 14px 16px; border-radius: 12px; font-size: .95rem; cursor: pointer; transition: all .15s; text-align: left; }
 .choice-opt:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
 .choice-opt:disabled { opacity: .6; cursor: default; }
-.choice-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 8px;
-  border-radius: 6px; background: var(--bg-3); color: var(--text-2); font-size: .75rem; font-weight: 800; vertical-align: middle; }
+.choice-num { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: 6px; background: var(--bg-3); color: var(--text-2); font-size: .75rem; font-weight: 800; }
+.choice-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.choice-season { align-self: flex-start; font-size: .68rem; font-weight: 800; letter-spacing: .04em; line-height: 1;
+  color: var(--accent-2); background: rgba(56, 214, 255, .16); padding: 3px 7px; border-radius: 999px; }
+.choice-title { font-weight: 600; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .choice-buttons { grid-template-columns: 1fr; } }
 
 /* ── Boutique de cosmétiques ── */

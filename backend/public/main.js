@@ -2055,7 +2055,8 @@ async function requestChoices(level) {
     const box = document.getElementById('choice-buttons');
     box.innerHTML = r.options.map((o, i) => {
       const answer = englishFirst() && o.englishTitle ? o.englishTitle : o.title;
-      return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span>${escapeHtml(formatAnimeLabel(o))}</button>`;
+      const seasonBadge = o.seasonNumber > 0 ? `<span class="choice-season">S${o.seasonNumber}</span>` : '';
+      return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span><span class="choice-body">${seasonBadge}<span class="choice-title">${escapeHtml(answer)}</span></span></button>`;
     }).join('');
     box.classList.remove('hidden');
   } catch (e) { setHint(e.message); }
