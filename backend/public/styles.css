@@ -1,15 +1,18 @@
+/* Tokens de la direction visuelle 2026 (arcade éditoriale) — seule source de
+   vérité : ce bloc écrasait auparavant un second `:root` dupliqué plus bas
+   dans le fichier, fusionné ici pour éviter que les deux dérivent. */
 :root {
-  --bg: #0f1117;
-  --bg-2: #1a1d29;
-  --bg-3: #242938;
-  --text: #e7e9f0;
-  --text-2: #9aa0b4;
-  --accent: #6c8cff;
-  --accent-2: #8a6cff;
+  --bg: #0a0b0f;
+  --bg-2: #13151b;
+  --bg-3: #1c1f27;
+  --text: #f2f0eb;
+  --text-2: #9ba1ad;
+  --accent: #ff5c7a;
+  --accent-2: #38d6ff;
   --green: #3ec98a;
   --red: #ff6b6b;
   --orange: #ffb648;
-  --radius: 12px;
+  --radius: 8px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1877,17 +1880,8 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 }
 .cosm-mythic-frame { animation: cosmMythic 2.5s ease-in-out infinite; }
 
-/* ── Direction visuelle 2026 : arcade éditoriale ── */
-:root {
-  --bg: #0a0b0f;
-  --bg-2: #13151b;
-  --bg-3: #1c1f27;
-  --text: #f2f0eb;
-  --text-2: #9ba1ad;
-  --accent: #ff5c7a;
-  --accent-2: #38d6ff;
-  --radius: 8px;
-}
+/* ── Direction visuelle 2026 : arcade éditoriale ──
+   (tokens désormais fusionnés dans le `:root` unique en tête de fichier) */
 
 body {
   font-family: 'Manrope', 'Segoe UI', sans-serif;
