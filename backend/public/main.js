@@ -622,6 +622,7 @@ function showView(name, options = {}) {
   if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
   if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
   if (name === 'home' && typeof loadHighlights === 'function') loadHighlights();
+  if (name === 'home' && typeof loadPersonalStats === 'function') loadPersonalStats();
 }
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
@@ -2376,7 +2377,7 @@ async function loadRecentPulls() {
   const box = document.getElementById('home-recent-pulls');
   if (!box) return;
   try {
-    const { pulls } = await api('/api/gacha/recent-pulls?limit=6');
+    const { pulls } = await api('/api/gacha/recent-pulls?limit=20');
     if (!pulls || !pulls.length) { box.innerHTML = ''; return; }
     box.innerHTML =
       `<h3 class="quests-title"><i class="fas fa-bolt"></i> Derniers tirages Légendaire+</h3>
@@ -2391,6 +2392,24 @@ async function loadRecentPulls() {
           <span class="rp-time">${timeAgo(p.obtainedAt)}</span>
         </button>`;
       }).join('')}</div>`;
+  } catch { box.innerHTML = ''; }
+}
+
+// Accueil : tes propres stats (rien de personnel n'était visible sur cette
+// page jusqu'ici — tout le reste, quêtes/tirages/catalogue, est global).
+async function loadPersonalStats() {
+  const box = document.getElementById('home-personal-stats');
+  if (!box || !currentUser || currentUser.isGuest) { if (box) box.innerHTML = ''; return; }
+  try {
+    const s = await api('/api/quiz/stats');
+    box.innerHTML = `
+      <h3 class="quests-title"><i class="fas fa-user"></i> Tes stats</h3>
+      <div class="profile-stats home-pstats">
+        <div class="pstat"><span>${s.played}</span><label>Jouées</label></div>
+        <div class="pstat"><span>${s.rate}%</span><label>Réussite</label></div>
+        <div class="pstat"><span>${currentUser.dailyStreak || 0} 🔥</span><label>Série</label></div>
+        <div class="pstat"><span>${currentUser.towerBestFloor || 0}</span><label>Meilleur étage</label></div>
+      </div>`;
   } catch { box.innerHTML = ''; }
 }
 

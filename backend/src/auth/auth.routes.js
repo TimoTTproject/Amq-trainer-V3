@@ -60,6 +60,7 @@ function publicUser(u) {
     dust: u.dust || 0,
     pity: u.pity || 0,
     towerBestFloor: u.towerBestFloor || 0,
+    dailyStreak: u.dailyStreak || 0,
     mmr: u.mmr,
     rankTier: (u.rankedGames || 0) > 0 ? tierFromMmr(u.mmr) : null,
     dailyAvailable: dailyAvailable(u.lastDailyAt),

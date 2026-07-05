@@ -1686,6 +1686,12 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .onboard-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .onboard-actions button { flex: 1; justify-content: center; min-width: 150px; }
 
+/* Accueil : tes propres stats (seul bloc personnel de la page, le reste est
+   global : quêtes, tirages, catalogue, nouveautés) */
+.home-personal-stats { margin: 0 0 26px; }
+.home-personal-stats:empty { display: none; }
+.home-pstats { margin-top: 10px; }
+
 /* Accueil : le catalogue en chiffres (sons les +/- réussis, les plus joués) */
 .home-highlights { margin: 0 0 26px; }
 .home-highlights:empty { display: none; }
