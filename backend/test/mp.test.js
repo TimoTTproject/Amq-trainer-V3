@@ -84,11 +84,11 @@ test('adds only purchased anime emotes to the free multiplayer reactions', () =>
 
 test('vote-skip needs a strict majority of active (connected, non-eliminated) players', () => {
   const room = roomWithTwoPlayers();
-  assert.equal(skipVotesNeeded(room), 1); // 2 joueurs → 1 vote suffit (majorité)
+  assert.equal(skipVotesNeeded(room), 2); // 2 joueurs → les 2 (moitié seule n'est pas une majorité)
   room.players.set('u3', { userId: 'u3', connected: true, eliminated: false });
   assert.equal(skipVotesNeeded(room), 2); // 3 joueurs → 2 votes
   room.players.get('u2').connected = false; // déconnecté → hors quorum
-  assert.equal(skipVotesNeeded(room), 1); // 2 actifs restants (u1, u3) → 1 vote
+  assert.equal(skipVotesNeeded(room), 2); // 2 actifs restants (u1, u3) → les 2
 });
 
 test('vote-skip always requires at least one vote, even with zero eligible players', () => {

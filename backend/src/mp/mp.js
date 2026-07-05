@@ -530,7 +530,11 @@ function onSkip(socket) {
 // toujours éligibles au moment du calcul (un départ recalcule le quorum).
 function skipVotesNeeded(room) {
   const eligible = connectedPlayers(room).filter((p) => !p.eliminated).length;
-  return Math.max(1, Math.ceil(eligible / 2));
+  // Majorité STRICTE (> la moitié), pas la moitié arrondie au-dessus : avec
+  // Math.ceil(eligible/2), une partie à 2 joueurs ne demandait qu'1 seul vote
+  // pour skip — pas une vraie majorité, ça permettait à un joueur de skip
+  // unilatéralement. floor(n/2)+1 donne 2/2, 2/3, 3/4, 3/5…
+  return Math.max(1, Math.floor(eligible / 2) + 1);
 }
 function skipVoteCount(room) {
   if (!room.current) return 0;
