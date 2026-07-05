@@ -2163,34 +2163,35 @@ header h1 i { color: var(--accent); }
 .home-hero .home-share:first-of-type { color: var(--text); font-weight: 700; text-decoration: none; }
 .home-hero .home-share:hover { color: var(--accent); }
 
+/* Tuiles de lancement rapide, denses : la navigation complète vit déjà dans
+   le menu latéral (Jouer/Collection/Communauté ouvrent les mêmes modes en
+   détail) — l'accueil n'a pas besoin de réexpliquer chaque mode avec une
+   description sur 2 lignes, juste un accès direct compact. */
 .home-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0;
+  display: flex; flex-wrap: wrap; gap: 0;
   background: none; border: 1px solid #20242e; border-radius: var(--radius);
   overflow: hidden;
 }
 .home-card {
   position: relative; background: var(--bg); border: 1px solid #20242e; border-radius: 0;
-  box-shadow: none; padding: 24px 20px; text-align: left; transform: none !important;
+  box-shadow: none; padding: 14px 16px; text-align: left; transform: none !important;
+  display: flex; align-items: center; gap: 10px;
+  flex: 1 1 auto; min-width: 150px; /* largeur au contenu (pas de troncature), tap-target correct */
 }
 .home-card:not(.disabled):hover { background: #14161c; box-shadow: none; }
 .home-card i {
-  display: inline-flex; width: auto; height: auto; font-size: 1.3rem;
+  display: inline-flex; width: auto; height: auto; font-size: 1.05rem; flex: none;
   color: var(--text-2); background: none; border: none;
   -webkit-text-fill-color: var(--text-2); transition: color .15s;
 }
 .home-card:not(.disabled):hover i { color: var(--accent); -webkit-text-fill-color: var(--accent); }
-.home-card h3 { margin-top: 10px; letter-spacing: .01em; }
-/* Hauteur de cellule uniforme : sans ça, une description sur 2 lignes force
-   toute la rangée à s'étirer et les cartes voisines à texte court laissent un
-   vide sous leur description — visuellement cassé dans une grille en cellules
-   jointes (contrairement à des cartes indépendantes, où ça ne se voit pas). */
-.home-card p {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  min-height: 2.9em; /* réserve 2 lignes même pour un texte court : sans ça, le
-    clamp limite le débordement mais ne comble pas le vide sous une description
-    plus courte que ses voisines de la même rangée. */
+.home-card h3 {
+  margin: 0; letter-spacing: .01em; font-size: .92rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-@media (max-width: 720px) { .home-grid { grid-template-columns: 1fr; } }
+.home-card p { display: none; }
+@media (max-width: 720px) { .home-card { flex-basis: 45%; } }
+@media (max-width: 420px) { .home-card { flex-basis: 100%; } }
 .home-hero > * { position: relative; z-index: 1; }
 
 .panel, .quiz-panel, .stats-panel, .modal-card, .quest-item, .srs-stat {
