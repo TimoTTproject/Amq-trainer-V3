@@ -601,11 +601,14 @@ function showView(name, options = {}) {
   document.getElementById('view-friends').classList.toggle('hidden', name !== 'friends');
   // Les sous-vues gardent leur hub parent en surbrillance dans la navbar (les 4
   // onglets racine ont data-nav = nom de hub). Les raccourcis épinglés, eux, ont
-  // data-nav = la vue précise (ex. "gacha") : on les compare aussi à `name` brut,
-  // sinon ils ne s'allument jamais (leur data-nav ne matche que le hub parent).
+  // data-nav = la vue précise (ex. "gacha") : s'il y en a un épinglé qui
+  // correspond exactement à la vue courante, lui seul s'allume (plus précis) ;
+  // sinon on retombe sur le hub parent, pour qu'il y ait toujours un repère.
+  const navItems = document.querySelectorAll('.nav-item');
   const navActive = NAV_GROUP[name] || name;
-  document.querySelectorAll('.nav-item').forEach((b) => {
-    const active = b.dataset.nav === navActive || b.dataset.nav === name;
+  const hasExactPin = [...navItems].some((b) => b.dataset.nav === name && b.dataset.nav !== navActive);
+  navItems.forEach((b) => {
+    const active = hasExactPin ? b.dataset.nav === name : b.dataset.nav === navActive;
     b.classList.toggle('active', active);
     if (active) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
