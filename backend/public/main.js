@@ -990,6 +990,37 @@ function setupAppUI() {
     }
   });
 
+  // Quêtes du jour : petit panneau toujours accessible depuis l'en-tête (sans
+  // quitter l'écran en cours) — avant ça, il fallait revenir sur l'Accueil.
+  const questsBtn = document.getElementById('quests-popover-btn');
+  const questsPopover = document.getElementById('quests-popover');
+  const setQuestsPopover = (open) => {
+    questsPopover.classList.toggle('hidden', !open);
+    questsBtn.setAttribute('aria-expanded', String(open));
+  };
+  questsBtn.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    if (!questsPopover.classList.contains('hidden')) return setQuestsPopover(false);
+    setHeaderMenu(false);
+    setRewardCapsPopover(false);
+    questsPopover.innerHTML = '<p class="hint">Chargement…</p>';
+    setQuestsPopover(true);
+    if (typeof renderQuestsPopover === 'function') renderQuestsPopover();
+  });
+  questsPopover.addEventListener('click', (event) => {
+    const b = event.target.closest('.quest-claim');
+    if (b) claimQuest(b.dataset.qid, b);
+  });
+  document.addEventListener('click', (event) => {
+    if (!questsPopover.classList.contains('hidden') && !event.target.closest('.user-section')) setQuestsPopover(false);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !questsPopover.classList.contains('hidden')) {
+      setQuestsPopover(false);
+      questsBtn.focus();
+    }
+  });
+
   // Amis : petit panneau toujours accessible depuis l'en-tête (n'importe quel
   // écran, y compris en pleine partie) — jusqu'ici il fallait quitter ce
   // qu'on faisait pour aller sur Communauté → Amis.
@@ -1004,6 +1035,7 @@ function setupAppUI() {
     if (!friendsPopover.classList.contains('hidden')) return setFriendsPopover(false);
     setHeaderMenu(false);
     setRewardCapsPopover(false);
+    if (typeof setQuestsPopover === 'function') setQuestsPopover(false);
     friendsPopover.innerHTML = '<p class="hint">Chargement…</p>';
     setFriendsPopover(true);
     if (typeof renderFriendsPopover === 'function') renderFriendsPopover();
@@ -2254,7 +2286,7 @@ function toggleVideo() {
 }
 
 // ── QUÊTES QUOTIDIENNES ──
-// Pastille « quêtes à réclamer » sur l'onglet Accueil (visible hors page d'accueil).
+// Pastille « quêtes à réclamer » sur le bouton d'en-tête (visible sur tous les écrans).
 function updateQuestsBadge(n) {
   const el = document.getElementById('quests-nav-badge');
   if (!el) return;
@@ -2265,6 +2297,30 @@ async function loadQuestsBadge() {
   try { const { quests } = await api('/api/quests'); updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length); } catch {}
 }
 
+// Fragment réutilisé par le widget Accueil et le panneau d'en-tête.
+function questItemHtml(q) {
+  const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
+  const right = q.claimed
+    ? '<span class="quest-claimed">✓ Réclamé</span>'
+    : q.done
+    ? `<button class="btn-primary quest-claim" data-qid="${q.id}">Réclamer +${q.reward} 🪙</button>`
+    : `<span class="quest-reward">+${q.reward} 🪙</span>`;
+  return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
+    <div class="quest-top"><span>${escapeHtml(q.label)}</span>${right}</div>
+    <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
+    <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
+  </div>`;
+}
+function questsBadgeHtml(quests) {
+  const claimable = quests.filter((q) => q.done && !q.claimed).length;
+  const claimedAll = quests.every((q) => q.claimed);
+  return claimable
+    ? `<span class="quests-badge ready">${claimable} à réclamer ✨</span>`
+    : claimedAll
+    ? '<span class="quests-badge done">Tout réclamé ✓</span>'
+    : '<span class="quests-badge">+🪙 chaque jour</span>';
+}
+
 async function loadQuests() {
   const box = document.getElementById('home-quests');
   if (!box) return;
@@ -2273,29 +2329,26 @@ async function loadQuests() {
     updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length);
     if (!quests || !quests.length) { box.innerHTML = ''; return; }
     const claimable = quests.filter((q) => q.done && !q.claimed).length;
-    const claimedAll = quests.every((q) => q.claimed);
-    const badge = claimable
-      ? `<span class="quests-badge ready">${claimable} à réclamer ✨</span>`
-      : claimedAll
-      ? '<span class="quests-badge done">Tout réclamé ✓</span>'
-      : '<span class="quests-badge">+🪙 chaque jour</span>';
     box.classList.toggle('has-claim', claimable > 0);
     box.innerHTML =
-      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour ${badge}</h3><div class="quests-list">` +
-      quests.map((q) => {
-        const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
-        const right = q.claimed
-          ? '<span class="quest-claimed">✓ Réclamé</span>'
-          : q.done
-          ? `<button class="btn-primary quest-claim" data-qid="${q.id}">Réclamer +${q.reward} 🪙</button>`
-          : `<span class="quest-reward">+${q.reward} 🪙</span>`;
-        return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
-          <div class="quest-top"><span>${escapeHtml(q.label)}</span>${right}</div>
-          <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
-          <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
-        </div>`;
-      }).join('') + '</div>';
+      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour ${questsBadgeHtml(quests)}</h3><div class="quests-list">` +
+      quests.map(questItemHtml).join('') + '</div>';
   } catch { box.innerHTML = ''; }
+}
+
+// Panneau compact (en-tête) : mêmes quêtes, toujours accessible sans quitter
+// l'écran en cours (avant, il fallait revenir sur l'Accueil pour réclamer).
+async function renderQuestsPopover() {
+  const box = document.getElementById('quests-popover');
+  try {
+    const { quests } = await api('/api/quests');
+    updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length);
+    if (!quests || !quests.length) { box.innerHTML = '<p class="hint">Aucune quête aujourd\'hui.</p>'; return; }
+    box.innerHTML = `<h4>Quêtes du jour ${questsBadgeHtml(quests)}</h4>
+      <div class="quests-pop-list">${quests.map(questItemHtml).join('')}</div>`;
+  } catch (e) {
+    box.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
+  }
 }
 
 async function claimQuest(id, btn) {
@@ -2307,6 +2360,8 @@ async function claimQuest(id, btn) {
     if (typeof sfx !== 'undefined') sfx.levelup();
     if (typeof burstConfetti === 'function') burstConfetti();
     loadQuests();
+    const popover = document.getElementById('quests-popover');
+    if (popover && !popover.classList.contains('hidden')) renderQuestsPopover();
   } catch (e) { alert(e.message); btn.disabled = false; }
 }
 

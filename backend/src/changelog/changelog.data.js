@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 34, date: '2026-07-05', tag: 'feature',
+    title: 'Quêtes du jour toujours accessibles',
+    description: "Un bouton dans l'en-tête (🎯) ouvre tes quêtes du jour et te laisse réclamer tes récompenses sans quitter l'écran où tu es — plus besoin de revenir sur l'Accueil.",
+  },
+  {
     id: 33, date: '2026-07-05', tag: 'improvement',
     title: 'Un vote de vedette par rareté',
     description: "Le vote de vedette se sépare maintenant en 3 petits cadres (Mythique / Légendaire / Épique) : tu votes une fois par catégorie, et chacune élit sa propre vedette la semaine suivante.",

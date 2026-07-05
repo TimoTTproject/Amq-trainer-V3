@@ -611,6 +611,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .friend-pop-row:hover { background: var(--bg-3); }
 .friend-pop-row .friend-name { flex: 1; font-weight: 600; }
 
+/* Panneau « Quêtes du jour » d'en-tête : même positionnement que les autres
+   popovers, réutilise .quest-item/.quests-badge (widget Accueil). */
+.quests-nav-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 5px; border-radius: 999px; background: var(--green); color: #06281a;
+  font-size: .72rem; font-weight: 800; margin-left: 2px; animation: questPulse 1.6s ease-in-out infinite;
+}
+.quests-popover { min-width: 280px; max-width: 340px; }
+.quests-popover h4 { margin: 0 0 10px; font-size: .9rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.quests-pop-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.quests-pop-list .quest-item { padding: 10px 12px; }
+
 /* Page Économie */
 .economy-balance { display: flex; gap: 14px; margin: 6px 0 22px; }
 .eco-balance-item { flex: 1; text-align: center; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 16px; }
