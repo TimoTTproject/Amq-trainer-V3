@@ -69,17 +69,21 @@ async function buildFloor(excludeId) {
   const displayTitle = (s) => englishTitleFor(s) || s.animeTitle;
 
   // 3 distracteurs : franchises différentes du bon anime ET entre elles.
+  // Un seul aller-retour DB (tranche contiguë à un offset aléatoire, dédupliquée
+  // en mémoire) au lieu d'aller chercher chaque distracteur un par un avec un
+  // skip aléatoire à chaque fois (jusqu'à 80 requêtes séquentielles par étage —
+  // même optimisation que buildChoices() dans quiz.routes.js).
   const usedKeys = new Set([franchiseKey(correct.animeTitle)]);
   const correctLabel = displayTitle(correct);
   const options = [correctLabel];
-  let guard = 0;
-  while (options.length < 4 && guard++ < 80) {
-    const s = await prisma.song.findFirst({
-      where,
-      skip: Math.floor(Math.random() * total),
-      select: { animeTitle: true, altTitles: true },
-    });
-    if (!s) continue;
+  const batchSize = Math.min(total, 200);
+  const batchSkip = Math.floor(Math.random() * Math.max(1, total - batchSize + 1));
+  const rows = await prisma.song.findMany({
+    where, skip: batchSkip, take: batchSize,
+    select: { animeTitle: true, altTitles: true },
+  });
+  for (const s of shuffle(rows)) {
+    if (options.length >= 4) break;
     const key = franchiseKey(s.animeTitle);
     if (usedKeys.has(key)) continue; // même franchise (ou bon anime) → on saute
     usedKeys.add(key);
