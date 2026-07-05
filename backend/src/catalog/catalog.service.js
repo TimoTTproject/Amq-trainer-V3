@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime, getAnimeFormatsByIds, getAnimeCoversByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
 const { norm } = require('../quiz/matching');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
@@ -437,6 +437,107 @@ async function backfillFormatsBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
+// Backfill du numéro de saison (position dans la chaîne PREQUEL/SEQUEL AniList)
+// pour distinguer les saisons d'une même œuvre dans les propositions du quiz
+// (ex. Kaguya-sama S1/S2, dont les titres romaji ne diffèrent que par un « ? »).
+// Traite un lot d'anilistId distincts encore sans seasonNumber (appeler en
+// boucle jusqu'à remaining === 0, même mécanique que backfillFormatsBatch).
+async function backfillSeasonsBatch(limit = 30) {
+  const rows = await prisma.song.findMany({
+    where: { seasonNumber: null },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const seedIds = rows.map((r) => r.anilistId);
+  // Résolution du graphe de relations par frontière successive : on part du lot
+  // et on élargit aux voisins PREQUEL/SEQUEL pas encore vus, même hors catalogue
+  // (un maillon manquant du catalogue ne doit pas casser la numérotation de la
+  // chaîne). Bornée à 6 tours pour éviter une explosion sur une franchise géante.
+  const visited = new Map(); // anilistId -> [{ relationType, nodeId }]
+  let frontier = [...seedIds];
+  let rounds = 0;
+  while (frontier.length && rounds < 6) {
+    const toFetch = frontier.filter((id) => !visited.has(id));
+    if (!toFetch.length) break;
+    const nextFrontier = new Set();
+    for (let i = 0; i < toFetch.length; i += 50) {
+      const slice = toFetch.slice(i, i + 50);
+      let media;
+      try {
+        media = await getAnimeRelationsByIds(slice);
+      } catch (err) {
+        console.warn('backfill seasons relations error:', err.message);
+        continue;
+      }
+      for (const m of media) {
+        const edges = (m.relations?.edges || [])
+          .filter((e) => e.node?.type === 'ANIME' && (e.relationType === 'PREQUEL' || e.relationType === 'SEQUEL'))
+          .map((e) => ({ relationType: e.relationType, nodeId: e.node.id }));
+        visited.set(m.id, edges);
+        for (const e of edges) if (!visited.has(e.nodeId)) nextFrontier.add(e.nodeId);
+      }
+      // ids demandés sans réponse AniList (supprimés/introuvables) : ne pas reboucler dessus
+      for (const id of slice) if (!visited.has(id)) visited.set(id, []);
+    }
+    frontier = [...nextFrontier];
+    rounds++;
+  }
+
+  // Graphe orienté u → v (v = SEQUEL de u), fusionné depuis les deux sens de
+  // relation (chaque anime référence en général l'un OU l'autre côté).
+  const forward = new Map(); // u -> Set<v>
+  const hasIncoming = new Set();
+  const addEdge = (u, v) => {
+    if (!forward.has(u)) forward.set(u, new Set());
+    forward.get(u).add(v);
+    hasIncoming.add(v);
+  };
+  for (const [id, edges] of visited) {
+    for (const e of edges) {
+      if (e.relationType === 'SEQUEL') addEdge(id, e.nodeId);
+      else addEdge(e.nodeId, id); // PREQUEL : nodeId est la saison précédente
+    }
+  }
+
+  // Numérotation par composante : BFS depuis chaque racine (nœud sans arête
+  // entrante) — racine = saison 1, ses SEQUEL directs = saison 2, etc.
+  const seasonById = new Map();
+  const globalSeen = new Set();
+  for (const id of visited.keys()) {
+    if (hasIncoming.has(id) || globalSeen.has(id)) continue;
+    let level = 1;
+    let queue = [id];
+    while (queue.length) {
+      const next = [];
+      for (const n of queue) {
+        if (globalSeen.has(n)) continue;
+        globalSeen.add(n);
+        seasonById.set(n, level);
+        for (const v of forward.get(n) || []) if (!globalSeen.has(v)) next.push(v);
+      }
+      queue = next;
+      level++;
+    }
+  }
+  // Nœuds visités jamais atteints (composante réduite à eux-mêmes) → isolés.
+  for (const id of visited.keys()) if (!globalSeen.has(id)) seasonById.set(id, 0);
+
+  let updated = 0;
+  for (const anilistId of seedIds) {
+    const seasonNumber = seasonById.get(anilistId) ?? 0;
+    // seasonNumber === 1 seul dans sa composante (pas de sequel trouvé) : pas
+    // besoin d'afficher « S1 » pour une œuvre qui n'a jamais eu de suite.
+    const finalNumber = seasonNumber === 1 && !hasIncoming.has(anilistId) && !(forward.get(anilistId)?.size) ? 0 : seasonNumber;
+    const res = await prisma.song.updateMany({ where: { anilistId, seasonNumber: null }, data: { seasonNumber: finalNumber } });
+    updated += res.count;
+  }
+  const remaining = await prisma.song.count({ where: { seasonNumber: null } });
+  return { processed: seedIds.length, updated, remaining };
+}
+
 // Backfill des jaquettes AniList (`coverUrl`) — identité visuelle par licence
 // (playlist, recherche…). Même mécanique que les formats : lot d'anilistId
 // distincts encore sans jaquette, sentinelle '' pour les introuvables.
@@ -513,6 +614,7 @@ module.exports = {
   buildAltTitles,
   scanEndingsBatch,
   backfillFormatsBatch,
+  backfillSeasonsBatch,
   backfillCoversBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,

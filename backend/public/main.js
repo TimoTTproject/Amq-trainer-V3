@@ -1171,6 +1171,7 @@ function setupAppUI() {
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-endings-btn').addEventListener('click', runImportEndings);
   document.getElementById('admin-format-btn').addEventListener('click', runBackfillFormat);
+  document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
@@ -2052,7 +2053,10 @@ async function requestChoices(level) {
     hideAssist();
     document.getElementById('answer-area').classList.add('hidden');
     const box = document.getElementById('choice-buttons');
-    box.innerHTML = r.options.map((o, i) => `<button class="choice-opt" data-answer="${escapeHtml(o)}"><span class="choice-num">${i + 1}</span>${escapeHtml(o)}</button>`).join('');
+    box.innerHTML = r.options.map((o, i) => {
+      const answer = englishFirst() && o.englishTitle ? o.englishTitle : o.title;
+      return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span>${escapeHtml(formatAnimeLabel(o))}</button>`;
+    }).join('');
     box.classList.remove('hidden');
   } catch (e) { setHint(e.message); }
 }
@@ -2121,7 +2125,7 @@ async function guessAnswer(forcedGuess) {
 
 // Affiche le bloc réponse + autorise la vidéo
 function revealAnswerBox(answer) {
-  document.getElementById('answer-anime').textContent = answer.animeTitle;
+  document.getElementById('answer-anime').textContent = formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber });
   document.getElementById('answer-title').textContent = answer.title;
   document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';
   document.getElementById('answer-result').classList.remove('hidden');

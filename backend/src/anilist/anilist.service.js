@@ -149,6 +149,24 @@ async function getAnimeFormatsByIds(ids) {
   return data?.Page?.media || [];
 }
 
+// Relations directes (PREQUEL/SEQUEL…) d'un lot d'animes — pour reconstruire
+// la chaîne de saisons d'une œuvre (cf. backfillSeasonsBatch).
+async function getAnimeRelationsByIds(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(id_in: $ids, type: ANIME) {
+          id
+          relations {
+            edges { relationType(version: 2) node { id type } }
+          }
+        }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.media || [];
+}
+
 // Jaquettes (coverImage) d'un lot d'animes — identité visuelle par licence.
 async function getAnimeCoversByIds(ids) {
   const query = `
@@ -161,4 +179,4 @@ async function getAnimeCoversByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeCoversByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };

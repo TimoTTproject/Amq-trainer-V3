@@ -38,26 +38,40 @@ function shuffle(arr) {
 // se distinguent trop facilement de ceux que le joueur a réellement dans sa liste,
 // ce qui trahit la bonne réponse par élimination). On complète avec le catalogue
 // global si ce périmètre ne contient pas assez d'animes distincts.
+// L'identité de chaque candidat reste le titre romaji (clé stable, unique par
+// anime) mais l'affichage laisse le CLIENT choisir l'ordre anglais/japonais
+// (cf. `settings.titleLang`, comme l'autocomplete) : on renvoie donc titre +
+// titre anglais + numéro de saison (S1/S2… calculé via les relations AniList,
+// cf. backfillSeasonsBatch), plutôt qu'un libellé déjà figé côté serveur.
 async function buildChoices(song, count, titlePool = null) {
-  const titles = new Set([song.animeTitle]);
+  const byTitle = new Map([
+    [song.animeTitle, { altTitles: song.altTitles || [], seasonNumber: song.seasonNumber || 0 }],
+  ]);
   if (titlePool && titlePool.length) {
     for (const t of shuffle(titlePool)) {
-      if (titles.size >= count) break;
-      if (t !== song.animeTitle) titles.add(t);
+      if (byTitle.size >= count) break;
+      if (t.animeTitle !== song.animeTitle) {
+        byTitle.set(t.animeTitle, { altTitles: t.altTitles || [], seasonNumber: t.seasonNumber || 0 });
+      }
     }
   }
-  if (titles.size < count) {
+  if (byTitle.size < count) {
     const total = await prisma.song.count();
     let guard = 0;
-    while (titles.size < count && guard++ < 40) {
+    while (byTitle.size < count && guard++ < 40) {
       const s = await prisma.song.findFirst({
         skip: Math.floor(Math.random() * total),
-        select: { animeTitle: true },
+        select: { animeTitle: true, altTitles: true, seasonNumber: true },
       });
-      if (s) titles.add(s.animeTitle);
+      if (s) byTitle.set(s.animeTitle, { altTitles: s.altTitles || [], seasonNumber: s.seasonNumber || 0 });
     }
   }
-  return shuffle([...titles]);
+  const options = [...byTitle].map(([animeTitle, { altTitles, seasonNumber }]) => ({
+    title: animeTitle,
+    englishTitle: englishTitleFor({ animeTitle, altTitles }),
+    seasonNumber,
+  }));
+  return shuffle(options);
 }
 
 // Résout l'ensemble des ids de musiques d'un mode/source d'entraînement pour un
@@ -262,8 +276,10 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   if (round.mode === 'mine' || round.source) {
     const ids = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, typeFilter: null });
     if (ids.length) {
-      const rows = await prisma.song.findMany({ where: { id: { in: ids } }, select: { animeTitle: true } });
-      titlePool = [...new Set(rows.map((r) => r.animeTitle))];
+      const rows = await prisma.song.findMany({ where: { id: { in: ids } }, select: { animeTitle: true, altTitles: true, seasonNumber: true } });
+      const seen = new Map();
+      for (const r of rows) if (!seen.has(r.animeTitle)) seen.set(r.animeTitle, { altTitles: r.altTitles || [], seasonNumber: r.seasonNumber || 0 });
+      titlePool = [...seen].map(([animeTitle, v]) => ({ animeTitle, ...v }));
     }
   }
 
@@ -322,7 +338,7 @@ async function ensureSeriesSearchCache() {
   if (seriesSearchCache.expiresAt >= Date.now()) return;
   const rows = await prisma.song.findMany({
     where: { videoUrl: { not: null } },
-    select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true },
+    select: { anilistId: true, animeTitle: true, altTitles: true, popularity: true, seasonNumber: true },
     orderBy: { popularity: 'desc' },
   });
   const uniqueRows = [...new Map(rows.map((row) => [row.anilistId, row])).values()];
@@ -333,6 +349,7 @@ async function ensureSeriesSearchCache() {
       return {
         title: row.animeTitle,
         englishTitle,
+        seasonNumber: row.seasonNumber || 0,
         popularity: row.popularity || 0,
         searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
       };
@@ -348,8 +365,8 @@ async function ensureSeriesSearchCache() {
 router.get('/series-all', requirePlayer, async (req, res) => {
   await ensureSeriesSearchCache();
   res.json({
-    entries: seriesSearchCache.entries.map(({ title, englishTitle, popularity, searchTitles }) => ({
-      title, englishTitle, popularity, searchTitles,
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles }) => ({
+      title, englishTitle, seasonNumber, popularity, searchTitles,
     })),
   });
 });
@@ -580,6 +597,8 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
       reward: 0,
       answer: {
         animeTitle: song.animeTitle,
+        englishTitle: englishTitleFor(song),
+        seasonNumber: song.seasonNumber || 0,
         title: song.title,
         artist: song.artist,
         type: song.type,
@@ -666,6 +685,8 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
     ...(result.tokens !== null ? { tokens: result.tokens } : {}),
     answer: {
       animeTitle: song.animeTitle,
+      englishTitle: englishTitleFor(song),
+      seasonNumber: song.seasonNumber || 0,
       title: song.title,
       artist: song.artist,
       type: song.type,
@@ -687,6 +708,8 @@ router.get('/answer/:songId', requirePlayer, async (req, res) => {
   res.json({
     answer: {
       animeTitle: song.animeTitle,
+      englishTitle: englishTitleFor(song),
+      seasonNumber: song.seasonNumber || 0,
       title: song.title,
       artist: song.artist,
       type: song.type,

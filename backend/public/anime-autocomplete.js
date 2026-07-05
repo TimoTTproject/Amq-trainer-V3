@@ -12,6 +12,22 @@ function loadAnimeFullList() {
   return animeFullListPromise;
 }
 
+// Préférence d'affichage (partagée par tout le quiz) : anglais d'abord (défaut)
+// ou japonais/romaji d'abord.
+function englishFirst() {
+  return typeof settings === 'undefined' || settings.titleLang !== 'jp';
+}
+
+// Libellé d'affichage d'un anime : titre choisi selon `englishFirst()`, préfixé
+// du numéro de saison (S1/S2…) quand il fait partie d'une chaîne détectée —
+// ex. distinguer Kaguya-sama S1/S2 dont les titres romaji ne diffèrent que par
+// un « ? ». Le préfixe est purement visuel : ne pas l'inclure dans un texte
+// soumis en réponse (le matching se fait sur `title`/`englishTitle` seuls).
+function formatAnimeLabel({ title, englishTitle, seasonNumber }) {
+  const base = englishFirst() && englishTitle ? englishTitle : title;
+  return seasonNumber > 0 ? `S${seasonNumber} · ${base}` : base;
+}
+
 const animeAutocompleteStates = new Map();
 
 function closeAnimeAutocomplete(inputId) {
@@ -38,7 +54,7 @@ function filterAnimeEntries(entries, needle) {
     if (matchIndex >= 0) scored.push({ entry, matchIndex });
   }
   scored.sort((a, b) => a.matchIndex - b.matchIndex || (b.entry.popularity || 0) - (a.entry.popularity || 0) || a.entry.title.localeCompare(b.entry.title));
-  return scored.slice(0, 20).map(({ entry }) => ({ title: entry.title, englishTitle: entry.englishTitle }));
+  return scored.slice(0, 20).map(({ entry }) => ({ title: entry.title, englishTitle: entry.englishTitle, seasonNumber: entry.seasonNumber || 0 }));
 }
 
 function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
@@ -49,16 +65,13 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const state = { input, list, suggestions: [], activeIndex: -1, timer: null, request: 0, onSubmit };
   animeAutocompleteStates.set(inputId, state);
 
-  // Préférence d'affichage : anglais d'abord (défaut) ou japonais/romaji d'abord.
-  const englishFirst = () => typeof settings === 'undefined' || settings.titleLang !== 'jp';
-
   const render = () => {
     if (!state.suggestions.length) return closeAnimeAutocomplete(inputId);
     const enFirst = englishFirst();
     list.innerHTML = state.suggestions
       .map((suggestion, index) => {
         const en = suggestion.englishTitle;
-        const primary = enFirst && en ? en : suggestion.title;
+        const primary = formatAnimeLabel(suggestion);
         const secondary = enFirst && en ? suggestion.title : (en && en !== suggestion.title ? en : null);
         return `<button type="button" class="anime-suggestion${index === state.activeIndex ? ' active' : ''}" role="option" aria-selected="${index === state.activeIndex}" data-anime-index="${index}">
         <span>${escapeHtml(primary)}</span>

@@ -318,6 +318,37 @@ async function runBackfillFormat() {
   }
 }
 
+async function runBackfillSeasons() {
+  const btn = document.getElementById('admin-seasons-btn');
+  const status = document.getElementById('admin-seasons-status');
+  btn.disabled = true;
+  let total = 0, updated = 0, fails = 0;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    while (true) {
+      let r;
+      try {
+        r = await api('/api/admin/backfill-seasons', { method: 'POST', body: JSON.stringify({}) });
+      } catch (e) {
+        if (++fails > 5) throw e;
+        status.textContent = `Pause (AniList saturé)… réessai ${fails}/5`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
+      total += r.processed; updated += r.updated;
+      status.textContent = `${total} animes traités · ${updated} musiques taguées · ${r.remaining} restantes…`;
+      if (r.remaining === 0 || r.processed === 0) break;
+      await sleep(1500); // throttle AniList
+    }
+    status.textContent = `Terminé ✅ (${updated} musiques taguées)`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runBackfillSeries() {
   const btn = document.getElementById('admin-backfill-btn');
   const status = document.getElementById('admin-backfill-status');

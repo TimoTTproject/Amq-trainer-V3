@@ -5,7 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
-const { scanEndingsBatch, backfillFormatsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
+const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
   r2Status,
@@ -190,6 +190,18 @@ router.post('/import-endings', requireAuth, requireAdmin, async (req, res) => {
 router.post('/backfill-format', requireAuth, requireAdmin, async (req, res) => {
   try {
     const r = await backfillFormatsBatch(50);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Calcule le numéro de saison (chaîne PREQUEL/SEQUEL AniList) pour distinguer
+// les saisons d'une même œuvre dans les propositions du quiz. Appeler en
+// boucle jusqu'à remaining === 0 (throttlé par AniList).
+router.post('/backfill-seasons', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await backfillSeasonsBatch(30);
     res.json(r);
   } catch (e) {
     res.status(502).json({ error: e.message });
