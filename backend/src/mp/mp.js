@@ -137,7 +137,7 @@ function roomSnapshot(room) {
     hostId: room.hostId, settings: room.settings,
     countdownEndsAt: room.countdownEndsAt || null, chat: room.chat.slice(-30),
     players: [...room.players.values()].map((p) => ({
-      name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
+      userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
       isHost: p.userId === room.hostId, connected: p.connected,
     })),
   };

@@ -86,6 +86,36 @@ async function openProfile() {
   renderProfile(profileData);
 }
 
+// Bouton ami d'une fiche publique : libellé/état selon la relation, et action
+// au clic (demande, ou acceptation directe si une demande est déjà reçue).
+function renderFriendButton(btn, status, userId) {
+  btn.disabled = false;
+  btn.onclick = null;
+  if (status === 'accepted') {
+    btn.innerHTML = '<i class="fas fa-check"></i> Ami';
+    btn.disabled = true;
+  } else if (status === 'pending_out') {
+    btn.innerHTML = '<i class="fas fa-clock"></i> Demande envoyée';
+    btn.disabled = true;
+  } else if (status === 'pending_in') {
+    btn.innerHTML = '<i class="fas fa-user-check"></i> Accepter la demande';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { await friendAction('accept', userId); renderFriendButton(btn, 'accepted', userId); }
+      catch { btn.disabled = false; }
+    };
+  } else {
+    btn.innerHTML = '<i class="fas fa-user-plus"></i> Ajouter en ami';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        const r = await friendAction('request', userId);
+        renderFriendButton(btn, r?.status === 'accepted' ? 'accepted' : 'pending_out', userId);
+      } catch { btn.disabled = false; }
+    };
+  }
+}
+
 // Rendu commun (profil perso ET fiche publique d'un autre joueur).
 function renderProfile(d, isSelf = true) {
   document.body.classList.toggle('profile-public', !isSelf);
@@ -102,8 +132,14 @@ function renderProfile(d, isSelf = true) {
     const tb = document.getElementById('profile-trade-btn');
     tb.classList.remove('hidden');
     tb.onclick = () => { if (typeof openTradeBuilder === 'function') openTradeBuilder(d.user.id, d.user.displayName); };
+    // Bouton ami : découvrable directement depuis la fiche (avant, il fallait
+    // savoir aller dans Communauté → Amis → recherche pour en ajouter un).
+    const fb = document.getElementById('profile-friend-btn');
+    fb.classList.remove('hidden');
+    renderFriendButton(fb, d.friendStatus, d.user.id);
   } else {
     document.getElementById('profile-trade-btn').classList.add('hidden');
+    document.getElementById('profile-friend-btn').classList.add('hidden');
   }
   applyBackgroundCosmetic(
     document.querySelector('#view-profile .profile-banner'),

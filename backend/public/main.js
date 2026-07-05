@@ -1258,10 +1258,13 @@ function setupAppUI() {
     if (e.target.id === 'character-modal') closeCharacter();
   });
 
-  // Catalogue : lecteur audio (clic sur le bouton lecture d'une ligne)
+  // Catalogue : lecteur audio (clic sur le bouton lecture d'une ligne) +
+  // ouverture du profil de qui a ajouté le son (colonne « Ajouté par »)
   document.getElementById('catalog-tbody').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-play]');
-    if (btn) toggleCatalogAudio(btn);
+    if (btn) return toggleCatalogAudio(btn);
+    const userBtn = e.target.closest('[data-userid]');
+    if (userBtn && typeof openPlayer === 'function') openPlayer(userBtn.dataset.userid);
   });
 
   document.getElementById('import-btn').addEventListener('click', startImport);
@@ -2460,7 +2463,7 @@ async function searchFriends(q) {
 }
 
 async function friendAction(path, userId) {
-  await api(`/api/friends/${path}`, { method: 'POST', body: JSON.stringify({ userId }) });
+  return api(`/api/friends/${path}`, { method: 'POST', body: JSON.stringify({ userId }) });
 }
 function inviteFriend(userId) {
   if (typeof connectMp === 'function') connectMp();

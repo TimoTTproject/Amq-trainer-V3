@@ -110,6 +110,7 @@ model User {
   passwordResets  PasswordResetToken[]
   playlists       Playlist[]
   cardAlbums      CardAlbum[]
+  songsAdded      Song[]
 }
 
 model PasswordResetToken {
@@ -349,6 +350,8 @@ model Song {
   popularity Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
   altTitles  String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
   seasonNumber Int? // position dans la chaîne PREQUEL/SEQUEL AniList (0 = hors chaîne, null = pas encore calculé)
+  addedByUserId String? // joueur dont l'import a fait entrer ce son dans le catalogue global (null = antérieur à cette fonctionnalité)
+  addedBy       User?   @relation(fields: [addedByUserId], references: [id])
 
   createdAt DateTime @default(now())
 

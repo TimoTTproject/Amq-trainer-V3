@@ -986,6 +986,8 @@ body.guest-mode .feedback-buttons { display: none !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .mp-players { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .mp-chip { background: var(--bg-3); border-radius: 999px; padding: 4px 12px 4px 5px; font-size: .82rem; display: inline-flex; align-items: center; gap: 7px; }
+.mp-chip[data-userid] { cursor: pointer; transition: background .12s; }
+.mp-chip[data-userid]:hover { background: var(--bg-2); }
 .mp-game { max-width: 720px; margin: 0 auto; }
 
 /* ── Multi : écran de partie + fin plus aérés (scopé, n'affecte pas la Tour) ── */

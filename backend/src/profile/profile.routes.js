@@ -221,8 +221,26 @@ router.get('/:userId', requireAuth, async (req, res) => {
     select: { ranked: true, placement: true, players: true, score: true, mmrAfter: true, mmrBefore: true, createdAt: true },
   });
 
+  // Statut d'amitié avec le visiteur (pour afficher le bon bouton sur une
+  // fiche publique) : aucun lien, demande envoyée/reçue en attente, ou amis.
+  let friendStatus = 'self';
+  if (req.user.id !== user.id) {
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: req.user.id, addresseeId: user.id },
+          { requesterId: user.id, addresseeId: req.user.id },
+        ],
+      },
+    });
+    if (!friendship) friendStatus = 'none';
+    else if (friendship.status === 'accepted') friendStatus = 'accepted';
+    else friendStatus = friendship.requesterId === req.user.id ? 'pending_out' : 'pending_in';
+  }
+
   res.json({
     user,
+    friendStatus,
     cosmetics: resolveEquipped(user),
     stats: { played, correct, rate: played ? Math.round((correct / played) * 100) : 0 },
     ranked: {

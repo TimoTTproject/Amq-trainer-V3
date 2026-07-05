@@ -18,7 +18,7 @@ async function loadCatalogList(page, search) {
   if (page < 1 || (catalogPages && page > catalogPages && page !== 1)) return;
   catalogSearch = search;
   const tbody = document.getElementById('catalog-tbody');
-  tbody.innerHTML = '<tr><td colspan="5" class="muted">Chargement…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
   try {
     const r = await api(`/api/catalog/list?page=${page}&search=${encodeURIComponent(search)}`);
     catalogPage = r.page;
@@ -26,19 +26,23 @@ async function loadCatalogList(page, search) {
     stopCatalogAudio();
     document.getElementById('catalog-total').textContent = `${r.total} openings`;
     if (!r.songs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun résultat.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="muted">Aucun résultat.</td></tr>';
     } else {
       tbody.innerHTML = r.songs
         .map((s) => {
           const playBtn = s.videoUrl
             ? `<button class="btn-play-row" data-play data-src="${escapeHtml(s.videoUrl)}" title="Écouter"><i class="fas fa-play"></i></button>`
             : '';
+          const addedBy = s.addedBy
+            ? `<button type="button" class="btn-link" data-userid="${s.addedBy.id}">${escapeHtml(s.addedBy.displayName)}</button>`
+            : '<span class="muted">—</span>';
           return `<tr>
             <td class="cat-play-cell">${playBtn}</td>
             <td>${escapeHtml(s.animeTitle)}</td>
             <td class="nowrap">${s.type}${s.number}</td>
             <td>${escapeHtml(s.title)}</td>
             <td>${escapeHtml(s.artist || '—')}</td>
+            <td>${addedBy}</td>
           </tr>`;
         })
         .join('');
@@ -47,7 +51,7 @@ async function loadCatalogList(page, search) {
     document.getElementById('cat-prev').disabled = r.page <= 1;
     document.getElementById('cat-next').disabled = r.page >= catalogPages;
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="muted">${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">${e.message}</td></tr>`;
   }
 }
 

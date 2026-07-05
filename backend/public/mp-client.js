@@ -527,7 +527,12 @@ function renderRoom(d) {
     : '⚡ Partie rapide';
   document.getElementById('mp-pcount').textContent = d.players.length;
   document.getElementById('mp-room-players').innerHTML = d.players
-    .map((p) => `<span class="mp-chip${p.isHost ? ' host' : ''}">${otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs')}${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`)
+    .map((p) => {
+      // Son propre chip n'ouvre rien (redondant avec le menu profil) — pas
+      // de data-userid dessus, donc pas de curseur pointer ni de clic.
+      const clickable = p.userId && p.userId !== currentUser?.id;
+      return `<span class="mp-chip${p.isHost ? ' host' : ''}"${clickable ? ` data-userid="${p.userId}"` : ''}>${otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs')}${p.isHost ? '👑 ' : ''}${escapeHtml(p.name)}</span>`;
+    })
     .join('');
 
   // Classé : réglages figés côté serveur → on masque le formulaire (sinon il
@@ -859,6 +864,11 @@ function initMpUI() {
     if (b) spectateRoom(b.dataset.spectate);
   });
   document.getElementById('mp-spectator-leave').addEventListener('click', stopSpectate);
+  // Salon : clic sur un joueur (chip) → sa fiche profil
+  document.getElementById('mp-room-players').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-userid]');
+    if (chip && typeof openPlayer === 'function') openPlayer(chip.dataset.userid);
+  });
   document.getElementById('mp-leave').addEventListener('click', () => {
     mpEngaged = false;
     mpSocket && mpSocket.emit('mp:leave'); mpRoom = null; mpShow('menu');
