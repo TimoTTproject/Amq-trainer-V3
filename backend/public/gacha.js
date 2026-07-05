@@ -104,12 +104,25 @@ function renderWeeklyBanner(info) {
   const days = Math.floor(left / 86400000);
   const hours = Math.floor((left % 86400000) / 3600000);
   const countdown = days > 0 ? `${days}j ${hours}h` : `${hours}h`;
+  const boostOn = currentUser.bannerBoostEnabled !== false;
   el.innerHTML = `
     <div class="weekly-head">
       <span><i class="fas fa-star"></i> Vedettes de la semaine <span class="weekly-boost">+${info.weeklyBoost || 60}% de chance</span></span>
       <span class="weekly-timer"><i class="fas fa-clock"></i> ${countdown}</span>
     </div>
-    <div class="featured-row">${chars.map((c) => cardHTML(c)).join('')}</div>`;
+    <div class="featured-row">${chars.map((c) => cardHTML(c)).join('')}</div>
+    <label class="weekly-boost-toggle">
+      <input type="checkbox" id="weekly-boost-toggle" ${boostOn ? 'checked' : ''}>
+      Utiliser le rate-up de cette bannière sur mes tirages
+    </label>`;
+  document.getElementById('weekly-boost-toggle')?.addEventListener('change', (e) => toggleBannerBoost(e.target.checked));
+}
+
+async function toggleBannerBoost(enabled) {
+  try {
+    await api('/api/gacha/banner-boost', { method: 'POST', body: JSON.stringify({ enabled }) });
+    currentUser.bannerBoostEnabled = enabled;
+  } catch (e) { alert(e.message); }
 }
 
 function renderGachaMeta(pityLimit = 60) {

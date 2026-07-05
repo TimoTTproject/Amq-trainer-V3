@@ -10,8 +10,11 @@ const router = express.Router();
 
 // ── Bannière hebdomadaire (vedettes de la semaine, rate-up) ──
 // Sélection déterministe par n° de semaine → pas de cron ni d'action admin.
-const WEEK_MS = 7 * 24 * 3600 * 1000;
+// Le reset tombe pile à minuit heure de Paris chaque LUNDI (DST géré via Intl),
+// pas toutes les 7×24h depuis 1970 (ce qui ne tombait sur aucun jour précis).
 const WEEKLY_BOOST = 0.6; // proba de tomber sur la vedette de la rareté tirée
+const RESET_TZ = 'Europe/Paris';
+const REF_MONDAY_WALL_MS = Date.UTC(2024, 0, 1); // lundi de référence (arbitraire, stable)
 let weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
 
 function seededIndex(wk, salt, mod) {
@@ -20,8 +23,46 @@ function seededIndex(wk, salt, mod) {
   return h % mod;
 }
 
+// Décalage (ms) entre UTC et l'heure murale de `timeZone` à l'instant `instant`.
+function tzOffsetMs(instant, timeZone) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = Object.fromEntries(dtf.formatToParts(instant).map((x) => [x.type, x.value]));
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return asUTC - instant.getTime();
+}
+
+// Minuit du lundi de la semaine de `instant`, en heure murale de Paris ENCODÉE
+// COMME SI C'ÉTAIT DE L'UTC (Y-M-D 00:00:00) — pratique pour faire de
+// l'arithmétique calendaire en jours entiers sans se soucier du DST.
+function mondayWallMs(instant) {
+  const wall = new Date(instant.getTime() + tzOffsetMs(instant, RESET_TZ));
+  const daysSinceMonday = (wall.getUTCDay() + 6) % 7;
+  return Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() - daysSinceMonday);
+}
+
+// Convertit une heure murale Paris (encodée en UTC, cf. ci-dessus) en véritable
+// instant UTC. Deux passes pour converger correctement autour d'un changement d'heure.
+function wallToRealMs(wallMs) {
+  let real = wallMs - tzOffsetMs(new Date(wallMs), RESET_TZ);
+  real = wallMs - tzOffsetMs(new Date(real), RESET_TZ);
+  return real;
+}
+
+// Numéro de semaine ENTIER et stable, incrémenté chaque lundi minuit (Paris).
+// Basé sur une différence de jours calendaires (toujours multiple exact de 7),
+// donc insensible aux changements d'heure — contrairement à une division par ms.
 function currentWeek() {
-  return Math.floor(Date.now() / WEEK_MS);
+  const days = Math.round((mondayWallMs(new Date()) - REF_MONDAY_WALL_MS) / 86400000);
+  return days / 7;
+}
+
+// Instant réel (epoch ms) du prochain lundi minuit heure de Paris.
+function nextMondayResetAt() {
+  return wallToRealMs(mondayWallMs(new Date()) + 7 * 86400000);
 }
 
 // Tirage au sort pondéré par les votes d'une semaine donnée (chaque vote = un
@@ -77,7 +118,7 @@ async function getWeeklyFeatured() {
     }
   } catch (e) { console.warn('weekly vote winner unavailable:', e.message); }
 
-  weeklyCache = { week: wk, byRarity, chars, resetAt: (wk + 1) * WEEK_MS };
+  weeklyCache = { week: wk, byRarity, chars, resetAt: nextMondayResetAt() };
   return weeklyCache;
 }
 
@@ -300,6 +341,14 @@ async function destroyInstances(tx, userId, characterId, n) {
   return insts.length;
 }
 
+// Active/désactive le rate-up de la bannière vedette en cours pour les tirages
+// du joueur (la bannière elle-même reste imposée, changée chaque lundi).
+router.post('/banner-boost', requireAuth, async (req, res) => {
+  const enabled = !!req.body?.enabled;
+  await prisma.user.update({ where: { id: req.user.id }, data: { bannerBoostEnabled: enabled } });
+  res.json({ ok: true, bannerBoostEnabled: enabled });
+});
+
 // Tirage : type = 'single' | 'pack'
 router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (req, res) => {
   const type = req.body?.type === 'pack' ? 'pack' : 'single';
@@ -330,6 +379,10 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
   }
 
   const weekly = await getWeeklyFeatured();
+  // Le joueur choisit d'utiliser ou non le rate-up de la bannière (la bannière
+  // elle-même reste imposée, changée chaque lundi) : désactivé → tirage normal.
+  const useBoost = req.user.bannerBoostEnabled !== false;
+  const boostByRarity = useBoost ? weekly.byRarity : {};
   const result = await prisma.$transaction(async (tx) => {
     // Débit du coût
     await tx.user.update({ where: { id: userId }, data: { tokens: { decrement: cfg.cost } } });
@@ -340,7 +393,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
     let dustTotal = 0;
     const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
     for (const rarity of rarities) {
-      const character = await pickRandomCharacter(tx, rarity, weekly.byRarity);
+      const character = await pickRandomCharacter(tx, rarity, boostByRarity);
       if (!character) continue;
       const mint = await mintInstance(tx, userId, character.id);
       if (!mint) continue; // épuisé entre-temps (course)
@@ -754,7 +807,7 @@ router.get('/vote', requireAuth, async (req, res) => {
   const weekly = await getWeeklyFeatured();
   res.json({
     week: wk,
-    closesAt: (wk + 1) * WEEK_MS,
+    closesAt: nextMondayResetAt(),
     myVote: mine?.characterId || null,
     standings,
     current: weekly.chars, // vedettes en cours (dont le gagnant du vote précédent)

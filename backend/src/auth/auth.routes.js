@@ -68,6 +68,7 @@ function publicUser(u) {
     isAdmin: isAdmin(u),
     cosmetics: resolveEquipped(u),
     pinnedNav: u.pinnedNav || [],
+    bannerBoostEnabled: u.bannerBoostEnabled !== false,
   };
 }
 

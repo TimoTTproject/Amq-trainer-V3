@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 32, date: '2026-07-05', tag: 'improvement',
+    title: 'Bannière vedette : reset le lundi à minuit + rate-up optionnel',
+    description: "La rotation de la bannière tombe désormais pile le lundi à minuit (heure de Paris) au lieu d'un décalage arbitraire. Tu peux aussi choisir d'utiliser ou non son rate-up sur tes tirages, via un interrupteur sous la bannière.",
+  },
+  {
     id: 31, date: '2026-07-05', tag: 'improvement',
     title: 'Vote de la vedette : un vrai sondage',
     description: "Fini le vote ouvert sur n'importe quel personnage : chaque semaine, une sélection de candidats épiques/légendaires/mythiques (différente pour chaque joueur) t'est proposée, et la vedette suivante est tirée au sort au prorata des votes reçus. Le compte à rebours est aussi mieux placé dans le panneau.",

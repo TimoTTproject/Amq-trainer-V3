@@ -88,6 +88,10 @@ model User {
   // ex. "leaderboard", "gacha" — ordre d'épinglage, pas de réordonnancement)
   pinnedNav String[] @default([])
 
+  // Le joueur choisit d'utiliser ou non le rate-up de la bannière vedette en
+  // cours quand il tire (la bannière elle-même change chaque lundi, imposée).
+  bannerBoostEnabled Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

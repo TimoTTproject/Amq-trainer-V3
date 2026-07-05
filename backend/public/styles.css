@@ -1349,6 +1349,8 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .weekly-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 10px 14px; border-radius: 10px; background: linear-gradient(120deg, #5f2c82, #ec4899, #f0a832); background-size: 200% auto; animation: cosmHolo 8s linear infinite; font-weight: 700; color: #fff; }
 .weekly-boost { font-size: .75rem; background: rgba(0,0,0,.3); padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
 .weekly-timer { font-size: .85rem; background: rgba(0,0,0,.3); padding: 3px 10px; border-radius: 999px; }
+.weekly-boost-toggle { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: .82rem; color: var(--text-2); cursor: pointer; }
+.weekly-boost-toggle input { cursor: pointer; }
 
 /* Panneau de vote « vedette de la semaine prochaine » */
 .gacha-vote { margin: 14px 0; }
