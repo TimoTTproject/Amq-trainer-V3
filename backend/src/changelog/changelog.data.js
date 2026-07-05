@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 35, date: '2026-07-05', tag: 'improvement',
+    title: 'Le craft respecte maintenant le tirage',
+    description: "Un personnage doit avoir été obtenu au moins une fois par tirage (par n'importe quel joueur) avant de pouvoir être fabriqué en poussière — plus de personnage qui n'existerait que par craft.",
+  },
+  {
     id: 34, date: '2026-07-05', tag: 'feature',
     title: 'Quêtes du jour toujours accessibles',
     description: "Un bouton dans l'en-tête (🎯) ouvre tes quêtes du jour et te laisse réclamer tes récompenses sans quitter l'écran où tu es — plus besoin de revenir sur l'Accueil.",

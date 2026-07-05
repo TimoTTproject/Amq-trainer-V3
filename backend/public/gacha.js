@@ -792,6 +792,8 @@ async function openCharacter(id) {
       </button>
       ${d.soldOut
         ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Épuisé — échange seulement</button>`
+        : !d.everDropped
+        ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Doit d'abord être tiré au moins une fois</button>`
         : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
         <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
       </button>`}

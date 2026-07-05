@@ -538,6 +538,10 @@ model CardInstance {
   serial      Int // numéro de série unique pour ce personnage (#serial)
   userId      String
   obtainedAt  DateTime @default(now())
+  // "pull" (tirage gacha) ou "craft" (fabriqué en poussière) — sert à vérifier
+  // qu'un personnage a déjà été obtenu par tirage au moins une fois avant de
+  // pouvoir être fabriqué (pas de perso qui n'existe QUE par craft).
+  source      String   @default("pull")
 
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

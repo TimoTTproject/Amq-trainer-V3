@@ -337,14 +337,14 @@ async function pickRandomCharacter(tx, rarity, boost) {
 
 // Frappe une nouvelle instance numérotée d'un personnage pour un joueur (dans tx).
 // Re-lit le perso (anti-course) ; retourne null si épuisé entre-temps. Sync UserCard.
-async function mintInstance(tx, userId, characterId) {
+async function mintInstance(tx, userId, characterId, source = 'pull') {
   const c = await tx.character.findUnique({
     where: { id: characterId },
     select: { id: true, minted: true, maxSupply: true, nextSerial: true },
   });
   if (!c || c.minted >= c.maxSupply) return null;
   const serial = c.nextSerial + 1;
-  await tx.cardInstance.create({ data: { characterId: c.id, serial, userId } });
+  await tx.cardInstance.create({ data: { characterId: c.id, serial, userId, source } });
   await tx.character.update({
     where: { id: c.id },
     data: { minted: { increment: 1 }, nextSerial: serial, soldOut: c.minted + 1 >= c.maxSupply },
@@ -476,13 +476,15 @@ router.post('/craft', requireAuth, async (req, res) => {
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
   if (character.soldOut) return res.status(400).json({ error: 'Personnage épuisé — disponible seulement par échange' });
+  const everDropped = await prisma.cardInstance.findFirst({ where: { characterId, source: 'pull' }, select: { id: true } });
+  if (!everDropped) return res.status(400).json({ error: 'Ce personnage doit être obtenu au moins une fois par tirage avant de pouvoir être fabriqué' });
   const cost = CRAFT_COST[character.rarity] || 0;
   if ((req.user.dust || 0) < cost) return res.status(400).json({ error: `Pas assez de poussière (${cost} requis)` });
 
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
-      const mint = await mintInstance(tx, req.user.id, characterId);
+      const mint = await mintInstance(tx, req.user.id, characterId, 'craft');
       if (!mint) throw new Error('SOLD_OUT');
       const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { decrement: cost } } });
       return { dust: u.dust, isNew: mint.isNew, serial: mint.serial };
@@ -707,6 +709,12 @@ router.get('/character/:id', requireAuth, async (req, res) => {
   const wished = !!(await prisma.wishlist.findUnique({
     where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
   }));
+  // Un perso ne peut être fabriqué que s'il a déjà été obtenu par tirage au
+  // moins une fois (par n'importe quel joueur) — pas de perso qui n'existe
+  // QUE par craft.
+  const everDropped = !!(await prisma.cardInstance.findFirst({
+    where: { characterId: id, source: 'pull' }, select: { id: true },
+  }));
 
   res.json({
     character: {
@@ -733,6 +741,7 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     favorite: card ? card.favorite : false,
     featured: character.featured,
     craftCost: CRAFT_COST[character.rarity] || 0,
+    everDropped,
     // Rareté réelle : stock mondial + n° de série possédés
     maxSupply: character.maxSupply,
     minted: character.minted,
