@@ -302,29 +302,28 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .hub-card {
   display: flex; align-items: center; gap: 16px; text-align: left;
-  background: var(--bg-2); border: 1px solid #2a2f42; border-left: 4px solid var(--c, var(--accent));
+  background: var(--bg-2); border: 1px solid #2a2f42;
   border-radius: var(--radius); padding: 20px; color: var(--text); text-decoration: none;
   transition: transform .08s, border-color .15s, box-shadow .15s;
 }
-.hub-card:hover { transform: translateY(-3px); border-color: var(--c, var(--accent)); box-shadow: 0 14px 30px rgba(0,0,0,.32); }
+.hub-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 14px 30px rgba(0,0,0,.32); }
 .hub-ico {
   flex-shrink: 0; width: 56px; height: 56px; border-radius: 14px;
-  display: flex; align-items: center; justify-content: center; font-size: 1.55rem; color: #fff;
-  background: var(--c, var(--accent)); box-shadow: 0 6px 16px -4px var(--c, var(--accent));
+  display: flex; align-items: center; justify-content: center; font-size: 1.55rem;
+  color: var(--text-2); background: rgba(255,255,255,.04); box-shadow: none;
+  transition: color .15s;
 }
+.hub-card:hover .hub-ico { color: var(--accent); }
 .hub-txt { flex: 1; min-width: 0; }
 .hub-txt h3 { font-size: 1.15rem; margin-bottom: 4px; }
 .hub-txt p { color: var(--text-2); font-size: .88rem; line-height: 1.4; }
 .hub-go { color: var(--text-2); font-size: .9rem; transition: transform .15s, color .15s; }
-.hub-card:hover .hub-go { color: var(--c, var(--accent)); transform: translateX(3px); }
-/* Carte mise en avant (ex. Coop) : lueur d'accent + badge */
-.hub-card.hub-card-feat {
-  border-color: var(--c, var(--accent));
-  box-shadow: inset 4px 0 var(--c, var(--accent)), 0 0 24px -6px var(--c, var(--accent));
-}
+.hub-card:hover .hub-go { color: var(--accent); transform: translateX(3px); }
+/* Carte mise en avant (ex. Coop) : le badge « NOUVEAU » suffit à la
+   distinguer — pas de lueur colorée permanente (cf. principes de design). */
 .hub-badge {
   display: inline-block; vertical-align: middle; margin-left: 8px;
-  background: var(--c, var(--accent)); color: #06222a; font-size: .58rem; font-weight: 800;
+  background: var(--accent); color: #fff; font-size: .58rem; font-weight: 800;
   letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; text-transform: uppercase;
 }
 @media (max-width: 560px) { .hub-grid { grid-template-columns: 1fr; } }
@@ -1705,6 +1704,13 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .changelog-row-body { flex: 1; min-width: 0; }
 .changelog-row .changelog-date { flex: 0 0 auto; white-space: nowrap; }
 
+/* Quêtes du jour + derniers tirages, côte à côte sur écran large : deux
+   longues bandes pleine largeur empilées utilisaient mal l'espace (cf.
+   passe « exploite la largeur »). En dessous de 900px, repli en pile. */
+.home-secondary-row { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 26px; }
+@media (min-width: 900px) { .home-secondary-row { grid-template-columns: 1fr 1fr; align-items: start; } }
+.home-secondary-row .home-quests, .home-secondary-row .home-recent-pulls { margin: 0; }
+
 /* Quêtes du jour (accueil) */
 .home-quests { margin: 18px 0 26px; padding: 18px; border-radius: 16px;
   background: linear-gradient(160deg, var(--bg-2), var(--bg));
@@ -2133,11 +2139,11 @@ header h1 i { color: var(--accent); }
   background: #13151a;
   border-color: #2c3038;
   border-radius: var(--radius);
-  box-shadow: inset 4px 0 var(--c, #30343d);
+  box-shadow: inset 4px 0 #30343d;
 }
 .hub-card:hover {
   border-color: #4a4f59;
-  box-shadow: inset 4px 0 var(--c, var(--accent)), 7px 7px 0 #07080a;
+  box-shadow: inset 4px 0 var(--accent), 7px 7px 0 #07080a;
   transform: translate(-2px, -2px);
 }
 .hub-ico { border-radius: 5px; background: #1a1d23; border: 1px solid #343943; }
