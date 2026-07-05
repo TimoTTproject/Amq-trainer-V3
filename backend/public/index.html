@@ -169,6 +169,8 @@
       <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span data-i18n="Jouer">Jouer</span></button>
       <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span data-i18n="Collection">Collection</span></button>
       <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span data-i18n="Communauté">Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
+      <div class="navbar-sep hidden" id="navbar-pinned-sep"></div>
+      <div id="navbar-pinned" class="navbar-pinned"></div>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span data-i18n="Admin">Admin</span></button>
     </nav>
 
@@ -182,31 +184,37 @@
         <button class="hub-card" data-nav="quiz" style="--c:#ffb648">
           <span class="hub-ico"><i class="fas fa-trophy"></i></span>
           <span class="hub-txt"><h3>Quiz classique</h3><p>Devine l'anime, gagne des tokens</p></span>
+          <span class="hub-pin" data-pin="quiz" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card hub-card-feat" data-nav="coop" style="--c:#38d6d6">
           <span class="hub-ico"><i class="fas fa-people-group"></i></span>
           <span class="hub-txt"><h3>Coop · Tour en équipe <span class="hub-badge">NOUVEAU</span></h3><p>Montez le plus haut possible ensemble — vies partagées, étages infinis</p></span>
+          <span class="hub-pin" data-pin="coop" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="training" style="--c:#3ec98a">
           <span class="hub-ico"><i class="fas fa-graduation-cap"></i></span>
           <span class="hub-txt"><h3>Entraînement</h3><p>Révise sans pression (séries, répétition espacée)</p></span>
+          <span class="hub-pin" data-pin="training" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="tower" style="--c:#8a6cff">
           <span class="hub-ico"><i class="fas fa-chess-rook"></i></span>
           <span class="hub-txt"><h3>Château de l'Infini</h3><p>QCM en survie : 3 vies, monte le plus haut possible</p></span>
+          <span class="hub-pin" data-pin="tower" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="mp" style="--c:#6c8cff">
           <span class="hub-ico"><i class="fas fa-users"></i></span>
           <span class="hub-txt"><h3>Multijoueur</h3><p>Affronte d'autres joueurs en temps réel</p></span>
+          <span class="hub-pin" data-pin="mp" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="daily" style="--c:#ff5d8f">
           <span class="hub-ico"><i class="fas fa-calendar-day"></i></span>
           <span class="hub-txt"><h3>Défi du jour</h3><p>Classé solo : mêmes chansons pour tous, 1 essai, MMR</p></span>
+          <span class="hub-pin" data-pin="daily" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
       </div>
@@ -222,26 +230,31 @@
         <button class="hub-card" data-nav="gacha" style="--c:#ff6bd6">
           <span class="hub-ico"><i class="fas fa-layer-group"></i></span>
           <span class="hub-txt"><h3>Gacha</h3><p>Dépense tes tokens pour collectionner des cartes</p></span>
+          <span class="hub-pin" data-pin="gacha" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="shop" style="--c:#f0a832">
           <span class="hub-ico"><i class="fas fa-store"></i></span>
           <span class="hub-txt"><h3>Boutique</h3><p>Cosmétiques : dos de cartes, bordures, bannières</p></span>
+          <span class="hub-pin" data-pin="shop" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="craft" style="--c:#ffd34d">
           <span class="hub-ico"><i class="fas fa-hammer"></i></span>
           <span class="hub-txt"><h3>Atelier</h3><p>Fabrique les cartes qui te manquent avec ta poussière 🌟</p></span>
+          <span class="hub-pin" data-pin="craft" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="catalog" style="--c:#4db8ff">
           <span class="hub-ico"><i class="fas fa-list"></i></span>
           <span class="hub-txt"><h3>Catalogue</h3><p>Parcours tous les openings (anime, titre, artiste)</p></span>
+          <span class="hub-pin" data-pin="catalog" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="playlist" style="--c:#ff6b6b">
           <span class="hub-ico"><i class="fas fa-heart"></i></span>
           <span class="hub-txt"><h3>Playlist</h3><p>Favoris likés et listes thématiques à partager</p></span>
+          <span class="hub-pin" data-pin="playlist" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
       </div>
@@ -257,21 +270,25 @@
         <button class="hub-card" data-nav="friends" style="--c:#3ec98a">
           <span class="hub-ico"><i class="fas fa-user-group"></i></span>
           <span class="hub-txt"><h3>Amis</h3><p>Ajoute des amis, vois qui est en ligne, invite en partie</p></span>
+          <span class="hub-pin" data-pin="friends" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="leaderboard" style="--c:#ffb648">
           <span class="hub-ico"><i class="fas fa-trophy"></i></span>
           <span class="hub-txt"><h3>Classement</h3><p>Classé, Château, Collection — qui domine ?</p></span>
+          <span class="hub-pin" data-pin="leaderboard" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="players" style="--c:#6c8cff">
           <span class="hub-ico"><i class="fas fa-users"></i></span>
           <span class="hub-txt"><h3>Joueurs</h3><p>Parcours tous les joueurs et visite leurs profils</p></span>
+          <span class="hub-pin" data-pin="players" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <button class="hub-card" data-nav="trades" style="--c:#ff6bd6">
           <span class="hub-ico"><i class="fas fa-right-left"></i></span>
           <span class="hub-txt"><h3>Échanges <span id="trades-hub-badge" class="nav-badge hidden"></span></h3><p>Propose et reçois des échanges de cartes</p></span>
+          <span class="hub-pin" data-pin="trades" role="button" tabindex="0" title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
         <a class="hub-card hub-card-feat" href="https://discord.gg/qsbn3bQh5K" target="_blank" rel="noopener" style="--c:#5865f2">

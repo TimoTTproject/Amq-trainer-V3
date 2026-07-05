@@ -678,6 +678,8 @@ function showApp(user) {
   else showView(defaultView, { replace: true });
   applyGameModeUI();
   renderHeaderUser();
+  if (typeof renderPinnedNav === 'function') renderPinnedNav();
+  if (typeof refreshPinIcons === 'function') refreshPinIcons();
   const linked = user.anilistListName || user.anilistName;
   if (linked) document.getElementById('anilist-username').value = linked;
   (guest ? Promise.resolve() : chooseInitialMode()).then(() => {
@@ -1048,10 +1050,17 @@ function setupAppUI() {
     b.addEventListener('click', () => navTo(b.dataset.nav))
   );
   // Hubs « Jouer » et « Collection » : les cartes portent data-nav
-  const hubClick = (e) => { const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav); };
+  const hubClick = (e) => {
+    const pin = e.target.closest('.hub-pin');
+    if (pin) { e.stopPropagation(); if (typeof togglePinNav === 'function') togglePinNav(pin.dataset.pin); return; }
+    const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav);
+  };
   document.getElementById('view-play').addEventListener('click', hubClick);
   document.getElementById('view-collection').addEventListener('click', hubClick);
   document.getElementById('view-community').addEventListener('click', hubClick);
+  document.getElementById('navbar-pinned').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav);
+  });
   document.getElementById('back-community-players').addEventListener('click', () => showView('community'));
   let playersSearchTimer;
   document.getElementById('players-search').addEventListener('input', (e) => {

@@ -3,6 +3,61 @@
 // (currentUser, api, escapeHtml, settings…) ; gacha.js définit RARITY_LABELS/ORDER
 // utilisés ici et dans le profil. Ne pas charger comme module ES.
 
+// ── ÉPINGLAGE DU MENU LATÉRAL ──
+// Icône/label de chaque raccourci épinglable (clés data-nav des hub-cards de
+// Jouer/Collection/Communauté) — reprend exactement ce qui est déjà écrit en
+// dur dans index.html, pour que le rendu en sidebar soit identique.
+const NAV_META = {
+  quiz: { icon: 'fa-trophy', label: 'Quiz classique' },
+  coop: { icon: 'fa-people-group', label: 'Coop' },
+  training: { icon: 'fa-graduation-cap', label: 'Entraînement' },
+  tower: { icon: 'fa-chess-rook', label: "Château de l'Infini" },
+  mp: { icon: 'fa-users', label: 'Multijoueur' },
+  daily: { icon: 'fa-calendar-day', label: 'Défi du jour' },
+  gacha: { icon: 'fa-layer-group', label: 'Gacha' },
+  shop: { icon: 'fa-store', label: 'Boutique' },
+  craft: { icon: 'fa-hammer', label: 'Atelier' },
+  catalog: { icon: 'fa-list', label: 'Catalogue' },
+  playlist: { icon: 'fa-heart', label: 'Playlist' },
+  friends: { icon: 'fa-user-group', label: 'Amis' },
+  leaderboard: { icon: 'fa-trophy', label: 'Classement' },
+  players: { icon: 'fa-users', label: 'Joueurs' },
+  trades: { icon: 'fa-right-left', label: 'Échanges' },
+};
+
+// Bascule un raccourci épinglé/désépinglé, met à jour currentUser + l'affichage.
+async function togglePinNav(nav) {
+  try {
+    const r = await api('/api/profile/pin-nav', { method: 'POST', body: JSON.stringify({ nav }) });
+    currentUser.pinnedNav = r.pinnedNav;
+    renderPinnedNav();
+    refreshPinIcons();
+  } catch (e) { alert(e.message); }
+}
+
+// Remet à jour l'état visuel (.pinned) de toutes les icônes punaise visibles
+// (hubs Jouer/Collection/Communauté) selon currentUser.pinnedNav.
+function refreshPinIcons() {
+  const pinned = new Set(currentUser?.pinnedNav || []);
+  document.querySelectorAll('.hub-pin').forEach((el) => {
+    el.classList.toggle('pinned', pinned.has(el.dataset.pin));
+  });
+}
+
+// Peuple #navbar-pinned à partir de currentUser.pinnedNav — appelée après
+// connexion et après chaque bascule d'épingle.
+function renderPinnedNav() {
+  const box = document.getElementById('navbar-pinned');
+  const sep = document.getElementById('navbar-pinned-sep');
+  if (!box || !sep) return;
+  const pins = (currentUser?.pinnedNav || []).filter((nav) => NAV_META[nav]);
+  sep.classList.toggle('hidden', !pins.length);
+  box.innerHTML = pins.map((nav) => {
+    const meta = NAV_META[nav];
+    return `<button class="nav-item" data-nav="${nav}"><i class="fas ${meta.icon}"></i><span>${escapeHtml(meta.label)}</span></button>`;
+  }).join('');
+}
+
 // ── CLASSEMENT ──
 const LB_UNITS = {
   tower: (v) => `Étage ${v}`,

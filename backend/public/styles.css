@@ -319,6 +319,16 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hub-txt p { color: var(--text-2); font-size: .88rem; line-height: 1.4; }
 .hub-go { color: var(--text-2); font-size: .9rem; transition: transform .15s, color .15s; }
 .hub-card:hover .hub-go { color: var(--accent); transform: translateX(3px); }
+/* Épingle : bascule un raccourci dans le menu latéral (cf. #navbar-pinned).
+   `<span>` volontairement (pas `<button>`) : .hub-card est déjà un bouton,
+   un bouton imbriqué serait invalide en HTML. */
+.hub-pin {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; color: var(--text-2);
+  cursor: pointer; transition: color .15s, background .15s;
+}
+.hub-pin:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.hub-pin.pinned { color: var(--accent); }
 /* Carte mise en avant (ex. Coop) : le badge « NOUVEAU » suffit à la
    distinguer — pas de lueur colorée permanente (cf. principes de design). */
 .hub-badge {
@@ -2499,6 +2509,10 @@ header { grid-area: header; padding-top: 22px; }
   background: var(--bg-2); border: 1px solid #232733; border-radius: var(--radius);
 }
 .navbar .nav-item { width: 100%; justify-content: flex-start; padding: 11px 14px; }
+/* Raccourcis épinglés par le joueur (cf. .hub-pin) : mêmes .nav-item, juste
+   séparés des 4 items racine par un filet discret. */
+.navbar-sep { border-top: 1px solid #232733; margin: 6px 4px; }
+.navbar-pinned { display: flex; flex-direction: column; gap: 2px; }
 #app > div[id^="view-"] { grid-area: main; min-width: 0; }
 
 @media (max-width: 860px) {
@@ -2509,4 +2523,6 @@ header { grid-area: header; padding-top: 22px; }
     border-radius: 0; padding: 0 0 8px; margin-bottom: 20px; min-height: 0;
   }
   .navbar .nav-item { width: auto; flex: none; justify-content: center; }
+  .navbar-sep { border-top: none; border-left: 1px solid #2a2f42; margin: 4px 6px; align-self: stretch; }
+  .navbar-pinned { flex-direction: row; flex-wrap: nowrap; gap: 2px; }
 }

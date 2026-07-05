@@ -119,6 +119,30 @@ router.post('/claim-levels', requireAuth, async (req, res) => {
   res.json({ granted: reward, tokens: u.tokens, claimedLevel: current, level: current });
 });
 
+// Épingle/désépingle un raccourci (data-nav des hub-cards) dans le menu
+// latéral. Bascule (present → retiré, absent → ajouté) ; borné à MAX_PINS
+// pour ne pas transformer la sidebar en second hub complet.
+const PINNABLE_NAV = new Set([
+  'quiz', 'coop', 'training', 'tower', 'mp', 'daily',
+  'gacha', 'shop', 'craft', 'catalog', 'playlist',
+  'friends', 'leaderboard', 'players', 'trades',
+]);
+const MAX_PINNED_NAV = 8;
+router.post('/pin-nav', requireAuth, async (req, res) => {
+  const nav = String(req.body?.nav || '');
+  if (!PINNABLE_NAV.has(nav)) return res.status(400).json({ error: 'Raccourci invalide' });
+  const current = req.user.pinnedNav || [];
+  let next;
+  if (current.includes(nav)) {
+    next = current.filter((n) => n !== nav);
+  } else {
+    if (current.length >= MAX_PINNED_NAV) return res.status(400).json({ error: `Maximum ${MAX_PINNED_NAV} raccourcis épinglés` });
+    next = [...current, nav];
+  }
+  const user = await prisma.user.update({ where: { id: req.user.id }, data: { pinnedNav: next }, select: { pinnedNav: true } });
+  res.json({ pinnedNav: user.pinnedNav });
+});
+
 // Annuaire des joueurs : liste paginée + recherche par pseudo (vue Communauté)
 router.get('/players/list', requireAuth, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);

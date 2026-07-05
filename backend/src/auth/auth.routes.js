@@ -66,6 +66,7 @@ function publicUser(u) {
     createdAt: u.createdAt,
     isAdmin: isAdmin(u),
     cosmetics: resolveEquipped(u),
+    pinnedNav: u.pinnedNav || [],
   };
 }
 

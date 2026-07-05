@@ -84,6 +84,10 @@ model User {
   profileBanner String? // bannière du profil
   avatarFrame   String? // cadre autour de l'avatar
 
+  // Raccourcis épinglés dans le menu latéral (clés data-nav des hub-cards,
+  // ex. "leaderboard", "gacha" — ordre d'épinglage, pas de réordonnancement)
+  pinnedNav String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
