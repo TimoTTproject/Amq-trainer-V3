@@ -56,14 +56,22 @@ async function buildChoices(song, count, titlePool = null) {
     }
   }
   if (byTitle.size < count) {
+    // Un seul aller-retour DB (une tranche contiguë prise à un offset aléatoire,
+    // puis dédoublonnée en mémoire) au lieu d'aller chercher jusqu'à 40 lignes
+    // une par une avec un skip aléatoire à chaque fois (ça multipliait les
+    // requêtes séquentielles et pouvait ralentir tout le site sous charge).
     const total = await prisma.song.count();
-    let guard = 0;
-    while (byTitle.size < count && guard++ < 40) {
-      const s = await prisma.song.findFirst({
-        skip: Math.floor(Math.random() * total),
+    if (total > 0) {
+      const batchSize = Math.min(total, 200);
+      const skip = Math.floor(Math.random() * Math.max(1, total - batchSize + 1));
+      const rows = await prisma.song.findMany({
+        skip, take: batchSize,
         select: { animeTitle: true, altTitles: true, seasonNumber: true },
       });
-      if (s) byTitle.set(s.animeTitle, { altTitles: s.altTitles || [], seasonNumber: s.seasonNumber || 0 });
+      for (const s of shuffle(rows)) {
+        if (byTitle.size >= count) break;
+        if (!byTitle.has(s.animeTitle)) byTitle.set(s.animeTitle, { altTitles: s.altTitles || [], seasonNumber: s.seasonNumber || 0 });
+      }
     }
   }
   const options = [...byTitle].map(([animeTitle, { altTitles, seasonNumber }]) => ({
