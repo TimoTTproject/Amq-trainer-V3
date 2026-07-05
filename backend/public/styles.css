@@ -2412,7 +2412,7 @@ header { grid-area: header; padding-top: 22px; }
 .navbar {
   grid-area: sidebar; flex-direction: column; align-items: stretch;
   gap: 2px; margin: 0; padding: 10px; border-bottom: none; overflow: visible;
-  position: sticky; top: 22px; align-self: start;
+  position: sticky; top: 22px; align-self: start; min-height: 180px;
   background: var(--bg-2); border: 1px solid #232733; border-radius: var(--radius);
 }
 .navbar .nav-item { width: 100%; justify-content: flex-start; padding: 11px 14px; }
@@ -2423,7 +2423,7 @@ header { grid-area: header; padding-top: 22px; }
   .navbar {
     flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; position: static; overflow-x: auto;
     background: none; border: none; border-bottom: 1px solid #2a2f42; box-shadow: none;
-    border-radius: 0; padding: 0 0 8px; margin-bottom: 20px;
+    border-radius: 0; padding: 0 0 8px; margin-bottom: 20px; min-height: 0;
   }
   .navbar .nav-item { width: auto; flex: none; justify-content: center; }
 }
