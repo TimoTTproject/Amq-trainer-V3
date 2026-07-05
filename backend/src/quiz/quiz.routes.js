@@ -85,8 +85,13 @@ async function buildChoices(song, count, titlePool = null) {
 // Résout l'ensemble des ids de musiques d'un mode/source d'entraînement pour un
 // utilisateur — partagé entre le tirage (/random) et les distracteurs Carré/Duo
 // (/choices), pour que les deux piochent dans exactement le même périmètre.
+// Renvoie aussi `titleRows` (animeTitle/altTitles/seasonNumber) quand on les a
+// déjà sous la main sans requête supplémentaire (cas 'mine'/'series', les plus
+// courants) : /choices les réutilise directement au lieu de re-scanner les
+// mêmes ids une seconde fois pour construire les distracteurs Carré/Duo.
 async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
   let songIds;
+  let titleRows = null;
   if (source === 'review') {
     songIds = await getReviewSongIds(userId);
   } else if (source === 'due') {
@@ -98,9 +103,10 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
   } else if (source === 'series') {
     const rows = await prisma.song.findMany({
       where: { animeTitle: series || '', videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) },
-      select: { id: true },
+      select: { id: true, animeTitle: true, altTitles: true, seasonNumber: true },
     });
     songIds = rows.map((r) => r.id);
+    titleRows = rows;
   } else if (source) {
     const where = { userId };
     if (source === 'missed') { where.playCount = { gt: 0 }; where.correctCount = 0; }
@@ -111,20 +117,25 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
     const entries = await prisma.userCatalogEntry.findMany({ where: { userId }, select: { songId: true } });
     songIds = entries.map((e) => e.songId);
   }
-  // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series')
+  // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series') : invalide
+  // titleRows (les lignes déjà en main ne correspondent plus au sous-ensemble filtré).
   if (typeFilter && source !== 'series' && songIds.length) {
     const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
     songIds = f.map((s) => s.id);
+    titleRows = null;
   }
   // Ma liste (mode normal) : priorise la série principale et exclut films/OAV/
   // spéciaux — par le format quand il est connu, sinon d'après le TITRE (gère les
   // morceaux non tagués `format: null`, qui passaient avant). Repli si ça vide tout.
   if (!source && songIds.length) {
-    const rows = await prisma.song.findMany({ where: { id: { in: songIds } }, select: { id: true, animeTitle: true, format: true } });
+    const rows = await prisma.song.findMany({
+      where: { id: { in: songIds } },
+      select: { id: true, animeTitle: true, format: true, altTitles: true, seasonNumber: true },
+    });
     const main = rows.filter((s) => (s.format ? isMainFormat(s.format) : !isSideContent(s.animeTitle)));
-    if (main.length) songIds = main.map((s) => s.id);
+    if (main.length) { songIds = main.map((s) => s.id); titleRows = main; }
   }
-  return songIds;
+  return { ids: songIds, titleRows };
 }
 
 // Répétition espacée : prochaine échéance selon la série de bonnes réponses.
@@ -216,7 +227,7 @@ router.get('/random', requirePlayer, async (req, res) => {
     if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
-    const songIds = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter });
+    const { ids: songIds } = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter });
     if (!songIds.length) {
       return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
     }
@@ -282,9 +293,14 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   // ce qui trahit la bonne réponse par élimination.
   let titlePool = null;
   if (round.mode === 'mine' || round.source) {
-    const ids = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, typeFilter: null });
-    if (ids.length) {
-      const rows = await prisma.song.findMany({ where: { id: { in: ids } }, select: { animeTitle: true, altTitles: true, seasonNumber: true } });
+    const { ids, titleRows } = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, typeFilter: null });
+    // titleRows est déjà rempli pour les cas les plus courants (mode 'mine',
+    // source 'series') par resolveSourceSongIds — sinon (sources basées sur
+    // UserSongStat, qui n'a pas ces colonnes) on va les chercher ici.
+    const rows = titleRows || (ids.length
+      ? await prisma.song.findMany({ where: { id: { in: ids } }, select: { animeTitle: true, altTitles: true, seasonNumber: true } })
+      : []);
+    if (rows.length) {
       const seen = new Map();
       for (const r of rows) if (!seen.has(r.animeTitle)) seen.set(r.animeTitle, { altTitles: r.altTitles || [], seasonNumber: r.seasonNumber || 0 });
       titlePool = [...seen].map(([animeTitle, v]) => ({ animeTitle, ...v }));
