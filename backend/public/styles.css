@@ -2392,3 +2392,38 @@ button, a, .nav-item, .hub-card, .home-card, .gcard, .tower-choice {
   .mode-switch { width: 100%; }
   .mode-switch .mode-btn { flex: 1; }
 }
+
+/* ════════════════════════════════════════════
+   MISE EN PAGE « TABLEAU DE BORD » : menu latéral + zone de contenu.
+   #app (seul élément à porter .container) devient une grille 2 colonnes :
+   en-tête pleine largeur en haut, menu latéral à gauche, contenu à droite.
+   Les ~25 vues (#app > div[id^="view-"]) partagent toutes la même zone
+   "main" : une seule est visible à la fois (.hidden gère l'affichage), donc
+   les superposer dans la même cellule de grille est sans risque et évite de
+   toucher au balisage de chaque vue.
+   ════════════════════════════════════════════ */
+.container {
+  max-width: 1360px; margin: 0 auto; padding: 0 24px 40px;
+  display: grid; column-gap: 32px; row-gap: 0;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-areas: "header header" "sidebar main";
+}
+header { grid-area: header; padding-top: 22px; }
+.navbar {
+  grid-area: sidebar; flex-direction: column; align-items: stretch;
+  gap: 2px; margin: 0; padding: 10px; border-bottom: none; overflow: visible;
+  position: sticky; top: 22px; align-self: start;
+  background: var(--bg-2); border: 1px solid #232733; border-radius: var(--radius);
+}
+.navbar .nav-item { width: 100%; justify-content: flex-start; padding: 11px 14px; }
+#app > div[id^="view-"] { grid-area: main; min-width: 0; }
+
+@media (max-width: 860px) {
+  .container { grid-template-columns: 1fr; grid-template-areas: "header" "sidebar" "main"; }
+  .navbar {
+    flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; position: static; overflow-x: auto;
+    background: none; border: none; border-bottom: 1px solid #2a2f42; box-shadow: none;
+    border-radius: 0; padding: 0 0 8px; margin-bottom: 20px;
+  }
+  .navbar .nav-item { width: auto; flex: none; justify-content: center; }
+}
