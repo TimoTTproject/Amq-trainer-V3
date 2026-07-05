@@ -844,6 +844,9 @@ function initMpUI() {
     mpLeft = false; mpEngaged = true;
     connectMp(); mpSocket && mpSocket.emit('mp:join', code);
   });
+  document.getElementById('mp-code-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('mp-join').click();
+  });
   // Entrée Coop : créer / rejoindre / retour
   document.getElementById('mp-coop-create').addEventListener('click', () => {
     mpLeft = false; mpEngaged = true;
@@ -855,6 +858,9 @@ function initMpUI() {
     mpLeft = false; mpEngaged = true;
     document.getElementById('mp-coop-msg').textContent = 'Connexion au salon…';
     connectMp(); mpSocket && mpSocket.emit('mp:join', code);
+  });
+  document.getElementById('mp-coop-code').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('mp-coop-join').click();
   });
   document.getElementById('mp-coop-back').addEventListener('click', () => { mpLeft = true; showView('play'); });
   // Liste des parties en cours + spectateur
