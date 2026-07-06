@@ -501,8 +501,12 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 /* ── Collection : barre filtre/tri ── */
 .gcard[data-cid] { cursor: pointer; transition: transform .12s; }
 .gcard[data-cid]:hover { transform: translateY(-3px); }
-.collection-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 14px 0; }
+.collection-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 14px 0; }
 .coll-filters { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+/* Les puces de filtre occupent toujours toute la largeur de leur ligne : sans
+   ça elles se mêlaient au tri/recherche/boutons et ça faisait un rendu confus
+   dès qu'il y avait plus de 2-3 puces (ex. Collection avec ses 5 raretés). */
+.collection-toolbar .coll-filters { flex: 1 1 100%; }
 .coll-chip { background: var(--bg); border: 1px solid #2a2f42; color: var(--text-2); padding: 6px 12px; border-radius: 999px; font-size: .8rem; cursor: pointer; transition: all .15s; }
 .coll-chip:hover { color: var(--text); border-color: var(--accent); }
 .coll-chip.active { background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 600; }
