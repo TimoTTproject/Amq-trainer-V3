@@ -19,6 +19,33 @@ let mpSpectating = false; // je regarde une partie (lecture seule, pas joueur)
 let mpVotedSkip = false; // ai-je voté pour passer l'extrait en cours ?
 let mpVoteSkipVotes = 0;
 let mpVoteSkipNeeded = 1;
+let mpClockOffset = 0; // serverNow - clientNow (voir mpSyncClock)
+
+// Le serveur envoie des timestamps ABSOLUS (startAt, countdownEndsAt) pour que
+// l'extrait démarre en même temps chez tous les joueurs. Comparer ça au Date.now()
+// LOCAL suppose une horloge système client bien synchronisée — faux en pratique
+// (PC/mobiles mal réglés) : le compte à rebours local finit alors trop tôt ou trop
+// tard par rapport au vrai `endRound` serveur, perçu comme un délai avant le reveal.
+// mpNow() corrige avec l'écart mesuré par aller-retour (mpSyncClock).
+function mpNow() { return Date.now() + mpClockOffset; }
+function mpSyncClock() {
+  if (!mpSocket) return;
+  let best = null;
+  let done = 0;
+  const attempts = 3;
+  const tick = () => {
+    const t0 = Date.now();
+    mpSocket.emit('mp:sync', t0, (res) => {
+      const rtt = Date.now() - t0;
+      const offset = res.serverTs + rtt / 2 - Date.now();
+      if (best === null || rtt < best.rtt) best = { rtt, offset };
+      done++;
+      if (done >= attempts) mpClockOffset = best.offset;
+      else setTimeout(tick, 120);
+    });
+  };
+  tick();
+}
 
 // Affiche les vies partagées de l'équipe (coop) dans le HUD.
 function updateCoopLives() {
@@ -197,6 +224,7 @@ function connectMp() {
   mpSocket.on('connect', () => {
     const msg = document.getElementById('mp-menu-msg');
     if (msg && msg.textContent.includes('Connexion au serveur')) msg.textContent = 'Connecté — entrée dans la file…';
+    mpSyncClock(); // ré-estime l'écart d'horloge à chaque (re)connexion
   });
   mpSocket.on('connect_error', () => {
     document.getElementById('mp-menu-msg').textContent = 'Connexion impossible (reconnecte-toi ?).';
@@ -591,7 +619,7 @@ function renderRoom(d) {
     startBtn.disabled = d.players.length < 2;
     if (d.countdownEndsAt) {
       const updateCountdown = () => {
-        const sec = Math.max(0, Math.ceil((d.countdownEndsAt - Date.now()) / 1000));
+        const sec = Math.max(0, Math.ceil((d.countdownEndsAt - mpNow()) / 1000));
         status.textContent = sec > 0 ? `Lancement automatique dans ${sec}s…` : 'Lancement de la partie…';
       };
       updateCountdown();
@@ -697,7 +725,7 @@ function mpUrlWithRetry(url, attempt) {
 }
 
 function mpWaitUntil(timestamp) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - mpNow())));
 }
 
 function mpWaitForCanPlay(media, timeoutMs = 9000) {
@@ -748,7 +776,7 @@ async function mpStartClip(url, startAt, duration) {
       if (sequence !== mpPlaybackSequence) return;
       await v.play();
       if (sequence !== mpPlaybackSequence) return;
-      const remaining = Math.max(1000, startAt + duration - Date.now());
+      const remaining = Math.max(1000, startAt + duration - mpNow());
       mpRunTimer(remaining);
       if (!mpEliminated && feedback.textContent.startsWith('Chargement du son')) feedback.textContent = '';
       return;

@@ -1105,6 +1105,15 @@ function initMp(server) {
     // client resté sur l'écran de jeu doit savoir que sa partie n'existe plus
     // au lieu de rester figé sur une manche fantôme (« Son indisponible »).
     if (!reattach(socket)) socket.emit('mp:none');
+    // Sync d'horloge : les manches utilisent des timestamps absolus (startAt,
+    // countdownEndsAt) pour que l'extrait démarre en même temps chez tous les
+    // joueurs. Si l'horloge système du client dérive par rapport au serveur
+    // (fréquent : PC/mobile mal synchronisés), son compte à rebours local finit
+    // trop tôt/tard par rapport au vrai `endRound` serveur (délai perçu avant le
+    // reveal). Le client mesure l'écart via un aller-retour et le compense.
+    socket.on('mp:sync', (clientTs, ack) => {
+      if (typeof ack === 'function') ack({ clientTs, serverTs: Date.now() });
+    });
     socket.on('mp:invite', (toUserId) => invite(socket, String(toUserId || '')));
     socket.on('mp:quick', (opts, ack) => {
       // Compat : si appelé avec seulement le callback (ancien client).
