@@ -1175,8 +1175,9 @@ function setupAppUI() {
   document.getElementById('player-modal').addEventListener('click', (e) => {
     if (e.target.id === 'player-modal') document.getElementById('player-modal').classList.add('hidden');
   });
-  // Pokédex personnages
+  // Pokédex personnages — accessible depuis Tirage, Collection, Par série et Albums
   document.getElementById('open-chars-btn').addEventListener('click', openCharacters);
+  document.querySelectorAll('[data-see-all-chars]').forEach((b) => b.addEventListener('click', openCharacters));
   document.getElementById('back-gacha-chars').addEventListener('click', () => showView('gacha'));
   // Stats de tirage (chance)
   document.getElementById('gacha-tabs').addEventListener('click', onGachaTabClick);
