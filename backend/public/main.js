@@ -1243,6 +1243,7 @@ function setupAppUI() {
   });
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
+  document.getElementById('admin-import-anime-btn').addEventListener('click', runImportCharactersFromAnime);
   document.getElementById('admin-endings-btn').addEventListener('click', runImportEndings);
   document.getElementById('admin-format-btn').addEventListener('click', runBackfillFormat);
   document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);

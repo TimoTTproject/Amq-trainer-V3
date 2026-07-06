@@ -190,6 +190,54 @@ async function runImportCharacters() {
   }
 }
 
+// Pareil que runImportCharacters, mais via /import-characters-anime : contourne
+// le plafond AniList de 5000 sur la recherche globale de personnages en
+// parcourant les ANIMES populaires et leurs personnages principaux/secondaires
+// (dédupliqués). Ici `page` avance sur les ANIMES, pas les personnages —
+// beaucoup plus de doublons attendus au fil des clics (persos déjà connus via
+// le premier import), donc plus lent à faire progresser le total.
+async function runImportCharactersFromAnime() {
+  const btn = document.getElementById('admin-import-anime-btn');
+  const status = document.getElementById('admin-import-anime-status');
+  btn.disabled = true;
+  status.textContent = 'Import via les animes AniList…';
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let totalAdded = 0, lastTotal = 0, fails = 0, nextPage = null;
+  try {
+    for (let i = 0; i < 16; i++) { // ~320 animes parcourus par clic
+      let r;
+      try {
+        const body = nextPage == null ? {} : { page: nextPage };
+        r = await api('/api/admin/import-characters-anime', { method: 'POST', body: JSON.stringify(body) });
+      } catch (e) {
+        if (++fails > 4) throw e;
+        status.textContent = `Pause (AniList saturé)… réessai ${fails}/4`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
+      totalAdded += r.added;
+      lastTotal = r.total;
+      nextPage = (r.page || 1) + 1;
+      status.textContent = `+${totalAdded} ajoutés · ${r.total} au total (page anime ${r.page})…`;
+      if (!r.hasMore) {
+        status.textContent = r.capped
+          ? `✅ Plafond AniList atteint (${r.total} personnages). Pense à « Recalculer les raretés ».`
+          : `✅ Terminé : ${r.total} personnages. Pense à « Recalculer les raretés ».`;
+        loadAdminChars(1, adminSearch);
+        return;
+      }
+      await sleep(1100); // throttle AniList
+    }
+    status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique pour continuer, puis « Recalculer les raretés ».`;
+    loadAdminChars(1, adminSearch);
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runResetMe() {
   if (!confirm('Réinitialiser TON compte ? (stats, SRS, cartes gacha, tokens, Château, classé seront effacés. Profil et « Ma liste » conservés.)')) return;
   const btn = document.getElementById('admin-reset-btn');

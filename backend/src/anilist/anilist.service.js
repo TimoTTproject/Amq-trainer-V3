@@ -102,6 +102,47 @@ async function getTopCharacters(page = 1, perPage = 50) {
   };
 }
 
+// Personnages via les ANIMES populaires plutôt que la recherche globale de
+// personnages : AniList plafonne strictement `Page.characters` à 5000
+// résultats, quels que soient le tri/filtre (vérifié — au-delà, l'API renvoie
+// "Page depth exceeds maximum allowed"). `Page.media` n'a pas cette limite
+// pour cet usage : on parcourt les animes par popularité et on récupère les
+// personnages principaux/secondaires de chacun, dédupliqués. Permet de faire
+// grossir le pool gacha au-delà de 5000 personnages.
+async function getAnimeCharacters(page = 1, perPage = 20, charsPerAnime = 15) {
+  const query = `
+    query ($page: Int, $perPage: Int, $charsPerAnime: Int) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo { hasNextPage }
+        media(type: ANIME, sort: POPULARITY_DESC) {
+          id
+          title { romaji english }
+          characters(sort: FAVOURITES_DESC, perPage: $charsPerAnime) {
+            edges { role node { id name { full } image { large } favourites } }
+          }
+        }
+      }
+    }`;
+  const data = await anilistQuery(query, { page, perPage, charsPerAnime });
+  const mediaList = data?.Page?.media || [];
+  // Un personnage peut apparaître dans plusieurs animes de cette page
+  // (crossover, spin-off) : on ne le garde qu'une fois, associé au premier
+  // anime rencontré (le plus populaire, puisque triés par popularité).
+  const seen = new Map();
+  for (const m of mediaList) {
+    const t = m.title || {};
+    const seriesTitle = t.romaji || t.english || null;
+    for (const edge of m.characters?.edges || []) {
+      const c = edge.node;
+      if (c && !seen.has(c.id)) seen.set(c.id, { ...c, seriesTitle, seriesId: m.id });
+    }
+  }
+  return {
+    characters: [...seen.values()],
+    hasNextPage: data?.Page?.pageInfo?.hasNextPage || false,
+  };
+}
+
 // Média (anime) principal de plusieurs personnages — pour remplir « series ».
 async function getCharacterMedia(ids) {
   const query = `
@@ -179,4 +220,4 @@ async function getAnimeCoversByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getTopCharacters, getCharacterMedia, seriesOfCharacter };
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getTopCharacters, getAnimeCharacters, getCharacterMedia, seriesOfCharacter };

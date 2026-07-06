@@ -3,7 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
-const { getCharacterMedia, seriesOfCharacter, getTopCharacters } = require('../anilist/anilist.service');
+const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
 const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
@@ -259,6 +259,47 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
       const { series, seriesId } = seriesOfCharacter(c);
       return { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity: 'common', series, seriesId, maxSupply: MAX_SUPPLY.common };
     });
+  if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
+
+  const total = await prisma.character.count();
+  res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
+});
+
+// Importe des personnages en itérant les ANIMES populaires plutôt que la
+// recherche globale de personnages — celle-ci est plafonnée par AniList à
+// 5000 résultats au total (vérifié : au-delà, l'API renvoie une erreur
+// "Page depth exceeds maximum"), quels que soient le tri/filtre. Ici, `page`
+// porte sur les ANIMES (pas les personnages) ; chaque anime apporte jusqu'à
+// ~15 personnages (rôles principaux/secondaires), dédupliqués contre le pool
+// existant. Nouveaux persos en « common » (l'admin recalcule ensuite les
+// raretés). Permet de faire grossir le pool au-delà de 5000.
+router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, res) => {
+  const pageNum = parseInt(req.body?.page) || 1;
+
+  let page;
+  try {
+    page = await getAnimeCharacters(pageNum, 20, 15);
+  } catch (e) {
+    const total = await prisma.character.count();
+    return res.json({ added: 0, total, hasMore: false, page: pageNum, capped: true });
+  }
+  const chars = page.characters || [];
+  if (!chars.length) {
+    const total = await prisma.character.count();
+    return res.json({ added: 0, total, hasMore: page.hasNextPage, page: pageNum });
+  }
+
+  const ids = chars.map((c) => c.id);
+  const existing = await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } });
+  const existingSet = new Set(existing.map((e) => e.anilistId));
+
+  const toCreate = chars
+    .filter((c) => !existingSet.has(c.id))
+    .map((c) => ({
+      anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0,
+      rarity: 'common', series: c.seriesTitle || null, seriesId: c.seriesId || null,
+      maxSupply: MAX_SUPPLY.common,
+    }));
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 
   const total = await prisma.character.count();
