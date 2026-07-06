@@ -484,18 +484,25 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
 // personnages réorganisé avec la nouvelle pyramide 150 Mythique/550 Légendaire
 // et un stock resserré) SANS toucher aux autres systèmes de jeu (quiz, Château,
 // multijoueur, défi du jour, XP/niveaux). Chaque joueur est REMBOURSÉ à
-// hauteur de ce qu'il a réellement dépensé en tirages depuis toujours (somme
-// BRUTE des coûts `pack_open`, sans déduire les remboursements de doublons
-// déjà perçus en cours de route) — pas un forfait identique pour tout le
-// monde. Ajouté à son solde actuel (jamais un remplacement : les tokens
-// gagnés hors gacha — quiz, Château, etc. — ne sont pas concernés).
+// hauteur de ce qu'il a réellement dépensé en tirages DEPUIS LE RESET
+// PRÉCÉDENT (somme BRUTE des coûts `pack_open` postérieurs à cette date, sans
+// déduire les remboursements de doublons déjà perçus en cours de route) — pas
+// un forfait identique pour tout le monde, et jamais deux fois la même
+// dépense si ce reset est déclenché plusieurs fois (sinon un 2ᵉ reset
+// rembourserait à nouveau les tirages déjà compensés par le 1ᵉʳ, doublant le
+// remboursement). Ajouté à son solde actuel (jamais un remplacement : les
+// tokens gagnés hors gacha — quiz, Château, etc. — ne sont pas concernés).
 // Protégé : nécessite body.confirm === 'RESET_GACHA'.
 router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   if (req.body?.confirm !== 'RESET_GACHA') return res.status(400).json({ error: 'Confirmation requise (RESET_GACHA)' });
 
   const users = await prisma.user.findMany({ select: { id: true } });
+  const prevReset = await prisma.appSetting.findUnique({ where: { key: 'lastGachaReset' } });
+  const since = prevReset ? new Date(parseInt(prevReset.value)) : null;
   const spentGroups = await prisma.tokenTransaction.groupBy({
-    by: ['userId'], where: { reason: 'pack_open' }, _sum: { amount: true },
+    by: ['userId'],
+    where: { reason: 'pack_open', ...(since ? { createdAt: { gt: since } } : {}) },
+    _sum: { amount: true },
   });
   // `amount` est négatif pour un coût de tirage (pack_open) → valeur absolue = dépensé.
   const spentByUser = new Map(spentGroups.map((g) => [g.userId, Math.abs(g._sum.amount || 0)]));

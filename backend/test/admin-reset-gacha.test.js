@@ -43,11 +43,14 @@ test('reset-gacha : refuse sans la confirmation exacte', async () => {
   assert.equal(res.status, 400);
 });
 
-test('reset-gacha : rembourse chaque joueur du montant BRUT réellement dépensé en tirages (u1=300, u2=0)', async () => {
+test('reset-gacha : rembourse chaque joueur du montant BRUT réellement dépensé en tirages depuis le reset précédent (u1=300, u2=0)', async () => {
   prisma.user.findMany = async () => [{ id: 'u1' }, { id: 'u2' }];
+  // Aucun reset précédent → pas de borne de date, tout l'historique pack_open compte.
+  prisma.appSetting.findUnique = async () => null;
   // u1 a dépensé 100+200=300 en pack_open (amount négatif) ; u2 n'a jamais tiré.
   prisma.tokenTransaction.groupBy = async ({ where }) => {
     assert.equal(where.reason, 'pack_open');
+    assert.equal('createdAt' in where, false);
     return [{ userId: 'u1', _sum: { amount: -300 } }];
   };
   const writes = [];
@@ -93,6 +96,34 @@ test('reset-gacha : rembourse chaque joueur du montant BRUT réellement dépens�
   assert.equal(bonuses.length, 2);
   assert.ok(bonuses.every((t) => t.amount === 500));
   assert.ok(['userCard', 'cardInstance', 'trade', 'cardAlbumItem', 'cardAlbum', 'character', 'appSetting'].every((w) => writes.includes(w)));
+});
+
+test('reset-gacha : ne rembourse QUE les tirages postérieurs au reset précédent (jamais deux fois la même dépense)', async () => {
+  prisma.user.findMany = async () => [{ id: 'u1' }];
+  const prevResetMs = 1751800000000;
+  prisma.appSetting.findUnique = async () => ({ key: 'lastGachaReset', value: String(prevResetMs) });
+  let capturedWhere;
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    capturedWhere = where;
+    return [{ userId: 'u1', _sum: { amount: -50 } }]; // seuls les tirages APRÈS le reset précédent
+  };
+  prisma.userCard.deleteMany = async () => ({});
+  prisma.cardInstance.deleteMany = async () => ({});
+  prisma.trade.deleteMany = async () => ({});
+  prisma.cardAlbumItem.deleteMany = async () => ({});
+  prisma.cardAlbum.deleteMany = async () => ({});
+  prisma.character.updateMany = async () => ({});
+  prisma.user.update = async () => ({});
+  prisma.tokenTransaction.create = async ({ data }) => data;
+  prisma.appSetting.upsert = async () => ({});
+
+  const res = await app.request('/api/admin/reset-gacha', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'RESET_GACHA' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.totalCompensation, 50);
+  assert.ok(capturedWhere.createdAt.gt instanceof Date);
+  assert.equal(capturedWhere.createdAt.gt.getTime(), prevResetMs);
 });
 
 test('reset-notice : renvoie resetAt=null si aucun reset n\'a jamais eu lieu', async () => {

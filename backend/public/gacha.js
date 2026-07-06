@@ -766,7 +766,7 @@ async function checkGachaResetNotice() {
   const body = document.getElementById('gacha-reset-body');
   if (!modal || !body) return;
   const compLine = d.compensation > 0
-    ? `<p>Tu as dépensé <b>${d.compensation} 🪙</b> en tirages depuis toujours — cette somme t'a été <b>intégralement rendue</b>, en plus de tes tokens actuels, pour retirer sur ce pool renouvelé.</p>`
+    ? `<p>Tu as dépensé <b>${d.compensation} 🪙</b> en tirages depuis le dernier reset — cette somme t'a été <b>intégralement rendue</b>, en plus de tes tokens actuels, pour retirer sur ce pool renouvelé.</p>`
     : `<p>Tu n'avais encore jamais tiré de carte, donc rien à te rembourser côté tirages.</p>`;
   const bonusLine = d.bonus > 0
     ? `<p>Un bug faisait sortir des Mythiques plus souvent que prévu (rate-up vedette hebdo mal recalculé) — en dédommagement, tu reçois en plus <b>${d.bonus} 🪙</b>, offerts à tout le monde.</p>`

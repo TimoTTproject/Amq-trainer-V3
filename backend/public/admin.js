@@ -293,7 +293,7 @@ async function runResetAll() {
 
 async function runResetGacha() {
   const status = document.getElementById('admin-reset-gacha-status');
-  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours, PLUS un dédommagement forfaitaire de 500 🪙 pour le bug de fuite de rareté (Mythique en trop) — ajouté à son solde actuel. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages DEPUIS LE RESET PRÉCÉDENT (jamais deux fois la même dépense), PLUS un dédommagement forfaitaire de 500 🪙 pour le bug de fuite de rareté (Mythique en trop) — ajouté à son solde actuel. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
   // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
   // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
   if (ans === null) { status.textContent = 'Annulé.'; return; }
