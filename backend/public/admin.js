@@ -293,7 +293,7 @@ async function runResetAll() {
 
 async function runResetGacha() {
   const status = document.getElementById('admin-reset-gacha-status');
-  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages DEPUIS LE RESET PRÉCÉDENT (jamais deux fois la même dépense), PLUS un dédommagement forfaitaire de 500 🪙 pour le bug de fuite de rareté (Mythique en trop) — ajouté à son solde actuel. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. AUCUN remboursement — les tokens ne sont pas touchés. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées non plus.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
   // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
   // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
   if (ans === null) { status.textContent = 'Annulé.'; return; }
@@ -303,145 +303,11 @@ async function runResetGacha() {
   status.textContent = 'Réinitialisation du gacha…';
   try {
     const r = await api('/api/admin/reset-gacha', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_GACHA' }) });
-    status.textContent = `✅ ${r.users} comptes réinitialisés, ${r.totalCompensation} 🪙 remboursés (montant réel dépensé) + ${r.totalBonus} 🪙 de dédommagement forfaitaire. Les joueurs verront une explication à leur prochaine connexion.`;
+    status.textContent = `✅ ${r.users} comptes réinitialisés (aucun remboursement). Les joueurs verront une explication à leur prochaine connexion.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
     btn.disabled = false;
-  }
-}
-
-// Liste les évènements de reset gacha détectés (lecture seule) — à consulter
-// avant de lancer la correction, pour vérifier qu'il y a bien 2+ évènements.
-async function auditResetGacha() {
-  const status = document.getElementById('admin-reset-gacha-audit-status');
-  const btn = document.getElementById('admin-reset-gacha-audit-btn');
-  btn.disabled = true;
-  status.textContent = 'Analyse…';
-  try {
-    const { events } = await api('/api/admin/reset-gacha/audit');
-    if (!events.length) { status.textContent = 'Aucun reset gacha détecté.'; return; }
-    status.innerHTML = events.map((e, i) => {
-      const date = new Date(e.at).toLocaleString('fr-FR');
-      return `#${i + 1} · ${date} : ${e.users} joueur(s) remboursé(s) (${e.totalCompensation} 🪙 au total)${e.bonusUsers ? `, ${e.bonusUsers} bonus incident (${e.totalBonus} 🪙)` : ''}`;
-    }).join('<br>');
-  } catch (e) {
-    status.textContent = 'Erreur : ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// Corrige le DERNIER reset s'il a remboursé tout l'historique au lieu de
-// seulement les tirages depuis le reset précédent (voir commit du 2026-07-06).
-async function fixDoubleRefund() {
-  const status = document.getElementById('admin-reset-gacha-fix-status');
-  const ans = prompt('⚠️ Corrige le dernier reset gacha s\'il a remboursé deux fois la même dépense : retire à chaque joueur concerné l\'excédent reçu par erreur (jamais en dessous de 0, et sans effet si déjà corrigé).\n\nTape FIX_DOUBLE_REFUND (exactement) pour confirmer :');
-  if (ans === null) { status.textContent = 'Annulé.'; return; }
-  if (ans !== 'FIX_DOUBLE_REFUND') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "FIX_DOUBLE_REFUND") — rien n'a été fait, réessaie.`; return; }
-  const btn = document.getElementById('admin-reset-gacha-fix-btn');
-  btn.disabled = true;
-  status.textContent = 'Correction en cours…';
-  try {
-    const r = await api('/api/admin/reset-gacha/fix-double-refund', { method: 'POST', body: JSON.stringify({ confirm: 'FIX_DOUBLE_REFUND' }) });
-    const clamped = r.corrections.filter((c) => c.clamped).length;
-    status.textContent = `✅ ${r.usersFixed} correction(s) appliquée(s) sur ${r.eventsChecked} évènement(s) de reset vérifié(s)${clamped ? ` (dont ${clamped} plafonnée(s) au solde actuel, déjà dépensé)` : ''}.`;
-  } catch (e) {
-    status.textContent = 'Erreur : ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// Relevé complet des transactions tokens d'un joueur — diagnostic en cas de
-// solde qui semble faux, pour voir les vraies lignes au lieu de recalculer à
-// l'aveugle (ex. plusieurs clics rapprochés sur "Reset GACHA" fusionnés dans
-// le même évènement détecté côté serveur).
-// Annulation complète : garde le tout 1er remboursement gacha_reset_
-// compensation par joueur, annule tous les suivants + les corrections déjà
-// appliquées par fixDoubleRefund (insuffisantes en pratique). Ne recalcule
-// rien par période — juste une annulation exacte des lignes existantes.
-async function rollbackToFirstReset() {
-  const status = document.getElementById('admin-reset-gacha-rollback-status');
-  const ans = prompt('⚠️ Annule TOUS les remboursements de reset gacha sauf le tout premier de chaque joueur (+ les corrections déjà appliquées) : à utiliser si "Corriger un remboursement en double" n\'a pas suffi. Jamais de solde négatif, sans effet si déjà appliqué.\n\nTape ROLLBACK_TO_FIRST (exactement) pour confirmer :');
-  if (ans === null) { status.textContent = 'Annulé.'; return; }
-  if (ans !== 'ROLLBACK_TO_FIRST') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "ROLLBACK_TO_FIRST") — rien n'a été fait, réessaie.`; return; }
-  const btn = document.getElementById('admin-reset-gacha-rollback-btn');
-  btn.disabled = true;
-  status.textContent = 'Annulation en cours…';
-  try {
-    const r = await api('/api/admin/reset-gacha/rollback-to-first', { method: 'POST', body: JSON.stringify({ confirm: 'ROLLBACK_TO_FIRST' }) });
-    const clamped = r.results.filter((c) => c.clamped).length;
-    status.textContent = `✅ ${r.usersAffected} joueur(s) concerné(s)${clamped ? ` (dont ${clamped} plafonné(s) au solde actuel, déjà dépensé)` : ''}.`;
-  } catch (e) {
-    status.textContent = 'Erreur : ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// Correction finale : recalcule depuis zéro (dépense pack_open réelle + bonus
-// forfaitaire, aucune hypothèse sur l'historique des resets précédents) et
-// applique la différence en une seule transaction traçable par joueur.
-function renderRecomputeRows(list) {
-  if (!list.length) return '<p class="muted">Aucun écart détecté — tout est déjà correct.</p>';
-  return `<table class="catalog-table"><thead><tr><th>Joueur</th><th>Dépensé</th><th>Correct</th><th>Actuel</th><th>Écart</th></tr></thead><tbody>${
-    list.map((p) => `<tr${p.alreadyDone ? ' class="muted"' : ''}><td>${p.userId}</td><td>${p.spent}</td><td>${p.correctGachaNet}</td><td>${p.currentGachaNet}</td><td>${p.diff > 0 ? '+' : ''}${p.diff}${p.alreadyDone ? ' (déjà appliqué)' : ''}</td></tr>`).join('')
-  }</tbody></table>`;
-}
-
-async function previewRecomputeFinal() {
-  const status = document.getElementById('admin-reset-gacha-final-status');
-  status.textContent = 'Calcul…';
-  try {
-    const r = await api('/api/admin/reset-gacha/recompute-preview');
-    status.innerHTML = `<p>${r.users} joueur(s) avec un écart détecté :</p>${renderRecomputeRows(r.preview)}`;
-  } catch (e) {
-    status.textContent = 'Erreur : ' + e.message;
-  }
-}
-
-async function applyRecomputeFinal() {
-  const status = document.getElementById('admin-reset-gacha-final-status');
-  const ans = prompt('⚠️ Applique la correction finale : recalcule pour chaque joueur ce qu\'il devrait avoir reçu (dépense réelle de tirages + bonus forfaitaire de 500) et ajuste son solde en une seule transaction, sans toucher à rien d\'autre. Jamais de solde négatif, idempotent.\n\nTape RECOMPUTE_FINAL (exactement) pour confirmer :');
-  if (ans === null) { status.textContent = 'Annulé.'; return; }
-  if (ans !== 'RECOMPUTE_FINAL') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RECOMPUTE_FINAL") — rien n'a été fait, réessaie.`; return; }
-  const btn = document.getElementById('admin-reset-gacha-final-btn');
-  btn.disabled = true;
-  status.textContent = 'Correction en cours…';
-  try {
-    const r = await api('/api/admin/reset-gacha/recompute-final', { method: 'POST', body: JSON.stringify({ confirm: 'RECOMPUTE_FINAL' }) });
-    status.innerHTML = `<p>✅ ${r.usersAffected} joueur(s) corrigé(s).</p>${renderRecomputeRows(r.corrections)}`;
-  } catch (e) {
-    status.textContent = 'Erreur : ' + e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function showTokenLedger() {
-  const input = document.getElementById('admin-ledger-search');
-  const out = document.getElementById('admin-ledger-result');
-  const q = input.value.trim();
-  if (!q) { out.textContent = 'Indique un pseudo.'; return; }
-  out.textContent = 'Chargement…';
-  try {
-    const r = await api(`/api/admin/token-ledger?user=${encodeURIComponent(q)}`);
-    const reasonRows = Object.entries(r.byReason)
-      .map(([reason, s]) => `<tr><td>${reason}</td><td>${s.count}</td><td>${s.total}</td></tr>`)
-      .join('');
-    const txRows = r.transactions.map((t) => {
-      const date = new Date(t.createdAt).toLocaleString('fr-FR');
-      return `<tr><td>${date}</td><td>${t.reason}</td><td>${t.amount}</td></tr>`;
-    }).join('');
-    out.innerHTML = `
-      <p><b>${escapeHtml(r.user.displayName)}</b> — solde actuel : <b>${r.user.tokens} 🪙</b> (somme de toutes les transactions : ${r.sumOfAllTransactions})</p>
-      <table class="catalog-table"><thead><tr><th>Raison</th><th>Nb</th><th>Total</th></tr></thead><tbody>${reasonRows}</tbody></table>
-      <details><summary>Détail chronologique (${r.transactions.length} transactions)</summary>
-        <table class="catalog-table"><thead><tr><th>Date</th><th>Raison</th><th>Montant</th></tr></thead><tbody>${txRows}</tbody></table>
-      </details>`;
-  } catch (e) {
-    out.textContent = 'Erreur : ' + e.message;
   }
 }
 

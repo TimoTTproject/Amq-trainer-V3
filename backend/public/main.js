@@ -1323,12 +1323,6 @@ function setupAppUI() {
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
   document.getElementById('admin-reset-gacha-btn').addEventListener('click', runResetGacha);
-  document.getElementById('admin-reset-gacha-audit-btn').addEventListener('click', auditResetGacha);
-  document.getElementById('admin-reset-gacha-fix-btn').addEventListener('click', fixDoubleRefund);
-  document.getElementById('admin-reset-gacha-rollback-btn').addEventListener('click', rollbackToFirstReset);
-  document.getElementById('admin-reset-gacha-preview-btn').addEventListener('click', previewRecomputeFinal);
-  document.getElementById('admin-reset-gacha-final-btn').addEventListener('click', applyRecomputeFinal);
-  document.getElementById('admin-ledger-btn').addEventListener('click', showTokenLedger);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));

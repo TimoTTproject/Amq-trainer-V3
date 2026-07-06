@@ -765,17 +765,9 @@ async function checkGachaResetNotice() {
   const modal = document.getElementById('gacha-reset-modal');
   const body = document.getElementById('gacha-reset-body');
   if (!modal || !body) return;
-  const compLine = d.compensation > 0
-    ? `<p>Tu as dépensé <b>${d.compensation} 🪙</b> en tirages depuis le dernier reset — cette somme t'a été <b>intégralement rendue</b>, en plus de tes tokens actuels, pour retirer sur ce pool renouvelé.</p>`
-    : `<p>Tu n'avais encore jamais tiré de carte, donc rien à te rembourser côté tirages.</p>`;
-  const bonusLine = d.bonus > 0
-    ? `<p>Un bug faisait sortir des Mythiques plus souvent que prévu (rate-up vedette hebdo mal recalculé) — en dédommagement, tu reçois en plus <b>${d.bonus} 🪙</b>, offerts à tout le monde.</p>`
-    : '';
   body.innerHTML = `
-    <p>Le pool de personnages a été réorganisé : <b>150 Mythiques</b> et <b>550 Légendaires</b> fixes, un stock resserré par personnage pour plus d'exclusivité.</p>
-    <p>Pour repartir sur une base saine avec cette nouvelle répartition, <b>ta collection a été réinitialisée</b> (cartes, exemplaires numérotés, échanges en cours). Tes statistiques de quiz, Château, multijoueur, défi du jour et niveaux ne sont <b>pas</b> concernées.</p>
-    ${compLine}
-    ${bonusLine}`;
+    <p>Le pool de personnages a été remis à plat, avec un stock resserré par personnage pour plus d'exclusivité.</p>
+    <p><b>Ta collection a été réinitialisée</b> (cartes, exemplaires numérotés, échanges en cours). Tes tokens et tes statistiques de quiz, Château, multijoueur, défi du jour et niveaux ne sont <b>pas</b> concernés.</p>`;
   modal.classList.remove('hidden');
   localStorage.setItem('amq_gacha_reset_seen', String(d.resetAt));
 }
