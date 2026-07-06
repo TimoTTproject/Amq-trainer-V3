@@ -1461,8 +1461,9 @@ select.album-form-control {
 .luck-head { text-align: center; padding: 16px; border-radius: var(--radius); background: var(--bg-3); margin-bottom: 14px; border: 1px solid #2a2f42; }
 .luck-head.lucky { border-color: var(--green); box-shadow: 0 0 18px -6px var(--green); }
 .luck-head.unlucky { border-color: var(--red); box-shadow: 0 0 18px -6px var(--red); }
+.luck-kicker { margin-bottom: 6px; color: var(--text-2); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .luck-pct { font-size: 2.6rem; font-weight: 800; line-height: 1; }
-.luck-pct span { font-size: 1.2rem; }
+.luck-pct span { margin-right: 2px; font-size: 1.2rem; vertical-align: .3em; }
 .luck-head.lucky .luck-pct { color: var(--green); }
 .luck-head.unlucky .luck-pct { color: var(--red); }
 .luck-head.neutral .luck-pct { color: var(--text); }

@@ -354,7 +354,16 @@ router.get('/stats', requireAuth, async (req, res) => {
 
   res.json({
     total, pity: u.pity || 0, pityLimit: PITY_LIMIT,
-    perRarity, luck: { percent: luckPercent, label: luckLabel, min: LUCK_MIN_PULLS },
+    perRarity,
+    // Indice relatif, pas une probabilité : 1 = conforme aux taux théoriques,
+    // > 1 = plus chanceux, < 1 = moins chanceux. `percent` reste exposé pour
+    // compatibilité avec les clients déjà chargés avant ce déploiement.
+    luck: {
+      index: luckPercent == null ? null : luckPercent / 100,
+      percent: luckPercent,
+      label: luckLabel,
+      min: LUCK_MIN_PULLS,
+    },
   });
 });
 

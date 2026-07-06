@@ -721,13 +721,15 @@ async function openGachaStats() {
 
 function renderGachaStats(d) {
   const luck = d.luck || {};
-  const cls = luck.percent == null ? 'neutral' : luck.percent >= 112 ? 'lucky' : luck.percent <= 88 ? 'unlucky' : 'neutral';
-  const luckHead = luck.percent == null
+  const luckIndex = luck.index ?? (luck.percent == null ? null : luck.percent / 100);
+  const cls = luckIndex == null ? 'neutral' : luckIndex >= 1.12 ? 'lucky' : luckIndex <= 0.88 ? 'unlucky' : 'neutral';
+  const luckHead = luckIndex == null
     ? `<div class="luck-head neutral"><div class="luck-label">${escapeHtml(luck.label)}</div></div>`
     : `<div class="luck-head ${cls}">
-         <div class="luck-pct">${luck.percent}<span>%</span></div>
+         <div class="luck-kicker">Indice de chance</div>
+         <div class="luck-pct"><span>×</span>${luckIndex.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
          <div class="luck-label">${escapeHtml(luck.label)}</div>
-         <div class="hint">100 % = pile dans les taux théoriques</div>
+         <div class="hint">×1 = conforme aux taux théoriques · ce n’est pas une probabilité de tirage</div>
        </div>`;
   const rows = (d.perRarity || []).map((r) => {
     const delta = r.actualRate - r.expectedRate;
