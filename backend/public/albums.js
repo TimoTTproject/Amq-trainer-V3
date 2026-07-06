@@ -147,9 +147,9 @@ async function saveAlbsEdit() {
   }
 }
 
-// ── Détail d'un album : aspect « classeur » — emplacements fixes (9/page),
-// on clique une pochette vide pour y ranger une carte possédée, au lieu
-// d'une longue liste de tous ses persos à cocher. ──
+// ── Détail d'un album : aspect « classeur » — emplacements fixes (9/page).
+// L'ajout passe par un bouton dédié pour laisser les cartes de l'album au
+// premier plan, sans longue liste de personnages avant le classeur. ──
 const ALD_PAGE_SLOTS = 9; // 3×3, comme une vraie page de classeur
 let aldCurrent = null; // { id, isOwner, cards: [{..., position}], … }
 let aldPage = 1;
@@ -187,12 +187,12 @@ async function openAlbumDetail(id) {
   renderAldGrid();
 }
 
-// Nombre de pages du classeur : couvre le plus haut emplacement occupé, et
-// le propriétaire a toujours une page vide en plus pour continuer à ranger.
+// Nombre de pages du classeur : couvre uniquement les emplacements occupés.
+// L'ajout se fait depuis le bouton dédié, donc aucune page vide supplémentaire.
 function aldPageCount() {
   const maxPos = aldCurrent.cards.reduce((m, c) => Math.max(m, c.position), -1);
   const used = Math.floor(maxPos / ALD_PAGE_SLOTS) + 1;
-  return Math.max(1, used + (aldCurrent.isOwner ? 1 : 0));
+  return Math.max(1, used);
 }
 
 function renderAldGrid() {
@@ -210,10 +210,6 @@ function renderAldGrid() {
         ? `<button class="alb-card-remove" data-ald-remove data-cid="${card.id}" title="Retirer de l'album"><i class="fas fa-trash"></i></button>`
         : '';
       slots.push(`<div class="alb-card-wrap">${cardHTML(card)}${removeBtn}</div>`);
-    } else if (aldCurrent.isOwner) {
-      slots.push(`<button type="button" class="alb-slot-empty" data-ald-slot="${position}">
-        <i class="fas fa-plus"></i> Ranger une carte
-      </button>`);
     } else {
       slots.push('<div class="alb-slot-empty inert" aria-hidden="true"></div>');
     }
@@ -248,14 +244,25 @@ function openAlbSlotPicker(position) {
   aldSlotTarget = position;
   document.getElementById('alb-slot-modal').classList.remove('hidden');
   document.getElementById('alb-slot-search').value = '';
-  renderAlbSlotResults('');
+  document.getElementById('alb-slot-rarity').value = '';
+  document.getElementById('alb-slot-sort').value = 'rarity';
+  renderAlbSlotResults();
 }
+
+function openAlbAddPicker() {
+  if (!aldCurrent?.isOwner) return;
+  const occupied = new Set(aldCurrent.cards.map((c) => c.position));
+  let firstFree = 0;
+  while (occupied.has(firstFree)) firstFree++;
+  openAlbSlotPicker(firstFree);
+}
+
 function closeAlbSlotPicker() {
   document.getElementById('alb-slot-modal').classList.add('hidden');
   aldSlotTarget = null;
 }
 
-async function renderAlbSlotResults(query) {
+async function renderAlbSlotResults() {
   const results = document.getElementById('alb-slot-results');
   results.innerHTML = '<p class="muted">Chargement…</p>';
   let owned;
@@ -266,8 +273,21 @@ async function renderAlbSlotResults(query) {
     return;
   }
   if (!owned.length) { results.innerHTML = '<p class="muted">Tu ne possèdes encore aucune carte — direction le tirage !</p>'; return; }
-  const q = query.trim().toLowerCase();
-  const matches = q ? owned.filter((c) => c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q)) : owned;
+  const q = document.getElementById('alb-slot-search').value.trim().toLowerCase();
+  const rarity = document.getElementById('alb-slot-rarity').value;
+  const sort = document.getElementById('alb-slot-sort').value;
+  let matches = owned.filter((c) =>
+    (!q || c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q)) &&
+    (!rarity || c.rarity === rarity)
+  );
+  if (sort === 'name') {
+    matches = [...matches].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  } else {
+    matches = [...matches].sort((a, b) =>
+      RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity) ||
+      a.name.localeCompare(b.name, 'fr')
+    );
+  }
   if (!matches.length) { results.innerHTML = '<p class="muted">Aucune carte possédée ne correspond.</p>'; return; }
   const inAlbum = new Set(aldCurrent.cards.map((c) => c.id));
   results.innerHTML = matches.map((c) => {
@@ -291,6 +311,7 @@ async function addCardToAlbumDetail(characterId, position) {
     aldCurrent.cards.push(card);
     document.getElementById('ald-count').textContent = `${aldCurrent.cards.length} carte${aldCurrent.cards.length > 1 ? 's' : ''}`;
     closeAlbSlotPicker();
+    aldPage = Math.floor(card.position / ALD_PAGE_SLOTS) + 1;
     renderAldGrid();
   } catch (e) {
     alert(e.message);
@@ -360,6 +381,7 @@ function initAlbumsUI() {
   document.getElementById('albs-discover-next').addEventListener('click', () => loadDiscoverAlbums(albsDiscoverPage + 1));
 
   document.getElementById('back-albums-detail').addEventListener('click', openAlbumsHub);
+  document.getElementById('ald-add-btn').addEventListener('click', openAlbAddPicker);
   document.getElementById('ald-edit-btn').addEventListener('click', () => openAlbsEditModal(aldCurrent));
   document.getElementById('ald-delete-btn').addEventListener('click', deleteCurrentAlbum);
   document.getElementById('ald-clone-btn').addEventListener('click', cloneAlbumToMine);
@@ -367,8 +389,6 @@ function initAlbumsUI() {
   document.getElementById('ald-grid').addEventListener('click', (e) => {
     const rm = e.target.closest('[data-ald-remove]');
     if (rm) return removeCardFromAlbumDetail(parseInt(rm.dataset.cid));
-    const slot = e.target.closest('[data-ald-slot]');
-    if (slot) return openAlbSlotPicker(parseInt(slot.dataset.aldSlot));
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
   });
@@ -380,11 +400,12 @@ function initAlbumsUI() {
     if (e.target.id === 'alb-slot-modal') closeAlbSlotPicker();
   });
   let albSlotSearchTimer;
-  document.getElementById('alb-slot-search').addEventListener('input', (e) => {
+  document.getElementById('alb-slot-search').addEventListener('input', () => {
     clearTimeout(albSlotSearchTimer);
-    const v = e.target.value;
-    albSlotSearchTimer = setTimeout(() => renderAlbSlotResults(v), 250);
+    albSlotSearchTimer = setTimeout(renderAlbSlotResults, 200);
   });
+  document.getElementById('alb-slot-rarity').addEventListener('change', renderAlbSlotResults);
+  document.getElementById('alb-slot-sort').addEventListener('change', renderAlbSlotResults);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAlbumsUI);

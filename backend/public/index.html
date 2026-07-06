@@ -850,10 +850,10 @@
       <div class="modal-card">
         <button class="modal-close" id="albs-edit-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3 id="albs-edit-title"><i class="fas fa-book"></i> Nouvel album</h3>
-        <label class="field-label">Nom</label>
-        <input type="text" id="albs-edit-name" maxlength="60" placeholder="Ex. Mes personnages 5 étoiles" />
-        <label class="field-label">Description (optionnel)</label>
-        <textarea id="albs-edit-desc" maxlength="200" rows="2" placeholder="Quelques mots sur cet album…"></textarea>
+        <label class="field-label" for="albs-edit-name">Nom</label>
+        <input class="album-form-control" type="text" id="albs-edit-name" maxlength="60" placeholder="Ex. Mes personnages 5 étoiles" />
+        <label class="field-label" for="albs-edit-desc">Description (optionnel)</label>
+        <textarea class="album-form-control" id="albs-edit-desc" maxlength="200" rows="2" placeholder="Quelques mots sur cet album…"></textarea>
         <label class="pls-public-toggle"><input type="checkbox" id="albs-edit-public" checked /> Album public (visible des autres joueurs, cloneable)</label>
         <p id="albs-edit-error" class="form-error"></p>
         <button class="btn-primary" id="albs-edit-save"><i class="fas fa-check"></i> Enregistrer</button>
@@ -870,6 +870,7 @@
       <p class="hint" id="ald-creator"></p>
       <p class="hint hidden" id="ald-desc"></p>
       <div class="pld-actions" id="ald-owner-actions">
+        <button class="btn-primary" id="ald-add-btn"><i class="fas fa-user-plus"></i> Ajouter des personnages</button>
         <button class="btn-secondary" id="ald-edit-btn"><i class="fas fa-pen"></i> Modifier</button>
         <button class="btn-secondary" id="ald-delete-btn"><i class="fas fa-trash"></i> Supprimer</button>
       </div>
@@ -893,7 +894,24 @@
       <div class="modal-card wide">
         <button class="modal-close" id="alb-slot-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3><i class="fas fa-plus"></i> Ajouter une carte</h3>
-        <input type="search" id="alb-slot-search" placeholder="Rechercher parmi tes cartes possédées…" autocomplete="off" />
+        <div class="alb-slot-tools">
+          <label class="alb-slot-search-wrap" for="alb-slot-search">
+            <i class="fas fa-search" aria-hidden="true"></i>
+            <input class="album-form-control" type="search" id="alb-slot-search" placeholder="Rechercher par nom ou série…" autocomplete="off" />
+          </label>
+          <select class="album-form-control" id="alb-slot-rarity" aria-label="Filtrer par rareté">
+            <option value="">Toutes les raretés</option>
+            <option value="mythic">Mythique</option>
+            <option value="legendary">Légendaire</option>
+            <option value="epic">Épique</option>
+            <option value="rare">Rare</option>
+            <option value="common">Commun</option>
+          </select>
+          <select class="album-form-control" id="alb-slot-sort" aria-label="Trier les cartes">
+            <option value="rarity">Trier par rareté</option>
+            <option value="name">Trier par nom</option>
+          </select>
+        </div>
         <div id="alb-slot-results" class="card-grid alb-slot-results"></div>
       </div>
     </div>

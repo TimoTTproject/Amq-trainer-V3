@@ -849,10 +849,54 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .pls-badge.pub { background: #143226; color: #7ee6b8; border: 1px solid #1e5a3e; }
 .pls-badge.priv { background: #2a2530; color: #c9a8ff; border: 1px solid #4a3a6b; }
 .pls-public-toggle { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: .9rem; color: var(--text-2); }
-.pld-actions { display: flex; gap: 10px; margin: 10px 0 16px; }
+.pld-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 16px; }
 .pls-mine-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 
 /* ── Albums de cartes (collections personnalisées, partageables) ── */
+.album-form-control {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 1px solid #353b4b;
+  border-radius: 12px;
+  outline: none;
+  background: linear-gradient(180deg, #171a22, #11131a);
+  color: var(--text);
+  font: inherit;
+  font-size: .92rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 1px 0 rgba(0, 0, 0, .35);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.album-form-control::placeholder { color: #717887; opacity: 1; }
+.album-form-control:hover { border-color: #4a5265; }
+.album-form-control:focus {
+  border-color: var(--accent);
+  background: #171a22;
+  box-shadow: 0 0 0 3px rgba(230, 20, 51, .14), inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+textarea.album-form-control { min-height: 88px; resize: vertical; line-height: 1.45; }
+select.album-form-control {
+  cursor: pointer;
+  color-scheme: dark;
+}
+.alb-slot-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 170px 150px;
+  gap: 10px;
+  align-items: center;
+}
+.alb-slot-search-wrap { position: relative; display: block; min-width: 0; }
+.alb-slot-search-wrap > i {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  z-index: 1;
+  color: #717887;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.alb-slot-search-wrap .album-form-control { padding-left: 40px; }
+.alb-slot-search-wrap:focus-within > i { color: var(--accent); }
 .alb-card-wrap { position: relative; display: flex; flex-direction: column; }
 .alb-card-remove {
   position: absolute; top: 6px; right: 6px; z-index: 2;
@@ -929,7 +973,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 }
 .album-page .alb-card-wrap .gcard { border-radius: 7px; }
 
-/* Pochette vide, cliquable pour ranger une carte à cet emplacement précis */
+/* Pochette vide du classeur (l'ajout se fait depuis le bouton de l'en-tête) */
 .alb-slot-empty {
   aspect-ratio: 3/4;
   border: 2px dashed #3a404a;
@@ -937,15 +981,17 @@ body.guest-mode .feedback-buttons { display: none !important; }
   background: rgba(0,0,0,.12);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; color: var(--text-2); font-size: .72rem;
-  cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+  cursor: default;
 }
 .alb-slot-empty i { font-size: 1.3rem; }
-.alb-slot-empty:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(108, 140, 255, .06); }
-.alb-slot-empty:disabled { cursor: default; opacity: .4; }
 .alb-slot-empty.inert { cursor: default; opacity: .3; }
 .alb-slot-results { max-height: 55vh; overflow-y: auto; margin-top: 12px; }
 .alb-slot-results .gcard { cursor: pointer; }
 .alb-slot-results .gcard.disabled { opacity: .35; pointer-events: none; }
+@media (max-width: 620px) {
+  .alb-slot-tools { grid-template-columns: 1fr 1fr; }
+  .alb-slot-search-wrap { grid-column: 1 / -1; }
+}
 
 /* ── Par série (progression de collection) ── */
 .series-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
