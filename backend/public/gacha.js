@@ -240,7 +240,12 @@ async function doPull(type) {
     result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
     result.classList.remove('hidden');
     if (r.cards.length > 1) document.getElementById('reveal-all-btn').classList.remove('hidden');
-    document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙 — clique sur les cartes pour les retourner ! 🎴`;
+    // Rareté tirée mais plus aucun personnage dispo dedans (pool en cours de
+    // rééquilibrage) : jamais rétrogradé en silence, remboursé à la place.
+    const unavailNote = r.unavailableCount
+      ? ` — ${r.unavailableCount} tirage(s) sans personnage disponible dans leur rareté, remboursé(s) (+${r.unavailableRefund} 🪙)`
+      : '';
+    document.getElementById('gacha-msg').textContent = `−${r.cost} 🪙 — clique sur les cartes pour les retourner ! 🎴${unavailNote}`;
   } catch (err) {
     document.getElementById('gacha-msg').textContent = err.message;
   } finally {

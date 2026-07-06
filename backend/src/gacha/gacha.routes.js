@@ -342,12 +342,14 @@ async function pickRandomCharacter(tx, rarity, boost) {
   }
   const feat = await tx.character.findFirst({ where: { rarity, featured: true, soldOut: false } });
   if (feat && Math.random() < 0.5) return feat;
-  let where = { rarity, soldOut: false };
-  let count = await tx.character.count({ where });
-  if (count === 0) {
-    where = { soldOut: false };
-    count = await tx.character.count({ where });
-  }
+  const where = { rarity, soldOut: false };
+  const count = await tx.character.count({ where });
+  // Pas de repli vers une autre rareté si celle-ci est épuisée : ça fausserait
+  // le taux annoncé (ex. un tirage Mythique livré comme Commun en silence).
+  // Le pool est actuellement rééquilibré à la main → un palier peut être
+  // temporairement vide ou totalement épuisé ; l'appelant (POST /pull) doit
+  // alors rembourser l'emplacement plutôt que de faire encaisser une rareté
+  // non promise.
   if (count === 0) return null;
   const skip = Math.floor(Math.random() * count);
   return tx.character.findFirst({ where, skip });
@@ -442,12 +444,14 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
     const cards = [];
     let refundTotal = 0;
     let dustTotal = 0;
+    let unavailableCount = 0; // emplacements sans personnage dispo dans la rareté tirée → remboursés, jamais rétrogradés
+    const perSlotCost = cfg.cost / cfg.count;
     const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
     for (const rarity of rarities) {
       const character = await pickRandomCharacter(tx, rarity, boostByRarity);
-      if (!character) continue;
+      if (!character) { unavailableCount++; continue; }
       const mint = await mintInstance(tx, userId, character.id);
-      if (!mint) continue; // épuisé entre-temps (course)
+      if (!mint) { unavailableCount++; continue; } // épuisé entre-temps (course)
       pullCounts[character.rarity] = (pullCounts[character.rarity] || 0) + 1;
       const isNew = mint.isNew;
       let refund = 0;
@@ -464,11 +468,12 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
       });
     }
 
+    const unavailableRefund = Math.round(unavailableCount * perSlotCost);
     const u = await tx.user.update({
       where: { id: userId },
       data: {
         pity,
-        ...(refundTotal > 0 ? { tokens: { increment: refundTotal } } : {}),
+        ...((refundTotal + unavailableRefund) > 0 ? { tokens: { increment: refundTotal + unavailableRefund } } : {}),
         ...(dustTotal > 0 ? { dust: { increment: dustTotal } } : {}),
         ...(pullCounts.common ? { pullCommon: { increment: pullCounts.common } } : {}),
         ...(pullCounts.rare ? { pullRare: { increment: pullCounts.rare } } : {}),
@@ -480,7 +485,10 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
     if (refundTotal > 0) {
       await tx.tokenTransaction.create({ data: { userId, amount: refundTotal, reason: 'duplicate_refund' } });
     }
-    return { cards, refundTotal, dustTotal, tokens: u.tokens, dust: u.dust, pity: u.pity };
+    if (unavailableRefund > 0) {
+      await tx.tokenTransaction.create({ data: { userId, amount: unavailableRefund, reason: 'rarity_unavailable_refund' } });
+    }
+    return { cards, refundTotal, dustTotal, unavailableCount, unavailableRefund, tokens: u.tokens, dust: u.dust, pity: u.pity };
   });
 
   progressQuests(userId, 'pull', cfg.count);
@@ -928,4 +936,4 @@ router.post('/vote', requireAuth, rateLimit({ max: 30, name: 'gacha-vote' }), as
   res.json({ ok: true, characterId, rarity: candidate.rarity });
 });
 
-module.exports = { router };
+module.exports = { router, pickRandomCharacter };
