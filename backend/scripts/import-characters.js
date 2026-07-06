@@ -1,6 +1,6 @@
 // Importe le pool de personnages du gacha : top N personnages AniList (favourites),
 // avec attribution de la rareté par rang.
-//   node scripts/import-characters.js [N]   (défaut 2500)
+//   node scripts/import-characters.js [N]   (défaut 5000, ~plafond de pagination AniList)
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { prisma } = require('../src/db');
@@ -10,7 +10,7 @@ const { rarityForRank, RARITY_LABELS } = require('../src/gacha/rarity');
 const PER_PAGE = 50;
 
 async function main() {
-  const target = parseInt(process.argv[2]) || 2500;
+  const target = parseInt(process.argv[2]) || 5000;
   console.log(`Récupération du top ${target} personnages AniList…\n`);
 
   // 1) Collecte

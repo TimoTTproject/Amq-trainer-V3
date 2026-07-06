@@ -267,41 +267,43 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
 
 // Recalcule la rareté de TOUS les personnages par rang de popularité (favourites).
 // Restaure la pyramide quel que soit le total (écrase les raretés manuelles).
-// Resynchronise aussi maxSupply/soldOut sur la nouvelle rareté (sinon un perso qui
-// change de palier garde l'ancien stock max, ex. Mythique avec un cap de Légendaire).
+// Resynchronise TOUJOURS maxSupply/soldOut sur le plafond courant de la rareté
+// (pas seulement les personnages qui changent de palier) : c'est ce qui permet
+// de resserrer MAX_SUPPLY dans rarity.js (ex. faire baisser un plafond mythique
+// existant) et de l'appliquer rétroactivement à tout le pool via ce bouton.
 router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) => {
   const all = await prisma.character.findMany({ select: { id: true, favourites: true, rarity: true, minted: true } });
   all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
   const total = all.length;
   if (!total) return res.json({ total: 0, counts: {} });
 
-  // Regroupe par (nouvelle rareté, ancienne rareté) pour ne resynchroniser le stock
-  // que sur les personnages dont la rareté change réellement.
   const byRarity = {};
-  const changedByRarity = {};
   all.forEach((c, i) => {
     const r = rarityForRank(i, total);
-    (byRarity[r] ||= []).push(c.id);
-    if (r !== c.rarity) (changedByRarity[r] ||= []).push(c);
+    (byRarity[r] ||= []).push(c);
   });
 
-  // updateMany par rareté, en lots de 500 ids (limite de taille de requête)
   const counts = {};
   const ops = [];
-  for (const [rarity, ids] of Object.entries(byRarity)) {
-    counts[rarity] = ids.length;
-    for (let i = 0; i < ids.length; i += 500) {
-      const chunk = ids.slice(i, i + 500);
-      ops.push(prisma.character.updateMany({ where: { id: { in: chunk } }, data: { rarity } }));
-    }
-  }
-  // Pour les personnages qui changent de rareté, aligne maxSupply sur le nouveau
-  // palier (jamais sous le nombre déjà en circulation) et met à jour soldOut.
-  for (const [rarity, chars] of Object.entries(changedByRarity)) {
+  for (const [rarity, chars] of Object.entries(byRarity)) {
+    counts[rarity] = chars.length;
     const cap = MAX_SUPPLY[rarity] || 1000000;
-    for (const c of chars) {
-      const maxSupply = Math.max(cap, c.minted);
-      ops.push(prisma.character.update({ where: { id: c.id }, data: { maxSupply, soldOut: c.minted >= maxSupply } }));
+    const ids = chars.map((c) => c.id);
+    for (let i = 0; i < ids.length; i += 500) {
+      ops.push(prisma.character.updateMany({ where: { id: { in: ids.slice(i, i + 500) } }, data: { rarity } }));
+    }
+    // La grande majorité des personnages tiennent sous le nouveau plafond → un
+    // seul updateMany groupé par rareté. Seuls ceux déjà « sursouscrits »
+    // (minted au-delà du nouveau cap, ex. un plafond mythique qu'on resserre
+    // sous des tirages déjà en circulation) doivent être ajustés un par un,
+    // pour ne jamais invalider des cartes déjà possédées par des joueurs.
+    const underCap = chars.filter((c) => c.minted < cap).map((c) => c.id);
+    const overCap = chars.filter((c) => c.minted >= cap);
+    for (let i = 0; i < underCap.length; i += 500) {
+      ops.push(prisma.character.updateMany({ where: { id: { in: underCap.slice(i, i + 500) } }, data: { maxSupply: cap, soldOut: false } }));
+    }
+    for (const c of overCap) {
+      ops.push(prisma.character.update({ where: { id: c.id }, data: { maxSupply: c.minted, soldOut: true } }));
     }
   }
   await prisma.$transaction(ops);

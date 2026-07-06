@@ -64,14 +64,17 @@ function ascendCost(stars) {
 }
 
 // Rareté réelle : stock max EN CIRCULATION simultanée, par rareté.
-// Généreux pour durer ; le recyclage rend l'exemplaire au stock (rareté dynamique).
-// Les communs sont quasi illimités ; ce sont les mythiques/légendaires qui se raréfient.
+// Le recyclage rend l'exemplaire au stock (rareté dynamique, pas d'épuisement
+// définitif). Les communs restent quasi illimités ; le reste est DÉRIVÉ du
+// plafond mythique (25 exemplaires/personnage = l'aspect exclusif recherché)
+// avec la même cascade ×4/×4/×5 qu'avant le resserrement (mythic→legendary→
+// epic→rare), pour un pool élargi à ~5000 personnages (voir import-characters.js).
 const MAX_SUPPLY = {
   common: 1000000,
-  rare: 5000,
-  epic: 1000,
-  legendary: 250,
-  mythic: 60,
+  rare: 2000,
+  epic: 400,
+  legendary: 100,
+  mythic: 25,
 };
 
 // Prix et contenu des achats
