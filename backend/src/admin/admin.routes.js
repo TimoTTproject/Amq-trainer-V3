@@ -612,61 +612,70 @@ router.get('/reset-gacha/audit', requireAuth, requireAdmin, async (req, res) => 
   res.json({ events: out });
 });
 
-// Corrige le DERNIER évènement de reset s'il a été calculé sur l'historique
-// COMPLET au lieu de seulement les tirages depuis l'évènement précédent :
-// pour chaque joueur compensé lors du dernier reset, ne garde que ce qu'il a
-// réellement dépensé ENTRE les deux évènements et retire l'excédent (jamais
-// en dessous de 0 côté solde). Idempotent : un 2ᵉ appel ne retire rien de
-// plus si la correction a déjà été appliquée pour cet évènement.
+// Corrige TOUS les évènements de reset après le premier (pas seulement le
+// dernier — si le bouton a été cliqué plus de 2 fois au total, chaque
+// évènement intermédiaire peut porter sa propre part d'historique en double,
+// et une correction limitée au seul dernier évènement laisserait les couches
+// précédentes non corrigées). Pour chaque évènement (sauf le tout premier,
+// qui n'a pas de prédécesseur et est donc par définition sa propre référence
+// correcte), ne garde que la dépense RÉELLE entre lui et l'évènement
+// précédent, et retire l'excédent (jamais en dessous de 0 côté solde).
+// Idempotent par évènement : un 2ᵉ appel ne retire rien de plus pour un
+// évènement déjà corrigé (fenêtre d'idempotence bornée à cet évènement
+// précis, pour ne pas confondre la correction d'un évènement avec celle d'un
+// autre).
 router.post('/reset-gacha/fix-double-refund', requireAuth, requireAdmin, async (req, res) => {
   if (req.body?.confirm !== 'FIX_DOUBLE_REFUND') return res.status(400).json({ error: 'Confirmation requise (FIX_DOUBLE_REFUND)' });
   const events = await findResetEvents();
   if (events.length < 2) return res.status(400).json({ error: 'Un seul évènement de reset détecté — rien à corriger.' });
 
-  const prevEvent = events[events.length - 2];
-  const lastEvent = events[events.length - 1];
-  const prevAt = new Date(prevEvent.last);
-  const lastStart = new Date(lastEvent.first);
-  const lastEnd = new Date(lastEvent.last);
-
-  const lastComps = await prisma.tokenTransaction.findMany({
-    where: { reason: 'gacha_reset_compensation', createdAt: { gte: lastStart, lte: lastEnd } },
-  });
-
   const ops = [];
   const corrections = [];
-  for (const comp of lastComps) {
-    const { userId } = comp;
-    // Déjà corrigé pour cet évènement ? (idempotence)
-    const already = await prisma.tokenTransaction.findFirst({
-      where: { userId, reason: 'gacha_reset_correction', createdAt: { gte: lastStart } },
+  for (let i = 1; i < events.length; i++) {
+    const prevAt = new Date(events[i - 1].last);
+    const curStart = new Date(events[i].first);
+    const curEnd = new Date(events[i].last);
+    // Fenêtre d'idempotence : entre CET évènement et le suivant (ou jusqu'à
+    // maintenant s'il n'y en a pas), pour ne pas confondre avec une
+    // correction déjà appliquée à un autre évènement.
+    const nextStart = i + 1 < events.length ? new Date(events[i + 1].first) : new Date();
+
+    const comps = await prisma.tokenTransaction.findMany({
+      where: { reason: 'gacha_reset_compensation', createdAt: { gte: curStart, lte: curEnd } },
     });
-    if (already) continue;
 
-    // Dépense réelle ENTRE le reset précédent et le dernier reset — c'est ce
-    // qui aurait dû être remboursé, au lieu de l'historique complet.
-    const spentGroups = await prisma.tokenTransaction.groupBy({
-      by: ['userId'],
-      where: { userId, reason: 'pack_open', createdAt: { gt: prevAt, lte: lastStart } },
-      _sum: { amount: true },
-    });
-    const correctAmount = Math.abs(spentGroups[0]?._sum.amount || 0);
-    const excess = comp.amount - correctAmount;
-    if (excess <= 0) continue;
+    for (const comp of comps) {
+      const { userId } = comp;
+      const already = await prisma.tokenTransaction.findFirst({
+        where: { userId, reason: 'gacha_reset_correction', createdAt: { gte: curStart, lt: nextStart } },
+      });
+      if (already) continue;
 
-    // Ne jamais passer le solde sous 0 : si le joueur a déjà dépensé
-    // l'excédent reçu par erreur (nouveaux tirages, boutique…), on retire
-    // seulement ce qu'il lui reste — `clamped` le signale pour suivi manuel.
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { tokens: true } });
-    const toRemove = Math.min(excess, user?.tokens || 0);
-    if (toRemove <= 0) { corrections.push({ userId, wrongAmount: comp.amount, correctAmount, excess, removed: 0, clamped: true }); continue; }
+      // Dépense réelle ENTRE l'évènement précédent et celui-ci — c'est ce
+      // qui aurait dû être remboursé, au lieu de l'historique complet.
+      const spentGroups = await prisma.tokenTransaction.groupBy({
+        by: ['userId'],
+        where: { userId, reason: 'pack_open', createdAt: { gt: prevAt, lte: curStart } },
+        _sum: { amount: true },
+      });
+      const correctAmount = Math.abs(spentGroups[0]?._sum.amount || 0);
+      const excess = comp.amount - correctAmount;
+      if (excess <= 0) continue;
 
-    ops.push(prisma.user.update({ where: { id: userId }, data: { tokens: { decrement: toRemove } } }));
-    ops.push(prisma.tokenTransaction.create({ data: { userId, amount: -toRemove, reason: 'gacha_reset_correction' } }));
-    corrections.push({ userId, wrongAmount: comp.amount, correctAmount, excess, removed: toRemove, clamped: toRemove < excess });
+      // Ne jamais passer le solde sous 0 : si le joueur a déjà dépensé
+      // l'excédent reçu par erreur (nouveaux tirages, boutique…), on retire
+      // seulement ce qu'il lui reste — `clamped` le signale pour suivi manuel.
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { tokens: true } });
+      const toRemove = Math.min(excess, user?.tokens || 0);
+      if (toRemove <= 0) { corrections.push({ userId, event: i + 1, wrongAmount: comp.amount, correctAmount, excess, removed: 0, clamped: true }); continue; }
+
+      ops.push(prisma.user.update({ where: { id: userId }, data: { tokens: { decrement: toRemove } } }));
+      ops.push(prisma.tokenTransaction.create({ data: { userId, amount: -toRemove, reason: 'gacha_reset_correction' } }));
+      corrections.push({ userId, event: i + 1, wrongAmount: comp.amount, correctAmount, excess, removed: toRemove, clamped: toRemove < excess });
+    }
   }
   if (ops.length) await prisma.$transaction(ops);
-  res.json({ ok: true, usersChecked: lastComps.length, usersFixed: corrections.length, corrections });
+  res.json({ ok: true, eventsChecked: events.length - 1, usersFixed: corrections.length, corrections });
 });
 
 module.exports = { router };

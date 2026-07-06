@@ -279,6 +279,59 @@ test('fix-double-refund : plafonne le retrait si le joueur a déjà tout dépens
   assert.deepEqual(userUpdates.find((u) => u.id === 'u1').data.tokens, { decrement: 1000 });
 });
 
+test('fix-double-refund : corrige TOUS les évènements après le 1er, pas seulement le dernier (3 resets ou plus)', async () => {
+  // 3 évènements de reset : le 1er est correct par définition (pas de
+  // prédécesseur). Le 2e ET le 3e ont chacun été calculés en buggé (tout
+  // l'historique pack_open), donc les DEUX doivent être corrigés — une
+  // correction limitée au seul dernier évènement laisserait l'excédent du
+  // 2e non retiré (bug signalé : "il y a encore une fois de trop").
+  const e1 = new Date('2026-07-01T10:00:00Z');
+  const e2 = new Date('2026-07-04T10:00:00Z');
+  const e3 = new Date('2026-07-06T09:00:00Z');
+  prisma.tokenTransaction.findMany = async ({ where }) => {
+    if (where?.reason === 'gacha_reset_compensation' && !where.createdAt) {
+      return [{ createdAt: e1 }, { createdAt: e2 }, { createdAt: e3 }];
+    }
+    if (where?.reason === 'gacha_reset_compensation' && where.createdAt) {
+      const from = where.createdAt.gte.getTime();
+      if (from === e2.getTime()) return [{ userId: 'u1', amount: 20000, reason: 'gacha_reset_compensation', createdAt: e2 }];
+      if (from === e3.getTime()) return [{ userId: 'u1', amount: 64000, reason: 'gacha_reset_compensation', createdAt: e3 }];
+    }
+    return [];
+  };
+  prisma.tokenTransaction.findFirst = async () => null; // rien encore corrigé
+  // Dépense réelle : 5000 entre e1→e2, puis 9000 entre e2→e3.
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    if (where.createdAt.gt.getTime() === e1.getTime()) return [{ userId: 'u1', _sum: { amount: -5000 } }];
+    if (where.createdAt.gt.getTime() === e2.getTime()) return [{ userId: 'u1', _sum: { amount: -9000 } }];
+    return [];
+  };
+  prisma.user.findUnique = async ({ where }) => (where.id === 'u1' ? { tokens: 200000 } : ADMIN);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+  prisma.tokenTransaction.create = async ({ data }) => data;
+
+  const res = await app.request('/api/admin/reset-gacha/fix-double-refund', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'FIX_DOUBLE_REFUND' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.eventsChecked, 2); // e2 et e3
+  assert.equal(res.json.usersFixed, 2);
+  const fixE2 = res.json.corrections.find((c) => c.event === 2);
+  const fixE3 = res.json.corrections.find((c) => c.event === 3);
+  assert.equal(fixE2.wrongAmount, 20000);
+  assert.equal(fixE2.correctAmount, 5000);
+  assert.equal(fixE2.excess, 15000);
+  assert.equal(fixE3.wrongAmount, 64000);
+  assert.equal(fixE3.correctAmount, 9000);
+  assert.equal(fixE3.excess, 55000);
+  // Total retiré = 15000 + 55000 = 70000, en 2 décréments distincts.
+  assert.equal(userUpdates.length, 2);
+  assert.ok(userUpdates.every((u) => u.id === 'u1'));
+  const totalRemoved = userUpdates.reduce((s, u) => s + u.data.tokens.decrement, 0);
+  assert.equal(totalRemoved, 70000);
+});
+
 test('fix-double-refund : idempotent — un 2e appel ne retire rien de plus si déjà corrigé', async () => {
   const firstEventAt = new Date('2026-07-01T10:00:00Z');
   const lastEventAt = new Date('2026-07-06T09:00:00Z');

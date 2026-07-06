@@ -345,7 +345,7 @@ async function fixDoubleRefund() {
   try {
     const r = await api('/api/admin/reset-gacha/fix-double-refund', { method: 'POST', body: JSON.stringify({ confirm: 'FIX_DOUBLE_REFUND' }) });
     const clamped = r.corrections.filter((c) => c.clamped).length;
-    status.textContent = `✅ ${r.usersFixed}/${r.usersChecked} joueur(s) corrigé(s)${clamped ? ` (dont ${clamped} plafonné(s) à leur solde actuel, déjà dépensé)` : ''}.`;
+    status.textContent = `✅ ${r.usersFixed} correction(s) appliquée(s) sur ${r.eventsChecked} évènement(s) de reset vérifié(s)${clamped ? ` (dont ${clamped} plafonnée(s) au solde actuel, déjà dépensé)` : ''}.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
