@@ -20,6 +20,10 @@ function setGachaTab(name) {
   document.getElementById('gacha-panel-collection').classList.toggle('hidden', name !== 'collection');
   document.getElementById('gacha-panel-series').classList.toggle('hidden', name !== 'series');
   document.getElementById('gacha-panel-albums').classList.toggle('hidden', name !== 'albums');
+  // Recharge à chaque clic d'onglet (pas seulement à l'entrée dans Gacha) :
+  // sinon une donnée changée pendant que la vue Gacha était déjà ouverte
+  // (ex. rareté recalculée par un admin) reste figée jusqu'à sortie/re-entrée.
+  if (name === 'collection') loadCollection();
   if (name === 'series') loadSeriesProgress();
   if (name === 'albums' && typeof loadMyAlbums === 'function') loadMyAlbums();
 }

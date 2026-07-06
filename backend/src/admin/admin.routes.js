@@ -71,7 +71,7 @@ router.get('/characters', requireAuth, requireAdmin, async (req, res) => {
     prisma.character.count({ where }),
     prisma.character.findMany({
       where,
-      orderBy: [{ favourites: 'desc' }],
+      orderBy: [{ favourites: 'desc' }, { id: 'asc' }], // tiebreak cohérent avec recompute-rarities
       skip: (page - 1) * perPage,
       take: perPage,
       select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true, featured: true },
@@ -348,7 +348,12 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
 // existant) et de l'appliquer rétroactivement à tout le pool via ce bouton.
 router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) => {
   const all = await prisma.character.findMany({ select: { id: true, favourites: true, rarity: true, minted: true } });
-  all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
+  // Départage les égalités de favoris par id (stable et déterministe) : sans
+  // ça, ce tri en mémoire peut classer des personnages à égalité dans un ordre
+  // différent de celui des requêtes `ORDER BY favourites DESC` faites ailleurs
+  // (pokédex, admin…), donnant l'impression que la frontière de rareté « fuit »
+  // (ex. un Épique affiché avant des Mythiques dans une liste triée par popularité).
+  all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0) || a.id - b.id);
   const total = all.length;
   if (!total) return res.json({ total: 0, counts: {} });
 

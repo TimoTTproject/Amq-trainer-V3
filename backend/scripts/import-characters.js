@@ -34,8 +34,9 @@ async function main() {
   const pool = all.slice(0, target);
   console.log(`\n\n${pool.length} personnages. Attribution des raretés + enregistrement…`);
 
-  // 2) Tri par favourites décroissant + rareté par rang
-  pool.sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
+  // 2) Tri par favourites décroissant (+ id AniList en tiebreak, cohérent avec
+  // le tri utilisé pour l'assignation dans admin.routes.js) + rareté par rang
+  pool.sort((a, b) => (b.favourites || 0) - (a.favourites || 0) || a.id - b.id);
   const counts = {};
   for (let i = 0; i < pool.length; i++) {
     const c = pool[i];

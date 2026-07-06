@@ -108,7 +108,7 @@ async function getWeeklyFeatured() {
     if (!count) continue;
     const idx = seededIndex(wk, salts[r], count);
     const c = await prisma.character.findFirst({
-      where: { rarity: r }, orderBy: { favourites: 'desc' }, skip: idx,
+      where: { rarity: r }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }], skip: idx,
       select: { id: true, name: true, imageUrl: true, rarity: true },
     });
     if (c) { chars.push(c); byRarity[r] = c.id; }
@@ -180,7 +180,7 @@ let candidatesByUser = new Map(); // userId -> { ids, chars }
 async function getRarityPool(rarity) {
   if (!rarityPoolCache[rarity]) {
     rarityPoolCache[rarity] = await prisma.character.findMany({
-      where: { rarity }, orderBy: { favourites: 'desc' },
+      where: { rarity }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }],
       select: { id: true, name: true, imageUrl: true, rarity: true },
     });
   }
@@ -613,7 +613,11 @@ router.get('/characters', requireAuth, async (req, res) => {
     const ids = mine.map((m) => m.characterId);
     where.id = req.query.owned === '1' ? { in: ids.length ? ids : [0] } : { notIn: ids.length ? ids : [0] };
   }
-  const orderBy = sort === 'name' ? [{ name: 'asc' }] : [{ favourites: 'desc' }];
+  // `id` en tiebreak : même critère que le tri utilisé pour l'assignation des
+  // raretés (recompute-rarities) — sinon des personnages à égalité de favoris
+  // peuvent apparaître dans un ordre différent ici, donnant l'impression que
+  // la frontière de rareté « fuit » (un Épique glissé entre des Mythiques).
+  const orderBy = sort === 'name' ? [{ name: 'asc' }, { id: 'asc' }] : [{ favourites: 'desc' }, { id: 'asc' }];
 
   const [total, chars, pool] = await Promise.all([
     prisma.character.count({ where }),
