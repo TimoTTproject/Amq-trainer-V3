@@ -774,6 +774,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
   display: flex; flex-direction: column; gap: 8px; text-align: left;
   background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius);
   padding: 16px; cursor: pointer; transition: border-color .15s, transform .05s;
+  color: var(--text); /* sans ça, un <button> hérite de la couleur système (gris délavé illisible) */
 }
 .pls-card:hover { border-color: var(--accent); transform: translateY(-2px); }
 .pls-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -829,6 +830,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
   display: flex; align-items: center; gap: 12px; text-align: left;
   background: #13151a; border: 1px solid #2c3038; border-radius: 6px;
   padding: 10px 14px; cursor: pointer; transition: transform .12s, border-color .12s, box-shadow .12s;
+  color: var(--text); /* sans ça, un <button> hérite de la couleur système (gris délavé illisible) */
 }
 .series-row:hover { border-color: #4a4f59; transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #07080a; }
 .series-row.complete { border-color: var(--green); }
@@ -842,7 +844,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .series-row-count { color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .series-row.complete .series-row-count i { color: var(--green); margin-left: 4px; }
 .series-row-bar { display: block; height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
-.series-row-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.series-row-bar span { display: block; height: 100%; min-width: 5px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .series-row.complete .series-row-bar span { background: var(--green); }
 
 .series-spotlight { margin-bottom: 16px; }
@@ -856,6 +858,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
   background: linear-gradient(135deg, rgba(208, 22, 36, .14), rgba(8, 174, 232, .06) 60%, transparent), #13151a;
   border: 1px solid #4a4f59; border-radius: 7px; padding: 16px 18px;
   transition: transform .12s, box-shadow .12s;
+  color: var(--text); /* sans ça, un <button> hérite de la couleur système (gris délavé illisible) */
 }
 .series-spotlight-row:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #07080a; }
 .series-spotlight-cover {
