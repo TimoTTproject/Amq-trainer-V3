@@ -293,7 +293,7 @@ async function runResetAll() {
 
 async function runResetGacha() {
   const status = document.getElementById('admin-reset-gacha-status');
-  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours (ajouté à son solde actuel). Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours, PLUS un dédommagement forfaitaire de 500 🪙 pour le bug de fuite de rareté (Mythique en trop) — ajouté à son solde actuel. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
   // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
   // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
   if (ans === null) { status.textContent = 'Annulé.'; return; }
@@ -303,7 +303,7 @@ async function runResetGacha() {
   status.textContent = 'Réinitialisation du gacha…';
   try {
     const r = await api('/api/admin/reset-gacha', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_GACHA' }) });
-    status.textContent = `✅ ${r.users} comptes réinitialisés, ${r.totalCompensation} 🪙 remboursés au total (montant réel par joueur). Les joueurs verront une explication à leur prochaine connexion.`;
+    status.textContent = `✅ ${r.users} comptes réinitialisés, ${r.totalCompensation} 🪙 remboursés (montant réel dépensé) + ${r.totalBonus} 🪙 de dédommagement forfaitaire. Les joueurs verront une explication à leur prochaine connexion.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {

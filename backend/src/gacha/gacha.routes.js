@@ -19,11 +19,11 @@ const router = express.Router();
 router.get('/reset-notice', requireAuth, async (req, res) => {
   const s = await prisma.appSetting.findUnique({ where: { key: 'lastGachaReset' } });
   if (!s) return res.json({ resetAt: null });
-  const myComp = await prisma.tokenTransaction.findFirst({
-    where: { userId: req.user.id, reason: 'gacha_reset_compensation' },
-    orderBy: { id: 'desc' },
-  });
-  res.json({ resetAt: parseInt(s.value), compensation: myComp ? myComp.amount : 0 });
+  const [myComp, myBonus] = await Promise.all([
+    prisma.tokenTransaction.findFirst({ where: { userId: req.user.id, reason: 'gacha_reset_compensation' }, orderBy: { id: 'desc' } }),
+    prisma.tokenTransaction.findFirst({ where: { userId: req.user.id, reason: 'gacha_incident_bonus' }, orderBy: { id: 'desc' } }),
+  ]);
+  res.json({ resetAt: parseInt(s.value), compensation: myComp ? myComp.amount : 0, bonus: myBonus ? myBonus.amount : 0 });
 });
 
 // ── Bannière hebdomadaire (vedettes de la semaine, rate-up) ──

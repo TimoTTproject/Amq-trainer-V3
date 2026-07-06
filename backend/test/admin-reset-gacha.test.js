@@ -73,21 +73,25 @@ test('reset-gacha : rembourse chaque joueur du montant BRUT réellement dépens�
   assert.equal(res.status, 200);
   assert.equal(res.json.users, 2);
   assert.equal(res.json.totalCompensation, 300);
+  // Dédommagement forfaitaire de cet incident (500/joueur), en plus du remboursement réel.
+  assert.equal(res.json.totalBonus, 1000);
 
   const u1 = userUpdates.find((u) => u.id === 'u1');
   const u2 = userUpdates.find((u) => u.id === 'u2');
   // increment (jamais un remplacement) : préserve les tokens gagnés hors gacha.
-  assert.deepEqual(u1.data.tokens, { increment: 300 });
-  assert.deepEqual(u2.data.tokens, { increment: 0 });
+  assert.deepEqual(u1.data.tokens, { increment: 800 }); // 300 dépensé + 500 dédommagement
+  assert.deepEqual(u2.data.tokens, { increment: 500 }); // jamais tiré, mais reçoit le dédommagement
   assert.equal(u1.data.dust, 0);
   for (const field of ['towerBestFloor', 'mmr', 'soloMmr', 'dailyStreak', 'claimedLevel']) {
     assert.equal(field in u1.data, false, `${field} ne devrait pas être touché`);
   }
-  // Seul u1 (compensation > 0) reçoit une transaction de compensation tracée.
-  assert.equal(txCreated.length, 1);
-  assert.equal(txCreated[0].userId, 'u1');
-  assert.equal(txCreated[0].amount, 300);
-  assert.equal(txCreated[0].reason, 'gacha_reset_compensation');
+  // u1 (compensation > 0) reçoit compensation + bonus ; u2 (jamais tiré) reçoit seulement le bonus.
+  assert.equal(txCreated.length, 3);
+  const u1Comp = txCreated.find((t) => t.userId === 'u1' && t.reason === 'gacha_reset_compensation');
+  assert.equal(u1Comp.amount, 300);
+  const bonuses = txCreated.filter((t) => t.reason === 'gacha_incident_bonus');
+  assert.equal(bonuses.length, 2);
+  assert.ok(bonuses.every((t) => t.amount === 500));
   assert.ok(['userCard', 'cardInstance', 'trade', 'cardAlbumItem', 'cardAlbum', 'character', 'appSetting'].every((w) => writes.includes(w)));
 });
 
@@ -98,23 +102,29 @@ test('reset-notice : renvoie resetAt=null si aucun reset n\'a jamais eu lieu', a
   assert.equal(res.json.resetAt, null);
 });
 
-test('reset-notice : renvoie MA compensation personnelle (pas un forfait partagé)', async () => {
+test('reset-notice : renvoie MA compensation ET mon bonus personnels (pas un forfait partagé)', async () => {
   prisma.appSetting.findUnique = async () => ({ key: 'lastGachaReset', value: '1751800000000' });
   prisma.tokenTransaction.findFirst = async ({ where }) => {
     assert.equal(where.userId, 'u1');
-    assert.equal(where.reason, 'gacha_reset_compensation');
-    return { userId: 'u1', amount: 300, reason: 'gacha_reset_compensation' };
+    if (where.reason === 'gacha_reset_compensation') return { userId: 'u1', amount: 300, reason: where.reason };
+    if (where.reason === 'gacha_incident_bonus') return { userId: 'u1', amount: 500, reason: where.reason };
+    throw new Error('reason inattendue: ' + where.reason);
   };
   const res = await app.request('/api/gacha/reset-notice', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.resetAt, 1751800000000);
   assert.equal(res.json.compensation, 300);
+  assert.equal(res.json.bonus, 500);
 });
 
-test('reset-notice : compensation = 0 si le joueur n\'a jamais tiré (pas de transaction)', async () => {
+test('reset-notice : compensation = 0 si le joueur n\'a jamais tiré (pas de transaction), bonus reste dû', async () => {
   prisma.appSetting.findUnique = async () => ({ key: 'lastGachaReset', value: '1751800000000' });
-  prisma.tokenTransaction.findFirst = async () => null;
+  prisma.tokenTransaction.findFirst = async ({ where }) => {
+    if (where.reason === 'gacha_incident_bonus') return { userId: 'u1', amount: 500, reason: where.reason };
+    return null;
+  };
   const res = await app.request('/api/gacha/reset-notice', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.compensation, 0);
+  assert.equal(res.json.bonus, 500);
 });

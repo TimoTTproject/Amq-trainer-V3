@@ -102,14 +102,27 @@ router.patch('/characters/:id/featured', requireAuth, requireAdmin, async (req, 
   }
 });
 
-// Modifie la rareté d'un personnage
+// Modifie la rareté d'un personnage. Recalcule TOUJOURS maxSupply/soldOut sur
+// le plafond de la nouvelle rareté (sinon un perso repassé "mythic" gardait
+// l'ancien plafond, ex. 1 000 000 s'il venait de "common" — beaucoup plus
+// disponible qu'un vrai mythique, donc largement sur-représenté dans le pool
+// mythique tant qu'il ne s'épuisait pas) et invalide les caches hebdomadaires
+// (même raison que /recompute-rarities, cf. invalidateWeeklyCaches).
 router.patch('/characters/:id', requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id);
   const rarity = req.body?.rarity;
   if (!VALID_RARITIES.includes(rarity)) return res.status(400).json({ error: 'Rareté invalide' });
   try {
-    const c = await prisma.character.update({ where: { id }, data: { rarity } });
-    res.json({ id: c.id, rarity: c.rarity });
+    const existing = await prisma.character.findUnique({ where: { id }, select: { minted: true } });
+    if (!existing) return res.status(404).json({ error: 'Personnage introuvable' });
+    const cap = MAX_SUPPLY[rarity] || 1000000;
+    const maxSupply = Math.max(cap, existing.minted);
+    const c = await prisma.character.update({
+      where: { id },
+      data: { rarity, maxSupply, soldOut: existing.minted >= maxSupply },
+    });
+    invalidateWeeklyCaches();
+    res.json({ id: c.id, rarity: c.rarity, maxSupply: c.maxSupply, soldOut: c.soldOut });
   } catch {
     res.status(404).json({ error: 'Personnage introuvable' });
   }
@@ -500,19 +513,29 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
     // des CardInstance qui comptaient dans `minted`).
     prisma.character.updateMany({ data: { minted: 0, nextSerial: 0, soldOut: false } }),
   ];
+  // Dédommagement forfaitaire de CET incident (fuite de rareté : le rate-up
+  // vedette hebdo pouvait livrer un Mythique sur un tirage Épique/Légendaire
+  // après un recalcul des raretés — corrigé le 2026-07-06), en plus du
+  // remboursement du montant réellement dépensé. Donné à tout le monde,
+  // même à ceux qui n'ont jamais tiré. Purement ponctuel : à retirer si un
+  // futur reset gacha n'a plus de rapport avec cet incident.
+  const INCIDENT_BONUS = 500;
   let totalCompensation = 0;
+  let totalBonus = 0;
   for (const { id: userId } of users) {
-    const compensation = spentByUser.get(userId) || 0;
-    totalCompensation += compensation;
+    const spent = spentByUser.get(userId) || 0;
+    totalCompensation += spent;
+    totalBonus += INCIDENT_BONUS;
     ops.push(prisma.user.update({
       where: { id: userId },
       // increment (jamais un remplacement) : préserve les tokens gagnés hors
       // gacha. Remise à zéro des compteurs propres au gacha uniquement.
-      data: { tokens: { increment: compensation }, dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
+      data: { tokens: { increment: spent + INCIDENT_BONUS }, dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
     }));
-    if (compensation > 0) {
-      ops.push(prisma.tokenTransaction.create({ data: { userId, amount: compensation, reason: 'gacha_reset_compensation' } }));
+    if (spent > 0) {
+      ops.push(prisma.tokenTransaction.create({ data: { userId, amount: spent, reason: 'gacha_reset_compensation' } }));
     }
+    ops.push(prisma.tokenTransaction.create({ data: { userId, amount: INCIDENT_BONUS, reason: 'gacha_incident_bonus' } }));
   }
   ops.push(prisma.appSetting.upsert({
     where: { key: 'lastGachaReset' },
@@ -526,7 +549,7 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   // via GET /reset-notice (jamais de montant personnel dans le broadcast lui-même).
   try { broadcastAll('gacha:reset-notice', {}); } catch (e) { console.error('broadcast gacha reset:', e.message); }
 
-  res.json({ ok: true, users: users.length, totalCompensation });
+  res.json({ ok: true, users: users.length, totalCompensation, totalBonus });
 });
 
 module.exports = { router };
