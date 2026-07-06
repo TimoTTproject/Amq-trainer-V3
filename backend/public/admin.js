@@ -292,10 +292,13 @@ async function runResetAll() {
 }
 
 async function runResetGacha() {
-  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours (ajouté à son solde actuel). Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA pour confirmer :");
-  if (ans !== 'RESET_GACHA') return;
-  const btn = document.getElementById('admin-reset-gacha-btn');
   const status = document.getElementById('admin-reset-gacha-status');
+  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours (ajouté à son solde actuel). Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
+  // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
+  if (ans === null) { status.textContent = 'Annulé.'; return; }
+  if (ans !== 'RESET_GACHA') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RESET_GACHA") — rien n'a été fait, réessaie.`; return; }
+  const btn = document.getElementById('admin-reset-gacha-btn');
   btn.disabled = true;
   status.textContent = 'Réinitialisation du gacha…';
   try {
