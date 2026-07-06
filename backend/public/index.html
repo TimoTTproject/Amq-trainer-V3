@@ -1288,6 +1288,12 @@
         <span id="admin-reset-gacha-rollback-status" class="hint"></span>
       </div>
       <div class="admin-backfill">
+        <label class="field-label">Correction FINALE (calculée depuis zéro : dépense réelle + bonus, sans hypothèse sur l'historique — à utiliser si les corrections ci-dessus ne suffisent toujours pas)</label>
+        <button class="btn-secondary" id="admin-reset-gacha-preview-btn"><i class="fas fa-magnifying-glass"></i> Prévisualiser (aucune écriture)</button>
+        <button class="btn-secondary admin-danger" id="admin-reset-gacha-final-btn"><i class="fas fa-calculator"></i> Appliquer la correction finale</button>
+        <div id="admin-reset-gacha-final-status" class="hint"></div>
+      </div>
+      <div class="admin-backfill">
         <label class="field-label">Relevé complet des tokens d'un joueur (diagnostic, lecture seule)</label>
         <div class="panel-row">
           <input type="text" id="admin-ledger-search" placeholder="Pseudo du joueur (ex. Dova)" />

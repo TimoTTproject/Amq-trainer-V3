@@ -380,6 +380,45 @@ async function rollbackToFirstReset() {
   }
 }
 
+// Correction finale : recalcule depuis zéro (dépense pack_open réelle + bonus
+// forfaitaire, aucune hypothèse sur l'historique des resets précédents) et
+// applique la différence en une seule transaction traçable par joueur.
+function renderRecomputeRows(list) {
+  if (!list.length) return '<p class="muted">Aucun écart détecté — tout est déjà correct.</p>';
+  return `<table class="catalog-table"><thead><tr><th>Joueur</th><th>Dépensé</th><th>Correct</th><th>Actuel</th><th>Écart</th></tr></thead><tbody>${
+    list.map((p) => `<tr${p.alreadyDone ? ' class="muted"' : ''}><td>${p.userId}</td><td>${p.spent}</td><td>${p.correctGachaNet}</td><td>${p.currentGachaNet}</td><td>${p.diff > 0 ? '+' : ''}${p.diff}${p.alreadyDone ? ' (déjà appliqué)' : ''}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+async function previewRecomputeFinal() {
+  const status = document.getElementById('admin-reset-gacha-final-status');
+  status.textContent = 'Calcul…';
+  try {
+    const r = await api('/api/admin/reset-gacha/recompute-preview');
+    status.innerHTML = `<p>${r.users} joueur(s) avec un écart détecté :</p>${renderRecomputeRows(r.preview)}`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  }
+}
+
+async function applyRecomputeFinal() {
+  const status = document.getElementById('admin-reset-gacha-final-status');
+  const ans = prompt('⚠️ Applique la correction finale : recalcule pour chaque joueur ce qu\'il devrait avoir reçu (dépense réelle de tirages + bonus forfaitaire de 500) et ajuste son solde en une seule transaction, sans toucher à rien d\'autre. Jamais de solde négatif, idempotent.\n\nTape RECOMPUTE_FINAL (exactement) pour confirmer :');
+  if (ans === null) { status.textContent = 'Annulé.'; return; }
+  if (ans !== 'RECOMPUTE_FINAL') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RECOMPUTE_FINAL") — rien n'a été fait, réessaie.`; return; }
+  const btn = document.getElementById('admin-reset-gacha-final-btn');
+  btn.disabled = true;
+  status.textContent = 'Correction en cours…';
+  try {
+    const r = await api('/api/admin/reset-gacha/recompute-final', { method: 'POST', body: JSON.stringify({ confirm: 'RECOMPUTE_FINAL' }) });
+    status.innerHTML = `<p>✅ ${r.usersAffected} joueur(s) corrigé(s).</p>${renderRecomputeRows(r.corrections)}`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function showTokenLedger() {
   const input = document.getElementById('admin-ledger-search');
   const out = document.getElementById('admin-ledger-result');

@@ -17,6 +17,9 @@ const {
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+// Dédommagement forfaitaire de l'incident de fuite de rareté (voir commit du
+// 2026-07-06), donné une seule fois par joueur en plus du remboursement réel.
+const INCIDENT_BONUS_AMOUNT = 500;
 
 router.get('/r2-status', requireAuth, requireAdmin, async (req, res) => {
   res.json(await r2Status());
@@ -526,23 +529,22 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   // remboursement du montant réellement dépensé. Donné à tout le monde,
   // même à ceux qui n'ont jamais tiré. Purement ponctuel : à retirer si un
   // futur reset gacha n'a plus de rapport avec cet incident.
-  const INCIDENT_BONUS = 500;
   let totalCompensation = 0;
   let totalBonus = 0;
   for (const { id: userId } of users) {
     const spent = spentByUser.get(userId) || 0;
     totalCompensation += spent;
-    totalBonus += INCIDENT_BONUS;
+    totalBonus += INCIDENT_BONUS_AMOUNT;
     ops.push(prisma.user.update({
       where: { id: userId },
       // increment (jamais un remplacement) : préserve les tokens gagnés hors
       // gacha. Remise à zéro des compteurs propres au gacha uniquement.
-      data: { tokens: { increment: spent + INCIDENT_BONUS }, dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
+      data: { tokens: { increment: spent + INCIDENT_BONUS_AMOUNT }, dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
     }));
     if (spent > 0) {
       ops.push(prisma.tokenTransaction.create({ data: { userId, amount: spent, reason: 'gacha_reset_compensation' } }));
     }
-    ops.push(prisma.tokenTransaction.create({ data: { userId, amount: INCIDENT_BONUS, reason: 'gacha_incident_bonus' } }));
+    ops.push(prisma.tokenTransaction.create({ data: { userId, amount: INCIDENT_BONUS_AMOUNT, reason: 'gacha_incident_bonus' } }));
   }
   ops.push(prisma.appSetting.upsert({
     where: { key: 'lastGachaReset' },
@@ -778,5 +780,91 @@ router.post('/reset-gacha/rollback-to-first', requireAuth, requireAdmin, async (
   if (ops.length) await prisma.$transaction(ops);
   res.json({ ok: true, usersAffected: results.length, results });
 });
+
+// ── Correction FINALE, calculée depuis zéro (pas d'hypothèse sur des
+// "évènements" ni sur "le 1er remboursement est forcément le bon") ──
+// Les deux tentatives précédentes reposaient sur des hypothèses qui se sont
+// avérées fausses en pratique : `fix-double-refund` recalculait par période
+// entre évènements détectés (fragile si des clics sont fusionnés), et
+// `rollback-to-first` supposait que seul le tout premier remboursement était
+// légitime — faux : CHAQUE reset devait légitimement rembourser la dépense
+// `pack_open` faite depuis le précédent, donc en annuler la totalité sauf le
+// 1er a effacé des remboursements réellement dus (ex. Dova : gardé 15300
+// alors qu'il avait dépensé 31800 au total → solde retombé à 506 au lieu de
+// ~17006).
+//
+// Principe, imposé par construction plutôt que reconstitué : la compensation
+// gacha TOTALE, cumulée sur tous les resets, doit égaler EXACTEMENT la
+// dépense `pack_open` totale à vie (chaque tirage remboursé une fois, pas
+// plus, pas moins) + le bonus incident forfaitaire (500, une seule fois).
+// On calcule ce que la somme actuelle de toutes les transactions liées aux
+// resets (compensation + bonus + corrections + rollback déjà appliqués)
+// DEVRAIT valoir, on compare à ce qu'elle vaut réellement, et on applique la
+// différence en UNE seule transaction traçable. Idempotent (reason dédiée).
+const RESET_RELATED_REASONS = [
+  'gacha_reset_compensation',
+  'gacha_incident_bonus',
+  'gacha_reset_correction',
+  'gacha_reset_rollback',
+];
+
+router.get('/reset-gacha/recompute-preview', requireAuth, requireAdmin, async (req, res) => {
+  const preview = await computeFinalCorrections();
+  res.json({ users: preview.length, preview });
+});
+
+router.post('/reset-gacha/recompute-final', requireAuth, requireAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'RECOMPUTE_FINAL') return res.status(400).json({ error: 'Confirmation requise (RECOMPUTE_FINAL)' });
+  const preview = await computeFinalCorrections();
+  const ops = [];
+  const applied = [];
+  for (const p of preview) {
+    if (p.diff === 0 || p.alreadyDone) continue;
+    // Si on doit RETIRER des tokens (diff < 0), jamais sous 0 — sinon on
+    // applique le diff exact (positif : le joueur reçoit ce qui lui manque).
+    const amount = p.diff > 0 ? p.diff : -Math.min(-p.diff, p.currentTokens);
+    if (amount === 0) continue;
+    ops.push(prisma.user.update({ where: { id: p.userId }, data: { tokens: { increment: amount } } }));
+    ops.push(prisma.tokenTransaction.create({ data: { userId: p.userId, amount, reason: 'gacha_reset_final_correction' } }));
+    applied.push({ ...p, applied: amount });
+  }
+  if (ops.length) await prisma.$transaction(ops);
+  res.json({ ok: true, usersAffected: applied.length, corrections: applied });
+});
+
+async function computeFinalCorrections() {
+  const spentGroups = await prisma.tokenTransaction.groupBy({
+    by: ['userId'], where: { reason: 'pack_open' }, _sum: { amount: true },
+  });
+  const relatedGroups = await prisma.tokenTransaction.groupBy({
+    by: ['userId'], where: { reason: { in: RESET_RELATED_REASONS } }, _sum: { amount: true },
+  });
+  const spentByUser = new Map(spentGroups.map((g) => [g.userId, Math.abs(g._sum.amount || 0)]));
+  const relatedByUser = new Map(relatedGroups.map((g) => [g.userId, g._sum.amount || 0]));
+
+  // Union des deux : un joueur peut avoir une trace de reset gacha (bonus
+  // inclus) sans avoir jamais tiré (spent=0) — ex. inscrit avant un reset —
+  // il ne faut PAS l'ignorer, sinon son solde déjà faussé reste faux.
+  const userIds = new Set([...spentByUser.keys(), ...relatedByUser.keys()]);
+
+  const out = [];
+  for (const userId of userIds) {
+    const spent = spentByUser.get(userId) || 0;
+    const currentGachaNet = relatedByUser.get(userId) || 0;
+    // N'a jamais tiré : seul le bonus incident est dû (s'il a bien une trace
+    // de reset, sinon on ne le touche pas du tout — cf. Set ci-dessus).
+    const correctGachaNet = spent > 0 ? spent + INCIDENT_BONUS_AMOUNT : INCIDENT_BONUS_AMOUNT;
+    const diff = correctGachaNet - currentGachaNet;
+    if (diff === 0) continue;
+    const already = await prisma.tokenTransaction.findFirst({ where: { userId, reason: 'gacha_reset_final_correction' } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { tokens: true } });
+    out.push({
+      userId, spent, correctGachaNet, currentGachaNet, diff,
+      currentTokens: user?.tokens || 0,
+      alreadyDone: !!already,
+    });
+  }
+  return out;
+}
 
 module.exports = { router };

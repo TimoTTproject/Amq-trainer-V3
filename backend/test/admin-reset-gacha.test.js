@@ -485,3 +485,97 @@ test('rollback-to-first : idempotent — ignore un joueur déjà rollback', asyn
   assert.equal(res.json.results[0].skipped, true);
   assert.equal(userUpdates.length, 0);
 });
+
+// ── Correction finale calculée depuis zéro (pas d'hypothèse sur des
+// "évènements" ni sur "le 1er remboursement est le bon") — remplace les 2
+// approches précédentes, qui se sont avérées fausses en pratique : le total
+// remboursé doit juste égaler la dépense pack_open réelle + le bonus
+// forfaitaire, point final. ──
+test('recompute-final : refuse un utilisateur non-admin', async () => {
+  const res = await app.request('/api/admin/reset-gacha/recompute-final', {
+    method: 'POST', cookie: app.authCookie(PLAIN.id), body: { confirm: 'RECOMPUTE_FINAL' },
+  });
+  assert.equal(res.status, 403);
+});
+
+test('recompute-final : refuse sans la confirmation exacte', async () => {
+  const res = await app.request('/api/admin/reset-gacha/recompute-final', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: {},
+  });
+  assert.equal(res.status, 400);
+});
+
+test('recompute-final : cas réel Dova — sous-remboursé après le rollback, complète la différence', async () => {
+  // Dépense réelle à vie : 31800. Net actuel des transactions liées au reset
+  // (compensation 78900 + bonus 500 + correction -30600 + rollback -33000) : 15800.
+  // Correct = 31800 + 500 = 32300. Diff = 32300 - 15800 = 16500 (à AJOUTER).
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    if (where.reason === 'pack_open') return [{ userId: 'dova1', _sum: { amount: -31800 } }];
+    if (where.reason?.in) return [{ userId: 'dova1', _sum: { amount: 15800 } }];
+    return [];
+  };
+  prisma.tokenTransaction.findFirst = async () => null; // pas encore appliqué
+  prisma.user.findUnique = async ({ where }) => (where.id === 'dova1' ? { tokens: 506 } : ADMIN);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+  const txCreated = [];
+  prisma.tokenTransaction.create = async ({ data }) => { txCreated.push(data); return data; };
+
+  const res = await app.request('/api/admin/reset-gacha/recompute-final', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'RECOMPUTE_FINAL' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.usersAffected, 1);
+  const fix = res.json.corrections[0];
+  assert.equal(fix.userId, 'dova1');
+  assert.equal(fix.spent, 31800);
+  assert.equal(fix.correctGachaNet, 32300);
+  assert.equal(fix.currentGachaNet, 15800);
+  assert.equal(fix.diff, 16500);
+  assert.equal(fix.applied, 16500);
+  assert.deepEqual(userUpdates.find((u) => u.id === 'dova1').data.tokens, { increment: 16500 });
+  const correction = txCreated.find((t) => t.reason === 'gacha_reset_final_correction');
+  assert.equal(correction.amount, 16500);
+});
+
+test('recompute-final : un joueur qui n\'a jamais tiré ne doit recevoir QUE le bonus (500), pas plus', async () => {
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    if (where.reason === 'pack_open') return []; // jamais tiré
+    if (where.reason?.in) return [{ userId: 'gebaie1', _sum: { amount: 0 } }]; // tout a été annulé par le rollback
+    return [];
+  };
+  prisma.tokenTransaction.findFirst = async () => null;
+  prisma.user.findUnique = async ({ where }) => (where.id === 'gebaie1' ? { tokens: 0 } : ADMIN);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+  prisma.tokenTransaction.create = async ({ data }) => data;
+
+  const res = await app.request('/api/admin/reset-gacha/recompute-final', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'RECOMPUTE_FINAL' },
+  });
+  assert.equal(res.status, 200);
+  const fix = res.json.corrections[0];
+  assert.equal(fix.userId, 'gebaie1');
+  assert.equal(fix.spent, 0);
+  assert.equal(fix.correctGachaNet, 500); // bonus seul, pas de remboursement de tirages
+  assert.equal(fix.applied, 500);
+});
+
+test('recompute-final : ne retire jamais sous 0 et est idempotent (déjà appliqué → ignoré)', async () => {
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    if (where.reason === 'pack_open') return [{ userId: 'u1', _sum: { amount: -1000 } }];
+    if (where.reason?.in) return [{ userId: 'u1', _sum: { amount: 999999 } }]; // trop-perçu énorme
+    return [];
+  };
+  // Déjà corrigé une fois → ignoré, quel que soit le diff recalculé.
+  prisma.tokenTransaction.findFirst = async ({ where }) => (where.reason === 'gacha_reset_final_correction' ? { id: 1 } : null);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+
+  const res = await app.request('/api/admin/reset-gacha/recompute-final', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'RECOMPUTE_FINAL' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.usersAffected, 0);
+  assert.equal(userUpdates.length, 0);
+});
