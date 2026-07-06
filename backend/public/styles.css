@@ -804,7 +804,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .pls-mine-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 
 /* ── Albums de cartes (collections personnalisées, partageables) ── */
-.alb-card-wrap { position: relative; }
+.alb-card-wrap { position: relative; display: flex; flex-direction: column; }
 .alb-card-remove {
   position: absolute; top: 6px; right: 6px; z-index: 2;
   width: 26px; height: 26px; border: 1px solid #3a404a; border-radius: 50%;
@@ -814,14 +814,15 @@ body.guest-mode .feedback-buttons { display: none !important; }
 }
 .alb-card-wrap:hover .alb-card-remove { opacity: 1; }
 .alb-card-remove:hover { color: #fff; background: var(--red); border-color: var(--red); }
+.alb-card-wrap .gcard { border-radius: 8px 8px 0 0; }
 .alb-search-add, .alb-search-added {
-  position: absolute; bottom: 6px; left: 6px; right: 6px; z-index: 2;
+  z-index: 2; margin-top: -1px;
   font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-  border-radius: 4px; padding: 5px 6px; text-align: center;
+  border-radius: 0 0 8px 8px; padding: 6px 6px; text-align: center;
 }
-.alb-search-add { background: var(--bg-3); color: var(--text); border: 1px solid #3a404a; cursor: pointer; }
+.alb-search-add { background: var(--bg-3); color: var(--text); border: 1px solid #3a404a; border-top: none; cursor: pointer; }
 .alb-search-add:hover { color: #16070b; background: var(--accent); border-color: var(--accent); }
-.alb-search-added { background: rgba(20, 50, 38, .9); color: var(--green); border: 1px solid #1e5a3e; }
+.alb-search-added { background: rgba(20, 50, 38, .9); color: var(--green); border: 1px solid #1e5a3e; border-top: none; }
 .char-album-toggle { width: 100%; justify-content: center; }
 .char-album-picker {
   margin-top: 10px; padding: 12px; background: #101217; border: 1px solid #343943;
@@ -859,9 +860,20 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .album-page {
   flex: 1;
   min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 14px;
+  padding: 14px;
   background: repeating-linear-gradient(180deg, rgba(255,255,255,.015) 0 42px, transparent 42px 84px);
   border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.04);
 }
+.album-page .alb-card-wrap, .album-page > .gcard {
+  background: rgba(0,0,0,.18);
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.03), inset 0 2px 6px rgba(0,0,0,.35);
+}
+.album-page .alb-card-wrap .gcard { border-radius: 7px; }
 
 /* ── Par série (progression de collection) ── */
 .series-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
@@ -2538,9 +2550,9 @@ header h1 i { color: var(--accent); }
 .playlist-search { margin: 26px 0 18px; }
 .playlist-search > h3 { font-size: 1.05rem; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
 .playlist-search > h3 i { color: var(--accent); }
-#playlist-search-input {
+#playlist-search-input, .playlist-search input[type="search"] {
   width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text);
-  border-radius: 10px; padding: 11px 14px; font-size: .95rem; margin-bottom: 12px;
+  border-radius: 10px; padding: 11px 14px; font-size: .95rem; margin-bottom: 12px; box-sizing: border-box;
 }
 #playlist-search-results { display: flex; flex-direction: column; gap: 8px; }
 .pl-search-row { display: flex; align-items: center; gap: 12px; background: #13151a; border: 1px solid #2a2f42; border-radius: 8px; padding: 8px 12px; }

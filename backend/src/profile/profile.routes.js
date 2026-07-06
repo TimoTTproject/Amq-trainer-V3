@@ -124,7 +124,8 @@ router.post('/claim-levels', requireAuth, async (req, res) => {
 // pour ne pas transformer la sidebar en second hub complet.
 const PINNABLE_NAV = new Set([
   'quiz', 'coop', 'training', 'tower', 'mp', 'daily',
-  'gacha', 'shop', 'craft', 'catalog', 'playlist',
+  'gacha-pull', 'gacha-collection', 'gacha-events', 'gacha-series', 'gacha-albums',
+  'shop', 'craft', 'catalog', 'playlist',
   'friends', 'leaderboard', 'players', 'trades',
 ]);
 const MAX_PINNED_NAV = 8;

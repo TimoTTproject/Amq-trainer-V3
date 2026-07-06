@@ -170,7 +170,8 @@
     <nav class="navbar" id="navbar">
       <button class="nav-item" id="nav-home" data-nav="home"><i class="fas fa-house"></i><span data-i18n="Accueil">Accueil</span><span id="changelog-nav-badge" class="nav-badge hidden"></span></button>
       <button class="nav-item" data-nav="play"><i class="fas fa-play"></i><span data-i18n="Jouer">Jouer</span></button>
-      <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span data-i18n="Collection">Collection</span></button>
+      <button class="nav-item" data-nav="collection"><i class="fas fa-layer-group"></i><span data-i18n="Gacha">Gacha</span></button>
+      <button class="nav-item" data-nav="extras"><i class="fas fa-shapes"></i><span data-i18n="Extras">Extras</span></button>
       <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span data-i18n="Communauté">Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
       <div class="navbar-sep hidden" id="navbar-pinned-sep"></div>
       <div id="navbar-pinned" class="navbar-pinned"></div>
@@ -223,19 +224,53 @@
       </div>
     </div>
 
-    <!-- VUE COLLECTION (hub gacha / boutique / catalogue / playlist) -->
+    <!-- VUE GACHA (hub tirage / collection / vedettes / séries / albums) -->
     <div id="view-collection" class="hidden">
       <div class="hub-head">
-        <h2 class="hub-title"><i class="fas fa-layer-group"></i> <span data-i18n="Collection">Collection</span></h2>
-        <p class="hub-sub" data-i18n="Tes cartes, ton style et ton catalogue.">Tes cartes, ton style et ton catalogue.</p>
+        <h2 class="hub-title"><i class="fas fa-layer-group"></i> <span data-i18n="Gacha">Gacha</span></h2>
+        <p class="hub-sub" data-i18n="Dépense tes tokens, complète ta collection et fais vivre tes albums.">Dépense tes tokens, complète ta collection et fais vivre tes albums.</p>
       </div>
       <div class="hub-grid">
-        <button class="hub-card" data-nav="gacha" style="--c:#ff6bd6">
-          <span class="hub-ico"><i class="fas fa-layer-group"></i></span>
-          <span class="hub-txt"><h3 data-i18n="Gacha">Gacha</h3><p data-i18n="Dépense tes tokens pour collectionner des cartes">Dépense tes tokens pour collectionner des cartes</p></span>
-          <span class="hub-pin" data-pin="gacha" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+        <button class="hub-card" data-nav="gacha-pull" style="--c:#ff6bd6">
+          <span class="hub-ico"><i class="fas fa-ticket"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Tirage">Tirage</h3><p data-i18n="Dépense tes tokens pour collectionner des cartes">Dépense tes tokens pour collectionner des cartes</p></span>
+          <span class="hub-pin" data-pin="gacha-pull" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+        <button class="hub-card" data-nav="gacha-collection" style="--c:#4db8ff">
+          <span class="hub-ico"><i class="fas fa-images"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Ma collection">Ma collection</h3><p data-i18n="Toutes tes cartes possédées, triées et filtrées">Toutes tes cartes possédées, triées et filtrées</p></span>
+          <span class="hub-pin" data-pin="gacha-collection" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+        <button class="hub-card" data-nav="gacha-events" style="--c:#ffb648">
+          <span class="hub-ico"><i class="fas fa-star"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Vedettes &amp; vote">Vedettes &amp; vote</h3><p data-i18n="Personnages en vedette et vote hebdomadaire de la communauté">Personnages en vedette et vote hebdomadaire de la communauté</p></span>
+          <span class="hub-pin" data-pin="gacha-events" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+        <button class="hub-card" data-nav="gacha-series" style="--c:#3ec98a">
+          <span class="hub-ico"><i class="fas fa-clapperboard"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Par série">Par série</h3><p data-i18n="Ta progression de collection, anime par anime">Ta progression de collection, anime par anime</p></span>
+          <span class="hub-pin" data-pin="gacha-series" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+        <button class="hub-card" data-nav="gacha-albums" style="--c:#b06cff">
+          <span class="hub-ico"><i class="fas fa-book"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Albums">Albums</h3><p data-i18n="Compose et partage des albums thématiques de tes cartes">Compose et partage des albums thématiques de tes cartes</p></span>
+          <span class="hub-pin" data-pin="gacha-albums" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- VUE EXTRAS (hub boutique / atelier / catalogue / playlist) -->
+    <div id="view-extras" class="hidden">
+      <div class="hub-head">
+        <h2 class="hub-title"><i class="fas fa-shapes"></i> <span data-i18n="Extras">Extras</span></h2>
+        <p class="hub-sub" data-i18n="Cosmétiques, fusion de doublons, catalogue et playlists.">Cosmétiques, fusion de doublons, catalogue et playlists.</p>
+      </div>
+      <div class="hub-grid">
         <button class="hub-card" data-nav="shop" style="--c:#f0a832">
           <span class="hub-ico"><i class="fas fa-store"></i></span>
           <span class="hub-txt"><h3 data-i18n="Boutique">Boutique</h3><p data-i18n="Cosmétiques : dos de cartes, bordures, bannières">Cosmétiques : dos de cartes, bordures, bannières</p></span>
@@ -634,7 +669,7 @@
 
     <!-- VUE GACHA -->
     <div id="view-gacha" class="hidden">
-      <button class="btn-back" id="back-home-gacha"><i class="fas fa-arrow-left"></i> Collection</button>
+      <button class="btn-back" id="back-home-gacha"><i class="fas fa-arrow-left"></i> Gacha</button>
       <div class="gacha-top">
         <h2><i class="fas fa-layer-group"></i> Gacha</h2>
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="gacha-tokens">0</span></span>
@@ -823,7 +858,7 @@
 
     <!-- VUE BOUTIQUE -->
     <div id="view-shop" class="hidden">
-      <button class="btn-back" id="back-home-shop"><i class="fas fa-arrow-left"></i> Collection</button>
+      <button class="btn-back" id="back-home-shop"><i class="fas fa-arrow-left"></i> Extras</button>
       <div class="gacha-top">
         <h2><i class="fas fa-store"></i> Boutique</h2>
         <span class="token-badge"><i class="fas fa-coins"></i> <span id="shop-tokens">0</span></span>
@@ -898,7 +933,7 @@
 
     <!-- VUE CATALOGUE -->
     <div id="view-catalog" class="hidden">
-      <button class="btn-back" id="back-home-catalog"><i class="fas fa-arrow-left"></i> Collection</button>
+      <button class="btn-back" id="back-home-catalog"><i class="fas fa-arrow-left"></i> Extras</button>
       <div class="gacha-top">
         <h2><i class="fas fa-list"></i> Catalogue</h2>
         <span class="catalog-info" id="catalog-total"></span>
@@ -1092,7 +1127,7 @@
 
     <!-- VUE ATELIER (craft) -->
     <div id="view-craft" class="hidden">
-      <button class="btn-back" id="back-collection-craft"><i class="fas fa-arrow-left"></i> Collection</button>
+      <button class="btn-back" id="back-collection-craft"><i class="fas fa-arrow-left"></i> Extras</button>
       <div class="gacha-top">
         <h2><i class="fas fa-wand-magic-sparkles"></i> Atelier · Fusion</h2>
         <span class="token-badge" id="fuse-counter-badge">0/3 sélectionné(s)</span>
@@ -1249,7 +1284,7 @@
 
     <!-- VUE PLAYLIST -->
     <div id="view-playlist" class="hidden">
-      <button class="btn-back" id="back-collection-playlist"><i class="fas fa-arrow-left"></i> Collection</button>
+      <button class="btn-back" id="back-collection-playlist"><i class="fas fa-arrow-left"></i> Extras</button>
       <div class="gacha-top">
         <h2><i class="fas fa-heart"></i> Playlist</h2>
         <span class="catalog-info" id="playlist-total"></span>

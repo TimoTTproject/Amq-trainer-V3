@@ -156,7 +156,7 @@ let aldSort = 'rarity'; // 'rarity' | 'name' | 'recent'
 let aldFilterSearch = ''; // recherche dans les cartes DÉJÀ dans l'album
 
 function openAlbumsHub() {
-  showView('gacha');
+  showView('gacha-albums');
   if (typeof setGachaTab === 'function') setGachaTab('albums');
 }
 

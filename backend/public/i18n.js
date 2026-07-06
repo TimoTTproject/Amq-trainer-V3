@@ -7,7 +7,7 @@ let LANG = localStorage.getItem('amq_lang') || 'fr';
 const I18N = {
   en: {
     // Navigation
-    'Accueil': 'Home', 'Jouer': 'Play', 'Collection': 'Collection',
+    'Accueil': 'Home', 'Jouer': 'Play', 'Collection': 'Collection', 'Extras': 'Extras',
     'Communauté': 'Community', 'Admin': 'Admin',
     // Écran de connexion
     "Reconnais l'anime.": 'Name the anime.',
@@ -54,10 +54,21 @@ const I18N = {
     'Défi du jour': 'Daily challenge',
     'Classé solo : mêmes chansons pour tous, 1 essai, MMR': 'Solo ranked: same songs for everyone, 1 try, MMR',
     'Épingler dans le menu': 'Pin to menu',
-    // Hub Collection
-    'Tes cartes, ton style et ton catalogue.': 'Your cards, your style, your catalog.',
+    // Hub Gacha
+    'Dépense tes tokens, complète ta collection et fais vivre tes albums.': 'Spend your tokens, complete your collection and bring your albums to life.',
     'Gacha': 'Gacha',
+    'Tirage': 'Pull',
     'Dépense tes tokens pour collectionner des cartes': 'Spend your tokens to collect cards',
+    'Ma collection': 'My collection',
+    'Toutes tes cartes possédées, triées et filtrées': 'All your owned cards, sorted and filtered',
+    'Vedettes & vote': 'Featured & vote',
+    'Personnages en vedette et vote hebdomadaire de la communauté': 'Featured characters and the community\'s weekly vote',
+    'Par série': 'By series',
+    'Ta progression de collection, anime par anime': 'Your collection progress, anime by anime',
+    'Albums': 'Albums',
+    'Compose et partage des albums thématiques de tes cartes': 'Build and share themed albums of your cards',
+    // Hub Extras
+    'Cosmétiques, fusion de doublons, catalogue et playlists.': 'Cosmetics, duplicate fusion, catalog and playlists.',
     'Boutique': 'Shop',
     'Cosmétiques : dos de cartes, bordures, bannières': 'Cosmetics: card backs, borders, banners',
     'Atelier': 'Workshop',

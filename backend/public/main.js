@@ -577,12 +577,13 @@ function showView(name, options = {}) {
   document.getElementById('view-home').classList.toggle('hidden', name !== 'home');
   document.getElementById('view-play').classList.toggle('hidden', name !== 'play');
   document.getElementById('view-collection').classList.toggle('hidden', name !== 'collection');
+  document.getElementById('view-extras').classList.toggle('hidden', name !== 'extras');
   document.getElementById('view-community').classList.toggle('hidden', name !== 'community');
   document.getElementById('view-players').classList.toggle('hidden', name !== 'players');
   document.getElementById('view-trades').classList.toggle('hidden', name !== 'trades');
   document.getElementById('view-trade').classList.toggle('hidden', name !== 'trade');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
-  document.getElementById('view-gacha').classList.toggle('hidden', name !== 'gacha');
+  document.getElementById('view-gacha').classList.toggle('hidden', !name.startsWith('gacha'));
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
   document.getElementById('view-economy').classList.toggle('hidden', name !== 'economy');
   document.getElementById('view-catalog').classList.toggle('hidden', name !== 'catalog');
@@ -635,8 +636,9 @@ function showView(name, options = {}) {
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
 const NAV_GROUP = {
   quiz: 'play', training: 'play', tower: 'play', mp: 'play', daily: 'play',
-  gacha: 'collection', shop: 'collection', catalog: 'collection', playlist: 'collection', characters: 'collection', craft: 'collection',
-  'playlist-detail': 'collection', 'album-detail': 'collection',
+  gacha: 'collection', 'gacha-pull': 'collection', 'gacha-events': 'collection', 'gacha-collection': 'collection', 'gacha-series': 'collection', 'gacha-albums': 'collection',
+  characters: 'collection', 'album-detail': 'collection',
+  shop: 'extras', craft: 'extras', catalog: 'extras', playlist: 'extras', 'playlist-detail': 'extras',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
 };
 
@@ -644,11 +646,17 @@ const NAV_GROUP = {
 function navTo(name) {
   if (name === 'play') return showView('play');
   if (name === 'collection') return showView('collection');
+  if (name === 'extras') return showView('extras');
   if (name === 'community') return showView('community');
   if (name === 'players') return openPlayers();
   if (name === 'trades') return openTrades();
   if (name === 'craft') return openCraft();
-  if (name === 'gacha') return openGacha();
+  if (name === 'gacha') return openGacha('pull'); // compat anciens raccourcis épinglés / liens
+  if (name === 'gacha-pull') return openGacha('pull');
+  if (name === 'gacha-events') return openGacha('events');
+  if (name === 'gacha-collection') return openGacha('collection');
+  if (name === 'gacha-series') return openGacha('series');
+  if (name === 'gacha-albums') return openGacha('albums');
   if (name === 'shop') return openShop();
   if (name === 'economy') return openEconomy();
   if (name === 'catalog') return openCatalog();
@@ -1095,7 +1103,7 @@ function setupAppUI() {
   setupProfileUI();
 
   document.getElementById('back-home-economy').addEventListener('click', () => showView('home'));
-  document.getElementById('back-home-shop').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-home-shop').addEventListener('click', () => showView('extras'));
   document.getElementById('shop-tabs').addEventListener('click', onShopTabClick);
   document.getElementById('shop-cosmetics').addEventListener('click', onShopClick);
   document.getElementById('shop-licenses-panel').addEventListener('click', onShopClick);
@@ -1128,6 +1136,7 @@ function setupAppUI() {
   };
   document.getElementById('view-play').addEventListener('click', hubClick);
   document.getElementById('view-collection').addEventListener('click', hubClick);
+  document.getElementById('view-extras').addEventListener('click', hubClick);
   document.getElementById('view-community').addEventListener('click', hubClick);
   document.getElementById('navbar-pinned').addEventListener('click', (e) => {
     const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav);
@@ -1234,7 +1243,7 @@ function setupAppUI() {
     if (card) openCharacter(card.dataset.cid);
   });
   // Atelier (fusion : 3 exemplaires possédés → 1 carte aléatoire de la même rareté)
-  document.getElementById('back-collection-craft').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-collection-craft').addEventListener('click', () => showView('extras'));
   let craftSearchTimer;
   document.getElementById('craft-search').addEventListener('input', (e) => {
     clearTimeout(craftSearchTimer);
@@ -1296,10 +1305,10 @@ function setupAppUI() {
   );
   document.getElementById('back-home').addEventListener('click', () => showView('play'));
   document.getElementById('back-home-gacha').addEventListener('click', () => showView('collection'));
-  document.getElementById('back-home-catalog').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-home-catalog').addEventListener('click', () => showView('extras'));
   document.getElementById('back-home-tower').addEventListener('click', () => showView('play'));
   document.getElementById('back-play-training').addEventListener('click', () => showView('play'));
-  document.getElementById('back-collection-playlist').addEventListener('click', () => showView('collection'));
+  document.getElementById('back-collection-playlist').addEventListener('click', () => showView('extras'));
   document.getElementById('back-play-mp').addEventListener('click', () => showView('play'));
   document.getElementById('tower-start').addEventListener('click', startTower);
   document.getElementById('tower-again').addEventListener('click', openTower);

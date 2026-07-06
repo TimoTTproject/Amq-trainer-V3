@@ -32,9 +32,10 @@ function onGachaTabClick(e) {
   if (b) setGachaTab(b.dataset.gtab);
 }
 
-async function openGacha() {
-  showView('gacha');
-  setGachaTab('pull');
+async function openGacha(tab) {
+  const t = tab || 'pull';
+  showView('gacha-' + t);
+  setGachaTab(t);
   setGachaTokens();
   document.getElementById('gacha-msg').textContent = '';
   document.getElementById('pull-result').classList.add('hidden');
