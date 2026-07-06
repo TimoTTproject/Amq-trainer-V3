@@ -213,7 +213,7 @@ if (pushEnabled()) {
 // Récompense coop hebdomadaire : les 2 meilleurs étages de la SEMAINE écoulée
 // gagnent 800 / 400 🪙. Idempotent (store partagé + flag `rewarded` en BDD).
 // NB : le coop est TOUJOURS en catalogue global (pas de farm sur ses listes).
-const { previousWeekKey } = require('./util/week');
+const { weekKey } = require('./util/week');
 async function payCoopWeekly(week) {
   const top = await prisma.coopWeeklyScore.findMany({
     where: { week, floor: { gt: 0 }, rewarded: false },
@@ -232,13 +232,27 @@ async function payCoopWeekly(week) {
   }
   if (top.length) console.log(`  → Récompenses coop hebdo (${week}) : ${top.length} joueur(s) payé(s)`);
 }
-setInterval(async () => {
-  const prev = previousWeekKey(); // semaine qui vient de se terminer
+async function checkCoopWeeklyPayout() {
   try {
-    if (!(await store.setIfAbsent('coop-weekly:' + prev, 14 * 86400))) return; // déjà traité
-    await payCoopWeekly(prev);
+    // Rattrape TOUTES les semaines passées non payées (pas seulement la dernière),
+    // au cas où un incident (ex : redéploiements trop fréquents pour laisser le
+    // temps au setInterval de se déclencher) ait empêché le paiement plus tôt.
+    const current = weekKey();
+    const pending = await prisma.coopWeeklyScore.findMany({
+      where: { rewarded: false, floor: { gt: 0 }, week: { not: current } },
+      distinct: ['week'], select: { week: true },
+    });
+    for (const { week } of pending) {
+      if (!(await store.setIfAbsent('coop-weekly:' + week, 14 * 86400))) continue; // déjà traité
+      await payCoopWeekly(week);
+    }
   } catch (e) { console.error('coop weekly check:', e && e.message); }
-}, 60 * 60 * 1000);
+}
+// Exécution immédiate au démarrage (les redéploiements fréquents faisaient que le
+// setInterval seul n'atteignait jamais 1h d'uptime continu, donc le paiement ne
+// se déclenchait jamais) + vérification périodique pour un process longue durée.
+checkCoopWeeklyPayout();
+setInterval(checkCoopWeeklyPayout, 60 * 60 * 1000);
 
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
