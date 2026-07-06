@@ -386,3 +386,102 @@ test('fix-double-refund : idempotent — un 2e appel ne retire rien de plus si d
   assert.equal(res.json.usersFixed, 0);
   assert.equal(userUpdates.length, 0);
 });
+
+// ── Annulation complète (garde le 1er remboursement, annule le reste + les
+// corrections déjà appliquées) — cas réel : 3 remboursements (78900 au
+// total), 2 corrections déjà appliquées (-30600), toujours trop élevé.
+test('rollback-to-first : refuse un utilisateur non-admin', async () => {
+  const res = await app.request('/api/admin/reset-gacha/rollback-to-first', {
+    method: 'POST', cookie: app.authCookie(PLAIN.id), body: { confirm: 'ROLLBACK_TO_FIRST' },
+  });
+  assert.equal(res.status, 403);
+});
+
+test('rollback-to-first : refuse sans la confirmation exacte', async () => {
+  const res = await app.request('/api/admin/reset-gacha/rollback-to-first', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: {},
+  });
+  assert.equal(res.status, 400);
+});
+
+test('rollback-to-first : refuse s\'il n\'y a qu\'un seul remboursement détecté', async () => {
+  prisma.tokenTransaction.findMany = async ({ where }) =>
+    (where?.reason === 'gacha_reset_compensation' ? [{ userId: 'u1', amount: 500, createdAt: new Date() }] : []);
+  const res = await app.request('/api/admin/reset-gacha/rollback-to-first', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'ROLLBACK_TO_FIRST' },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /Un seul remboursement/);
+});
+
+test('rollback-to-first : annule tout sauf le 1er remboursement, plus les corrections déjà appliquées', async () => {
+  // Reproduit le relevé réel : 3 remboursements gacha_reset_compensation
+  // (le 1er est légitime, gardé), 2 corrections déjà appliquées (-30600 au
+  // total, insuffisantes). netExcess = (event2+event3) - corrections déjà retirées.
+  const e1 = new Date('2026-07-01T10:00:00Z');
+  const e2 = new Date('2026-07-04T10:00:00Z');
+  const e3 = new Date('2026-07-06T09:00:00Z');
+  prisma.tokenTransaction.findMany = async ({ where }) => {
+    if (where?.reason === 'gacha_reset_compensation') {
+      return [
+        { userId: 'u1', amount: 4000, reason: 'gacha_reset_compensation', createdAt: e1 },
+        { userId: 'u1', amount: 20000, reason: 'gacha_reset_compensation', createdAt: e2 },
+        { userId: 'u1', amount: 54900, reason: 'gacha_reset_compensation', createdAt: e3 },
+      ];
+    }
+    if (where?.reason === 'gacha_reset_correction') {
+      return [
+        { userId: 'u1', amount: -15000, reason: 'gacha_reset_correction', createdAt: e2 },
+        { userId: 'u1', amount: -15600, reason: 'gacha_reset_correction', createdAt: e3 },
+      ];
+    }
+    return [];
+  };
+  prisma.tokenTransaction.findFirst = async () => null; // pas encore rollback
+  prisma.user.findUnique = async ({ where }) => (where.id === 'u1' ? { tokens: 200000 } : ADMIN);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+  const txCreated = [];
+  prisma.tokenTransaction.create = async ({ data }) => { txCreated.push(data); return data; };
+
+  const res = await app.request('/api/admin/reset-gacha/rollback-to-first', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'ROLLBACK_TO_FIRST' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.usersAffected, 1);
+  const fix = res.json.results[0];
+  assert.equal(fix.userId, 'u1');
+  // À annuler : (20000 + 54900) - (15000 + 15600) = 74900 - 30600 = 44300.
+  assert.equal(fix.netExcess, 44300);
+  assert.equal(fix.removed, 44300);
+  assert.equal(fix.clamped, false);
+
+  const rollback = txCreated.find((t) => t.reason === 'gacha_reset_rollback');
+  assert.equal(rollback.amount, -44300);
+  assert.deepEqual(userUpdates.find((u) => u.id === 'u1').data.tokens, { decrement: 44300 });
+});
+
+test('rollback-to-first : idempotent — ignore un joueur déjà rollback', async () => {
+  const e1 = new Date('2026-07-01T10:00:00Z');
+  const e2 = new Date('2026-07-04T10:00:00Z');
+  prisma.tokenTransaction.findMany = async ({ where }) => {
+    if (where?.reason === 'gacha_reset_compensation') {
+      return [
+        { userId: 'u1', amount: 4000, reason: 'gacha_reset_compensation', createdAt: e1 },
+        { userId: 'u1', amount: 20000, reason: 'gacha_reset_compensation', createdAt: e2 },
+      ];
+    }
+    return [];
+  };
+  prisma.tokenTransaction.findFirst = async ({ where }) => (where.reason === 'gacha_reset_rollback' ? { id: 1 } : null);
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+
+  const res = await app.request('/api/admin/reset-gacha/rollback-to-first', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { confirm: 'ROLLBACK_TO_FIRST' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.usersAffected, 1);
+  assert.equal(res.json.results[0].skipped, true);
+  assert.equal(userUpdates.length, 0);
+});

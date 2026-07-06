@@ -716,4 +716,67 @@ router.post('/reset-gacha/fix-double-refund', requireAuth, requireAdmin, async (
   res.json({ ok: true, eventsChecked: events.length - 1, usersFixed: corrections.length, corrections });
 });
 
+// Annulation complète (au lieu d'un recalcul par période, qui s'est avéré peu
+// fiable en pratique — clics rapprochés fusionnés en un seul évènement,
+// dépenses non gacha compliquant la reconstitution) : garde uniquement le
+// TOUT PREMIER remboursement `gacha_reset_compensation` de chaque joueur
+// (considéré comme le seul légitime) et annule tous les suivants, ainsi que
+// les corrections déjà appliquées par /fix-double-refund (qui n'ont pas
+// suffi). Le bonus incident (500, forfaitaire, correct par construction)
+// n'est PAS touché. Jamais de solde négatif ; idempotent (reason dédiée
+// `gacha_reset_rollback`, un seul rollback par joueur).
+router.post('/reset-gacha/rollback-to-first', requireAuth, requireAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'ROLLBACK_TO_FIRST') return res.status(400).json({ error: 'Confirmation requise (ROLLBACK_TO_FIRST)' });
+
+  const comps = await prisma.tokenTransaction.findMany({
+    where: { reason: 'gacha_reset_compensation' },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (comps.length < 2) return res.status(400).json({ error: 'Un seul remboursement détecté — rien à annuler.' });
+
+  // Garde le tout premier remboursement de CHAQUE joueur (pas juste la toute
+  // première ligne globale : un joueur peut avoir manqué le tout 1er reset
+  // s'il n'avait encore rien dépensé à ce moment-là).
+  const firstSeen = new Set();
+  const toReverse = [];
+  for (const c of comps) {
+    if (firstSeen.has(c.userId)) toReverse.push(c);
+    else firstSeen.add(c.userId);
+  }
+
+  const corrections = await prisma.tokenTransaction.findMany({ where: { reason: 'gacha_reset_correction' } });
+
+  const netByUser = new Map();
+  for (const t of toReverse) netByUser.set(t.userId, (netByUser.get(t.userId) || 0) + t.amount);
+  // Les corrections précédentes sont déjà négatives (elles ont RETIRÉ des
+  // tokens) → les annuler revient à les rajouter, donc à les additionner ici.
+  for (const t of corrections) netByUser.set(t.userId, (netByUser.get(t.userId) || 0) + t.amount);
+
+  const ops = [];
+  const results = [];
+  for (const [userId, netExcess] of netByUser.entries()) {
+    if (netExcess === 0) continue;
+    const already = await prisma.tokenTransaction.findFirst({ where: { userId, reason: 'gacha_reset_rollback' } });
+    if (already) { results.push({ userId, skipped: true }); continue; }
+
+    if (netExcess > 0) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { tokens: true } });
+      const toRemove = Math.min(netExcess, user?.tokens || 0);
+      ops.push(prisma.user.update({ where: { id: userId }, data: { tokens: { decrement: toRemove } } }));
+      ops.push(prisma.tokenTransaction.create({ data: { userId, amount: -toRemove, reason: 'gacha_reset_rollback' } }));
+      results.push({ userId, netExcess, removed: toRemove, clamped: toRemove < netExcess });
+    } else {
+      // Les corrections précédentes ont retiré plus que le trop-perçu réel
+      // (peut arriver si /fix-double-refund avait déjà sur-corrigé) → on
+      // rend l'écart pour rester exact.
+      const add = -netExcess;
+      ops.push(prisma.user.update({ where: { id: userId }, data: { tokens: { increment: add } } }));
+      ops.push(prisma.tokenTransaction.create({ data: { userId, amount: add, reason: 'gacha_reset_rollback' } }));
+      results.push({ userId, netExcess, added: add });
+    }
+  }
+  if (ops.length) await prisma.$transaction(ops);
+  res.json({ ok: true, usersAffected: results.length, results });
+});
+
 module.exports = { router };

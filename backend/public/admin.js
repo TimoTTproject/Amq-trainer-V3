@@ -357,6 +357,29 @@ async function fixDoubleRefund() {
 // solde qui semble faux, pour voir les vraies lignes au lieu de recalculer à
 // l'aveugle (ex. plusieurs clics rapprochés sur "Reset GACHA" fusionnés dans
 // le même évènement détecté côté serveur).
+// Annulation complète : garde le tout 1er remboursement gacha_reset_
+// compensation par joueur, annule tous les suivants + les corrections déjà
+// appliquées par fixDoubleRefund (insuffisantes en pratique). Ne recalcule
+// rien par période — juste une annulation exacte des lignes existantes.
+async function rollbackToFirstReset() {
+  const status = document.getElementById('admin-reset-gacha-rollback-status');
+  const ans = prompt('⚠️ Annule TOUS les remboursements de reset gacha sauf le tout premier de chaque joueur (+ les corrections déjà appliquées) : à utiliser si "Corriger un remboursement en double" n\'a pas suffi. Jamais de solde négatif, sans effet si déjà appliqué.\n\nTape ROLLBACK_TO_FIRST (exactement) pour confirmer :');
+  if (ans === null) { status.textContent = 'Annulé.'; return; }
+  if (ans !== 'ROLLBACK_TO_FIRST') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "ROLLBACK_TO_FIRST") — rien n'a été fait, réessaie.`; return; }
+  const btn = document.getElementById('admin-reset-gacha-rollback-btn');
+  btn.disabled = true;
+  status.textContent = 'Annulation en cours…';
+  try {
+    const r = await api('/api/admin/reset-gacha/rollback-to-first', { method: 'POST', body: JSON.stringify({ confirm: 'ROLLBACK_TO_FIRST' }) });
+    const clamped = r.results.filter((c) => c.clamped).length;
+    status.textContent = `✅ ${r.usersAffected} joueur(s) concerné(s)${clamped ? ` (dont ${clamped} plafonné(s) au solde actuel, déjà dépensé)` : ''}.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function showTokenLedger() {
   const input = document.getElementById('admin-ledger-search');
   const out = document.getElementById('admin-ledger-result');
