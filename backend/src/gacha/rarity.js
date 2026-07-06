@@ -9,18 +9,26 @@ const RARITY_LABELS = {
 };
 const RARITY_ORDER = { common: 0, rare: 1, epic: 2, legendary: 3, mythic: 4 };
 
-// Attribution de la rareté par RANG dans le pool (trié par favourites décroissant)
-// → pyramide stable quelles que soient les valeurs absolues de favourites.
-const RANK_CUTOFFS = [
-  { rarity: 'mythic', upTo: 0.01 }, // top 1%
-  { rarity: 'legendary', upTo: 0.05 }, // 1–5%
-  { rarity: 'epic', upTo: 0.15 }, // 5–15%
-  { rarity: 'rare', upTo: 0.4 }, // 15–40%
-  { rarity: 'common', upTo: 1.0 }, // 40–100%
+// Attribution de la rareté par RANG dans le pool (trié par favourites décroissant).
+// Hybride, décidé le 2026-07-06 : Mythique/Légendaire en EFFECTIF ABSOLU (le
+// pool a grossi vite — 5000→13000+ — un % aurait fait fluctuer ces paliers à
+// chaque import ; un nombre fixe donne un objectif de collection stable).
+// Épique/Rare restent en % du total (évoluent avec le pool, comme avant) ;
+// leur bande démarre juste après le quota absolu mythique+légendaire, donc
+// légèrement plus étroite que leur pourcentage nominal tant que ce quota
+// dépasse le seuil qu'il aurait occupé en %  — négligeable à cette échelle.
+const MYTHIC_COUNT = 150;
+const LEGENDARY_COUNT = 550;
+const RANK_CUTOFFS_PCT = [
+  { rarity: 'epic', upTo: 0.15 }, // jusqu'à 15% du total
+  { rarity: 'rare', upTo: 0.4 }, // jusqu'à 40% du total
+  { rarity: 'common', upTo: 1.0 }, // le reste
 ];
 function rarityForRank(rankIndex, total) {
+  if (rankIndex < MYTHIC_COUNT) return 'mythic';
+  if (rankIndex < MYTHIC_COUNT + LEGENDARY_COUNT) return 'legendary';
   const frac = (rankIndex + 1) / total;
-  for (const c of RANK_CUTOFFS) if (frac <= c.upTo) return c.rarity;
+  for (const c of RANK_CUTOFFS_PCT) if (frac <= c.upTo) return c.rarity;
   return 'common';
 }
 

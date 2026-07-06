@@ -17,13 +17,33 @@ test('ascendCost grows per star and is 0 at max level', () => {
   assert.equal(ascendCost(99), 0);
 });
 
-test('rarityForRank follows the rank cutoffs (pyramid)', () => {
-  const total = 1000;
-  assert.equal(rarityForRank(0, total), 'mythic'); // top 1%
-  assert.equal(rarityForRank(30, total), 'legendary'); // ~3% → 1–5%
-  assert.equal(rarityForRank(100, total), 'epic'); // ~10% → 5–15%
-  assert.equal(rarityForRank(300, total), 'rare'); // ~30% → 15–40%
-  assert.equal(rarityForRank(999, total), 'common'); // dernier
+test('rarityForRank : mythique (150) et légendaire (550) en effectif ABSOLU, épique/rare en % du total', () => {
+  const total = 13000;
+  assert.equal(rarityForRank(0, total), 'mythic');
+  assert.equal(rarityForRank(149, total), 'mythic'); // 150ᵉ et dernier rang mythique (index 0-based)
+  assert.equal(rarityForRank(150, total), 'legendary'); // 151ᵉ rang → 1er légendaire
+  assert.equal(rarityForRank(699, total), 'legendary'); // 700ᵉ et dernier rang légendaire (150+550)
+  assert.equal(rarityForRank(700, total), 'epic'); // 701ᵉ rang → 1er épique
+  assert.equal(rarityForRank(1949, total), 'epic'); // encore sous 15% de 13000 (1950)
+  assert.equal(rarityForRank(1950, total), 'rare'); // 15% pile → bascule rare
+  assert.equal(rarityForRank(5199, total), 'rare'); // encore sous 40% (5200)
+  assert.equal(rarityForRank(5200, total), 'common'); // 40% pile → bascule common
+  assert.equal(rarityForRank(total - 1, total), 'common'); // dernier
+});
+
+test('rarityForRank : le quota absolu mythique+légendaire ne dépend pas de la taille du pool', () => {
+  // Que le pool fasse 5000 ou 20000, exactement 150 mythiques et 550
+  // légendaires — objectif de collection stable malgré la croissance du pool.
+  for (const total of [5000, 13000, 20000]) {
+    let mythic = 0, legendary = 0;
+    for (let i = 0; i < total; i++) {
+      const r = rarityForRank(i, total);
+      if (r === 'mythic') mythic++;
+      else if (r === 'legendary') legendary++;
+    }
+    assert.equal(mythic, 150, `total=${total}`);
+    assert.equal(legendary, 550, `total=${total}`);
+  }
 });
 
 test('RARITY_RATES sum to 100% and respect the order', () => {
