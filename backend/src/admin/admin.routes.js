@@ -4,7 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
-const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
+const { rarityForRank, MAX_SUPPLY, GACHA_RESET_COMPENSATION } = require('../gacha/rarity');
 const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
@@ -457,6 +457,48 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
   ]);
   const users = await prisma.user.count();
   res.json({ ok: true, users });
+});
+
+// Reset GACHA UNIQUEMENT : remet à zéro les collections/stock (pool de
+// personnages réorganisé avec la nouvelle pyramide 150 Mythique/550 Légendaire
+// et un stock resserré) SANS toucher aux autres systèmes de jeu (quiz, Château,
+// multijoueur, défi du jour, XP/niveaux). Chaque joueur reçoit GACHA_RESET_
+// COMPENSATION tokens pour repartir sur le pool réorganisé. Protégé :
+// nécessite body.confirm === 'RESET_GACHA'.
+router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'RESET_GACHA') return res.status(400).json({ error: 'Confirmation requise (RESET_GACHA)' });
+
+  const userIds = (await prisma.user.findMany({ select: { id: true } })).map((u) => u.id);
+
+  await prisma.$transaction([
+    // Cartes possédées + exemplaires numérotés + échanges (référencent des
+    // exemplaires qui n'existeront plus) + albums (organisent des cartes possédées).
+    prisma.userCard.deleteMany({}),
+    prisma.cardInstance.deleteMany({}),
+    prisma.trade.deleteMany({}),
+    prisma.cardAlbumItem.deleteMany({}),
+    prisma.cardAlbum.deleteMany({}),
+    // Stock mondial en circulation : remis à zéro pour TOUS les personnages
+    // (sinon ils resteraient artificiellement épuisés après la suppression
+    // des CardInstance qui comptaient dans `minted`).
+    prisma.character.updateMany({ data: { minted: 0, nextSerial: 0, soldOut: false } }),
+    // Compensation + remise à zéro des compteurs gacha (poussière vestige,
+    // pitié, statistiques de tirage par rareté). Ne touche à AUCUN champ
+    // quiz/Château/multijoueur/défi du jour/niveaux.
+    prisma.user.updateMany({
+      data: { tokens: GACHA_RESET_COMPENSATION, dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
+    }),
+    prisma.tokenTransaction.createMany({
+      data: userIds.map((userId) => ({ userId, amount: GACHA_RESET_COMPENSATION, reason: 'gacha_reset_compensation' })),
+    }),
+    prisma.appSetting.upsert({
+      where: { key: 'lastGachaReset' },
+      update: { value: String(Date.now()) },
+      create: { key: 'lastGachaReset', value: String(Date.now()) },
+    }),
+  ]);
+
+  res.json({ ok: true, users: userIds.length, compensation: GACHA_RESET_COMPENSATION });
 });
 
 module.exports = { router };

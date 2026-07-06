@@ -750,6 +750,26 @@ function renderGachaStats(d) {
     <p class="hint gs-foot">Le repère clair sur chaque barre indique le taux attendu.</p>`;
 }
 
+// ── Modale « le gacha a été réinitialisé » (une fois par joueur) ──
+// Compare l'horodatage serveur du dernier reset gacha à un horodatage gardé
+// en localStorage — évite un champ dédié sur User ou une notif individuelle.
+async function checkGachaResetNotice() {
+  let d;
+  try { d = await api('/api/gacha/reset-notice'); } catch { return; }
+  if (!d.resetAt) return;
+  const seen = parseInt(localStorage.getItem('amq_gacha_reset_seen') || '0', 10);
+  if (d.resetAt <= seen) return;
+  const modal = document.getElementById('gacha-reset-modal');
+  const body = document.getElementById('gacha-reset-body');
+  if (!modal || !body) return;
+  body.innerHTML = `
+    <p>Le pool de personnages a été réorganisé : <b>150 Mythiques</b> et <b>550 Légendaires</b> fixes, un stock resserré par personnage pour plus d'exclusivité.</p>
+    <p>Pour repartir sur une base saine avec cette nouvelle répartition, <b>ta collection a été réinitialisée</b> (cartes, exemplaires numérotés, échanges en cours). Tes statistiques de quiz, Château, multijoueur, défi du jour et niveaux ne sont <b>pas</b> concernées.</p>
+    <p>Pour te remercier de ta patience, tu as reçu <b>${d.compensation} 🪙</b> pour retirer sur ce pool renouvelé.</p>`;
+  modal.classList.remove('hidden');
+  localStorage.setItem('amq_gacha_reset_seen', String(d.resetAt));
+}
+
 // ── Détail personnage (modale) ──
 async function openCharacter(id) {
   const modal = document.getElementById('character-modal');

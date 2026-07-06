@@ -701,6 +701,7 @@ function showApp(user) {
     if (typeof loadFriendsOnlineCount === 'function') loadFriendsOnlineCount();
     loadQuestsBadge();
     if (typeof loadChangelogBadge === 'function') loadChangelogBadge();
+    if (typeof checkGachaResetNotice === 'function') checkGachaResetNotice();
   }
   if (requested && requested !== defaultView && (!guest || requested === 'quiz')) {
     suppressHistory = true;
@@ -1190,6 +1191,12 @@ function setupAppUI() {
   document.getElementById('promotion-modal').addEventListener('click', (e) => {
     if (e.target.id === 'promotion-modal') e.currentTarget.classList.add('hidden');
   });
+  // Modale reset gacha
+  document.getElementById('gacha-reset-close').addEventListener('click', () =>
+    document.getElementById('gacha-reset-modal').classList.add('hidden'));
+  document.getElementById('gacha-reset-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'gacha-reset-modal') e.currentTarget.classList.add('hidden');
+  });
   let charsSearchTimer;
   document.getElementById('chars-search').addEventListener('input', (e) => {
     clearTimeout(charsSearchTimer);
@@ -1258,6 +1265,7 @@ function setupAppUI() {
   document.getElementById('admin-reset-weekly-votes-btn').addEventListener('click', runResetWeeklyVotes);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
+  document.getElementById('admin-reset-gacha-btn').addEventListener('click', runResetGacha);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));

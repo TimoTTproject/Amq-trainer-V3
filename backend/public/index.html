@@ -849,6 +849,15 @@
       </div>
     </div>
 
+    <!-- Modale « le gacha a été réinitialisé » (affichée une fois par joueur) -->
+    <div id="gacha-reset-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gacha-reset-title">
+      <div class="modal-card">
+        <h3 id="gacha-reset-title"><i class="fas fa-layer-group"></i> Le Gacha a été réinitialisé</h3>
+        <div id="gacha-reset-body"></div>
+        <button class="btn-primary" id="gacha-reset-close">C'est compris, merci !</button>
+      </div>
+    </div>
+
     <!-- Modale historique complet des nouveautés -->
     <div id="changelog-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Nouveautés">
       <div class="modal-card">
@@ -1163,6 +1172,10 @@
       <div class="admin-backfill">
         <button class="btn-secondary admin-danger" id="admin-reset-all-btn"><i class="fas fa-skull-crossbones"></i> Reset GLOBAL (tous les comptes)</button>
         <span id="admin-reset-all-status" class="hint"></span>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Reset GACHA uniquement (collection + 500 🪙 à tous, garde les autres stats)</button>
+        <span id="admin-reset-gacha-status" class="hint"></span>
       </div>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">

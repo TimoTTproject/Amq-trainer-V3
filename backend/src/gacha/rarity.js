@@ -61,6 +61,11 @@ const DUPLICATE_REFUND = { common: 2, rare: 5, epic: 15, legendary: 40, mythic: 
 // nouveauté). Voir POST /api/gacha/fuse.
 const FUSE_COUNT = 3;
 
+// Compensation versée à chaque joueur lors d'un reset gacha global (voir
+// POST /api/admin/reset-gacha) — même valeur utilisée pour créditer les
+// comptes et pour l'annoncer dans la modale d'explication côté client.
+const GACHA_RESET_COMPENSATION = 500;
+
 // Pitié : nombre de tirages sans Légendaire+ avant garantie
 const PITY_LIMIT = 60;
 
@@ -101,6 +106,7 @@ module.exports = {
   rollRarity,
   DUPLICATE_REFUND,
   FUSE_COUNT,
+  GACHA_RESET_COMPENSATION,
   PITY_LIMIT,
   MAX_STARS,
   ASCEND_COST,

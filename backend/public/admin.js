@@ -291,6 +291,23 @@ async function runResetAll() {
   }
 }
 
+async function runResetGacha() {
+  const ans = prompt('⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro ; chaque joueur reçoit 500 🪙 de compensation. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA pour confirmer :');
+  if (ans !== 'RESET_GACHA') return;
+  const btn = document.getElementById('admin-reset-gacha-btn');
+  const status = document.getElementById('admin-reset-gacha-status');
+  btn.disabled = true;
+  status.textContent = 'Réinitialisation du gacha…';
+  try {
+    const r = await api('/api/admin/reset-gacha', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_GACHA' }) });
+    status.textContent = `✅ ${r.users} comptes réinitialisés, +${r.compensation} 🪙 chacun. Les joueurs verront une explication à leur prochaine connexion.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runRecomputeRarities() {
   const btn = document.getElementById('admin-recompute-btn');
   const status = document.getElementById('admin-recompute-status');

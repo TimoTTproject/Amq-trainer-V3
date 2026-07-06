@@ -3,11 +3,20 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('../admin/admin');
-const { rollRarity, DUPLICATE_REFUND, FUSE_COUNT, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, FUSE_COUNT, GACHA_RESET_COMPENSATION, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
+
+// Horodatage du dernier reset gacha global (voir POST /api/admin/reset-gacha) —
+// permet au front d'afficher une modale d'explication une seule fois par
+// joueur (comparaison avec un horodatage gardé en localStorage), sans champ
+// dédié sur User ni notification poussée à chacun individuellement.
+router.get('/reset-notice', requireAuth, async (req, res) => {
+  const s = await prisma.appSetting.findUnique({ where: { key: 'lastGachaReset' } });
+  res.json({ resetAt: s ? parseInt(s.value) : null, compensation: GACHA_RESET_COMPENSATION });
+});
 
 // ── Bannière hebdomadaire (vedettes de la semaine, rate-up) ──
 // Sélection déterministe par n° de semaine → pas de cron ni d'action admin.
