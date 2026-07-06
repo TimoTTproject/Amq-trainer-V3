@@ -6,6 +6,11 @@
 // ── GACHA ──
 const RARITY_LABELS = { common: 'Commun', rare: 'Rare', epic: 'Épique', legendary: 'Légendaire', mythic: 'Mythique' };
 const RARITY_ORDER = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+const rarityRank = (rarity) => {
+  const i = RARITY_ORDER.indexOf(rarity);
+  return i === -1 ? RARITY_ORDER.length : i;
+};
+const bestRarityOf = (cards = []) => cards.reduce((best, card) => (rarityRank(card.rarity) < rarityRank(best) ? card.rarity : best), 'common');
 const FUSE_COUNT = 3; // doit rester égal à FUSE_COUNT dans src/gacha/rarity.js (fusion Atelier)
 
 function setGachaTokens() {
@@ -179,6 +184,8 @@ function cardHTML(c, opts = {}) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.favorite) badges.push('<span class="badge fav">★</span>');
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
+  const edition = c.edition ? `<span class="gcard-edition">E${c.edition}</span>` : '<span class="gcard-edition">E1</span>';
+  const serial = c.serial ? ` <span class="gcard-serial">#${c.serial}</span>` : '';
   const bd = !opts.noBorder && currentUser.cosmetics && currentUser.cosmetics.cardBorder;
   const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '') + cosmClass(bd);
   const delayCss = opts.index != null ? `animation-delay:${(opts.index * 0.45).toFixed(2)}s` : '';
@@ -190,7 +197,7 @@ function cardHTML(c, opts = {}) {
     <div class="gcard-img" ${img}>${stars}</div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
-      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${serial}${edition}</div>
     </div>
     ${badges.join('')}
   </div>`;
@@ -205,6 +212,7 @@ function flipCardHTML(c, i) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
   const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
+  const edition = c.edition ? `<span class="gcard-edition">E${c.edition}</span>` : '<span class="gcard-edition">E1</span>';
   const cb = currentUser.cosmetics && currentUser.cosmetics.cardBack;
   const bd = currentUser.cosmetics && currentUser.cosmetics.cardBorder;
   const backIcon = cb && cb.image ? '' : ((cb && cb.icon) || 'fa-music');
@@ -216,7 +224,7 @@ function flipCardHTML(c, i) {
           <div class="gcard-img" ${img}>${holo}</div>
           <div class="gcard-info">
             <div class="gcard-name">${escapeHtml(c.name)}</div>
-            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${c.serial ? ` · <span class="gcard-serial">#${c.serial}</span>` : ''}</div>
+            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${c.serial ? ` · <span class="gcard-serial">#${c.serial}</span>` : ''}${edition}</div>
           </div>
           ${badges.join('')}
         </div>
@@ -231,6 +239,10 @@ async function doPull(type) {
   buttons.forEach((btn) => { btn.disabled = true; });
   document.getElementById('gacha-msg').textContent = 'Ouverture…';
   document.getElementById('reveal-all-btn').classList.add('hidden');
+  const result = document.getElementById('pull-result');
+  result.classList.add('hidden');
+  result.classList.remove('pull-showcase');
+  delete result.dataset.bestRarity;
   try {
     const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
     currentUser.tokens = r.tokens;
@@ -240,8 +252,9 @@ async function doPull(type) {
     renderGachaMeta(r.pityLimit);
     pullRefundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙` : '';
     pullCost = r.cost;
-    const result = document.getElementById('pull-result');
     result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
+    result.dataset.bestRarity = bestRarityOf(r.cards);
+    result.classList.add('pull-showcase');
     result.classList.remove('hidden');
     if (r.cards.length > 1) document.getElementById('reveal-all-btn').classList.remove('hidden');
     // Rareté tirée mais plus aucun personnage dispo dedans (pool en cours de
@@ -331,7 +344,9 @@ function renderCollection() {
   const grid = document.getElementById('collection-grid');
   if (!collectionCards.length) {
     grid.innerHTML = `<div class="empty-state">
-      <p class="muted">Aucune carte pour l'instant.</p>
+      <div class="empty-card-stack" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+      <h3>Ton classeur est vide</h3>
+      <p class="muted">Ouvre un paquet ×5 pour lancer ta collection Édition 1.</p>
       <button class="btn-primary" id="collection-empty-pull"><i class="fas fa-ticket"></i> Faire mon premier tirage</button>
     </div>`;
     const btn = document.getElementById('collection-empty-pull');
@@ -787,6 +802,7 @@ async function openCharacter(id) {
     const rate = d.pullRate != null ? `${d.pullRate.toFixed(d.pullRate < 1 ? 2 : 1)} %` : '—';
     const unlistedInstances = (d.instances || []).filter((i) => !i.listed);
     body.innerHTML = `
+      <div class="char-collector-kicker"><span>Carte collection</span><span>Édition ${c.edition || 1}</span></div>
       <div class="char-hero r-${c.rarity}">
         <div class="char-img" ${img}></div>
         ${d.owned ? `<span class="badge copies">×${d.owned}</span>` : '<span class="badge new">Non possédé</span>'}
