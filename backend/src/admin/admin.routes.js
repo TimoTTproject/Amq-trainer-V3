@@ -286,8 +286,13 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
     try {
       page = await getAnimeCharacters(pageNum, 20, 15, year);
     } catch (e) {
-      // Cette année dépasse elle-même le plafond de pagination (rarissime,
-      // années très denses) : on l'abandonne et on passe à la précédente.
+      // Seul le plafond de pagination D'AniList (rarissime : années très
+      // denses) justifie de sauter à l'année précédente. Toute autre erreur
+      // (rate-limit épuisé, réseau…) doit remonter tout de suite : sinon la
+      // boucle enchaînerait des dizaines d'années, chacune ré-attendant le
+      // délai de rate-limit d'anilistQuery (jusqu'à 60-180s), et la requête
+      // ne répond jamais au navigateur (perçu comme "bloqué" côté admin).
+      if (!/page depth exceeds maximum/i.test(e.message || '')) throw e;
       page = null;
     }
     if (page && (page.characters.length > 0 || page.hasNextPage)) { processedYear = year; break; }
