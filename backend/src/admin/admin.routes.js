@@ -5,6 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
+const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
 const { broadcastAll } = require('../mp/mp');
 const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
@@ -388,6 +389,12 @@ router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) =
     }
   }
   await prisma.$transaction(ops);
+  // Les raretés viennent de bouger : le rate-up vedette de la semaine
+  // (weeklyCache) et les pools de candidats au vote peuvent maintenant
+  // pointer vers des personnages dont la rareté réelle a changé — sans ça,
+  // un tirage Épique/Légendaire peut silencieusement ressortir Mythique
+  // (ou l'inverse) via le rate-up, jusqu'au prochain redémarrage serveur.
+  invalidateWeeklyCaches();
   res.json({ total, counts });
 });
 

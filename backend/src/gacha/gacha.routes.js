@@ -151,6 +151,22 @@ async function getWeeklyFeatured() {
   return weeklyCache;
 }
 
+// Vide TOUS les caches en mémoire dérivés de la rareté des personnages
+// (bannière hebdo + pools de candidats au vote). Nécessaire après tout
+// changement des raretés en base (ex. /admin/recompute-rarities) : sinon
+// `weeklyCache.byRarity` peut continuer à pointer, PENDANT LE RESTE DE LA
+// SEMAINE, vers un personnage dont la rareté RÉELLE a changé — le rate-up
+// vedette (50-60% de chance) livre alors silencieusement une carte d'une
+// rareté différente de celle tirée (ex. un tirage Épique/Légendaire, bien
+// plus fréquent que Mythique, qui ressort en Mythique si le perso vedette a
+// été promu). Exportée pour être appelée depuis l'admin après un recalcul.
+function invalidateWeeklyCaches() {
+  weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
+  candidatesWeek = -1;
+  rarityPoolCache = {};
+  candidatesByUser = new Map();
+}
+
 // Efface la bannière en cours jusqu'au prochain reset (lundi). N'affecte pas
 // les votes déjà en cours pour la semaine prochaine.
 router.post('/banner-suppress', requireAuth, requireAdmin, async (req, res) => {
@@ -171,13 +187,13 @@ router.post('/banner-suppress', requireAuth, requireAdmin, async (req, res) => {
 // fixé la bannière ACTUELLE (week-1) et ceux en cours pour la semaine
 // prochaine (week), puis force le recalcul de tous les caches en mémoire
 // (bannière + pools de candidats par joueur) sur la nouvelle répartition.
+// Note : /admin/recompute-rarities appelle déjà invalidateWeeklyCaches()
+// automatiquement ; cette route reste utile pour en plus PURGER les votes
+// devenus invalides (ce que le recalcul seul ne fait pas).
 router.post('/reset-weekly-votes', requireAuth, requireAdmin, async (req, res) => {
   const wk = currentWeek();
   const { count } = await prisma.featuredVote.deleteMany({ where: { week: { in: [wk - 1, wk] } } });
-  weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
-  candidatesWeek = -1;
-  rarityPoolCache = {};
-  candidatesByUser = new Map();
+  invalidateWeeklyCaches();
   const weekly = await getWeeklyFeatured();
   res.json({ ok: true, deletedVotes: count, week: wk, weekly });
 });
@@ -355,7 +371,12 @@ async function pickRandomCharacter(tx, rarity, boost) {
   const boostId = boost && boost[rarity];
   if (boostId) {
     const bc = await tx.character.findUnique({ where: { id: boostId }, select: { id: true, name: true, imageUrl: true, rarity: true, featured: true, soldOut: true } });
-    if (bc && !bc.soldOut && Math.random() < 0.6) return bc;
+    // Garde-fou : `boost` vient d'un cache hebdomadaire qui peut devenir
+    // périmé si les raretés ont été recalculées entre-temps (cf.
+    // invalidateWeeklyCaches). Sans cette vérification, un tirage d'une
+    // rareté commune pourrait silencieusement livrer une carte devenue
+    // Mythique entre-temps via ce rate-up.
+    if (bc && bc.rarity === rarity && !bc.soldOut && Math.random() < 0.6) return bc;
   }
   const feat = await tx.character.findFirst({ where: { rarity, featured: true, soldOut: false } });
   if (feat && Math.random() < 0.5) return feat;
@@ -951,4 +972,4 @@ router.post('/vote', requireAuth, rateLimit({ max: 30, name: 'gacha-vote' }), as
   res.json({ ok: true, characterId, rarity: candidate.rarity });
 });
 
-module.exports = { router, pickRandomCharacter };
+module.exports = { router, pickRandomCharacter, invalidateWeeklyCaches };
