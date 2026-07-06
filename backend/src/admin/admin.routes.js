@@ -67,7 +67,7 @@ router.get('/characters', requireAuth, requireAdmin, async (req, res) => {
       { series: { contains: q, mode: 'insensitive' } },
     ];
   }
-  const [total, characters, missingSeries] = await Promise.all([
+  const [total, characters, missingSeries, rarityGroups] = await Promise.all([
     prisma.character.count({ where }),
     prisma.character.findMany({
       where,
@@ -77,8 +77,15 @@ router.get('/characters', requireAuth, requireAdmin, async (req, res) => {
       select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true, featured: true },
     }),
     prisma.character.count({ where: { series: null } }),
+    // Répartition GLOBALE par rareté (indépendante du filtre/recherche en
+    // cours) — affichée en permanence dans l'admin pour suivre le pool avant
+    // un rééquilibrage manuel (ex. avant un reset global).
+    prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } }),
   ]);
-  res.json({ characters, total, page, pages: Math.ceil(total / perPage), rarities: VALID_RARITIES, missingSeries });
+  const byRarity = {};
+  let grandTotal = 0;
+  rarityGroups.forEach((g) => { byRarity[g.rarity] = g._count._all; grandTotal += g._count._all; });
+  res.json({ characters, total, page, pages: Math.ceil(total / perPage), rarities: VALID_RARITIES, missingSeries, byRarity, grandTotal });
 });
 
 // Active/désactive le statut « vedette » d'un personnage

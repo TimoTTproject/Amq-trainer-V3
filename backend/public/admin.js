@@ -90,6 +90,22 @@ async function loadAdminStats() {
   } catch { box.innerHTML = ''; }
 }
 
+// Répartition globale du pool par rareté, toujours visible (indépendante du
+// filtre/recherche en cours) — utile pour suivre le rééquilibrage manuel
+// avant un reset global.
+function renderAdminRaritySummary(byRarity, grandTotal) {
+  const box = document.getElementById('admin-rarity-summary');
+  if (!box) return;
+  const rows = RARITY_ORDER.map((r) => {
+    const n = byRarity[r] || 0;
+    const pct = grandTotal ? ((n / grandTotal) * 100).toFixed(1) : '0.0';
+    return `<div class="astat r-${r}"><span>${n.toLocaleString('fr-FR')}</span><label>${RARITY_LABELS[r]} · ${pct}%</label></div>`;
+  }).join('');
+  box.innerHTML = `
+    <h3><i class="fas fa-layer-group"></i> ${(grandTotal || 0).toLocaleString('fr-FR')} personnages au total</h3>
+    <div class="astat-grid">${rows}</div>`;
+}
+
 async function loadAdminChars(page, search) {
   if (page < 1) return;
   adminSearch = search;
@@ -100,12 +116,14 @@ async function loadAdminChars(page, search) {
     const r = await api(`/api/admin/characters?page=${page}&search=${encodeURIComponent(search)}${rq}`);
     adminPage = r.page; adminPages = r.pages || 1;
     document.getElementById('admin-filters').innerHTML = (() => {
-      const chips = [`<button class="coll-chip${adminRarity === 'all' ? ' active' : ''}" data-filter="all">Tous</button>`];
+      const byRarity = r.byRarity || {};
+      const chips = [`<button class="coll-chip${adminRarity === 'all' ? ' active' : ''}" data-filter="all">Tous (${r.grandTotal ?? ''})</button>`];
       RARITY_ORDER.forEach((rr) =>
-        chips.push(`<button class="coll-chip r-${rr}${adminRarity === rr ? ' active' : ''}" data-filter="${rr}">${RARITY_LABELS[rr]}</button>`)
+        chips.push(`<button class="coll-chip r-${rr}${adminRarity === rr ? ' active' : ''}" data-filter="${rr}">${RARITY_LABELS[rr]} (${byRarity[rr] || 0})</button>`)
       );
       return chips.join('');
     })();
+    if (r.byRarity) renderAdminRaritySummary(r.byRarity, r.grandTotal);
     if (r.missingSeries != null) {
       document.getElementById('admin-backfill-status').textContent =
         r.missingSeries ? `${r.missingSeries} séries manquantes` : 'Toutes les séries sont remplies ✅';

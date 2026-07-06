@@ -121,6 +121,18 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .admin-stats { margin-bottom: 18px; }
 .astat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .astat { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 12px; text-align: center; }
+.astat.r-common span    { color: #aab; }
+.astat.r-rare span      { color: #3aa0ff; }
+.astat.r-epic span      { color: #b06cff; }
+.astat.r-legendary span { color: #ffb648; }
+.astat.r-mythic span    { color: #ff5d8f; }
+
+/* Répartition globale du pool par rareté (vue Admin, avant un rééquilibrage) */
+.admin-rarity-summary { margin-bottom: 18px; }
+.admin-rarity-summary h3 { font-size: 1rem; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.admin-rarity-summary h3 i { color: var(--accent); }
+.admin-rarity-summary .astat span { font-size: 1.3rem; font-weight: 800; }
+.admin-rarity-summary .astat label { display: block; margin-top: 2px; font-size: .78rem; color: var(--text-2); }
 .astat span { display: block; font-size: 1.4rem; font-weight: 800; color: var(--accent); }
 .astat label { font-size: .76rem; color: var(--text-2); }
 .avis-chart-wrap { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 12px 14px; }
