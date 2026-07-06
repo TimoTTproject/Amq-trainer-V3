@@ -1670,14 +1670,36 @@ select.album-form-control {
 /* ── Gacha : boutons de tirage en cartes « premium » ── */
 .open-chars, #open-chars-btn { margin: 4px 0 8px; }
 .gacha-summon-banner {
-  position: relative; overflow: hidden; margin: 20px 0 16px; padding: 24px;
+  position: relative; overflow: hidden; width: 100%; margin: 20px 0 16px; padding: 24px;
   min-height: 178px; border-radius: 24px; isolation: isolate;
-  display: flex; align-items: flex-end;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 18px;
   background:
     linear-gradient(90deg, rgba(4,8,18,.34), rgba(4,8,18,.72) 42%, rgba(4,8,18,.22)),
     url('/assets/gacha/summon-banner.jpg') center / cover no-repeat;
   border: 1px solid rgba(8,174,232,.34);
+  color: #fff; text-align: left; cursor: pointer; font: inherit; appearance: none;
   box-shadow: 0 20px 46px rgba(0,0,0,.38), 0 0 34px rgba(8,174,232,.13);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+.gacha-summon-banner:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.gacha-summon-banner:hover {
+  transform: translateY(-3px); filter: brightness(1.06);
+  border-color: rgba(77,184,255,.7);
+  box-shadow: 0 24px 54px rgba(0,0,0,.44), 0 0 42px rgba(8,174,232,.23);
+}
+.gacha-summon-banner:disabled { opacity: .62; cursor: wait; transform: none; filter: grayscale(.15); }
+.gacha-summon-banner > * { position: relative; z-index: 1; }
+.gacha-summon-banner .pull-shine {
+  position: absolute; top: -12%; bottom: -12%; left: -45%; width: 32%; z-index: 2;
+  transform: skewX(-18deg); pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent);
+}
+.gacha-summon-banner:hover .pull-shine { animation: pullSweep .75s ease; }
+.gacha-summon-banner .pull-guarantee {
+  position: absolute; top: 14px; right: 16px; z-index: 3;
+  background: rgba(0,0,0,.36); color: #fff; font-size: .68rem; font-weight: 900; letter-spacing: .06em;
+  padding: 5px 11px; border-radius: 999px; text-transform: uppercase; text-shadow: none;
+  border: 1px solid rgba(255,255,255,.28);
 }
 .gacha-summon-banner::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -1696,6 +1718,13 @@ select.album-form-control {
 }
 .summon-banner-copy h3 { margin: 0; color: #fff; font-size: clamp(1.6rem, 4.4vw, 3rem); line-height: .92; text-transform: uppercase; letter-spacing: .05em; }
 .summon-banner-copy p { margin: 8px 0 0; color: rgba(231,233,240,.82); font-weight: 700; font-size: .92rem; }
+.summon-banner-copy p b { color: #fff; font-size: 1.05em; }
+.summon-cta {
+  display: inline-flex; align-items: center; gap: 9px; flex: none;
+  padding: 12px 16px; border-radius: 999px;
+  color: #04111e; background: linear-gradient(135deg, #e8fbff, var(--accent-2));
+  box-shadow: 0 12px 28px rgba(8,174,232,.28); font-weight: 900; text-transform: uppercase; letter-spacing: .04em;
+}
 .gacha-actions { gap: 16px; margin: 20px 0 10px; }
 .gacha-actions .btn-primary {
   position: relative; overflow: hidden;
@@ -1729,12 +1758,6 @@ select.album-form-control {
 .pull-label { font-weight: 800; font-size: 1.18rem; letter-spacing: .3px; }
 .pull-price { font-size: .98rem; font-weight: 600; background: rgba(0,0,0,.20); padding: 5px 14px; border-radius: 999px; }
 .pull-price b { font-size: 1.15rem; }
-#pull-pack {
-  background: linear-gradient(150deg, #ff9a4c, #ff5d8f 52%, #ff6bd6);
-  box-shadow: 0 14px 34px rgba(255,93,143,.30), inset 0 1px 0 rgba(255,255,255,.28);
-}
-#pull-pack:hover { box-shadow: 0 22px 46px rgba(255,93,143,.44), inset 0 1px 0 rgba(255,255,255,.32); }
-
 /* Reflet qui balaie au survol */
 .gacha-actions .btn-primary .pull-shine {
   position: absolute; top: -10%; bottom: -10%; left: -60%; width: 45%; z-index: 2;
@@ -1774,8 +1797,9 @@ select.album-form-control {
 .gcard-img { position: relative; }
 
 @media (max-width: 560px) {
-  .gacha-summon-banner { min-height: 140px; padding: 18px; background-position: center; }
+  .gacha-summon-banner { min-height: 160px; padding: 18px; background-position: center; align-items: flex-start; flex-direction: column; justify-content: flex-end; }
   .summon-banner-copy p { font-size: .82rem; }
+  .summon-cta { width: 100%; justify-content: center; font-size: .82rem; }
   .gacha-actions .btn-primary { min-width: 100%; }
 }
 @media (max-width: 480px) {

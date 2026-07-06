@@ -41,8 +41,8 @@ async function openGacha(tab) {
   document.getElementById('pull-result').classList.add('hidden');
   try {
     const info = await api('/api/gacha/info');
-    document.getElementById('price-single').textContent = info.prices.single.cost;
-    document.getElementById('price-pack').textContent = info.prices.pack.cost;
+    const packPrice = document.getElementById('price-pack');
+    if (packPrice) packPrice.textContent = info.prices.pack.cost;
     document.getElementById('gacha-pool').textContent = `${info.total} personnages à collectionner`;
     renderGachaMeta(info.pityLimit);
     const feat = document.getElementById('gacha-featured');
@@ -226,9 +226,9 @@ function flipCardHTML(c, i) {
 }
 
 async function doPull(type) {
-  const single = document.getElementById('pull-single');
   const pack = document.getElementById('pull-pack');
-  single.disabled = pack.disabled = true;
+  const buttons = [pack].filter(Boolean);
+  buttons.forEach((btn) => { btn.disabled = true; });
   document.getElementById('gacha-msg').textContent = 'Ouverture…';
   document.getElementById('reveal-all-btn').classList.add('hidden');
   try {
@@ -253,7 +253,7 @@ async function doPull(type) {
   } catch (err) {
     document.getElementById('gacha-msg').textContent = err.message;
   } finally {
-    single.disabled = pack.disabled = false;
+    buttons.forEach((btn) => { btn.disabled = false; });
   }
 }
 

@@ -732,28 +732,16 @@
       <div id="gacha-panel-pull" class="gacha-panel">
       <div class="gacha-weekly" id="gacha-weekly-pull"></div>
       <div class="gacha-meta" id="gacha-meta"></div>
-      <div class="gacha-summon-banner">
+      <button class="gacha-summon-banner" id="pull-pack">
+        <span class="pull-shine" aria-hidden="true"></span>
+        <span class="pull-guarantee">Rare+ garanti</span>
         <div class="summon-banner-copy">
           <span>Invocation</span>
-          <h3>Édition 1</h3>
-          <p>Les cartes originales d’AMQTrainer</p>
+          <h3>Tirage ×5</h3>
+          <p>Édition 1 · <b id="price-pack">100</b> 🪙</p>
         </div>
-      </div>
-      <div class="gacha-actions">
-        <button class="btn-primary" id="pull-single">
-          <span class="pull-shine" aria-hidden="true"></span>
-          <i class="fas fa-ticket"></i>
-          <span class="pull-label">Tirage simple</span>
-          <span class="pull-price"><b id="price-single">25</b> 🪙</span>
-        </button>
-        <button class="btn-primary" id="pull-pack">
-          <span class="pull-shine" aria-hidden="true"></span>
-          <span class="pull-guarantee">Rare+ garanti</span>
-          <i class="fas fa-box-open"></i>
-          <span class="pull-label">Paquet ×5</span>
-          <span class="pull-price"><b id="price-pack">100</b> 🪙</span>
-        </button>
-      </div>
+        <span class="summon-cta"><i class="fas fa-box-open"></i> Invoquer 5 cartes</span>
+      </button>
       <p id="gacha-msg" class="gacha-msg"></p>
       <div id="pull-result" class="pull-result hidden"></div>
       <button class="btn-secondary reveal-all hidden" id="reveal-all-btn"><i class="fas fa-hand-sparkles"></i> Tout retourner</button>

@@ -448,9 +448,12 @@ router.post('/banner-boost', requireAuth, async (req, res) => {
   res.json({ ok: true, bannerBoostEnabled: enabled });
 });
 
-// Tirage : type = 'single' | 'pack'
+// Tirage : pack x5 uniquement (les singles ont été retirés de l'UI et de l'API).
 router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (req, res) => {
-  const type = req.body?.type === 'pack' ? 'pack' : 'single';
+  if (req.body?.type !== 'pack') {
+    return res.status(400).json({ error: 'Le tirage simple n’est plus disponible.' });
+  }
+  const type = 'pack';
   const cfg = PRICES[type];
   const userId = req.user.id;
 

@@ -89,7 +89,6 @@ const MAX_SUPPLY = {
 
 // Prix et contenu des achats
 const PRICES = {
-  single: { cost: 25, count: 1, guaranteeRarePlus: false },
   pack: { cost: 100, count: 5, guaranteeRarePlus: true },
 };
 

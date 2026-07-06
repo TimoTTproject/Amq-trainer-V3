@@ -1355,8 +1355,8 @@ function setupAppUI() {
   });
   document.getElementById('cat-prev').addEventListener('click', () => loadCatalogList(catalogPage - 1, catalogSearch));
   document.getElementById('cat-next').addEventListener('click', () => loadCatalogList(catalogPage + 1, catalogSearch));
-  document.getElementById('pull-single').addEventListener('click', () => doPull('single'));
-  document.getElementById('pull-pack').addEventListener('click', () => doPull('pack'));
+  const pullPackBtn = document.getElementById('pull-pack');
+  if (pullPackBtn) pullPackBtn.addEventListener('click', () => doPull('pack'));
 
   // Collection : filtre par rareté, tri, et clic sur une carte → fiche perso
   document.getElementById('coll-filters').addEventListener('click', (e) => {

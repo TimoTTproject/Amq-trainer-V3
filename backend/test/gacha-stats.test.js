@@ -47,3 +47,14 @@ test("stats gacha : n'évalue pas la chance sur un échantillon trop petit", asy
   assert.equal(res.json.luck.index, null);
   assert.match(res.json.luck.label, /40 tirage/);
 });
+
+test("pull gacha : refuse le tirage simple retiré de l'interface", async () => {
+  const res = await app.request('/api/gacha/pull', {
+    method: 'POST',
+    cookie: app.authCookie(user.id),
+    body: { type: 'single' },
+  });
+
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /tirage simple/i);
+});
