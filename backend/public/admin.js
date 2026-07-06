@@ -311,6 +311,48 @@ async function runResetGacha() {
   }
 }
 
+// Liste les évènements de reset gacha détectés (lecture seule) — à consulter
+// avant de lancer la correction, pour vérifier qu'il y a bien 2+ évènements.
+async function auditResetGacha() {
+  const status = document.getElementById('admin-reset-gacha-audit-status');
+  const btn = document.getElementById('admin-reset-gacha-audit-btn');
+  btn.disabled = true;
+  status.textContent = 'Analyse…';
+  try {
+    const { events } = await api('/api/admin/reset-gacha/audit');
+    if (!events.length) { status.textContent = 'Aucun reset gacha détecté.'; return; }
+    status.innerHTML = events.map((e, i) => {
+      const date = new Date(e.at).toLocaleString('fr-FR');
+      return `#${i + 1} · ${date} : ${e.users} joueur(s) remboursé(s) (${e.totalCompensation} 🪙 au total)${e.bonusUsers ? `, ${e.bonusUsers} bonus incident (${e.totalBonus} 🪙)` : ''}`;
+    }).join('<br>');
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Corrige le DERNIER reset s'il a remboursé tout l'historique au lieu de
+// seulement les tirages depuis le reset précédent (voir commit du 2026-07-06).
+async function fixDoubleRefund() {
+  const status = document.getElementById('admin-reset-gacha-fix-status');
+  const ans = prompt('⚠️ Corrige le dernier reset gacha s\'il a remboursé deux fois la même dépense : retire à chaque joueur concerné l\'excédent reçu par erreur (jamais en dessous de 0, et sans effet si déjà corrigé).\n\nTape FIX_DOUBLE_REFUND (exactement) pour confirmer :');
+  if (ans === null) { status.textContent = 'Annulé.'; return; }
+  if (ans !== 'FIX_DOUBLE_REFUND') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "FIX_DOUBLE_REFUND") — rien n'a été fait, réessaie.`; return; }
+  const btn = document.getElementById('admin-reset-gacha-fix-btn');
+  btn.disabled = true;
+  status.textContent = 'Correction en cours…';
+  try {
+    const r = await api('/api/admin/reset-gacha/fix-double-refund', { method: 'POST', body: JSON.stringify({ confirm: 'FIX_DOUBLE_REFUND' }) });
+    const clamped = r.corrections.filter((c) => c.clamped).length;
+    status.textContent = `✅ ${r.usersFixed}/${r.usersChecked} joueur(s) corrigé(s)${clamped ? ` (dont ${clamped} plafonné(s) à leur solde actuel, déjà dépensé)` : ''}.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runRecomputeRarities() {
   const btn = document.getElementById('admin-recompute-btn');
   const status = document.getElementById('admin-recompute-status');

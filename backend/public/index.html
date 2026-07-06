@@ -1275,6 +1275,14 @@
         <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Reset GACHA uniquement (collection + remboursement réel des tirages, garde les autres stats)</button>
         <span id="admin-reset-gacha-status" class="hint"></span>
       </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary" id="admin-reset-gacha-audit-btn"><i class="fas fa-magnifying-glass"></i> Auditer les resets gacha passés (détecte un éventuel remboursement en double)</button>
+        <span id="admin-reset-gacha-audit-status" class="hint"></span>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary admin-danger" id="admin-reset-gacha-fix-btn"><i class="fas fa-triangle-exclamation"></i> Corriger un remboursement en double (retire l'excédent du dernier reset)</button>
+        <span id="admin-reset-gacha-fix-status" class="hint"></span>
+      </div>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">
         <input type="text" id="admin-search" placeholder="Rechercher un personnage ou une série…" />
