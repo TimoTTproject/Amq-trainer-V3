@@ -340,7 +340,12 @@ function renderCollFilters(ownedByRarity) {
 function renderCollection() {
   const grid = document.getElementById('collection-grid');
   if (!collectionCards.length) {
-    grid.innerHTML = '<p class="muted">Aucune carte pour l\'instant. Tire ton premier personnage !</p>';
+    grid.innerHTML = `<div class="empty-state">
+      <p class="muted">Aucune carte pour l'instant.</p>
+      <button class="btn-primary" id="collection-empty-pull"><i class="fas fa-ticket"></i> Faire mon premier tirage</button>
+    </div>`;
+    const btn = document.getElementById('collection-empty-pull');
+    if (btn) btn.addEventListener('click', () => setGachaTab('pull'));
     return;
   }
   let list = collectionCards.filter((c) => collFilter === 'all' || c.rarity === collFilter);

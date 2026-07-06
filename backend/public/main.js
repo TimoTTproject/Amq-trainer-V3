@@ -62,7 +62,7 @@ function ensureAppReady() {
   appReadyPromise = (async () => {
     await Promise.all([
       'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'albums.js', 'daily.js', 'gacha.js',
-      'catalog.js', 'community.js', 'profile.js', 'anime-autocomplete.js',
+      'catalog.js', 'community.js', 'profile.js', 'anime-autocomplete.js', 'tutorial.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');
@@ -624,6 +624,7 @@ function showView(name, options = {}) {
     const method = options.replace ? 'replaceState' : 'pushState';
     history[method]({ view: name }, '', url);
   }
+  if (name === 'home' && typeof loadHomeToday === 'function') loadHomeToday();
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
   if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
   if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
@@ -700,7 +701,6 @@ function showApp(user) {
     if (typeof loadFriendsOnlineCount === 'function') loadFriendsOnlineCount();
     loadQuestsBadge();
     if (typeof loadChangelogBadge === 'function') loadChangelogBadge();
-    maybeOnboard();
   }
   if (requested && requested !== defaultView && (!guest || requested === 'quiz')) {
     suppressHistory = true;
@@ -1550,6 +1550,7 @@ function openQuiz() {
   refreshQuizOptionsLock();
   quizSessionEnded = true; // la 1re manche démarre une session propre
   showView('quiz');
+  if (!isTraining && !currentUser.isGuest && typeof startTutorial === 'function') startTutorial();
 }
 
 async function openTraining() {
@@ -2327,6 +2328,72 @@ function questsBadgeHtml(quests) {
     : '<span class="quests-badge">+🪙 chaque jour</span>';
 }
 
+// Bloc « Aujourd'hui » de l'accueil : bonus + défi du jour + quêtes en un
+// coup d'œil, chacun avec une action directe (réclamer / jouer / voir).
+async function loadHomeToday() {
+  const box = document.getElementById('home-today');
+  if (!box || !currentUser || currentUser.isGuest) { if (box) box.innerHTML = ''; return; }
+
+  const tiles = [];
+
+  // Bonus quotidien (déjà géré par claimDaily/currentUser.dailyAvailable)
+  tiles.push(currentUser.dailyAvailable
+    ? `<div class="today-tile ready">
+        <span class="today-tile-ico">🎁</span>
+        <div class="today-tile-body"><b>Bonus quotidien</b><span>Un cadeau de connexion t'attend</span></div>
+        <button class="btn-primary today-tile-action" id="today-claim-bonus">Réclamer</button>
+      </div>`
+    : `<div class="today-tile done">
+        <span class="today-tile-ico">🎁</span>
+        <div class="today-tile-body"><b>Bonus quotidien</b><span>Réclamé aujourd'hui ✓</span></div>
+      </div>`);
+
+  // Défi du jour
+  try {
+    const d = await api('/api/daily/status');
+    const streak = d.streak ? ` · 🔥 série de ${d.streak}` : '';
+    tiles.push(d.played
+      ? `<div class="today-tile done">
+          <span class="today-tile-ico">🗓️</span>
+          <div class="today-tile-body"><b>Défi du jour</b><span>Terminé — ${d.run ? d.run.score : 0} pts${streak} ✓</span></div>
+        </div>`
+      : `<div class="today-tile ready">
+          <span class="today-tile-ico">🗓️</span>
+          <div class="today-tile-body"><b>Défi du jour</b><span>${d.inProgress ? 'Partie en cours' : `10 chansons, 1 essai${streak}`}</span></div>
+          <button class="btn-primary today-tile-action" id="today-play-daily">${d.inProgress ? 'Reprendre' : 'Jouer'}</button>
+        </div>`);
+  } catch {}
+
+  // Quêtes du jour
+  try {
+    const { quests } = await api('/api/quests');
+    if (quests && quests.length) {
+      const claimable = quests.filter((q) => q.done && !q.claimed).length;
+      const doneCount = quests.filter((q) => q.claimed).length;
+      tiles.push(claimable
+        ? `<div class="today-tile ready">
+            <span class="today-tile-ico">🎯</span>
+            <div class="today-tile-body"><b>Quêtes</b><span>${claimable} récompense${claimable > 1 ? 's' : ''} à réclamer</span></div>
+            <button class="btn-primary today-tile-action" id="today-see-quests">Voir</button>
+          </div>`
+        : `<div class="today-tile ${doneCount === quests.length ? 'done' : ''}">
+            <span class="today-tile-ico">🎯</span>
+            <div class="today-tile-body"><b>Quêtes</b><span>${doneCount}/${quests.length} terminées${doneCount === quests.length ? ' ✓' : ''}</span></div>
+          </div>`);
+    }
+  } catch {}
+
+  box.innerHTML = tiles.join('');
+  const bonusBtn = document.getElementById('today-claim-bonus');
+  if (bonusBtn) bonusBtn.addEventListener('click', async () => { await claimDaily(); loadHomeToday(); });
+  const dailyBtn = document.getElementById('today-play-daily');
+  if (dailyBtn) dailyBtn.addEventListener('click', () => { if (typeof openDaily === 'function') navTo('daily'); });
+  const questsBtn = document.getElementById('today-see-quests');
+  if (questsBtn) questsBtn.addEventListener('click', () => {
+    document.getElementById('home-quests')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
 async function loadQuests() {
   const box = document.getElementById('home-quests');
   if (!box) return;
@@ -2679,29 +2746,5 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── ONBOARDING (1ʳᵉ connexion) ──
-function maybeOnboard() {
-  if (localStorage.getItem('amq_onboarded')) return;
-  document.getElementById('onboard-modal').classList.remove('hidden');
-}
-function closeOnboard() {
-  localStorage.setItem('amq_onboarded', '1');
-  document.getElementById('onboard-modal').classList.add('hidden');
-}
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('onboard-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'onboard-modal') closeOnboard();
-  });
-  document.getElementById('onboard-import').addEventListener('click', () => {
-    closeOnboard();
-    mode = 'mine'; localStorage.setItem('amq_mode', 'mine');
-    applyModeUI();
-    openQuiz();
-    document.getElementById('anilist-username').focus();
-  });
-  document.getElementById('onboard-play').addEventListener('click', () => {
-    closeOnboard();
-    mode = 'global'; localStorage.setItem('amq_mode', 'global');
-    applyModeUI(); refreshCatalogInfo();
-    openQuiz();
-  });
-});
+// Remplacé par un tutoriel joué (voir tutorial.js/startTutorial, déclenché
+// depuis openQuiz) : plus efficace qu'une modale-liste fermée sans être lue.

@@ -110,16 +110,112 @@ function renderDailyBoard(d, containerId) {
   box.innerHTML = `<h3 class="daily-board-title">Classement du jour · ${d.players} joueur(s)</h3><ol class="lb-list">${rows}${meOut}</ol>`;
 }
 
-function shareDaily() {
+let dailyLastResult = null; // dernier résultat (pour l'image de partage)
+
+function flashShareBtn(label) {
+  const b = document.getElementById('daily-share');
+  if (!b) return;
+  const old = b.innerHTML;
+  b.innerHTML = `<i class="fas fa-check"></i> ${label}`;
+  setTimeout(() => (b.innerHTML = old), 1800);
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// Carte de score dessinée en canvas (1200×630, format « aperçu social »).
+function buildDailyShareImage(res) {
+  return new Promise((resolve) => {
+    if (!res) return resolve(null);
+    try {
+      const W = 1200, H = 630;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      const bg = ctx.createRadialGradient(W * 0.75, -H * 0.1, 100, W * 0.5, H * 0.5, 900);
+      bg.addColorStop(0, '#20243a');
+      bg.addColorStop(1, '#0a0b0f');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 34px Manrope, sans-serif';
+      ctx.fillText('AMQTrainer', 60, 80);
+      ctx.fillStyle = '#9aa3b5';
+      ctx.font = '600 22px Manrope, sans-serif';
+      ctx.fillText('Défi du jour', 60, 112);
+
+      const grad = ctx.createLinearGradient(0, 0, 520, 0);
+      grad.addColorStop(0, '#d01624');
+      grad.addColorStop(1, '#08aee8');
+      ctx.fillStyle = grad;
+      ctx.font = '800 150px "Barlow Condensed", sans-serif';
+      ctx.fillText(String(res.score), 60, 300);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '600 32px Manrope, sans-serif';
+      ctx.fillText('points', 64, 340);
+
+      const stats = [
+        [`${res.correct}/${res.total}`, 'bonnes réponses'],
+        [`${res.streak || 0} 🔥`, (res.streak || 0) > 1 ? 'jours de série' : 'jour de série'],
+        [`${res.mmrAfter ?? '—'}`, 'MMR solo'],
+      ];
+      let x = 60;
+      stats.forEach(([val, label]) => {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 40px Manrope, sans-serif';
+        ctx.fillText(val, x, 440);
+        ctx.fillStyle = '#9aa3b5';
+        ctx.font = '500 20px Manrope, sans-serif';
+        ctx.fillText(label, x, 470);
+        x += 320;
+      });
+
+      ctx.fillStyle = '#6c8cff';
+      ctx.font = '600 24px Manrope, sans-serif';
+      ctx.fillText('amqtrainer.fr', 60, 560);
+      ctx.fillStyle = '#9aa3b5';
+      ctx.font = '400 20px Manrope, sans-serif';
+      ctx.fillText("Devine l'anime à son opening — bats mon score !", 60, 590);
+
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function shareDaily() {
   const text = `J'ai marqué ${dailyMyScore} pts au Défi du jour sur AMQTrainer 🎵 — bats-moi !`;
   const url = location.origin;
+  try {
+    const blob = await buildDailyShareImage(dailyLastResult);
+    if (blob) {
+      const file = new File([blob], 'defi-du-jour.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: 'AMQTrainer — Défi du jour', text, url, files: [file] });
+        return;
+      }
+      downloadBlob(blob, 'defi-du-jour.png');
+      if (navigator.share) { navigator.share({ title: 'AMQTrainer', text, url }).catch(() => {}); return; }
+      flashShareBtn('Image téléchargée !');
+      return;
+    }
+  } catch {
+    // annulé par l'utilisateur ou API indisponible : on retombe sur le partage texte
+  }
   if (navigator.share) {
     navigator.share({ title: 'AMQTrainer', text, url }).catch(() => {});
   } else if (navigator.clipboard) {
-    navigator.clipboard.writeText(`${text} ${url}`).then(() => {
-      const b = document.getElementById('daily-share');
-      if (b) { const old = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copié !'; setTimeout(() => (b.innerHTML = old), 1800); }
-    }).catch(() => {});
+    navigator.clipboard.writeText(`${text} ${url}`).then(() => flashShareBtn('Copié !')).catch(() => {});
   }
 }
 
@@ -254,6 +350,7 @@ function renderDailyResult(res) {
   stopDailyMedia();
   dailyShow('over');
   dailyMyScore = res.score;
+  dailyLastResult = res;
   document.getElementById('daily-over-score').textContent = res.score;
   document.getElementById('daily-over-correct').textContent = `${res.correct}/${res.total}`;
   document.getElementById('daily-over-mmr').textContent = res.mmrAfter;
