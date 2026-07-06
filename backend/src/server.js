@@ -215,13 +215,17 @@ if (pushEnabled()) {
 // NB : le coop est TOUJOURS en catalogue global (pas de farm sur ses listes).
 const { weekKey } = require('./util/week');
 async function payCoopWeekly(week) {
-  const top = await prisma.coopWeeklyScore.findMany({
+  const rows = await prisma.coopWeeklyScore.findMany({
     where: { week, floor: { gt: 0 }, rewarded: false },
-    orderBy: { floor: 'desc' }, take: 2,
+    orderBy: { floor: 'desc' },
   });
-  const amounts = [800, 400];
-  for (let i = 0; i < top.length; i++) {
-    const amt = amounts[i]; const row = top[i];
+  // Les 2 meilleurs ÉTAGES (pas les 2 premières lignes) sont récompensés : en cas
+  // d'égalité sur un étage, tout le monde à ce rang touche le même montant.
+  const distinctFloors = [...new Set(rows.map((r) => r.floor))].slice(0, 2);
+  const amountByFloor = new Map(distinctFloors.map((floor, i) => [floor, [800, 400][i]]));
+  const top = rows.filter((r) => amountByFloor.has(r.floor));
+  for (const row of top) {
+    const amt = amountByFloor.get(row.floor);
     try {
       await prisma.$transaction([
         prisma.user.update({ where: { id: row.userId }, data: { tokens: { increment: amt } } }),
