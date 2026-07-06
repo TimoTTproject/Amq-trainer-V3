@@ -191,24 +191,23 @@ async function runImportCharacters() {
 }
 
 // Pareil que runImportCharacters, mais via /import-characters-anime : contourne
-// le plafond AniList de 5000 sur la recherche globale de personnages en
-// parcourant les ANIMES populaires et leurs personnages principaux/secondaires
-// (dédupliqués). Ici `page` avance sur les ANIMES, pas les personnages —
-// beaucoup plus de doublons attendus au fil des clics (persos déjà connus via
-// le premier import), donc plus lent à faire progresser le total.
+// le plafond AniList de 5000 (qui touche aussi bien la recherche globale de
+// personnages que le browse global d'animes) en parcourant les animes ANNÉE
+// PAR ANNÉE et en récupérant leurs personnages principaux/secondaires
+// (dédupliqués). Le curseur { year, page } est géré par le serveur — on le
+// repasse tel quel, sans logique d'année côté client.
 async function runImportCharactersFromAnime() {
   const btn = document.getElementById('admin-import-anime-btn');
   const status = document.getElementById('admin-import-anime-status');
   btn.disabled = true;
   status.textContent = 'Import via les animes AniList…';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  let totalAdded = 0, lastTotal = 0, fails = 0, nextPage = null;
+  let totalAdded = 0, lastTotal = 0, fails = 0, cursor = {};
   try {
     for (let i = 0; i < 16; i++) { // ~320 animes parcourus par clic
       let r;
       try {
-        const body = nextPage == null ? {} : { page: nextPage };
-        r = await api('/api/admin/import-characters-anime', { method: 'POST', body: JSON.stringify(body) });
+        r = await api('/api/admin/import-characters-anime', { method: 'POST', body: JSON.stringify(cursor) });
       } catch (e) {
         if (++fails > 4) throw e;
         status.textContent = `Pause (AniList saturé)… réessai ${fails}/4`;
@@ -218,18 +217,18 @@ async function runImportCharactersFromAnime() {
       fails = 0;
       totalAdded += r.added;
       lastTotal = r.total;
-      nextPage = (r.page || 1) + 1;
-      status.textContent = `+${totalAdded} ajoutés · ${r.total} au total (page anime ${r.page})…`;
+      cursor = { year: r.year, page: r.page };
+      status.textContent = `+${totalAdded} ajoutés · ${r.total} au total (${r.processedYear || r.year}, page ${r.page})…`;
       if (!r.hasMore) {
-        status.textContent = r.capped
-          ? `✅ Plafond AniList atteint (${r.total} personnages). Pense à « Recalculer les raretés ».`
+        status.textContent = r.done
+          ? `✅ Historique AniList épuisé (${r.total} personnages). Pense à « Recalculer les raretés ».`
           : `✅ Terminé : ${r.total} personnages. Pense à « Recalculer les raretés ».`;
         loadAdminChars(1, adminSearch);
         return;
       }
       await sleep(1100); // throttle AniList
     }
-    status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total. Reclique pour continuer, puis « Recalculer les raretés ».`;
+    status.textContent = `✅ +${totalAdded} personnages · ${lastTotal} au total (arrêté à ${cursor.year}). Reclique pour continuer, puis « Recalculer les raretés ».`;
     loadAdminChars(1, adminSearch);
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;

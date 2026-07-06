@@ -102,19 +102,24 @@ async function getTopCharacters(page = 1, perPage = 50) {
   };
 }
 
-// Personnages via les ANIMES populaires plutôt que la recherche globale de
-// personnages : AniList plafonne strictement `Page.characters` à 5000
-// résultats, quels que soient le tri/filtre (vérifié — au-delà, l'API renvoie
-// "Page depth exceeds maximum allowed"). `Page.media` n'a pas cette limite
-// pour cet usage : on parcourt les animes par popularité et on récupère les
-// personnages principaux/secondaires de chacun, dédupliqués. Permet de faire
-// grossir le pool gacha au-delà de 5000 personnages.
-async function getAnimeCharacters(page = 1, perPage = 20, charsPerAnime = 15) {
+// Personnages via les ANIMES plutôt que la recherche globale de personnages :
+// AniList plafonne strictement `Page.characters` à 5000 résultats quels que
+// soient le tri/filtre (vérifié — au-delà, l'API renvoie "Page depth exceeds
+// maximum allowed"). Mais `Page.media` a EXACTEMENT la même limite dès qu'on
+// le parcourt sans filtre (browse global par popularité) — donc parcourir
+// « tous les animes » se heurte au même mur un cran plus loin.
+// Contournement qui marche vraiment : filtrer par ANNÉE (`seasonYear`).
+// Chaque année reste largement sous le plafond de 5000 (vérifié), donc on
+// peut parcourir l'intégralité de l'historique des animes année par année
+// sans jamais l'atteindre, et récupérer les personnages principaux/
+// secondaires de chaque anime (dédupliqués) — le pool gacha n'est alors plus
+// limité par la profondeur de pagination d'AniList.
+async function getAnimeCharacters(page = 1, perPage = 20, charsPerAnime = 15, seasonYear) {
   const query = `
-    query ($page: Int, $perPage: Int, $charsPerAnime: Int) {
+    query ($page: Int, $perPage: Int, $charsPerAnime: Int, $seasonYear: Int) {
       Page(page: $page, perPage: $perPage) {
         pageInfo { hasNextPage }
-        media(type: ANIME, sort: POPULARITY_DESC) {
+        media(type: ANIME, sort: POPULARITY_DESC, seasonYear: $seasonYear) {
           id
           title { romaji english }
           characters(sort: FAVOURITES_DESC, perPage: $charsPerAnime) {
@@ -123,7 +128,7 @@ async function getAnimeCharacters(page = 1, perPage = 20, charsPerAnime = 15) {
         }
       }
     }`;
-  const data = await anilistQuery(query, { page, perPage, charsPerAnime });
+  const data = await anilistQuery(query, { page, perPage, charsPerAnime, seasonYear });
   const mediaList = data?.Page?.media || [];
   // Un personnage peut apparaître dans plusieurs animes de cette page
   // (crossover, spin-off) : on ne le garde qu'une fois, associé au premier

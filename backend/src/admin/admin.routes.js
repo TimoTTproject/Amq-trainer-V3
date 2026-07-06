@@ -265,32 +265,45 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
   res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
 });
 
-// Importe des personnages en itérant les ANIMES populaires plutôt que la
-// recherche globale de personnages — celle-ci est plafonnée par AniList à
-// 5000 résultats au total (vérifié : au-delà, l'API renvoie une erreur
-// "Page depth exceeds maximum"), quels que soient le tri/filtre. Ici, `page`
-// porte sur les ANIMES (pas les personnages) ; chaque anime apporte jusqu'à
-// ~15 personnages (rôles principaux/secondaires), dédupliqués contre le pool
-// existant. Nouveaux persos en « common » (l'admin recalcule ensuite les
-// raretés). Permet de faire grossir le pool au-delà de 5000.
+// Importe des personnages en itérant les ANIMES par ANNÉE plutôt que la
+// recherche globale de personnages — celle-ci (et le browse global d'animes
+// par popularité) est plafonnée par AniList à 5000 résultats au total
+// (vérifié : au-delà, l'API renvoie "Page depth exceeds maximum"), quels que
+// soient le tri/filtre. Filtrer par année contourne ce plafond pour de bon :
+// chaque année reste largement en dessous, donc on peut parcourir tout
+// l'historique. `year`/`page` forment un curseur géré par le serveur (le
+// front le repasse tel quel) : quand une année est épuisée on descend à la
+// précédente, jusqu'à YEAR_FLOOR. Nouveaux persos en « common » (l'admin
+// recalcule ensuite les raretés).
+const ANIME_YEAR_FLOOR = 1960;
 router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, res) => {
-  const pageNum = parseInt(req.body?.page) || 1;
+  let year = parseInt(req.body?.year) || new Date().getFullYear() + 1;
+  let pageNum = parseInt(req.body?.page) || 1;
 
-  let page;
-  try {
-    page = await getAnimeCharacters(pageNum, 20, 15);
-  } catch (e) {
-    const total = await prisma.character.count();
-    return res.json({ added: 0, total, hasMore: false, page: pageNum, capped: true });
+  let page = null;
+  let processedYear = year;
+  for (let guard = 0; guard < 200 && year >= ANIME_YEAR_FLOOR; guard++) {
+    try {
+      page = await getAnimeCharacters(pageNum, 20, 15, year);
+    } catch (e) {
+      // Cette année dépasse elle-même le plafond de pagination (rarissime,
+      // années très denses) : on l'abandonne et on passe à la précédente.
+      page = null;
+    }
+    if (page && (page.characters.length > 0 || page.hasNextPage)) { processedYear = year; break; }
+    year--; pageNum = 1; page = null;
   }
+
+  if (!page) {
+    const total = await prisma.character.count();
+    return res.json({ added: 0, total, hasMore: false, done: true, year: ANIME_YEAR_FLOOR, page: 1 });
+  }
+
   const chars = page.characters || [];
-  if (!chars.length) {
-    const total = await prisma.character.count();
-    return res.json({ added: 0, total, hasMore: page.hasNextPage, page: pageNum });
-  }
-
   const ids = chars.map((c) => c.id);
-  const existing = await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } });
+  const existing = ids.length
+    ? await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } })
+    : [];
   const existingSet = new Set(existing.map((e) => e.anilistId));
 
   const toCreate = chars
@@ -303,7 +316,12 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 
   const total = await prisma.character.count();
-  res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
+  const nextYear = page.hasNextPage ? processedYear : processedYear - 1;
+  const nextPage = page.hasNextPage ? pageNum + 1 : 1;
+  res.json({
+    added: toCreate.length, total, year: nextYear, page: nextPage,
+    processedYear, hasMore: nextYear >= ANIME_YEAR_FLOOR,
+  });
 });
 
 // Recalcule la rareté de TOUS les personnages par rang de popularité (favourites).
