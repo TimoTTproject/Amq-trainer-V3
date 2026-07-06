@@ -284,7 +284,11 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
   let processedYear = year;
   for (let guard = 0; guard < 200 && year >= ANIME_YEAR_FLOOR; guard++) {
     try {
-      page = await getAnimeCharacters(pageNum, 20, 15, year);
+      // perPage=50 (max animes/requête) et charsPerAnime=30 : le seuil réel du
+      // top-5000 personnages est ~240 favoris (vérifié), et un anime populaire
+      // a souvent PLUS de 15 personnages au-dessus — avec 15, on ne touchait
+      // quasiment que des doublons sur les animes populaires en tête d'année.
+      page = await getAnimeCharacters(pageNum, 50, 30, year);
     } catch (e) {
       // Seul le plafond de pagination D'AniList (rarissime : années très
       // denses) justifie de sauter à l'année précédente. Toute autre erreur

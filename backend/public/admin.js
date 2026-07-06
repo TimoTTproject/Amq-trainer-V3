@@ -204,7 +204,7 @@ async function runImportCharactersFromAnime() {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let totalAdded = 0, lastTotal = 0, fails = 0, cursor = {};
   try {
-    for (let i = 0; i < 16; i++) { // ~320 animes parcourus par clic
+    for (let i = 0; i < 16; i++) { // ~800 animes parcourus par clic (50/requête)
       let r;
       try {
         r = await api('/api/admin/import-characters-anime', { method: 'POST', body: JSON.stringify(cursor) });
