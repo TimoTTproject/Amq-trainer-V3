@@ -97,6 +97,13 @@ function notifyUser(userId, event, payload) {
   for (const sid of set) io.sockets.sockets.get(sid)?.emit(event, payload);
 }
 
+// Émet un événement à TOUS les sockets connectés (annonces globales, ex. un
+// reset gacha déclenché par l'admin) — sans attendre une reconnexion/reload.
+function broadcastAll(event, payload) {
+  if (!io) return;
+  io.emit(event, payload);
+}
+
 // Invitation en salle privée : prévient tous les sockets de l'ami
 function invite(socket, toUserId) {
   const room = rooms.get(socket.data.roomId);
@@ -1160,6 +1167,6 @@ function initMp(server) {
 }
 
 module.exports = {
-  initMp, getCurrentVideo, isOnline, notifyUser, everyoneResolved, availableSongWhere, videoForRound,
+  initMp, getCurrentVideo, isOnline, notifyUser, broadcastAll, everyoneResolved, availableSongWhere, videoForRound,
   rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_REWARD_CAP,
 };

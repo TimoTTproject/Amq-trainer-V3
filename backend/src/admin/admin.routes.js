@@ -5,6 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
+const { broadcastAll } = require('../mp/mp');
 const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
@@ -512,6 +513,11 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
     create: { key: 'lastGachaReset', value: String(Date.now()) },
   }));
   await prisma.$transaction(ops);
+
+  // Prévient tous les joueurs déjà connectés (socket ouvert) sans attendre
+  // une reconnexion/reload : le client relit alors SA propre compensation
+  // via GET /reset-notice (jamais de montant personnel dans le broadcast lui-même).
+  try { broadcastAll('gacha:reset-notice', {}); } catch (e) { console.error('broadcast gacha reset:', e.message); }
 
   res.json({ ok: true, users: users.length, totalCompensation });
 });

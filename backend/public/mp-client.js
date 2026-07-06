@@ -235,6 +235,12 @@ function connectMp() {
     const coop = document.getElementById('mp-coop-msg'); if (coop) coop.textContent = m;
   });
   mpSocket.on('mp:info', (d) => mpToast(d.msg));
+  // Reset gacha déclenché par l'admin : diffusé à tous les joueurs déjà
+  // connectés (sans payload personnel) — chacun relit alors sa propre
+  // compensation via GET /api/gacha/reset-notice, sans avoir à se reconnecter.
+  mpSocket.on('gacha:reset-notice', () => {
+    if (typeof checkGachaResetNotice === 'function') checkGachaResetNotice();
+  });
   // Reconnexion sans partie côté serveur (ex. redéploiement pendant une manche) :
   // si on est resté sur un écran de salle/jeu, la partie n'existe plus → on sort
   // proprement au lieu de rester figé sur une manche fantôme (« Son indisponible »).
