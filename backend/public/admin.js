@@ -353,6 +353,36 @@ async function fixDoubleRefund() {
   }
 }
 
+// Relevé complet des transactions tokens d'un joueur — diagnostic en cas de
+// solde qui semble faux, pour voir les vraies lignes au lieu de recalculer à
+// l'aveugle (ex. plusieurs clics rapprochés sur "Reset GACHA" fusionnés dans
+// le même évènement détecté côté serveur).
+async function showTokenLedger() {
+  const input = document.getElementById('admin-ledger-search');
+  const out = document.getElementById('admin-ledger-result');
+  const q = input.value.trim();
+  if (!q) { out.textContent = 'Indique un pseudo.'; return; }
+  out.textContent = 'Chargement…';
+  try {
+    const r = await api(`/api/admin/token-ledger?user=${encodeURIComponent(q)}`);
+    const reasonRows = Object.entries(r.byReason)
+      .map(([reason, s]) => `<tr><td>${reason}</td><td>${s.count}</td><td>${s.total}</td></tr>`)
+      .join('');
+    const txRows = r.transactions.map((t) => {
+      const date = new Date(t.createdAt).toLocaleString('fr-FR');
+      return `<tr><td>${date}</td><td>${t.reason}</td><td>${t.amount}</td></tr>`;
+    }).join('');
+    out.innerHTML = `
+      <p><b>${escapeHtml(r.user.displayName)}</b> — solde actuel : <b>${r.user.tokens} 🪙</b> (somme de toutes les transactions : ${r.sumOfAllTransactions})</p>
+      <table class="catalog-table"><thead><tr><th>Raison</th><th>Nb</th><th>Total</th></tr></thead><tbody>${reasonRows}</tbody></table>
+      <details><summary>Détail chronologique (${r.transactions.length} transactions)</summary>
+        <table class="catalog-table"><thead><tr><th>Date</th><th>Raison</th><th>Montant</th></tr></thead><tbody>${txRows}</tbody></table>
+      </details>`;
+  } catch (e) {
+    out.textContent = 'Erreur : ' + e.message;
+  }
+}
+
 async function runRecomputeRarities() {
   const btn = document.getElementById('admin-recompute-btn');
   const status = document.getElementById('admin-recompute-status');

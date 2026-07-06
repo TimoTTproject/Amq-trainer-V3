@@ -559,6 +559,44 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true, users: users.length, totalCompensation, totalBonus });
 });
 
+// Relevé complet des transactions "tokens" d'un joueur (recherché par
+// pseudo exact ou approché) : sert à diagnostiquer un solde qui semble faux
+// SANS deviner — on voit directement chaque ligne (pack_open, compensations,
+// bonus, corrections) au lieu de recalculer à l'aveugle.
+router.get('/token-ledger', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.user || '').trim();
+  if (!q) return res.status(400).json({ error: 'Paramètre user requis (pseudo)' });
+  const user = await prisma.user.findFirst({
+    where: { displayName: { equals: q, mode: 'insensitive' } },
+    select: { id: true, displayName: true, tokens: true },
+  }) || await prisma.user.findFirst({
+    where: { displayName: { contains: q, mode: 'insensitive' } },
+    select: { id: true, displayName: true, tokens: true },
+  });
+  if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
+
+  const txs = await prisma.tokenTransaction.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, amount: true, reason: true, createdAt: true },
+  });
+  const byReason = {};
+  for (const t of txs) {
+    byReason[t.reason] ||= { count: 0, total: 0 };
+    byReason[t.reason].count++;
+    byReason[t.reason].total += t.amount;
+  }
+
+  res.json({
+    user: { id: user.id, displayName: user.displayName, tokens: user.tokens },
+    byReason,
+    // Somme de TOUTES les transactions = ce que le solde actuel DEVRAIT être
+    // si aucune transaction n'a été perdue/ignorée (le solde part de 0 à la création).
+    sumOfAllTransactions: txs.reduce((s, t) => s + t.amount, 0),
+    transactions: txs,
+  });
+});
+
 // ── Correction d'un remboursement en double (voir commit du 2026-07-06) ──
 // AVANT le fix, /reset-gacha remboursait TOUT l'historique pack_open à
 // chaque exécution, sans tenir compte d'un reset précédent déjà effectué :

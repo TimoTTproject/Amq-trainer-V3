@@ -160,6 +160,36 @@ test('reset-notice : compensation = 0 si le joueur n\'a jamais tiré (pas de tra
   assert.equal(res.json.bonus, 500);
 });
 
+// ── Relevé complet des tokens d'un joueur (diagnostic) ──
+test('token-ledger : refuse un utilisateur non-admin', async () => {
+  const res = await app.request('/api/admin/token-ledger?user=Dova', { cookie: app.authCookie(PLAIN.id) });
+  assert.equal(res.status, 403);
+});
+
+test('token-ledger : 404 si le joueur est introuvable', async () => {
+  prisma.user.findFirst = async () => null;
+  const res = await app.request('/api/admin/token-ledger?user=Inconnu', { cookie: app.authCookie(ADMIN.id) });
+  assert.equal(res.status, 404);
+});
+
+test('token-ledger : regroupe les transactions par raison et fournit le détail chronologique', async () => {
+  prisma.user.findFirst = async () => ({ id: 'dova1', displayName: 'Dova', tokens: 9000 });
+  const rows = [
+    { id: 1, amount: -100, reason: 'pack_open', createdAt: new Date('2026-07-01T00:00:00Z') },
+    { id: 2, amount: 4000, reason: 'gacha_reset_compensation', createdAt: new Date('2026-07-04T00:00:00Z') },
+    { id: 3, amount: 500, reason: 'gacha_incident_bonus', createdAt: new Date('2026-07-06T00:00:00Z') },
+    { id: 4, amount: 4500, reason: 'gacha_reset_compensation', createdAt: new Date('2026-07-06T00:00:01Z') },
+  ];
+  prisma.tokenTransaction.findMany = async () => rows;
+  const res = await app.request('/api/admin/token-ledger?user=Dova', { cookie: app.authCookie(ADMIN.id) });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.user.displayName, 'Dova');
+  assert.equal(res.json.byReason.gacha_reset_compensation.count, 2);
+  assert.equal(res.json.byReason.gacha_reset_compensation.total, 8500);
+  assert.equal(res.json.transactions.length, 4);
+  assert.equal(res.json.sumOfAllTransactions, -100 + 4000 + 500 + 4500);
+});
+
 // ── Correction du remboursement en double (2 évènements de reset détectés) ──
 test('fix-double-refund : refuse sans la confirmation exacte', async () => {
   const res = await app.request('/api/admin/reset-gacha/fix-double-refund', {
