@@ -462,6 +462,7 @@ function openCharacters() {
   document.getElementById('chars-search').value = '';
   charsSearch = ''; charsRarity = 'all';
   loadCharacters(1, '');
+  if (typeof loadPromotionRemainingBadge === 'function') loadPromotionRemainingBadge();
 }
 
 function rarityFilterChips(byRarity, current) {

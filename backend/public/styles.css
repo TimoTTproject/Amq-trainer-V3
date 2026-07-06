@@ -1737,6 +1737,26 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 /* Wishlist */
 .char-wish.on { border-color: var(--red); color: var(--red); }
 .char-wish.on i { color: var(--red); }
+
+/* Édition de carte + vote « Édition 2 » */
+.char-edition {
+  display: inline-block; margin-left: 8px; font-size: .68rem; font-weight: 700;
+  color: var(--text-2); background: var(--bg-3); padding: 2px 8px; border-radius: 8px; vertical-align: middle;
+}
+.char-promote.on { border-color: var(--accent-2); color: var(--accent-2); }
+.char-promote.on i { color: var(--accent-2); }
+.char-promote-count { color: var(--text-2); font-weight: 500; }
+.chars-edition-note { margin-bottom: 14px; }
+.chars-edition-note .btn-link { font-weight: 700; color: var(--accent-2); }
+#promotion-remaining-badge { background: var(--accent-2); color: #08131a; }
+.promotion-mine { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 20px; }
+.promotion-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--bg-3);
+  border: 1px solid #2a2f42; color: var(--text); padding: 6px 10px; border-radius: 20px; font-size: .85rem;
+}
+.promotion-chip:hover { border-color: var(--red); color: var(--red); }
+#promotion-body h4 { margin: 16px 0 8px; font-size: .95rem; }
+#promotion-body h4:first-child { margin-top: 0; }
 .wish-card { position: relative; cursor: pointer; transition: transform .12s; }
 .wish-card:hover { transform: translateY(-3px); }
 .wish-card.owned { opacity: .55; }

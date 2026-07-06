@@ -780,7 +780,10 @@ async function openCharacter(id) {
       </div>
       <h2 class="char-name">${escapeHtml(c.name)}</h2>
       ${c.series && c.series !== '—' ? `<div class="char-series">${escapeHtml(c.series)}</div>` : ''}
-      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''}</div>
+      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''} <span class="char-edition" title="Une future Édition 2 réutilisera les mêmes personnages avec de nouvelles raretés et un nouveau visuel">Édition ${c.edition || 1}</span></div>
+      <button class="btn-secondary char-promote${d.votedByMe ? ' on' : ''}" id="char-promote-btn" data-cid="${c.id}">
+        <i class="fas fa-arrow-trend-up"></i> ${d.votedByMe ? 'Voté pour l’Édition 2 ↑' : 'Voter pour l’Édition 2'} <span class="char-promote-count">(${d.promotionVoteCount})</span>
+      </button>
       ${d.owned ? `<div class="char-stars-line" title="Niveau d'ascension">${'★'.repeat(d.stars)}<span class="muted">${'☆'.repeat(Math.max(0, (d.maxStars || 5) - d.stars))}</span></div>` : ''}
       <div class="char-stats">
         <div class="cstat"><span>${rate}</span><label>Taux de tirage</label></div>
@@ -844,6 +847,30 @@ async function openCharacter(id) {
         } catch (e) { alert(e.message); recycleBtn.disabled = false; }
       });
     }
+    const promoteBtn = document.getElementById('char-promote-btn');
+    if (promoteBtn) {
+      let voted = d.votedByMe;
+      let voteCount = d.promotionVoteCount;
+      promoteBtn.addEventListener('click', async () => {
+        promoteBtn.disabled = true;
+        try {
+          if (voted) {
+            const r = await api(`/api/promotion/vote/${c.id}`, { method: 'DELETE' });
+            voted = false;
+            voteCount = Math.max(0, voteCount - 1);
+            if (typeof updatePromotionRemaining === 'function') updatePromotionRemaining(r.remaining);
+          } else {
+            const r = await api('/api/promotion/vote', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+            voted = true;
+            voteCount += 1;
+            if (typeof updatePromotionRemaining === 'function') updatePromotionRemaining(r.remaining);
+            if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+          }
+          promoteBtn.classList.toggle('on', voted);
+          promoteBtn.innerHTML = `<i class="fas fa-arrow-trend-up"></i> ${voted ? 'Voté pour l’Édition 2 ↑' : 'Voter pour l’Édition 2'} <span class="char-promote-count">(${voteCount})</span>`;
+        } catch (e) { alert(e.message); } finally { promoteBtn.disabled = false; }
+      });
+    }
     const wishBtn = document.getElementById('char-wish-btn');
     if (wishBtn) {
       let wished = d.wished;
@@ -896,6 +923,64 @@ async function openCharacter(id) {
   }
 }
 function closeCharacter() { document.getElementById('character-modal').classList.add('hidden'); }
+
+// ── Vote « Édition 2 » (promotion Mythique/Légendaire) ──
+function updatePromotionRemaining(remaining) {
+  const badge = document.getElementById('promotion-remaining-badge');
+  if (!badge) return;
+  if (remaining == null) { badge.classList.add('hidden'); return; }
+  badge.textContent = `${remaining}/10 voix`;
+  badge.classList.remove('hidden');
+}
+async function loadPromotionRemainingBadge() {
+  try {
+    const d = await api('/api/promotion/status');
+    updatePromotionRemaining(d.remaining);
+  } catch { updatePromotionRemaining(null); }
+}
+async function openPromotionModal() {
+  const modal = document.getElementById('promotion-modal');
+  const body = document.getElementById('promotion-body');
+  body.innerHTML = '<p class="muted">Chargement…</p>';
+  modal.classList.remove('hidden');
+  try {
+    const [status, board] = await Promise.all([
+      api('/api/promotion/status'),
+      api('/api/promotion/leaderboard?limit=20'),
+    ]);
+    updatePromotionRemaining(status.remaining);
+    const mine = status.votes.length
+      ? `<div class="promotion-mine">${status.votes.map((c) => `
+          <button class="promotion-chip" data-cid="${c.id}" title="Retirer ce vote">
+            ${escapeHtml(c.name)} <i class="fas fa-times"></i>
+          </button>`).join('')}</div>`
+      : '<p class="muted">Tu n\'as encore voté pour personne.</p>';
+    const rows = board.entries.length
+      ? board.entries.map((c, i) => `
+          <li class="lb-row">
+            <span class="lb-rank">#${i + 1}</span>
+            <span class="lb-name">${escapeHtml(c.name)}${c.series ? ` <span class="muted">(${escapeHtml(c.series)})</span>` : ''}</span>
+            <span class="lb-value">${c.votes} vote${c.votes > 1 ? 's' : ''}</span>
+          </li>`).join('')
+      : '<li class="muted">Aucun vote pour l\'instant — sois le premier !</li>';
+    body.innerHTML = `
+      <h4>Mes votes (${status.used}/${status.max})</h4>
+      ${mine}
+      <h4><i class="fas fa-trophy"></i> Classement des votes</h4>
+      <ol class="lb-list">${rows}</ol>`;
+    body.querySelectorAll('.promotion-chip').forEach((chip) => {
+      chip.addEventListener('click', async () => {
+        chip.disabled = true;
+        try {
+          await api(`/api/promotion/vote/${chip.dataset.cid}`, { method: 'DELETE' });
+          openPromotionModal(); // recharge (voix restantes + classement)
+        } catch (e) { alert(e.message); chip.disabled = false; }
+      });
+    });
+  } catch (e) {
+    body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
 
 // Picker « Ranger dans un album » : liste des albums du joueur, chacun
 // cochable/décochable indépendamment (une carte peut vivre dans plusieurs albums).

@@ -106,6 +106,7 @@ model User {
   pushSubs        PushSubscription[]
   seasonClaims    SeasonClaim[]
   featuredVotes   FeaturedVote[]
+  promotionVotes  PromotionVote[]
   wishlist        Wishlist[]
   quests          Quest[]
   dailyStats      DailyStat[]
@@ -519,15 +520,44 @@ model Character {
   nextSerial Int     @default(0) // dernier n° de série attribué (croissant, jamais réutilisé)
   soldOut    Boolean @default(false) // minted >= maxSupply → plus tirable (échange seulement)
 
-  cards     UserCard[]
-  instances CardInstance[]
-  votes     FeaturedVote[]
-  wishedBy  Wishlist[]
-  albumEntries CardAlbumItem[]
+  // Édition de la carte (voir PromotionVote) : les personnages actuels sont
+  // tous l'Édition 1. Une future Édition 2 réutilisera les mêmes personnages
+  // avec une rareté et un visuel différents — le mécanisme exact (nouvelle
+  // ligne Character vs révision de la même ligne) n'est PAS encore décidé,
+  // ce champ sert pour l'instant juste à AFFICHER "Édition 1" aux joueurs.
+  // ⚠️ `anilistId` est `@unique` : si l'Édition 2 devient une ligne à part
+  // entière, il faudra remplacer par `@@unique([anilistId, edition])`.
+  edition Int @default(1)
+
+  cards          UserCard[]
+  instances      CardInstance[]
+  votes          FeaturedVote[]
+  wishedBy       Wishlist[]
+  albumEntries   CardAlbumItem[]
+  promotionVotes PromotionVote[]
 
   @@index([rarity])
   @@index([series])
   @@index([rarity, soldOut])
+}
+
+// Vote « quel personnage mérite une promotion en Mythique/Légendaire à la
+// prochaine édition ? » — chaque joueur peut voter pour 10 personnages
+// distincts maximum (1 voix chacun, pas de cumul), sans distinction de
+// rareté visée. Sert à orienter le rééquilibrage de l'Édition 2 (voir
+// Character.edition) ; le nombre exact de promotions n'est pas encore fixé,
+// ce modèle ne fait que constituer un classement par nombre de votes.
+model PromotionVote {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  characterId Int
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, characterId])
+  @@index([characterId])
 }
 
 // Un exemplaire physique d'une carte : porte le numéro de série et le propriétaire.

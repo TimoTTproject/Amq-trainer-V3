@@ -840,6 +840,16 @@
       </div>
     </div>
 
+    <!-- Modale vote « Édition 2 » -->
+    <div id="promotion-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Vote Édition 2">
+      <div class="modal-card">
+        <button class="modal-close" id="promotion-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-arrow-trend-up"></i> Vote « Édition 2 »</h3>
+        <p class="hint">Choisis jusqu'à 10 personnages que tu aimerais voir promus Mythique ou Légendaire à la prochaine édition (1 voix par personnage, pas de cumul). Vote depuis la fiche d'un personnage (bouton « Voter pour l'Édition 2 »).</p>
+        <div id="promotion-body"></div>
+      </div>
+    </div>
+
     <!-- Modale historique complet des nouveautés -->
     <div id="changelog-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Nouveautés">
       <div class="modal-card">
@@ -1082,6 +1092,7 @@
         <h2><i class="fas fa-book-open"></i> Personnages</h2>
         <span class="catalog-info" id="chars-total"></span>
       </div>
+      <p class="hint chars-edition-note">🗓️ Ces personnages sont l'<b>Édition 1</b>. Une <b>Édition 2</b> arrivera dans quelques semaines : mêmes personnages, nouvelles raretés et nouveaux visuels — <button class="btn-link" id="open-promotion-btn">vote pour qui mérite une promotion <span id="promotion-remaining-badge" class="nav-badge hidden"></span></button>.</p>
       <div class="coll-filters" id="chars-filters"></div>
       <div class="catalog-search">
         <input type="text" id="chars-search" placeholder="Rechercher un personnage ou une série…" />
@@ -1575,6 +1586,7 @@
           <li>Chaque carte est un exemplaire numéroté à stock limité.</li>
           <li>Les doublons donnent de la poussière 🌟 pour fabriquer une carte précise.</li>
           <li>Un Légendaire+ est garanti après 60 tirages sans en obtenir.</li>
+          <li>Les personnages actuels sont l'<b>Édition 1</b>. Une <b>Édition 2</b> arrivera dans quelques semaines : mêmes personnages, nouvelles raretés et nouveaux visuels — vote dès maintenant (fiche personnage) pour ceux que tu veux voir promus Mythique/Légendaire (10 voix par joueur).</li>
         </ul>
         <p>Échange tes cartes, ajoute des amis, grimpe aux classements et personnalise ton profil à la Boutique.</p>
       </details>

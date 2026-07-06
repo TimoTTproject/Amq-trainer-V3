@@ -715,6 +715,10 @@ router.get('/character/:id', requireAuth, async (req, res) => {
   const everDropped = !!(await prisma.cardInstance.findFirst({
     where: { characterId: id, source: 'pull' }, select: { id: true },
   }));
+  const promotionVoteCount = await prisma.promotionVote.count({ where: { characterId: id } });
+  const votedByMe = !!(await prisma.promotionVote.findUnique({
+    where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
+  }));
 
   res.json({
     character: {
@@ -726,7 +730,10 @@ router.get('/character/:id', requireAuth, async (req, res) => {
       favourites: character.favourites,
       fromManga: character.fromManga,
       series: character.series,
+      edition: character.edition,
     },
+    promotionVoteCount,
+    votedByMe,
     rarityLabel: RARITY_LABELS[character.rarity] || character.rarity,
     pullRate: RARITY_RATES[character.rarity] ?? null,
     dupRefund: DUPLICATE_REFUND[character.rarity] ?? 0,

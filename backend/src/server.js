@@ -54,6 +54,7 @@ const mpRoutes = require('./mp/mp.routes');
 const playlistsRoutes = require('./playlists/playlists.routes');
 const albumsRoutes = require('./albums/albums.routes');
 const changelogRoutes = require('./changelog/changelog.routes');
+const promotionRoutes = require('./promotion/promotion.routes');
 const { isEnabled: pushEnabled, sendDailyReminder } = require('./push/push');
 const store = require('./util/store');
 const { initMp } = require('./mp/mp');
@@ -131,6 +132,7 @@ app.use('/api/mp', mpRoutes.router);
 app.use('/api/playlists', playlistsRoutes.router);
 app.use('/api/albums', albumsRoutes.router);
 app.use('/api/changelog', changelogRoutes.router);
+app.use('/api/promotion', promotionRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Aperçu de partage personnalisé : sur /?u=<id>, on sert le HTML avec des balises

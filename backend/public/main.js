@@ -1186,6 +1186,13 @@ function setupAppUI() {
   document.getElementById('gacha-stats-modal').addEventListener('click', (e) => {
     if (e.target.id === 'gacha-stats-modal') e.currentTarget.classList.add('hidden');
   });
+  // Vote « Édition 2 »
+  document.getElementById('open-promotion-btn').addEventListener('click', openPromotionModal);
+  document.getElementById('promotion-close').addEventListener('click', () =>
+    document.getElementById('promotion-modal').classList.add('hidden'));
+  document.getElementById('promotion-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'promotion-modal') e.currentTarget.classList.add('hidden');
+  });
   let charsSearchTimer;
   document.getElementById('chars-search').addEventListener('input', (e) => {
     clearTimeout(charsSearchTimer);
