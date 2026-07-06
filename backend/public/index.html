@@ -1254,6 +1254,13 @@
       <div class="admin-backfill">
         <button class="btn-secondary" id="admin-recompute-btn"><i class="fas fa-scale-balanced"></i> Recalculer les raretés (équilibrage)</button>
         <span id="admin-recompute-status" class="hint"></span>
+        <p class="hint" style="margin-top:4px">⚠️ Écrase TES raretés modifiées à la main par la répartition automatique par rang. Ne clique ceci que si tu veux repartir de zéro.</p>
+      </div>
+      <div class="admin-backfill">
+        <button class="btn-secondary" id="admin-rarity-check-btn"><i class="fas fa-magnifying-glass-chart"></i> Vérifier les raretés (probabilités + modifs manuelles)</button>
+        <button class="btn-secondary" id="admin-fix-supply-btn"><i class="fas fa-wrench"></i> Corriger les stocks (maxSupply selon rareté)</button>
+        <div id="admin-rarity-check-status" class="hint"></div>
+        <span id="admin-fix-supply-status" class="hint"></span>
       </div>
       <div class="admin-backfill">
         <button class="btn-secondary" id="admin-suppress-banner-btn"><i class="fas fa-ban"></i> Supprimer la bannière en cours (jusqu'au reset de lundi)</button>

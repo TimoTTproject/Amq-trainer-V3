@@ -463,6 +463,60 @@ async function runRecomputeRarities() {
   }
 }
 
+// Diagnostic des raretés (lecture seule) : montre la chance effective de tirer
+// un perso par palier, et liste les raretés modifiées à la main (écart entre
+// la rareté stockée et celle attendue par rang).
+async function runRarityCheck() {
+  const btn = document.getElementById('admin-rarity-check-btn');
+  const status = document.getElementById('admin-rarity-check-status');
+  btn.disabled = true;
+  status.textContent = 'Analyse…';
+  try {
+    const r = await api('/api/admin/rarity-check');
+    const rows = r.rarities.map((x) => `<tr>
+      <td>${x.label}</td>
+      <td>${x.count}${x.soldOut ? ` <span class="muted">(${x.soldOut} épuisés)</span>` : ''}</td>
+      <td>${x.tierRatePct}%</td>
+      <td>${x.perCharChancePct ? x.perCharChancePct.toFixed(4) + '%' : '—'}</td>
+      <td>${x.oneInN ? '1 sur ' + x.oneInN.toLocaleString('fr-FR') : '—'}</td>
+    </tr>`).join('');
+    const ovr = r.overrides.sample.slice(0, 40).map((o) =>
+      `<tr><td>${escapeHtml(o.name)}</td><td>#${o.rank}</td><td>${RARITY_LABELS[o.stored] || o.stored}</td><td>${RARITY_LABELS[o.byRank] || o.byRank}</td></tr>`
+    ).join('');
+    const mismatchLine = r.supplyMismatches.total
+      ? `<p style="color:var(--red)">⚠️ ${r.supplyMismatches.total} perso(s) avec un stock (maxSupply) incohérent avec leur rareté — clique « Corriger les stocks » ci-dessous.</p>`
+      : '<p>✅ Stocks (maxSupply) cohérents avec les raretés.</p>';
+    status.innerHTML = `
+      <p><b>${r.total}</b> personnages. Chance effective de tirer un perso PRÉCIS par palier (= taux du palier ÷ nb de persos tirables) :</p>
+      <table class="catalog-table"><thead><tr><th>Rareté</th><th>Nb</th><th>Taux palier</th><th>Par perso</th><th>≈</th></tr></thead><tbody>${rows}</tbody></table>
+      ${mismatchLine}
+      <p style="margin-top:8px"><b>${r.overrides.total}</b> rareté(s) modifiée(s) à la main (différentes de la répartition par rang) :</p>
+      ${r.overrides.total
+        ? `<table class="catalog-table"><thead><tr><th>Perso</th><th>Rang</th><th>Rareté manuelle</th><th>Rareté par rang</th></tr></thead><tbody>${ovr}</tbody></table>${r.overrides.total > 40 ? `<p class="muted">… et ${r.overrides.total - 40} autre(s).</p>` : ''}`
+        : '<p class="muted">Aucune — toutes les raretés suivent le rang de popularité.</p>'}
+      <p class="hint" style="margin-top:6px">✅ Ces raretés manuelles sont bien prises en compte dans les tirages : un perso passé Mythique se tire au taux Mythique. Ne clique PAS « Recalculer les raretés » si tu veux les garder.</p>`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runFixSupply() {
+  const btn = document.getElementById('admin-fix-supply-btn');
+  const status = document.getElementById('admin-fix-supply-status');
+  btn.disabled = true;
+  status.textContent = 'Correction des stocks…';
+  try {
+    const r = await api('/api/admin/fix-supply-mismatch', { method: 'POST', body: JSON.stringify({}) });
+    status.textContent = r.fixed ? `✅ ${r.fixed} stock(s) corrigé(s).` : '✅ Aucun stock à corriger.';
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runSuppressBanner() {
   const btn = document.getElementById('admin-suppress-banner-btn');
   const status = document.getElementById('admin-suppress-banner-status');

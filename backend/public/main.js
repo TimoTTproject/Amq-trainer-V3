@@ -1316,6 +1316,8 @@ function setupAppUI() {
   document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
+  document.getElementById('admin-rarity-check-btn').addEventListener('click', runRarityCheck);
+  document.getElementById('admin-fix-supply-btn').addEventListener('click', runFixSupply);
   document.getElementById('admin-suppress-banner-btn').addEventListener('click', runSuppressBanner);
   document.getElementById('admin-reset-weekly-votes-btn').addEventListener('click', runResetWeeklyVotes);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);

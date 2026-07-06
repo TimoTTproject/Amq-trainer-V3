@@ -4,7 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
-const { rarityForRank, MAX_SUPPLY } = require('../gacha/rarity');
+const { rarityForRank, MAX_SUPPLY, RARITY_RATES, RARITY_LABELS } = require('../gacha/rarity');
 const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
 const { broadcastAll } = require('../mp/mp');
 const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
@@ -412,6 +412,104 @@ router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) =
   // (ou l'inverse) via le rate-up, jusqu'au prochain redémarrage serveur.
   invalidateWeeklyCaches();
   res.json({ total, counts });
+});
+
+// Diagnostic des raretés (lecture seule). Confirme comment la rareté d'un
+// personnage détermine sa probabilité de tirage, et signale les incohérences
+// après des modifications manuelles de rareté.
+//
+// Modèle de probabilité (voir gacha.routes.js `rollRarity` + `pickRandomCharacter`) :
+//   1. rollRarity() tire un PALIER de rareté selon des poids FIXES
+//      (PULL_WEIGHTS : common 70, rare 20, epic 7, legendary 2.5, mythic 0.5).
+//   2. pickRandomCharacter() choisit uniformément un personnage NON ÉPUISÉ de
+//      ce palier, en filtrant sur le champ `rarity` STOCKÉ (donc les
+//      changements manuels sont bien pris en compte).
+//   → Chance d'UN personnage précis = tauxDuPalier / (nb de persos non épuisés
+//     dans ce palier). Plus un palier contient de persos, plus chacun est rare.
+//
+// Le rang (favourites) ne détermine la rareté QUE via `recompute-rarities`
+// (bouton « Recalculer les raretés »), qui ÉCRASE toutes les raretés manuelles
+// par la répartition par rang. Tant qu'on ne le clique pas, les raretés
+// manuelles tiennent. Cette route liste justement les écarts entre la rareté
+// STOCKÉE et la rareté QU'AURAIT le perso selon son rang — ce sont tes
+// overrides manuels (ou d'anciens décalages).
+router.get('/rarity-check', requireAuth, requireAdmin, async (req, res) => {
+  const all = await prisma.character.findMany({
+    select: { id: true, name: true, favourites: true, rarity: true, maxSupply: true, minted: true, soldOut: true },
+  });
+  const total = all.length;
+  // Ordre de rang identique à recompute-rarities (favourites desc, id asc).
+  all.sort((a, b) => (b.favourites || 0) - (a.favourites || 0) || a.id - b.id);
+
+  const byRarity = {};
+  for (const r of VALID_RARITIES) byRarity[r] = { count: 0, notSoldOut: 0, soldOut: 0 };
+  const overrides = [];
+  const supplyMismatches = [];
+
+  all.forEach((c, rankIndex) => {
+    const bucket = byRarity[c.rarity] || (byRarity[c.rarity] = { count: 0, notSoldOut: 0, soldOut: 0 });
+    bucket.count++;
+    if (c.soldOut) bucket.soldOut++; else bucket.notSoldOut++;
+
+    // Override manuel : rareté stockée ≠ rareté attendue selon le rang.
+    const expected = rarityForRank(rankIndex, total);
+    if (expected !== c.rarity) {
+      overrides.push({ id: c.id, name: c.name, favourites: c.favourites, rank: rankIndex + 1, stored: c.rarity, byRank: expected });
+    }
+    // Incohérence de stock : maxSupply devrait être max(plafond du palier, déjà en circulation).
+    const cap = MAX_SUPPLY[c.rarity] || 1000000;
+    const expectedSupply = Math.max(cap, c.minted);
+    if (c.maxSupply !== expectedSupply) {
+      supplyMismatches.push({ id: c.id, name: c.name, rarity: c.rarity, maxSupply: c.maxSupply, expected: expectedSupply, minted: c.minted });
+    }
+  });
+
+  // Taux effectif par palier : taux du palier / nb de persos tirables (non épuisés).
+  const rarities = VALID_RARITIES.map((r) => {
+    const b = byRarity[r];
+    const tierRate = RARITY_RATES[r] ?? 0; // en %
+    const perCharChance = b.notSoldOut > 0 ? tierRate / b.notSoldOut : 0;
+    return {
+      rarity: r,
+      label: RARITY_LABELS[r] || r,
+      count: b.count,
+      notSoldOut: b.notSoldOut,
+      soldOut: b.soldOut,
+      tierRatePct: tierRate,
+      perCharChancePct: perCharChance,
+      // « 1 sur N » plus parlant qu'un petit pourcentage.
+      oneInN: perCharChance > 0 ? Math.round(100 / perCharChance) : null,
+    };
+  });
+
+  res.json({
+    total,
+    rarities,
+    overrides: { total: overrides.length, sample: overrides.slice(0, 200) },
+    supplyMismatches: { total: supplyMismatches.length, sample: supplyMismatches.slice(0, 200) },
+  });
+});
+
+// Corrige les stocks (maxSupply/soldOut) incohérents avec la rareté actuelle —
+// même logique que scripts/fix-supply-mismatch.js, mais à la demande depuis
+// l'admin (utile après des modifs manuelles de rareté antérieures au correctif
+// du PATCH). Ne descend jamais maxSupply sous le nombre déjà en circulation.
+router.post('/fix-supply-mismatch', requireAuth, requireAdmin, async (req, res) => {
+  const all = await prisma.character.findMany({
+    where: { maxSupply: { gt: 0 } },
+    select: { id: true, rarity: true, maxSupply: true, minted: true },
+  });
+  const ops = [];
+  let fixed = 0;
+  for (const c of all) {
+    const cap = MAX_SUPPLY[c.rarity] || 1000000;
+    const maxSupply = Math.max(cap, c.minted);
+    if (c.maxSupply === maxSupply) continue;
+    fixed++;
+    ops.push(prisma.character.update({ where: { id: c.id }, data: { maxSupply, soldOut: c.minted >= maxSupply } }));
+  }
+  for (let i = 0; i < ops.length; i += 100) await prisma.$transaction(ops.slice(i, i + 100));
+  res.json({ ok: true, fixed });
 });
 
 // Réinitialise la progression du compte courant (pour repartir propre avant une sortie).
