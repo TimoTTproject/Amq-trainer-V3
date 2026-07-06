@@ -293,6 +293,7 @@ function onAllRevealed() {
 let collectionCards = [];
 let collFilter = 'all'; // 'all' | rareté
 let collSort = 'rarity'; // 'rarity' | 'name' | 'copies'
+let collSearch = '';
 
 async function loadCollection() {
   const grid = document.getElementById('collection-grid');
@@ -336,7 +337,8 @@ function renderCollection() {
     if (btn) btn.addEventListener('click', () => setGachaTab('pull'));
     return;
   }
-  let list = collectionCards.filter((c) => collFilter === 'all' || c.rarity === collFilter);
+  const q = collSearch.trim().toLowerCase();
+  let list = collectionCards.filter((c) => (collFilter === 'all' || c.rarity === collFilter) && (!q || c.name.toLowerCase().includes(q)));
   const rank = (r) => RARITY_ORDER.indexOf(r); // 0 = mythic … (du plus rare au plus commun)
   const st = (c) => c.stars || 1;
   if (collSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));

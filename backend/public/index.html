@@ -700,6 +700,7 @@
               <option value="copies">Exemplaires</option>
             </select>
           </label>
+          <input type="search" class="trade-search coll-search" id="coll-search" placeholder="Rechercher un personnage…" autocomplete="off" />
           <button class="btn-secondary" id="goto-fuse-btn"><i class="fas fa-wand-magic-sparkles"></i> Fusionner des doublons</button>
           <button class="btn-secondary see-all-chars-btn" data-see-all-chars><i class="fas fa-book-open"></i> Voir tous les personnages (y compris non possédés)</button>
         </div>
@@ -746,6 +747,7 @@
                 <option value="count">Nb de cartes</option>
               </select>
             </label>
+            <input type="search" class="trade-search coll-search" id="albs-search" placeholder="Rechercher un album…" autocomplete="off" />
           </div>
           <div id="albs-mine-grid" class="pls-grid"></div>
         </div>
@@ -802,7 +804,21 @@
         <div id="ald-search-results" class="card-grid"></div>
       </section>
 
-      <div id="ald-grid" class="card-grid"></div>
+      <div class="collection-toolbar">
+        <div class="coll-filters" id="ald-filters"></div>
+        <label class="coll-sort">Trier :
+          <select id="ald-sort">
+            <option value="rarity">Rareté</option>
+            <option value="name">Nom (A→Z)</option>
+            <option value="recent">Récemment ajoutées</option>
+          </select>
+        </label>
+        <input type="search" class="trade-search coll-search" id="ald-filter-search" placeholder="Rechercher dans l'album…" autocomplete="off" />
+      </div>
+      <div class="album-binder">
+        <div class="album-binder-rings"></div>
+        <div id="ald-grid" class="card-grid album-page"></div>
+      </div>
     </div>
 
     <!-- VUE BOUTIQUE -->

@@ -15,6 +15,7 @@ let albsEditOnCreated = null; // callback optionnel après création (picker de 
 let albsMineData = []; // cache brut de « Mes albums » (pour filtrer/trier sans recharger)
 let albsFilter = 'all'; // 'all' | 'public' | 'private'
 let albsSort = 'recent'; // 'recent' | 'name' | 'count'
+let albsSearch = '';
 
 function switchAlbsTab(tab) {
   albsTab = tab;
@@ -52,9 +53,11 @@ function renderMyAlbums() {
     grid.innerHTML = '<p class="muted">Aucun album pour l\'instant. Crée-en un pour commencer !</p>';
     return;
   }
+  const q = albsSearch.trim().toLowerCase();
   let list = albsMineData.filter((a) => {
-    if (albsFilter === 'public') return a.isPublic;
-    if (albsFilter === 'private') return !a.isPublic;
+    if (albsFilter === 'public' && !a.isPublic) return false;
+    if (albsFilter === 'private' && a.isPublic) return false;
+    if (q && !a.name.toLowerCase().includes(q)) return false;
     return true;
   });
   if (albsSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
@@ -147,7 +150,10 @@ async function saveAlbsEdit() {
 // ── Détail d'un album ──
 let aldCurrent = null; // { id, isOwner, cards, … }
 let aldOwnedCards = null; // cache des cartes possédées (pour la recherche-ajout)
-let aldSearchQuery = '';
+let aldSearchQuery = ''; // recherche dans le picker « Ajouter des cartes »
+let aldFilter = 'all'; // 'all' | rareté — filtre les cartes DÉJÀ dans l'album
+let aldSort = 'rarity'; // 'rarity' | 'name' | 'recent'
+let aldFilterSearch = ''; // recherche dans les cartes DÉJÀ dans l'album
 
 function openAlbumsHub() {
   showView('gacha');
@@ -177,10 +183,23 @@ async function openAlbumDetail(id) {
   document.getElementById('ald-clone-wrap').classList.toggle('hidden', aldCurrent.isOwner);
   document.getElementById('ald-search-section').classList.toggle('hidden', !aldCurrent.isOwner);
   aldOwnedCards = null; aldSearchQuery = '';
+  aldFilter = 'all'; aldSort = 'rarity'; aldFilterSearch = '';
   const searchInput = document.getElementById('ald-search-input');
   if (searchInput) searchInput.value = '';
+  const filterSearchInput = document.getElementById('ald-filter-search');
+  if (filterSearchInput) filterSearchInput.value = '';
+  document.getElementById('ald-sort').value = 'rarity';
   if (aldCurrent.isOwner) renderAldSearch();
+  renderAldFilters();
   renderAldGrid();
+}
+
+// Chips de filtre par rareté sur les cartes DÉJÀ dans l'album (effectifs locaux).
+function renderAldFilters() {
+  const byRarity = {};
+  aldCurrent.cards.forEach((c) => (byRarity[c.rarity] = (byRarity[c.rarity] || 0) + 1));
+  document.getElementById('ald-filters').innerHTML = typeof rarityFilterChips === 'function'
+    ? rarityFilterChips(byRarity, aldFilter) : '';
 }
 
 function renderAldGrid() {
@@ -189,7 +208,16 @@ function renderAldGrid() {
     grid.innerHTML = `<p class="muted">${aldCurrent.isOwner ? 'Album vide. Ajoute des cartes ci-dessus.' : 'Cet album est vide.'}</p>`;
     return;
   }
-  grid.innerHTML = aldCurrent.cards.map((c) => {
+  const q = aldFilterSearch.trim().toLowerCase();
+  let list = aldCurrent.cards.filter((c) => (aldFilter === 'all' || c.rarity === aldFilter) && (!q || c.name.toLowerCase().includes(q)));
+  if (aldSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+  else if (aldSort === 'rarity') {
+    const rank = (r) => RARITY_ORDER.indexOf(r);
+    list = [...list].sort((a, b) => rank(a.rarity) - rank(b.rarity) || a.name.localeCompare(b.name));
+  }
+  // 'recent' : garde l'ordre reçu du serveur (déjà trié par addedAt desc).
+  if (!list.length) { grid.innerHTML = '<p class="muted">Aucune carte ne correspond.</p>'; return; }
+  grid.innerHTML = list.map((c) => {
     const removeBtn = aldCurrent.isOwner
       ? `<button class="alb-card-remove" data-ald-remove data-cid="${c.id}" title="Retirer de l'album"><i class="fas fa-trash"></i></button>`
       : '';
@@ -295,6 +323,11 @@ function initAlbumsUI() {
     albsSort = e.target.value;
     renderMyAlbums();
   });
+  let albsSearchTimer;
+  document.getElementById('albs-search').addEventListener('input', (e) => {
+    clearTimeout(albsSearchTimer);
+    albsSearchTimer = setTimeout(() => { albsSearch = e.target.value; renderMyAlbums(); }, 200);
+  });
   document.getElementById('albs-edit-close').addEventListener('click', closeAlbsEditModal);
   document.getElementById('albs-edit-save').addEventListener('click', saveAlbsEdit);
   document.getElementById('albs-mine-grid').addEventListener('click', (e) => {
@@ -323,6 +356,23 @@ function initAlbumsUI() {
     if (rm) return removeCardFromAlbumDetail(parseInt(rm.dataset.cid));
     const card = e.target.closest('.gcard[data-cid]');
     if (card && !e.target.closest('[data-ald-remove]')) openCharacter(card.dataset.cid);
+  });
+
+  document.getElementById('ald-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (!btn) return;
+    aldFilter = btn.dataset.filter;
+    renderAldFilters();
+    renderAldGrid();
+  });
+  document.getElementById('ald-sort').addEventListener('change', (e) => {
+    aldSort = e.target.value;
+    renderAldGrid();
+  });
+  let aldFilterSearchTimer;
+  document.getElementById('ald-filter-search').addEventListener('input', (e) => {
+    clearTimeout(aldFilterSearchTimer);
+    aldFilterSearchTimer = setTimeout(() => { aldFilterSearch = e.target.value; renderAldGrid(); }, 200);
   });
 
   const aldSearchInput = document.getElementById('ald-search-input');

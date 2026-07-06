@@ -831,6 +831,38 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .char-album-row { display: flex; align-items: center; gap: 8px; font-size: .88rem; cursor: pointer; }
 .char-album-create { width: 100%; justify-content: center; margin-top: 2px; }
 
+/* ── Détail d'album : aspect « classeur » (page de classeur + anneaux) ── */
+.album-binder {
+  position: relative;
+  display: flex;
+  background: linear-gradient(180deg, #1a1c22, #15171c);
+  border: 1px solid #343943;
+  border-radius: 10px;
+  padding: 22px 20px 22px 46px;
+  box-shadow: 8px 8px 0 rgba(5, 6, 9, .7), inset 0 0 30px rgba(0, 0, 0, .25);
+}
+.album-binder-rings {
+  position: absolute;
+  top: 0; bottom: 0; left: 14px;
+  width: 18px;
+  background-image: radial-gradient(circle, #0c0e12 0 5px, #3a404a 5px 6px, transparent 7px);
+  background-size: 18px 42px;
+  background-repeat: repeat-y;
+  background-position: center 10px;
+}
+.album-binder-rings::before, .album-binder-rings::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 20px;
+  background: linear-gradient(180deg, rgba(5,6,9,.5), transparent);
+}
+.album-binder-rings::before { top: 0; }
+.album-binder-rings::after { bottom: 0; transform: rotate(180deg); }
+.album-page {
+  flex: 1;
+  min-width: 0;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,.015) 0 42px, transparent 42px 84px);
+  border-radius: 6px;
+}
+
 /* ── Par série (progression de collection) ── */
 .series-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .series-toolbar input {
@@ -1378,6 +1410,10 @@ body.guest-mode .feedback-buttons { display: none !important; }
 }
 .trade-search:focus { outline: none; border-color: var(--accent-2); }
 #trade-send { margin-top: 14px; }
+/* Réutilisé hors du builder d'échange (Collection, Album) : largeur au
+   contenu au lieu de 100% (assis dans une barre d'outils avec d'autres champs). */
+.coll-search { width: 220px; margin-bottom: 0; flex: 0 1 auto; }
+@media (max-width: 640px) { .coll-search { width: 100%; } }
 @media (max-width: 620px) { .trade-cols { grid-template-columns: 1fr; } }
 
 /* ── Échange : offres ── */

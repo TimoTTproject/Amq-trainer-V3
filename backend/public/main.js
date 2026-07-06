@@ -1335,6 +1335,11 @@ function setupAppUI() {
     collSort = e.target.value;
     renderCollection();
   });
+  let collSearchTimer;
+  document.getElementById('coll-search').addEventListener('input', (e) => {
+    clearTimeout(collSearchTimer);
+    collSearchTimer = setTimeout(() => { collSearch = e.target.value; renderCollection(); }, 200);
+  });
   document.getElementById('goto-fuse-btn').addEventListener('click', () => navTo('craft'));
   const openCardFromEvent = (e) => {
     const card = e.target.closest('.gcard[data-cid]');
