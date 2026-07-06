@@ -306,6 +306,22 @@ async function runSuppressBanner() {
   }
 }
 
+async function runResetWeeklyVotes() {
+  const btn = document.getElementById('admin-reset-weekly-votes-btn');
+  const status = document.getElementById('admin-reset-weekly-votes-status');
+  if (!confirm("Supprimer tous les votes de vedette en cours (bannière actuelle + semaine prochaine) et forcer un recalcul complet ? Irréversible.")) return;
+  btn.disabled = true;
+  status.textContent = 'Réinitialisation…';
+  try {
+    const r = await api('/api/gacha/reset-weekly-votes', { method: 'POST' });
+    status.textContent = `✅ ${r.deletedVotes} vote(s) supprimé(s) — bannière recalculée sur la nouvelle répartition (semaine ${r.week}).`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function setCharacterRarity(id, rarity, sel) {
   sel.disabled = true;
   try {

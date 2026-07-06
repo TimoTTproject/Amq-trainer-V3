@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 37, date: '2026-07-06', tag: 'feature',
+    title: 'Le pool de personnages passe de 5 000 à plus de 13 000 !',
+    description: "Le catalogue de personnages a plus que doublé (import continu depuis les animes AniList) et les raretés ont été recalculées sur cette nouvelle base — plus de Mythiques et de Légendaires à débloquer, avec un stock resserré par personnage pour plus d'exclusivité. C'est aussi la 1ʳᵉ édition : une Édition 2 arrivera dans quelques semaines, mêmes personnages avec de nouvelles raretés et de nouveaux visuels. Vote dès maintenant (fiche personnage) pour ceux que tu veux voir promus. Les votes de vedette hebdo ont été réinitialisés pour repartir sur cette nouvelle répartition.",
+  },
+  {
     id: 36, date: '2026-07-05', tag: 'fix',
     title: 'Recommandations plus variées, playlists sans doublon',
     description: "Les recommandations excluent maintenant les morceaux déjà suggérés récemment (au lieu de les remontrer quand même) pour proposer de vraies nouveautés. Impossible aussi d'ajouter deux fois le même morceau à une playlist, même quand le catalogue le liste sous deux fiches différentes.",

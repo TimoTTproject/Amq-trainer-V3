@@ -147,6 +147,24 @@ router.post('/banner-suppress', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true, week: wk });
 });
 
+// Réinitialise le vote de vedette hebdo après un changement de raretés (ex.
+// pool agrandi + « Recalculer les raretés ») qui invaliderait les votes déjà
+// émis : les votes stockent la rareté AU MOMENT DU VOTE, donc un personnage
+// qui change de palier fausse le tirage pondéré. Efface les votes qui ont
+// fixé la bannière ACTUELLE (week-1) et ceux en cours pour la semaine
+// prochaine (week), puis force le recalcul de tous les caches en mémoire
+// (bannière + pools de candidats par joueur) sur la nouvelle répartition.
+router.post('/reset-weekly-votes', requireAuth, requireAdmin, async (req, res) => {
+  const wk = currentWeek();
+  const { count } = await prisma.featuredVote.deleteMany({ where: { week: { in: [wk - 1, wk] } } });
+  weeklyCache = { week: -1, byRarity: {}, chars: [], resetAt: 0 };
+  candidatesWeek = -1;
+  rarityPoolCache = {};
+  candidatesByUser = new Map();
+  const weekly = await getWeeklyFeatured();
+  res.json({ ok: true, deletedVotes: count, week: wk, weekly });
+});
+
 // ── Candidats du vote hebdomadaire (légendaires/mythiques/épiques tirés au sort) ──
 // La liste est PROPRE À CHAQUE JOUEUR (graine = semaine + son userId) : deux
 // joueurs ne voient pas forcément les mêmes candidats la même semaine.
