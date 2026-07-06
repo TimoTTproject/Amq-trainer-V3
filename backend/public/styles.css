@@ -252,9 +252,8 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .gcard .badge.fav { left: 6px; top: auto; bottom: 6px; background: #ffd34d; color: #3a2600; }
 .gcard .badge.feat-badge { left: 6px; top: 6px; background: linear-gradient(135deg,#ff5d8f,#ffb648); color: #2a1400; font-size: .56rem; }
 
-/* Gacha enrichi : poussière, pitié, vedettes, craft */
+/* Gacha enrichi : pitié, vedettes, fusion */
 .gacha-meta { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 4px 0 12px; font-size: .9rem; }
-.gacha-dust b { color: #ffd34d; }
 .gacha-pity { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); }
 .gacha-pity b { color: var(--text); }
 .pity-bar { width: 90px; height: 7px; background: var(--bg-3); border-radius: 6px; overflow: hidden; display: inline-block; }
@@ -709,7 +708,6 @@ body.guest-mode .feedback-buttons { display: none !important; }
   .profile-chip { max-width: 44px; width: 44px; height: 44px; padding: 6px; justify-content: center; }
   .profile-chip .user-name { display: none; }
   .token-badge { padding: 7px 9px; }
-  .dust-badge { display: none; }
   .btn-discord { padding: 8px 10px; }
   .btn-discord-txt { display: none; }
   .navbar { margin-bottom: 24px; flex-wrap: nowrap; }
@@ -1320,14 +1318,15 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .gs-exp { position: absolute; top: -2px; width: 2px; height: 13px; background: #fff; opacity: .85; transform: translateX(-1px); }
 .gs-foot { margin-top: 10px; text-align: center; }
 
-/* ── Atelier (craft) ── */
-.dust-badge #user-dust, .dust-badge #craft-dust { color: #ffd34d; font-weight: 700; }
+/* ── Atelier (fusion) ── */
 .craft-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; }
-.craft-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: .88rem; cursor: pointer; }
-.craft-toggle input { accent-color: var(--accent); }
-#craft-grid .gcard { display: flex; flex-direction: column; }
-.craft-btn { width: calc(100% - 16px); justify-content: center; margin: 8px auto 10px; font-size: .82rem; padding: 8px; }
-.craft-btn:disabled { opacity: .45; }
+#craft-grid .gcard { display: flex; flex-direction: column; cursor: pointer; border-width: 2px; transition: border-color .12s, transform .1s; }
+#craft-grid .gcard:hover { transform: translateY(-2px); }
+#craft-grid .gcard.fuse-picked { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(8,174,232,.35); }
+.badge.fuse-selected { background: var(--accent-2); color: #08131a; font-weight: 800; }
+.fuse-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 16px; }
+#fuse-counter-badge { background: var(--bg-3); color: var(--accent-2); font-weight: 700; }
+#fuse-result .gcard { max-width: 220px; margin: 0 auto; }
 
 /* ── Annuaire des joueurs ── */
 .players-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1551,9 +1550,9 @@ body.guest-mode .feedback-buttons { display: none !important; }
   border: 1px solid rgba(255,255,255,.28);
 }
 
-/* Ressources (pitié / poussière) en pastilles */
+/* Ressource (pitié) en pastille */
 .gacha-meta { gap: 12px; margin: 8px 0 16px; }
-.gacha-dust, .gacha-pity {
+.gacha-pity {
   background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 999px; padding: 8px 15px;
 }
 .pity-bar { width: 110px; height: 8px; }
@@ -1595,8 +1594,7 @@ body.guest-mode .feedback-buttons { display: none !important; }
 body.profile-public #profile-claim,
 body.profile-public #profile-share,
 body.profile-public .profile-edit,
-body.profile-public .token-history,
-body.profile-public #pstat-dust { display: none; }
+body.profile-public .token-history { display: none; }
 
 .badge-check { color: var(--green); font-size: .95rem; flex-shrink: 0; }
 .badge-prog { font-size: .72rem; font-weight: 700; color: var(--text-2); flex-shrink: 0; white-space: nowrap; }

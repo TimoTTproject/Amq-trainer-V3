@@ -55,9 +55,11 @@ function rollRarity() {
 // Remboursement en tokens d'un doublon, par rareté
 const DUPLICATE_REFUND = { common: 2, rare: 5, epic: 15, legendary: 40, mythic: 100 };
 
-// Poussière gagnée par doublon + coût de fabrication, par rareté
-const DUST_GAIN = { common: 2, rare: 6, epic: 20, legendary: 60, mythic: 150 };
-const CRAFT_COST = { common: 20, rare: 60, epic: 200, legendary: 600, mythic: 1500 };
+// Fusion (remplace poussière/craft depuis le 2026-07-06) : 3 exemplaires
+// possédés (même personnage ou mélangés, même rareté) → 1 carte ALÉATOIRE de
+// cette même rareté (peut retomber sur un doublon, pas de garantie de
+// nouveauté). Voir POST /api/gacha/fuse.
+const FUSE_COUNT = 3;
 
 // Pitié : nombre de tirages sans Légendaire+ avant garantie
 const PITY_LIMIT = 60;
@@ -98,8 +100,7 @@ module.exports = {
   rarityForRank,
   rollRarity,
   DUPLICATE_REFUND,
-  DUST_GAIN,
-  CRAFT_COST,
+  FUSE_COUNT,
   PITY_LIMIT,
   MAX_STARS,
   ASCEND_COST,

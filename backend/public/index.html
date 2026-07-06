@@ -142,7 +142,6 @@
         <span id="admin-badge" class="admin-badge hidden">ADMIN</span>
         <button type="button" class="token-badge" id="reward-caps-btn" title="Voir les plafonds anti-farm" aria-haspopup="true" aria-expanded="false" aria-controls="reward-caps-popover"><i class="fas fa-coins"></i> <span id="user-tokens">0</span></button>
         <div id="reward-caps-popover" class="reward-caps-popover hidden" role="dialog" aria-label="Plafonds anti-farm"></div>
-        <span class="token-badge dust-badge" title="Poussière (craft)">🌟 <span id="user-dust">0</span></span>
         <button type="button" class="token-badge" id="quests-popover-btn" title="Quêtes du jour" aria-haspopup="true" aria-expanded="false" aria-controls="quests-popover"><i class="fas fa-bullseye"></i> <span id="quests-nav-badge" class="quests-nav-badge hidden"></span></button>
         <div id="quests-popover" class="reward-caps-popover quests-popover hidden" role="dialog" aria-label="Quêtes du jour"></div>
         <button type="button" class="token-badge" id="friends-popover-btn" title="Amis" aria-haspopup="true" aria-expanded="false" aria-controls="friends-popover"><i class="fas fa-user-group"></i> <span id="friends-online-count">0</span></button>
@@ -245,7 +244,7 @@
         </button>
         <button class="hub-card" data-nav="craft" style="--c:#ffd34d">
           <span class="hub-ico"><i class="fas fa-hammer"></i></span>
-          <span class="hub-txt"><h3 data-i18n="Atelier">Atelier</h3><p data-i18n="Fabrique les cartes qui te manquent avec ta poussière 🌟">Fabrique les cartes qui te manquent avec ta poussière 🌟</p></span>
+          <span class="hub-txt"><h3 data-i18n="Atelier">Atelier</h3><p data-i18n="Fusionne 3 exemplaires possédés pour 1 carte aléatoire de la même rareté">Fusionne 3 exemplaires possédés pour 1 carte aléatoire de la même rareté</p></span>
           <span class="hub-pin" data-pin="craft" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
@@ -322,7 +321,6 @@
           <h3 class="trade-col-title give">Je donne</h3>
           <div class="trade-cur">
             <label>🪙 <input type="number" id="trade-give-tokens" min="0" value="0" /></label>
-            <label>🌟 <input type="number" id="trade-give-dust" min="0" value="0" /></label>
           </div>
           <div id="trade-give" class="trade-pool"></div>
         </div>
@@ -330,7 +328,6 @@
           <h3 class="trade-col-title want">Je reçois</h3>
           <div class="trade-cur">
             <label>🪙 <input type="number" id="trade-want-tokens" min="0" value="0" /></label>
-            <label>🌟 <input type="number" id="trade-want-dust" min="0" value="0" /></label>
           </div>
           <div id="trade-want" class="trade-pool"></div>
         </div>
@@ -390,7 +387,6 @@
         <div class="pstat"><span id="profile-coop">0</span><label>Coop · étage max</label></div>
         <div class="pstat"><span id="profile-cards-count">0</span><label>Cartes</label></div>
         <div class="pstat"><span id="profile-tokens">0</span><label>Tokens</label></div>
-        <div class="pstat" id="pstat-dust"><span id="profile-dust">0</span><label>Poussière 🌟</label></div>
       </div>
 
       <div class="profile-grid">
@@ -647,7 +643,7 @@
         <button class="shop-tab" data-gtab="albums"><i class="fas fa-book"></i> Albums</button>
       </div>
 
-      <!-- Onglet Tirage : ressources (pitié / poussière) → tirage → résultat -->
+      <!-- Onglet Tirage : ressources (pitié) → tirage → résultat -->
       <div id="gacha-panel-pull" class="gacha-panel">
       <div class="gacha-weekly" id="gacha-weekly-pull"></div>
       <div class="gacha-meta" id="gacha-meta"></div>
@@ -699,7 +695,7 @@
               <option value="copies">Exemplaires</option>
             </select>
           </label>
-          <button class="btn-secondary" id="recycle-all-btn"><i class="fas fa-recycle"></i> Recycler les doublons</button>
+          <button class="btn-secondary" id="goto-fuse-btn"><i class="fas fa-wand-magic-sparkles"></i> Fusionner des doublons</button>
           <button class="btn-secondary see-all-chars-btn" data-see-all-chars><i class="fas fa-book-open"></i> Voir tous les personnages (y compris non possédés)</button>
         </div>
         <div id="collection-grid" class="card-grid"></div>
@@ -1068,19 +1064,23 @@
     <div id="view-craft" class="hidden">
       <button class="btn-back" id="back-collection-craft"><i class="fas fa-arrow-left"></i> Collection</button>
       <div class="gacha-top">
-        <h2><i class="fas fa-hammer"></i> Atelier</h2>
-        <span class="token-badge dust-badge" title="Poussière">🌟 <span id="craft-dust">0</span></span>
+        <h2><i class="fas fa-wand-magic-sparkles"></i> Atelier · Fusion</h2>
+        <span class="token-badge" id="fuse-counter-badge">0/3 sélectionné(s)</span>
       </div>
-      <p class="gacha-sub">Dépense ta poussière (gagnée avec les doublons) pour fabriquer une carte précise.</p>
+      <p class="gacha-sub">Choisis 3 exemplaires que tu possèdes dans une même rareté — n'importe lesquels, même personnage ou mélangés. Le jeu les recycle et t'offre 1 carte <b>aléatoire</b> de cette rareté (peut retomber sur un doublon).</p>
       <div class="craft-toolbar">
         <div class="coll-filters" id="craft-filters"></div>
-        <label class="craft-toggle"><input type="checkbox" id="craft-missing" /> Manquants seulement</label>
       </div>
       <div class="catalog-search">
         <input type="text" id="craft-search" placeholder="Rechercher un personnage ou une série…" />
       </div>
       <p id="craft-msg" class="gacha-msg"></p>
+      <div class="fuse-actions">
+        <button class="btn-secondary" id="fuse-clear-btn"><i class="fas fa-xmark"></i> Vider la sélection</button>
+        <button class="btn-primary" id="fuse-btn" disabled><i class="fas fa-wand-magic-sparkles"></i> Fusionner</button>
+      </div>
       <div id="craft-grid" class="card-grid"></div>
+      <div id="fuse-result" class="pull-result hidden"></div>
       <div class="catalog-pager">
         <button class="btn-secondary" id="craft-prev"><i class="fas fa-chevron-left"></i></button>
         <span id="craft-pageinfo">—</span>
@@ -1592,7 +1592,7 @@
         <ul>
           <li>Tire des cartes de personnages, de Commun à Mythique.</li>
           <li>Chaque carte est un exemplaire numéroté à stock limité.</li>
-          <li>Les doublons donnent de la poussière 🌟 pour fabriquer une carte précise.</li>
+          <li>À l'Atelier, fusionne 3 exemplaires possédés (même perso ou mélangés, même rareté) contre 1 carte aléatoire de cette rareté.</li>
           <li>Un Légendaire+ est garanti après 60 tirages sans en obtenir.</li>
           <li>Les personnages actuels sont l'<b>Édition 1</b>. Une <b>Édition 2</b> arrivera dans quelques semaines : mêmes personnages, nouvelles raretés et nouveaux visuels — vote dès maintenant (fiche personnage) pour ceux que tu veux voir promus Mythique/Légendaire (10 voix par joueur).</li>
         </ul>

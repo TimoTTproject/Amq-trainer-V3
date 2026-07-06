@@ -805,8 +805,6 @@ function renderHeaderUser() {
     tk.parentElement.classList.add('token-bump');
   }
   _lastTokens = currentUser.tokens;
-  const du = document.getElementById('user-dust');
-  if (du) du.textContent = currentUser.dust || 0;
   renderAvatar(document.getElementById('header-avatar'), currentUser);
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
@@ -901,7 +899,6 @@ const ECONOMY_EARN_SOURCES = [
 ];
 const ECONOMY_SPEND_SOURCES = [
   { icon: '🎴', title: 'Tirages gacha', desc: 'Dépense tes tokens pour tirer des cartes de personnages (5 raretés, stock limité).' },
-  { icon: '🔨', title: 'Atelier (craft)', desc: 'Fabrique une carte précise avec de la poussière 🌟 (doublons recyclés).' },
   { icon: '🛍️', title: 'Boutique', desc: 'Cosmétiques : dos de cartes, bordures, bannières, cadres d\'avatar.' },
 ];
 
@@ -915,7 +912,6 @@ async function openEconomy() {
     box.innerHTML = `
       <div class="economy-balance">
         <div class="eco-balance-item"><span class="eco-balance-val">${currentUser.tokens}</span><span class="eco-balance-label">🪙 tokens</span></div>
-        <div class="eco-balance-item"><span class="eco-balance-val">${currentUser.dust || 0}</span><span class="eco-balance-label">🌟 poussière</span></div>
       </div>
       <h3 class="economy-section-title"><i class="fas fa-gauge-high"></i> Plafonds anti-farm en cours</h3>
       ${rewardCapRow('🎯 Quiz solo (6h)', caps.quiz)}
@@ -1209,7 +1205,7 @@ function setupAppUI() {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
   });
-  // Atelier (craft)
+  // Atelier (fusion : 3 exemplaires possédés → 1 carte aléatoire de la même rareté)
   document.getElementById('back-collection-craft').addEventListener('click', () => showView('collection'));
   let craftSearchTimer;
   document.getElementById('craft-search').addEventListener('input', (e) => {
@@ -1217,7 +1213,6 @@ function setupAppUI() {
     craftSearch = e.target.value.trim();
     craftSearchTimer = setTimeout(() => loadCraft(1), 300);
   });
-  document.getElementById('craft-missing').addEventListener('change', (e) => { craftMissing = e.target.checked; loadCraft(1); });
   document.getElementById('craft-prev').addEventListener('click', () => loadCraft(craftPage - 1));
   document.getElementById('craft-next').addEventListener('click', () => loadCraft(craftPage + 1));
   document.getElementById('craft-filters').addEventListener('click', (e) => {
@@ -1225,9 +1220,11 @@ function setupAppUI() {
     if (btn) { craftRarity = btn.dataset.filter; loadCraft(1); }
   });
   document.getElementById('craft-grid').addEventListener('click', (e) => {
-    const btn = e.target.closest('.craft-btn');
-    if (btn) craftFromAtelier(btn);
+    const card = e.target.closest('.gcard');
+    if (card) toggleFuseCard(parseInt(card.dataset.cid), card.dataset.rarity, parseInt(card.dataset.owned), card.dataset.name);
   });
+  document.getElementById('fuse-clear-btn').addEventListener('click', clearFuseSelection);
+  document.getElementById('fuse-btn').addEventListener('click', runFusion);
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
   let adminSearchTimer;
@@ -1309,7 +1306,7 @@ function setupAppUI() {
     collSort = e.target.value;
     renderCollection();
   });
-  document.getElementById('recycle-all-btn').addEventListener('click', recycleAllDupes);
+  document.getElementById('goto-fuse-btn').addEventListener('click', () => navTo('craft'));
   const openCardFromEvent = (e) => {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);

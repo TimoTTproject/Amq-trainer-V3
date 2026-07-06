@@ -6,6 +6,7 @@
 // ── GACHA ──
 const RARITY_LABELS = { common: 'Commun', rare: 'Rare', epic: 'Épique', legendary: 'Légendaire', mythic: 'Mythique' };
 const RARITY_ORDER = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+const FUSE_COUNT = 3; // doit rester égal à FUSE_COUNT dans src/gacha/rarity.js (fusion Atelier)
 
 function setGachaTokens() {
   document.getElementById('gacha-tokens').textContent = currentUser.tokens;
@@ -160,7 +161,6 @@ function renderGachaMeta(pityLimit = 60) {
   const pity = currentUser.pity || 0;
   const pct = Math.min(100, Math.round((pity / pityLimit) * 100));
   document.getElementById('gacha-meta').innerHTML = `
-    <span class="gacha-dust">🌟 <b>${currentUser.dust || 0}</b> poussière</span>
     <span class="gacha-pity">Pitié <b>${pity}/${pityLimit}</b>
       <span class="pity-bar"><span class="pity-fill" style="width:${pct}%"></span></span>
     </span>`;
@@ -229,12 +229,11 @@ async function doPull(type) {
   try {
     const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
     currentUser.tokens = r.tokens;
-    if (typeof r.dust === 'number') currentUser.dust = r.dust;
     if (typeof r.pity === 'number') currentUser.pity = r.pity;
     renderHeaderUser();
     setGachaTokens();
     renderGachaMeta(r.pityLimit);
-    pullRefundMsg = (r.refundTotal ? ` · ${r.refundTotal} 🪙` : '') + (r.dustTotal ? ` · +${r.dustTotal} 🌟` : '');
+    pullRefundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙` : '';
     pullCost = r.cost;
     const result = document.getElementById('pull-result');
     result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
@@ -309,26 +308,6 @@ async function loadCollection() {
   }
 }
 
-// Recycle tous les doublons de la collection en poussière
-async function recycleAllDupes() {
-  const dupes = collectionCards.filter((c) => c.copies > 1).reduce((s, c) => s + (c.copies - 1), 0);
-  if (!dupes) { alert('Aucun doublon à recycler.'); return; }
-  if (!confirm(`Recycler ${dupes} doublon(s) en poussière ? (tu gardes 1 exemplaire de chaque carte)`)) return;
-  const btn = document.getElementById('recycle-all-btn');
-  btn.disabled = true;
-  try {
-    const r = await api('/api/gacha/recycle-all', { method: 'POST' });
-    currentUser.dust = r.dust;
-    renderHeaderUser();
-    sfx.correct && sfx.correct();
-    document.getElementById('gacha-msg').textContent = `♻️ ${r.recycled} doublon(s) recyclé(s) · +${r.gain} 🌟 (total ${r.dust})`;
-    loadCollection();
-  } catch (e) {
-    document.getElementById('gacha-msg').textContent = e.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
 
 // Boutons de filtre par rareté (n'affiche que les raretés possédées)
 function renderCollFilters(ownedByRarity) {
@@ -803,18 +782,11 @@ async function openCharacter(id) {
       <button class="btn-secondary char-wish${d.wished ? ' on' : ''}" id="char-wish-btn">
         <i class="fa-heart ${d.wished ? 'fas' : 'far'}"></i> ${d.wished ? 'Dans ta wishlist ♥' : 'Ajouter à la wishlist'}
       </button>
-      ${d.soldOut
-        ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Épuisé — échange seulement</button>`
-        : !d.everDropped
-        ? `<button class="btn-secondary char-craft" disabled><i class="fas fa-ban"></i> Doit d'abord être tiré au moins une fois</button>`
-        : `<button class="btn-secondary char-craft" id="char-craft-btn" data-cid="${c.id}" ${(currentUser.dust || 0) < d.craftCost ? 'disabled' : ''}>
-        <i class="fas fa-hammer"></i> Fabriquer · ${d.craftCost} 🌟 ${(currentUser.dust || 0) < d.craftCost ? `(tu as ${currentUser.dust || 0})` : ''}
-      </button>`}
       ${d.owned && d.stars < (d.maxStars || 5) ? `<button class="btn-secondary char-ascend" id="char-ascend-btn" ${(d.owned - 1) < d.ascendCost ? 'disabled' : ''}>
         <i class="fas fa-star"></i> Ascensionner ★${d.stars + 1} · ${d.ascendCost} doublon(s)${(d.owned - 1) < d.ascendCost ? ` (tu en as ${d.owned - 1})` : ''}
       </button>` : ''}
-      ${d.owned > 1 ? `<button class="btn-secondary char-recycle" id="char-recycle-btn">
-        <i class="fas fa-recycle"></i> Recycler ${d.owned - 1} doublon(s) · +${(d.owned - 1) * d.dustGain} 🌟
+      ${d.owned > 1 ? `<button class="btn-secondary char-goto-fuse" id="char-goto-fuse-btn">
+        <i class="fas fa-wand-magic-sparkles"></i> Fusionner tes doublons à l'Atelier →
       </button>` : ''}
       ${d.owned ? `<button class="btn-secondary char-album-toggle" id="char-album-btn" data-cid="${c.id}">
         <i class="fas fa-book"></i> Ranger dans un album
@@ -823,33 +795,11 @@ async function openCharacter(id) {
       <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
         <i class="fas fa-external-link-alt"></i> Voir sur AniList
       </a>`;
-    const craftBtn = document.getElementById('char-craft-btn');
-    if (craftBtn) {
-      craftBtn.addEventListener('click', async () => {
-        if (!confirm(`Fabriquer ${c.name} pour ${d.craftCost} 🌟 ?`)) return;
-        craftBtn.disabled = true;
-        try {
-          const r = await api('/api/gacha/craft', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
-          currentUser.dust = r.dust;
-          if (typeof sfx !== 'undefined') sfx.reveal(c.rarity);
-          if (typeof burstConfetti === 'function') burstConfetti();
-          openCharacter(c.id); // recharge la fiche (possession + poussière à jour)
-          loadCollection();
-        } catch (e) { alert(e.message); craftBtn.disabled = false; }
-      });
-    }
-    const recycleBtn = document.getElementById('char-recycle-btn');
-    if (recycleBtn) {
-      recycleBtn.addEventListener('click', async () => {
-        if (!confirm(`Recycler ${d.owned - 1} doublon(s) de ${c.name} en poussière ?`)) return;
-        recycleBtn.disabled = true;
-        try {
-          const r = await api('/api/gacha/recycle', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
-          currentUser.dust = r.dust;
-          sfx.correct && sfx.correct();
-          openCharacter(c.id); // recharge la fiche (copies + poussière à jour)
-          loadCollection();
-        } catch (e) { alert(e.message); recycleBtn.disabled = false; }
+    const gotoFuseBtn = document.getElementById('char-goto-fuse-btn');
+    if (gotoFuseBtn) {
+      gotoFuseBtn.addEventListener('click', () => {
+        closeCharacter();
+        if (typeof navTo === 'function') navTo('craft');
       });
     }
     const promoteBtn = document.getElementById('char-promote-btn');

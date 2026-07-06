@@ -153,8 +153,6 @@ function renderProfile(d, isSelf = true) {
   document.getElementById('profile-coop').textContent = d.user.coopBestFloor || 0;
   document.getElementById('profile-cards-count').textContent = d.cardsCount || 0;
   document.getElementById('profile-tokens').textContent = d.user.tokens;
-  const dustEl = document.getElementById('profile-dust');
-  if (dustEl && isSelf) dustEl.textContent = currentUser.dust || 0;
   const since = d.user.createdAt
     ? new Date(d.user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     : '—';

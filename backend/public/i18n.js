@@ -61,7 +61,7 @@ const I18N = {
     'Boutique': 'Shop',
     'Cosmétiques : dos de cartes, bordures, bannières': 'Cosmetics: card backs, borders, banners',
     'Atelier': 'Workshop',
-    'Fabrique les cartes qui te manquent avec ta poussière 🌟': "Craft the cards you're missing with your dust 🌟",
+    'Fusionne 3 exemplaires possédés pour 1 carte aléatoire de la même rareté': 'Fuse 3 owned copies for 1 random card of the same rarity',
     'Catalogue': 'Catalog',
     'Parcours tous les openings (anime, titre, artiste)': 'Browse every opening (anime, title, artist)',
     'Playlist': 'Playlist',

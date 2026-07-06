@@ -3,7 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('../admin/admin');
-const { rollRarity, DUPLICATE_REFUND, DUST_GAIN, CRAFT_COST, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, FUSE_COUNT, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
@@ -252,7 +252,7 @@ router.get('/info', async (req, res) => {
   });
   const weekly = await getWeeklyFeatured();
   res.json({
-    prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, craftCost: CRAFT_COST, pityLimit: PITY_LIMIT,
+    prices: PRICES, total, byRarity, labels: RARITY_LABELS, featured, pityLimit: PITY_LIMIT,
     weeklyFeatured: weekly.chars, weeklyResetAt: weekly.resetAt, weeklyBoost: Math.round(WEEKLY_BOOST * 100),
   });
 });
@@ -443,7 +443,6 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
 
     const cards = [];
     let refundTotal = 0;
-    let dustTotal = 0;
     let unavailableCount = 0; // emplacements sans personnage dispo dans la rareté tirée → remboursés, jamais rétrogradés
     const perSlotCost = cfg.cost / cfg.count;
     const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
@@ -455,16 +454,13 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
       pullCounts[character.rarity] = (pullCounts[character.rarity] || 0) + 1;
       const isNew = mint.isNew;
       let refund = 0;
-      let dust = 0;
       if (!isNew) {
         refund = DUPLICATE_REFUND[character.rarity] || 0;
-        dust = DUST_GAIN[character.rarity] || 0;
         refundTotal += refund;
-        dustTotal += dust;
       }
       cards.push({
         id: character.id, name: character.name, imageUrl: character.imageUrl,
-        rarity: character.rarity, featured: character.featured, isNew, refund, dust, serial: mint.serial,
+        rarity: character.rarity, featured: character.featured, isNew, refund, serial: mint.serial,
       });
     }
 
@@ -474,7 +470,6 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
       data: {
         pity,
         ...((refundTotal + unavailableRefund) > 0 ? { tokens: { increment: refundTotal + unavailableRefund } } : {}),
-        ...(dustTotal > 0 ? { dust: { increment: dustTotal } } : {}),
         ...(pullCounts.common ? { pullCommon: { increment: pullCounts.common } } : {}),
         ...(pullCounts.rare ? { pullRare: { increment: pullCounts.rare } } : {}),
         ...(pullCounts.epic ? { pullEpic: { increment: pullCounts.epic } } : {}),
@@ -488,63 +483,84 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
     if (unavailableRefund > 0) {
       await tx.tokenTransaction.create({ data: { userId, amount: unavailableRefund, reason: 'rarity_unavailable_refund' } });
     }
-    return { cards, refundTotal, dustTotal, unavailableCount, unavailableRefund, tokens: u.tokens, dust: u.dust, pity: u.pity };
+    return { cards, refundTotal, unavailableCount, unavailableRefund, tokens: u.tokens, pity: u.pity };
   });
 
   progressQuests(userId, 'pull', cfg.count);
   res.json({ type, cost: cfg.cost, pityLimit: PITY_LIMIT, ...result });
 });
 
-// Fabrication : dépense de la poussière pour obtenir un personnage choisi
-router.post('/craft', requireAuth, async (req, res) => {
-  const characterId = parseInt(req.body?.characterId);
-  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
-  const character = await prisma.character.findUnique({ where: { id: characterId } });
-  if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
-  if (character.soldOut) return res.status(400).json({ error: 'Personnage épuisé — disponible seulement par échange' });
-  const everDropped = await prisma.cardInstance.findFirst({ where: { characterId, source: 'pull' }, select: { id: true } });
-  if (!everDropped) return res.status(400).json({ error: 'Ce personnage doit être obtenu au moins une fois par tirage avant de pouvoir être fabriqué' });
-  const cost = CRAFT_COST[character.rarity] || 0;
-  if ((req.user.dust || 0) < cost) return res.status(400).json({ error: `Pas assez de poussière (${cost} requis)` });
+// Fusion (remplace poussière/craft depuis le 2026-07-06) : le joueur choisit
+// `items` = [{characterId, count}] possédés, même rareté, total = FUSE_COUNT
+// (3) exemplaires quelconques (même perso ou mélangés). Ils sont recyclés
+// (rendus au stock mondial) contre 1 carte ALÉATOIRE de cette même rareté —
+// vraiment aléatoire, peut retomber sur un doublon (pas de garantie de
+// nouveauté).
+router.post('/fuse', requireAuth, async (req, res) => {
+  const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+  const wanted = new Map(); // characterId -> count (fusionne les doublons d'entrée)
+  for (const it of raw) {
+    const cid = parseInt(it?.characterId);
+    const n = parseInt(it?.count);
+    if (!cid || !(n > 0)) continue;
+    wanted.set(cid, (wanted.get(cid) || 0) + n);
+  }
+  const items = [...wanted.entries()].map(([characterId, count]) => ({ characterId, count }));
+  const total = items.reduce((s, it) => s + it.count, 0);
+  if (!items.length || total !== FUSE_COUNT) {
+    return res.status(400).json({ error: `Choisis exactement ${FUSE_COUNT} exemplaires à fusionner.` });
+  }
+
+  const chars = await prisma.character.findMany({ where: { id: { in: items.map((it) => it.characterId) } } });
+  if (chars.length !== items.length) return res.status(404).json({ error: 'Personnage introuvable.' });
+  const rarity = chars[0].rarity;
+  if (!chars.every((c) => c.rarity === rarity)) {
+    return res.status(400).json({ error: 'Les exemplaires choisis doivent être de la même rareté.' });
+  }
+
+  const owned = await prisma.userCard.findMany({
+    where: { userId: req.user.id, characterId: { in: items.map((it) => it.characterId) } },
+  });
+  const copiesById = new Map(owned.map((c) => [c.characterId, c.copies]));
+  for (const it of items) {
+    if ((copiesById.get(it.characterId) || 0) < it.count) {
+      return res.status(400).json({ error: 'Tu ne possèdes pas assez d’exemplaires de ce personnage.' });
+    }
+  }
 
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
-      const mint = await mintInstance(tx, req.user.id, characterId, 'craft');
-      if (!mint) throw new Error('SOLD_OUT');
-      const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { decrement: cost } } });
-      return { dust: u.dust, isNew: mint.isNew, serial: mint.serial };
+      const won = await pickRandomCharacter(tx, rarity, {});
+      if (!won) throw new Error('NONE_AVAILABLE');
+      for (const it of items) {
+        await destroyInstances(tx, req.user.id, it.characterId, it.count); // rend les places au stock
+        const card = await tx.userCard.findUnique({
+          where: { userId_characterId: { userId: req.user.id, characterId: it.characterId } },
+        });
+        if (!card || card.copies <= it.count) {
+          await tx.userCard.deleteMany({ where: { userId: req.user.id, characterId: it.characterId } });
+        } else {
+          await tx.userCard.update({
+            where: { userId_characterId: { userId: req.user.id, characterId: it.characterId } },
+            data: { copies: { decrement: it.count } },
+          });
+        }
+      }
+      const mint = await mintInstance(tx, req.user.id, won.id, 'fuse');
+      if (!mint) throw new Error('NONE_AVAILABLE'); // épuisé entre le tirage et la frappe (course rarissime)
+      return {
+        id: won.id, name: won.name, imageUrl: won.imageUrl, rarity: won.rarity,
+        isNew: mint.isNew, serial: mint.serial,
+      };
     });
   } catch (e) {
-    if (e.message === 'SOLD_OUT') return res.status(400).json({ error: 'Personnage épuisé entre-temps' });
+    if (e.message === 'NONE_AVAILABLE') {
+      return res.status(400).json({ error: 'Plus aucun personnage disponible dans cette rareté pour le moment.' });
+    }
     throw e;
   }
-  res.json({ ...result, cost });
-});
-
-// Recyclage : convertit les doublons (copies au-delà de 1) en poussière.
-// Garde toujours 1 exemplaire de chaque personnage.
-router.post('/recycle', requireAuth, async (req, res) => {
-  const characterId = parseInt(req.body?.characterId);
-  if (!characterId) return res.status(400).json({ error: 'characterId requis' });
-  const out = await prisma.$transaction(async (tx) => {
-    const card = await tx.userCard.findUnique({
-      where: { userId_characterId: { userId: req.user.id, characterId } },
-      include: { character: true },
-    });
-    if (!card || card.copies <= 1) return { error: 'Aucun doublon à recycler' };
-    const extra = card.copies - 1;
-    const gain = extra * (DUST_GAIN[card.character.rarity] || 0);
-    await destroyInstances(tx, req.user.id, characterId, extra); // rend les places au stock
-    await tx.userCard.update({
-      where: { userId_characterId: { userId: req.user.id, characterId } },
-      data: { copies: 1 },
-    });
-    const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { increment: gain } } });
-    return { recycled: extra, gain, dust: u.dust };
-  });
-  if (out.error) return res.status(400).json({ error: out.error });
-  res.json(out);
+  res.json({ ok: true, card: result });
 });
 
 // Ascension d'une carte (★) : consomme des DOUBLONS pour monter d'un niveau.
@@ -571,33 +587,6 @@ router.post('/ascend', requireAuth, async (req, res) => {
   });
   if (out.error) return res.status(400).json({ error: out.error });
   res.json(out);
-});
-
-// Recycle TOUS les doublons de la collection d'un coup.
-router.post('/recycle-all', requireAuth, async (req, res) => {
-  const dupes = await prisma.userCard.findMany({
-    where: { userId: req.user.id, copies: { gt: 1 } },
-    include: { character: { select: { rarity: true } } },
-  });
-  if (!dupes.length) return res.status(400).json({ error: 'Aucun doublon à recycler' });
-  let gain = 0, recycled = 0;
-  for (const c of dupes) {
-    const extra = c.copies - 1;
-    recycled += extra;
-    gain += extra * (DUST_GAIN[c.character.rarity] || 0);
-  }
-  const dust = await prisma.$transaction(async (tx) => {
-    for (const c of dupes) {
-      await destroyInstances(tx, req.user.id, c.characterId, c.copies - 1); // rend les places au stock
-      await tx.userCard.update({
-        where: { userId_characterId: { userId: req.user.id, characterId: c.characterId } },
-        data: { copies: 1 },
-      });
-    }
-    const u = await tx.user.update({ where: { id: req.user.id }, data: { dust: { increment: gain } } });
-    return u.dust;
-  });
-  res.json({ recycled, gain, dust });
 });
 
 // Catalogue (pokédex) des personnages : filtre rareté/recherche (nom ou série),
@@ -648,13 +637,12 @@ router.get('/characters', requireAuth, async (req, res) => {
   pool.forEach((g) => (byRarity[g.rarity] = g._count._all));
 
   res.json({
-    characters: chars.map((c) => ({ ...c, owned: ownedById[c.id] || 0, craftCost: CRAFT_COST[c.rarity] || 0 })), // c.soldOut inclus via select
+    characters: chars.map((c) => ({ ...c, owned: ownedById[c.id] || 0 })), // c.soldOut inclus via select
     total,
     page,
     pages: Math.ceil(total / perPage),
     byRarity,
     labels: RARITY_LABELS,
-    dust: req.user.dust || 0,
   });
 });
 
@@ -735,12 +723,6 @@ router.get('/character/:id', requireAuth, async (req, res) => {
   const wished = !!(await prisma.wishlist.findUnique({
     where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
   }));
-  // Un perso ne peut être fabriqué que s'il a déjà été obtenu par tirage au
-  // moins une fois (par n'importe quel joueur) — pas de perso qui n'existe
-  // QUE par craft.
-  const everDropped = !!(await prisma.cardInstance.findFirst({
-    where: { characterId: id, source: 'pull' }, select: { id: true },
-  }));
   const promotionVoteCount = await prisma.promotionVote.count({ where: { characterId: id } });
   const votedByMe = !!(await prisma.promotionVote.findUnique({
     where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
@@ -763,7 +745,6 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     rarityLabel: RARITY_LABELS[character.rarity] || character.rarity,
     pullRate: RARITY_RATES[character.rarity] ?? null,
     dupRefund: DUPLICATE_REFUND[character.rarity] ?? 0,
-    dustGain: DUST_GAIN[character.rarity] ?? 0,
     rankInRarity,
     totalInRarity,
     owned: card ? card.copies : 0,
@@ -773,8 +754,6 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     maxStars: MAX_STARS,
     favorite: card ? card.favorite : false,
     featured: character.featured,
-    craftCost: CRAFT_COST[character.rarity] || 0,
-    everDropped,
     // Rareté réelle : stock mondial + n° de série possédés
     maxSupply: character.maxSupply,
     minted: character.minted,

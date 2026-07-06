@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 38, date: '2026-07-06', tag: 'feature',
+    title: "L'Atelier passe à la fusion : 3 cartes → 1 aléatoire",
+    description: "La poussière et le craft ciblé disparaissent, remplacés par la Fusion : choisis 3 exemplaires que tu possèdes dans une même rareté (n'importe lesquels, même personnage ou mélangés), et le jeu te donne 1 carte aléatoire de cette rareté en échange — un vrai coup de dés, pas de garantie de nouveauté. Rendez-vous à l'Atelier (Collection) pour l'essayer.",
+  },
+  {
     id: 37, date: '2026-07-06', tag: 'feature',
     title: 'Le pool de personnages passe de 5 000 à plus de 13 000 !',
     description: "Le catalogue de personnages a plus que doublé (import continu depuis les animes AniList) et les raretés ont été recalculées sur cette nouvelle base — plus de Mythiques et de Légendaires à débloquer, avec un stock resserré par personnage pour plus d'exclusivité. C'est aussi la 1ʳᵉ édition : une Édition 2 arrivera dans quelques semaines, mêmes personnages avec de nouvelles raretés et de nouveaux visuels. Vote dès maintenant (fiche personnage) pour ceux que tu veux voir promus. Les votes de vedette hebdo ont été réinitialisés pour repartir sur cette nouvelle répartition.",

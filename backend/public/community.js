@@ -241,7 +241,7 @@ async function openTradeBuilder(userId, displayName) {
   showView('trade');
   document.getElementById('trade-with').textContent = displayName;
   document.getElementById('trade-msg').textContent = '';
-  ['trade-give-tokens', 'trade-give-dust', 'trade-want-tokens', 'trade-want-dust'].forEach((id) => { document.getElementById(id).value = 0; });
+  ['trade-give-tokens', 'trade-want-tokens'].forEach((id) => { document.getElementById(id).value = 0; });
   document.getElementById('trade-give').innerHTML = '<p class="muted">Chargement…</p>';
   document.getElementById('trade-want').innerHTML = '<p class="muted">Chargement…</p>';
   try {
@@ -282,8 +282,6 @@ async function sendTrade() {
     requestedIds: [...tradeWantSel],
     offeredTokens: +document.getElementById('trade-give-tokens').value || 0,
     requestedTokens: +document.getElementById('trade-want-tokens').value || 0,
-    offeredDust: +document.getElementById('trade-give-dust').value || 0,
-    requestedDust: +document.getElementById('trade-want-dust').value || 0,
   };
   const msg = document.getElementById('trade-msg');
   const btn = document.getElementById('trade-send');
@@ -514,14 +512,21 @@ async function loadCharacters(page, search) {
 }
 
 // ── ATELIER (craft) ──
-let craftPage = 1, craftSearch = '', craftRarity = 'all', craftPages = 1, craftMissing = false;
+let craftPage = 1, craftSearch = '', craftRarity = 'all', craftPages = 1;
+
+// Fusion : sélection en cours { characterId -> { count, rarity, name } }.
+// Verrouillée sur une seule rareté à la fois (fuseRarity), vidée par
+// clearFuseSelection ou après une fusion réussie.
+let fuseSelection = new Map();
+let fuseRarity = null;
 
 function openCraft() {
   showView('craft');
   document.getElementById('craft-search').value = '';
-  document.getElementById('craft-missing').checked = false;
-  craftSearch = ''; craftRarity = 'all'; craftMissing = false;
+  craftSearch = ''; craftRarity = 'all';
   document.getElementById('craft-msg').textContent = '';
+  document.getElementById('fuse-result').classList.add('hidden');
+  clearFuseSelection();
   loadCraft(1);
 }
 
@@ -531,16 +536,13 @@ async function loadCraft(page) {
   grid.innerHTML = '<p class="muted">Chargement…</p>';
   try {
     const rq = craftRarity !== 'all' ? `&rarity=${craftRarity}` : '';
-    const ownedQ = craftMissing ? '&owned=0' : '';
-    const r = await api(`/api/gacha/characters?page=${page}&search=${encodeURIComponent(craftSearch)}${rq}${ownedQ}`);
+    const r = await api(`/api/gacha/characters?page=${page}&search=${encodeURIComponent(craftSearch)}${rq}&owned=1`);
     craftPage = r.page; craftPages = r.pages || 1;
-    if (typeof r.dust === 'number') { currentUser.dust = r.dust; renderHeaderUser(); }
-    document.getElementById('craft-dust').textContent = currentUser.dust || 0;
     document.getElementById('craft-filters').innerHTML = rarityFilterChips(r.byRarity, craftRarity);
     if (!r.characters.length) {
-      grid.innerHTML = '<p class="muted">Aucun personnage.</p>';
+      grid.innerHTML = '<div class="empty-state"><p class="muted">Aucune carte possédée dans ce filtre.</p></div>';
     } else {
-      grid.innerHTML = r.characters.map((c) => craftCardHTML(c)).join('');
+      grid.innerHTML = r.characters.map((c) => fuseCardHTML(c)).join('');
     }
     document.getElementById('craft-pageinfo').textContent = `Page ${craftPage} / ${craftPages}`;
     document.getElementById('craft-prev').disabled = craftPage <= 1;
@@ -550,18 +552,24 @@ async function loadCraft(page) {
   }
 }
 
-function craftCardHTML(c) {
-  const owned = c.owned > 0;
+function fuseSelectedTotal() {
+  let t = 0;
+  fuseSelection.forEach((v) => (t += v.count));
+  return t;
+}
+
+function updateFuseBar() {
+  const total = fuseSelectedTotal();
+  document.getElementById('fuse-counter-badge').textContent = `${total}/${FUSE_COUNT} sélectionné(s)`;
+  document.getElementById('fuse-btn').disabled = total !== FUSE_COUNT;
+}
+
+function fuseCardHTML(c) {
   const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
-  const canAfford = (currentUser.dust || 0) >= c.craftCost;
-  const badge = c.soldOut ? '<span class="badge soldout">ÉPUISÉ</span>'
-    : owned ? `<span class="badge copies">×${c.owned}</span>` : '<span class="badge locked-badge"><i class="fas fa-lock"></i></span>';
-  const btn = c.soldOut
-    ? `<button class="btn-secondary craft-btn" disabled><i class="fas fa-ban"></i> Épuisé</button>`
-    : `<button class="btn-primary craft-btn" data-cid="${c.id}" data-cost="${c.craftCost}" data-name="${escapeHtml(c.name)}" ${canAfford ? '' : 'disabled'}>
-      <i class="fas fa-hammer"></i> ${c.craftCost} 🌟
-    </button>`;
-  return `<div class="gcard r-${c.rarity}${owned ? '' : ' locked'}">
+  const sel = fuseSelection.get(c.id);
+  const selCount = sel ? sel.count : 0;
+  const badge = selCount > 0 ? `<span class="badge fuse-selected">✓ ×${selCount}</span>` : `<span class="badge copies">×${c.owned}</span>`;
+  return `<button type="button" class="gcard r-${c.rarity}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.id}" data-rarity="${c.rarity}" data-owned="${c.owned}" data-name="${escapeHtml(c.name)}">
     <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -569,26 +577,85 @@ function craftCardHTML(c) {
       ${sub}
     </div>
     ${badge}
-    ${btn}
-  </div>`;
+  </button>`;
 }
 
-async function craftFromAtelier(btn) {
-  const id = btn.dataset.cid;
-  const cost = btn.dataset.cost;
-  const name = btn.dataset.name;
-  if (!confirm(`Fabriquer ${name} pour ${cost} 🌟 ?`)) return;
-  btn.disabled = true;
+// Clique une carte possédée : ajoute 1 à la sélection (jusqu'à ses copies et
+// jusqu'à FUSE_COUNT au total), ou en retire 1 si elle est déjà au maximum.
+// Toutes les cartes sélectionnées doivent être de la même rareté.
+function toggleFuseCard(cid, rarity, owned, name) {
   const msg = document.getElementById('craft-msg');
+  const total = fuseSelectedTotal();
+  if (fuseRarity && rarity !== fuseRarity && total > 0) {
+    msg.textContent = `Choisis des exemplaires de la même rareté (${RARITY_LABELS[fuseRarity] || fuseRarity}) — vide la sélection pour changer.`;
+    return;
+  }
+  const cur = fuseSelection.get(cid) || { count: 0, rarity, name };
+  if (cur.count < owned && total < FUSE_COUNT) {
+    cur.count++;
+    fuseSelection.set(cid, cur);
+  } else if (cur.count > 0) {
+    cur.count--;
+    if (cur.count === 0) fuseSelection.delete(cid); else fuseSelection.set(cid, cur);
+  }
+  fuseRarity = fuseSelectedTotal() > 0 ? rarity : null;
+  msg.textContent = '';
+  updateFuseBar();
+  renderFuseCardBadges();
+}
+
+// Ne recharge pas toute la grille depuis l'API (juste les badges/états de sélection).
+function renderFuseCardBadges() {
+  document.querySelectorAll('#craft-grid .gcard').forEach((el) => {
+    const cid = parseInt(el.dataset.cid);
+    const owned = parseInt(el.dataset.owned);
+    const sel = fuseSelection.get(cid);
+    const selCount = sel ? sel.count : 0;
+    el.classList.toggle('fuse-picked', selCount > 0);
+    const badge = el.querySelector('.badge');
+    if (badge) {
+      badge.className = selCount > 0 ? 'badge fuse-selected' : 'badge copies';
+      badge.innerHTML = selCount > 0 ? `✓ ×${selCount}` : `×${owned}`;
+    }
+  });
+}
+
+function clearFuseSelection() {
+  fuseSelection = new Map();
+  fuseRarity = null;
+  const msg = document.getElementById('craft-msg');
+  if (msg) msg.textContent = '';
+  updateFuseBar();
+  renderFuseCardBadges();
+}
+
+async function runFusion() {
+  const btn = document.getElementById('fuse-btn');
+  const msg = document.getElementById('craft-msg');
+  const items = [...fuseSelection.entries()].map(([characterId, v]) => ({ characterId, count: v.count }));
+  if (!confirm(`Fusionner ces ${FUSE_COUNT} exemplaires en 1 carte aléatoire ${RARITY_LABELS[fuseRarity] || ''} ?`)) return;
+  btn.disabled = true;
   try {
-    const r = await api('/api/gacha/craft', { method: 'POST', body: JSON.stringify({ characterId: parseInt(id) }) });
-    currentUser.dust = r.dust;
-    renderHeaderUser();
-    sfx.reveal && sfx.reveal('epic');
-    msg.textContent = `✅ ${name} ${r.isNew ? 'ajouté à ta collection' : 'fabriqué (doublon)'} ! Reste ${r.dust} 🌟`;
-    loadCraft(craftPage); // rafraîchit la possession + coûts abordables
+    const r = await api('/api/gacha/fuse', { method: 'POST', body: JSON.stringify({ items }) });
+    const c = r.card;
+    if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(c.rarity);
+    if (['legendary', 'mythic'].includes(c.rarity) && typeof burstConfetti === 'function') burstConfetti(c.rarity === 'mythic' ? 40 : 26);
+    const result = document.getElementById('fuse-result');
+    result.innerHTML = `<div class="gcard r-${c.rarity}">
+      <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
+      <div class="gcard-info">
+        <div class="gcard-name">${escapeHtml(c.name)}</div>
+        <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity} · #${c.serial}</div>
+      </div>
+      ${c.isNew ? '<span class="badge new">NOUVEAU</span>' : '<span class="badge copies">Doublon</span>'}
+    </div>`;
+    result.classList.remove('hidden');
+    msg.textContent = `✨ Fusion réussie : ${escapeHtml(c.name)} (${RARITY_LABELS[c.rarity] || c.rarity})${c.isNew ? ' — nouveau !' : ' (doublon)'}`;
+    clearFuseSelection();
+    loadCraft(craftPage); // rafraîchit la possession
   } catch (e) {
     msg.textContent = e.message;
+  } finally {
     btn.disabled = false;
   }
 }
