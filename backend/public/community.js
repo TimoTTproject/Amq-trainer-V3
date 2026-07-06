@@ -231,17 +231,29 @@ async function deletePlayerAccount(userId, name) {
 }
 
 // ── ÉCHANGE : builder ──
+// Sélection par PERSONNAGE (pas par n° de série, invisible et sans intérêt
+// pour l'utilisateur) : cliquer une carte ajoute 1 exemplaire à l'offre
+// (jusqu'aux copies possédées et jusqu'à TRADE_MAX_ITEMS), reclique pour
+// en retirer un. Le n° de série exact est choisi automatiquement en interne.
+const TRADE_MAX_ITEMS = 12; // même plafond que côté serveur (src/trade/trade.routes.js)
 let tradeTarget = null; // { id, name }
-const tradeGiveSel = new Set(); // instance ids que je donne
-const tradeWantSel = new Set(); // instance ids que je veux
+let tradeGiveChars = []; // liste complète possédée par moi (pour filtrer sans refetch)
+let tradeWantChars = []; // liste complète possédée par l'autre joueur
+let tradeGiveSearch = '';
+let tradeWantSearch = '';
+const tradeGiveSel = new Map(); // characterId -> { count, serialIds }
+const tradeWantSel = new Map();
 
 async function openTradeBuilder(userId, displayName) {
   tradeTarget = { id: userId, name: displayName };
   tradeGiveSel.clear(); tradeWantSel.clear();
+  tradeGiveSearch = ''; tradeWantSearch = '';
   showView('trade');
   document.getElementById('trade-with').textContent = displayName;
   document.getElementById('trade-msg').textContent = '';
   ['trade-give-tokens', 'trade-want-tokens'].forEach((id) => { document.getElementById(id).value = 0; });
+  document.getElementById('trade-give-search').value = '';
+  document.getElementById('trade-want-search').value = '';
   document.getElementById('trade-give').innerHTML = '<p class="muted">Chargement…</p>';
   document.getElementById('trade-want').innerHTML = '<p class="muted">Chargement…</p>';
   try {
@@ -249,37 +261,76 @@ async function openTradeBuilder(userId, displayName) {
       api(`/api/trade/instances/${currentUser.id}`),
       api(`/api/trade/instances/${userId}`),
     ]);
-    renderTradePool('trade-give', mine.characters, tradeGiveSel);
-    renderTradePool('trade-want', theirs.characters, tradeWantSel);
+    tradeGiveChars = mine.characters;
+    tradeWantChars = theirs.characters;
+    renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch);
+    renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch);
+    updateTradeCounts();
   } catch (e) {
     document.getElementById('trade-msg').textContent = e.message;
   }
 }
 
-function renderTradePool(containerId, characters, selSet) {
-  const el = document.getElementById(containerId);
-  if (!characters.length) { el.innerHTML = '<p class="muted">Aucune carte.</p>'; return; }
-  el.innerHTML = characters.map((c) => `
-    <div class="trade-char">
-      <span class="rb-pill r-${c.rarity}">${escapeHtml(c.name)}</span>
-      <div class="trade-serials">
-        ${c.serials.map((s) => `<button class="serial-chip${selSet.has(s.id) ? ' on' : ''}" data-iid="${s.id}">#${s.serial}</button>`).join('')}
-      </div>
-    </div>`).join('');
+function tradeSelectedTotal(selSet) {
+  let t = 0;
+  selSet.forEach((v) => (t += v.count));
+  return t;
 }
 
-function toggleTradeChip(containerId, selSet, btn) {
-  const iid = parseInt(btn.dataset.iid);
-  if (selSet.has(iid)) { selSet.delete(iid); btn.classList.remove('on'); }
-  else { selSet.add(iid); btn.classList.add('on'); }
+function updateTradeCounts() {
+  document.getElementById('trade-give-count').textContent = `${tradeSelectedTotal(tradeGiveSel)}/${TRADE_MAX_ITEMS}`;
+  document.getElementById('trade-want-count').textContent = `${tradeSelectedTotal(tradeWantSel)}/${TRADE_MAX_ITEMS}`;
+}
+
+function renderTradePool(containerId, characters, selSet, search) {
+  const el = document.getElementById(containerId);
+  if (!characters.length) { el.innerHTML = '<p class="muted">Aucune carte possédée.</p>'; return; }
+  const q = (search || '').trim().toLowerCase();
+  const list = q ? characters.filter((c) => c.name.toLowerCase().includes(q)) : characters;
+  if (!list.length) { el.innerHTML = '<p class="muted">Aucun personnage ne correspond.</p>'; return; }
+  el.innerHTML = list.map((c) => {
+    const sel = selSet.get(c.characterId);
+    const selCount = sel ? sel.count : 0;
+    const owned = c.serials.length;
+    const badge = selCount > 0 ? `<span class="badge fuse-selected">✓ ×${selCount}</span>` : `<span class="badge copies">×${owned}</span>`;
+    return `<button type="button" class="gcard r-${c.rarity}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.characterId}">
+      <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
+      <div class="gcard-info">
+        <div class="gcard-name">${escapeHtml(c.name)}</div>
+        <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}</div>
+      </div>
+      ${badge}
+    </button>`;
+  }).join('');
+}
+
+function toggleTradeCard(containerId, characters, selSet, characterId) {
+  const c = characters.find((x) => x.characterId === characterId);
+  if (!c) return;
+  const owned = c.serials.length;
+  const total = tradeSelectedTotal(selSet);
+  const cur = selSet.get(characterId) || { count: 0, serialIds: [] };
+  if (cur.count < owned && total < TRADE_MAX_ITEMS) {
+    const next = c.serials.find((s) => !cur.serialIds.includes(s.id));
+    if (next) { cur.count++; cur.serialIds.push(next.id); selSet.set(characterId, cur); }
+  } else if (cur.count > 0) {
+    cur.serialIds.pop();
+    cur.count--;
+    if (cur.count === 0) selSet.delete(characterId); else selSet.set(characterId, cur);
+  }
+  updateTradeCounts();
+  const search = containerId === 'trade-give' ? tradeGiveSearch : tradeWantSearch;
+  renderTradePool(containerId, characters, selSet, search);
 }
 
 async function sendTrade() {
   if (!tradeTarget) return;
+  const offeredIds = [...tradeGiveSel.values()].flatMap((v) => v.serialIds);
+  const requestedIds = [...tradeWantSel.values()].flatMap((v) => v.serialIds);
   const body = {
     toUserId: tradeTarget.id,
-    offeredIds: [...tradeGiveSel],
-    requestedIds: [...tradeWantSel],
+    offeredIds,
+    requestedIds,
     offeredTokens: +document.getElementById('trade-give-tokens').value || 0,
     requestedTokens: +document.getElementById('trade-want-tokens').value || 0,
   };

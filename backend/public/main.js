@@ -1151,10 +1151,25 @@ function setupAppUI() {
   document.getElementById('back-community-trades').addEventListener('click', () => showView('community'));
   document.getElementById('back-trade').addEventListener('click', () => showView('community'));
   document.getElementById('trade-give').addEventListener('click', (e) => {
-    const b = e.target.closest('.serial-chip'); if (b) toggleTradeChip('trade-give', tradeGiveSel, b);
+    const b = e.target.closest('.gcard'); if (b) toggleTradeCard('trade-give', tradeGiveChars, tradeGiveSel, parseInt(b.dataset.cid));
   });
   document.getElementById('trade-want').addEventListener('click', (e) => {
-    const b = e.target.closest('.serial-chip'); if (b) toggleTradeChip('trade-want', tradeWantSel, b);
+    const b = e.target.closest('.gcard'); if (b) toggleTradeCard('trade-want', tradeWantChars, tradeWantSel, parseInt(b.dataset.cid));
+  });
+  let tradeGiveSearchTimer, tradeWantSearchTimer;
+  document.getElementById('trade-give-search').addEventListener('input', (e) => {
+    clearTimeout(tradeGiveSearchTimer);
+    tradeGiveSearchTimer = setTimeout(() => {
+      tradeGiveSearch = e.target.value;
+      renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch);
+    }, 200);
+  });
+  document.getElementById('trade-want-search').addEventListener('input', (e) => {
+    clearTimeout(tradeWantSearchTimer);
+    tradeWantSearchTimer = setTimeout(() => {
+      tradeWantSearch = e.target.value;
+      renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch);
+    }, 200);
   });
   document.getElementById('trade-send').addEventListener('click', sendTrade);
   document.getElementById('trades-list').addEventListener('click', (e) => {

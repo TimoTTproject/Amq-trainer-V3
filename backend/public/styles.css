@@ -235,7 +235,10 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .empty-state .muted { padding: 0; }
 
 /* Carte personnage */
-.gcard { position: relative; background: var(--bg-2); border-radius: 10px; overflow: hidden; border: 2px solid #2a2f42; }
+.gcard {
+  position: relative; background: var(--bg-2); border-radius: 10px; overflow: hidden; border: 2px solid #2a2f42;
+  color: var(--text); text-align: left; /* .gcard est parfois un <button> (fusion, échange) : sans ça, hérite du gris système */
+}
 .gcard-img { width: 100%; aspect-ratio: 3/4; background-size: cover; background-position: center top; background-color: var(--bg-3); position: relative; }
 .gcard-info { padding: 7px 8px; }
 /* Étoiles d'ascension (cartes + fiche) */
@@ -1320,9 +1323,11 @@ body.guest-mode .feedback-buttons { display: none !important; }
 
 /* ── Atelier (fusion) ── */
 .craft-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; }
-#craft-grid .gcard { display: flex; flex-direction: column; cursor: pointer; border-width: 2px; transition: border-color .12s, transform .1s; }
-#craft-grid .gcard:hover { transform: translateY(-2px); }
-#craft-grid .gcard.fuse-picked { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(8,174,232,.35); }
+/* Cartes cliquables pour composer une sélection (fusion à l'Atelier, offres
+   d'échange) : même comportement visuel partout. */
+#craft-grid .gcard, .trade-pool .gcard { display: flex; flex-direction: column; cursor: pointer; border-width: 2px; transition: border-color .12s, transform .1s; }
+#craft-grid .gcard:hover, .trade-pool .gcard:hover { transform: translateY(-2px); }
+#craft-grid .gcard.fuse-picked, .trade-pool .gcard.fuse-picked { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(8,174,232,.35); }
 .badge.fuse-selected { background: var(--accent-2); color: #08131a; font-weight: 800; }
 .fuse-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 16px; }
 #fuse-counter-badge { background: var(--bg-3); color: var(--accent-2); font-weight: 700; }
@@ -1365,11 +1370,13 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .trade-cur { display: flex; gap: 12px; margin-bottom: 10px; }
 .trade-cur label { color: var(--text-2); font-size: .85rem; display: inline-flex; align-items: center; gap: 5px; }
 .trade-cur input { width: 70px; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
-.trade-pool { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-.trade-char { border-bottom: 1px solid #23283a; padding-bottom: 7px; }
-.trade-serials { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-.serial-chip { background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text-2); border-radius: 8px; padding: 3px 8px; font-size: .76rem; font-weight: 700; }
-.serial-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.trade-pool { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+.trade-col-count { font-size: .78rem; font-weight: 600; color: var(--text-2); margin-left: 8px; }
+.trade-search {
+  width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text);
+  padding: 9px 12px; border-radius: 10px; font-size: .9rem; margin-bottom: 10px;
+}
+.trade-search:focus { outline: none; border-color: var(--accent-2); }
 #trade-send { margin-top: 14px; }
 @media (max-width: 620px) { .trade-cols { grid-template-columns: 1fr; } }
 

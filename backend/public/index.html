@@ -316,20 +316,23 @@
     <div id="view-trade" class="hidden">
       <button class="btn-back" id="back-trade"><i class="fas fa-arrow-left"></i> Retour</button>
       <div class="gacha-top"><h2><i class="fas fa-right-left"></i> Échange avec <span id="trade-with">—</span></h2></div>
+      <p class="hint">Clique une carte pour l'ajouter à l'offre (jusqu'à tes exemplaires possédés) ; reclique pour en retirer une.</p>
       <div class="trade-cols">
         <div class="trade-col">
-          <h3 class="trade-col-title give">Je donne</h3>
+          <h3 class="trade-col-title give">Je donne <span class="trade-col-count" id="trade-give-count">0/12</span></h3>
           <div class="trade-cur">
             <label>🪙 <input type="number" id="trade-give-tokens" min="0" value="0" /></label>
           </div>
-          <div id="trade-give" class="trade-pool"></div>
+          <input type="search" class="trade-search" id="trade-give-search" placeholder="Rechercher un personnage…" autocomplete="off" />
+          <div id="trade-give" class="card-grid trade-pool"></div>
         </div>
         <div class="trade-col">
-          <h3 class="trade-col-title want">Je reçois</h3>
+          <h3 class="trade-col-title want">Je reçois <span class="trade-col-count" id="trade-want-count">0/12</span></h3>
           <div class="trade-cur">
             <label>🪙 <input type="number" id="trade-want-tokens" min="0" value="0" /></label>
           </div>
-          <div id="trade-want" class="trade-pool"></div>
+          <input type="search" class="trade-search" id="trade-want-search" placeholder="Rechercher un personnage…" autocomplete="off" />
+          <div id="trade-want" class="card-grid trade-pool"></div>
         </div>
       </div>
       <p id="trade-msg" class="gacha-msg"></p>
