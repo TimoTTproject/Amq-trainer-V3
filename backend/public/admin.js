@@ -292,7 +292,7 @@ async function runResetAll() {
 }
 
 async function runResetGacha() {
-  const ans = prompt('⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro ; chaque joueur reçoit 500 🪙 de compensation. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA pour confirmer :');
+  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. Chaque joueur est remboursé du montant qu'il a réellement dépensé en tirages depuis toujours (ajouté à son solde actuel). Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées.\n\nTape RESET_GACHA pour confirmer :");
   if (ans !== 'RESET_GACHA') return;
   const btn = document.getElementById('admin-reset-gacha-btn');
   const status = document.getElementById('admin-reset-gacha-status');
@@ -300,7 +300,7 @@ async function runResetGacha() {
   status.textContent = 'Réinitialisation du gacha…';
   try {
     const r = await api('/api/admin/reset-gacha', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_GACHA' }) });
-    status.textContent = `✅ ${r.users} comptes réinitialisés, +${r.compensation} 🪙 chacun. Les joueurs verront une explication à leur prochaine connexion.`;
+    status.textContent = `✅ ${r.users} comptes réinitialisés, ${r.totalCompensation} 🪙 remboursés au total (montant réel par joueur). Les joueurs verront une explication à leur prochaine connexion.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {

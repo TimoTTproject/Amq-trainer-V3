@@ -5,8 +5,8 @@
 const ENTRIES = [
   {
     id: 39, date: '2026-07-06', tag: 'improvement',
-    title: 'Reset du Gacha : collection remise à zéro + 500 🪙 offerts',
-    description: "Le pool de personnages a été réorganisé avec les nouvelles raretés (150 Mythiques, 550 Légendaires fixes) et un stock resserré par personnage. Pour repartir sur cette base saine, les collections ont été réinitialisées et chaque joueur a reçu 500 🪙 de compensation. Aucun autre système (quiz, Château, multijoueur, défi du jour, niveaux) n'est concerné — une fenêtre s'affiche à ta prochaine connexion pour le détail.",
+    title: 'Reset du Gacha : collection remise à zéro + tirages remboursés',
+    description: "Le pool de personnages a été réorganisé avec les nouvelles raretés (150 Mythiques, 550 Légendaires fixes) et un stock resserré par personnage. Pour repartir sur cette base saine, les collections ont été réinitialisées et chaque joueur a été remboursé du montant qu'il a réellement dépensé en tirages depuis toujours. Aucun autre système (quiz, Château, multijoueur, défi du jour, niveaux) n'est concerné — une fenêtre s'affiche à ta prochaine connexion pour le détail.",
   },
   {
     id: 38, date: '2026-07-06', tag: 'feature',

@@ -3,7 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin } = require('../admin/admin');
-const { rollRarity, DUPLICATE_REFUND, FUSE_COUNT, GACHA_RESET_COMPENSATION, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
+const { rollRarity, DUPLICATE_REFUND, FUSE_COUNT, PITY_LIMIT, PRICES, RARITY_LABELS, RARITY_ORDER, RARITY_RATES, MAX_STARS, ascendCost } = require('./rarity');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
@@ -12,10 +12,18 @@ const router = express.Router();
 // Horodatage du dernier reset gacha global (voir POST /api/admin/reset-gacha) —
 // permet au front d'afficher une modale d'explication une seule fois par
 // joueur (comparaison avec un horodatage gardé en localStorage), sans champ
-// dédié sur User ni notification poussée à chacun individuellement.
+// dédié sur User ni notification poussée à chacun individuellement. La
+// compensation est PROPRE À CHAQUE JOUEUR (montant réellement dépensé en
+// tirages, pas un forfait) → relue depuis SA transaction de compensation
+// plutôt qu'une constante partagée.
 router.get('/reset-notice', requireAuth, async (req, res) => {
   const s = await prisma.appSetting.findUnique({ where: { key: 'lastGachaReset' } });
-  res.json({ resetAt: s ? parseInt(s.value) : null, compensation: GACHA_RESET_COMPENSATION });
+  if (!s) return res.json({ resetAt: null });
+  const myComp = await prisma.tokenTransaction.findFirst({
+    where: { userId: req.user.id, reason: 'gacha_reset_compensation' },
+    orderBy: { id: 'desc' },
+  });
+  res.json({ resetAt: parseInt(s.value), compensation: myComp ? myComp.amount : 0 });
 });
 
 // ── Bannière hebdomadaire (vedettes de la semaine, rate-up) ──

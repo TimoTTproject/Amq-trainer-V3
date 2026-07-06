@@ -1,6 +1,7 @@
 // Tests de route : POST /api/admin/reset-gacha (collection remise à zéro +
-// compensation en tokens, sans toucher aux autres systèmes de jeu) et
-// GET /api/gacha/reset-notice (horodatage exposé au client pour la modale).
+// remboursement PROPRE À CHAQUE JOUEUR du montant réellement dépensé en
+// tirages depuis toujours, sans toucher aux autres systèmes de jeu) et
+// GET /api/gacha/reset-notice (horodatage + compensation personnelle pour la modale).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { fakePrisma, createApp } = require('./helpers/api');
@@ -8,7 +9,6 @@ const { fakePrisma, createApp } = require('./helpers/api');
 const prisma = fakePrisma();
 const adminRoutes = require('../src/admin/admin.routes');
 const gachaRoutes = require('../src/gacha/gacha.routes');
-const { GACHA_RESET_COMPENSATION } = require('../src/gacha/rarity');
 
 const ADMIN = { id: 'admin1', email: 'melfisk6@gmail.com', displayName: 'Admin' };
 const PLAIN = { id: 'u1', email: 'joueur@b.fr', displayName: 'Joueur' };
@@ -43,8 +43,13 @@ test('reset-gacha : refuse sans la confirmation exacte', async () => {
   assert.equal(res.status, 400);
 });
 
-test('reset-gacha : succès → compense chaque joueur et ne touche pas les autres champs', async () => {
+test('reset-gacha : rembourse chaque joueur du montant BRUT réellement dépensé en tirages (u1=300, u2=0)', async () => {
   prisma.user.findMany = async () => [{ id: 'u1' }, { id: 'u2' }];
+  // u1 a dépensé 100+200=300 en pack_open (amount négatif) ; u2 n'a jamais tiré.
+  prisma.tokenTransaction.groupBy = async ({ where }) => {
+    assert.equal(where.reason, 'pack_open');
+    return [{ userId: 'u1', _sum: { amount: -300 } }];
+  };
   const writes = [];
   prisma.userCard.deleteMany = async () => { writes.push('userCard'); return {}; };
   prisma.cardInstance.deleteMany = async () => { writes.push('cardInstance'); return {}; };
@@ -56,10 +61,10 @@ test('reset-gacha : succès → compense chaque joueur et ne touche pas les autr
     writes.push('character');
     return {};
   };
-  let userUpdateData = null;
-  prisma.user.updateMany = async ({ data }) => { userUpdateData = data; writes.push('user'); return {}; };
-  let txCreated = null;
-  prisma.tokenTransaction.createMany = async ({ data }) => { txCreated = data; writes.push('tokenTransaction'); return {}; };
+  const userUpdates = [];
+  prisma.user.update = async ({ where, data }) => { userUpdates.push({ id: where.id, data }); return {}; };
+  const txCreated = [];
+  prisma.tokenTransaction.create = async ({ data }) => { txCreated.push(data); return data; };
   prisma.appSetting.upsert = async () => { writes.push('appSetting'); return {}; };
 
   const res = await app.request('/api/admin/reset-gacha', {
@@ -67,30 +72,49 @@ test('reset-gacha : succès → compense chaque joueur et ne touche pas les autr
   });
   assert.equal(res.status, 200);
   assert.equal(res.json.users, 2);
-  assert.equal(res.json.compensation, GACHA_RESET_COMPENSATION);
-  assert.equal(userUpdateData.tokens, GACHA_RESET_COMPENSATION);
-  assert.equal(userUpdateData.dust, 0);
-  // Ne doit PAS toucher aux stats quiz/Château/multijoueur/défi/niveaux.
+  assert.equal(res.json.totalCompensation, 300);
+
+  const u1 = userUpdates.find((u) => u.id === 'u1');
+  const u2 = userUpdates.find((u) => u.id === 'u2');
+  // increment (jamais un remplacement) : préserve les tokens gagnés hors gacha.
+  assert.deepEqual(u1.data.tokens, { increment: 300 });
+  assert.deepEqual(u2.data.tokens, { increment: 0 });
+  assert.equal(u1.data.dust, 0);
   for (const field of ['towerBestFloor', 'mmr', 'soloMmr', 'dailyStreak', 'claimedLevel']) {
-    assert.equal(field in userUpdateData, false, `${field} ne devrait pas être touché`);
+    assert.equal(field in u1.data, false, `${field} ne devrait pas être touché`);
   }
-  assert.equal(txCreated.length, 2);
+  // Seul u1 (compensation > 0) reçoit une transaction de compensation tracée.
+  assert.equal(txCreated.length, 1);
+  assert.equal(txCreated[0].userId, 'u1');
+  assert.equal(txCreated[0].amount, 300);
   assert.equal(txCreated[0].reason, 'gacha_reset_compensation');
-  assert.equal(txCreated[0].amount, GACHA_RESET_COMPENSATION);
-  assert.ok(['userCard', 'cardInstance', 'trade', 'cardAlbumItem', 'cardAlbum', 'character', 'user', 'tokenTransaction', 'appSetting'].every((w) => writes.includes(w)));
+  assert.ok(['userCard', 'cardInstance', 'trade', 'cardAlbumItem', 'cardAlbum', 'character', 'appSetting'].every((w) => writes.includes(w)));
 });
 
-test('reset-notice : renvoie null si aucun reset n\'a jamais eu lieu', async () => {
+test('reset-notice : renvoie resetAt=null si aucun reset n\'a jamais eu lieu', async () => {
   prisma.appSetting.findUnique = async () => null;
   const res = await app.request('/api/gacha/reset-notice', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.resetAt, null);
 });
 
-test('reset-notice : renvoie l\'horodatage + la compensation après un reset', async () => {
+test('reset-notice : renvoie MA compensation personnelle (pas un forfait partagé)', async () => {
   prisma.appSetting.findUnique = async () => ({ key: 'lastGachaReset', value: '1751800000000' });
+  prisma.tokenTransaction.findFirst = async ({ where }) => {
+    assert.equal(where.userId, 'u1');
+    assert.equal(where.reason, 'gacha_reset_compensation');
+    return { userId: 'u1', amount: 300, reason: 'gacha_reset_compensation' };
+  };
   const res = await app.request('/api/gacha/reset-notice', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.resetAt, 1751800000000);
-  assert.equal(res.json.compensation, GACHA_RESET_COMPENSATION);
+  assert.equal(res.json.compensation, 300);
+});
+
+test('reset-notice : compensation = 0 si le joueur n\'a jamais tiré (pas de transaction)', async () => {
+  prisma.appSetting.findUnique = async () => ({ key: 'lastGachaReset', value: '1751800000000' });
+  prisma.tokenTransaction.findFirst = async () => null;
+  const res = await app.request('/api/gacha/reset-notice', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.compensation, 0);
 });
