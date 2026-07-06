@@ -629,6 +629,7 @@ function showView(name, options = {}) {
   if (name === 'home' && typeof loadHomeToday === 'function') loadHomeToday();
   if (name === 'home' && typeof loadQuests === 'function') loadQuests();
   if (name === 'home' && typeof loadRecentPulls === 'function') loadRecentPulls();
+  if (name === 'home' && typeof loadLuckBoard === 'function') loadLuckBoard();
   if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
   if (name === 'home' && typeof loadHighlights === 'function') loadHighlights();
   if (name === 'home' && typeof loadPersonalStats === 'function') loadPersonalStats();
@@ -2636,6 +2637,45 @@ async function loadRecentPulls() {
   } catch { box.innerHTML = ''; }
 }
 
+// Accueil : classement de chance gacha (indice relatif, pas probabilité).
+function formatLuckIndex(value) {
+  return `×${Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function luckAvatar(entry) {
+  if (typeof otherAvatar === 'function') return otherAvatar(entry, 'avatar-xs');
+  const bg = entry.avatarUrl ? `background-image:url('${entry.avatarUrl}');` : '';
+  const inner = entry.avatarUrl ? '' : escapeHtml((entry.displayName || '?').charAt(0).toUpperCase());
+  return `<span class="avatar avatar-xs" style="${bg}">${inner}</span>`;
+}
+
+async function loadLuckBoard() {
+  const box = document.getElementById('home-luck-board');
+  if (!box || !currentUser || currentUser.isGuest) { if (box) box.innerHTML = ''; return; }
+  try {
+    const d = await api('/api/leaderboard?type=luck');
+    const top = (d.top || []).slice(0, 5);
+    if (!top.length) { box.innerHTML = ''; return; }
+    const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+    box.innerHTML = `
+      <div class="luck-board-head">
+        <h3 class="quests-title"><i class="fas fa-clover"></i> Classement chance gacha</h3>
+        <button class="btn-link" id="home-luck-see-all">Tout voir <i class="fas fa-arrow-right"></i></button>
+      </div>
+      <div class="home-luck-list">
+        ${top.map((e) => `
+          <button class="home-luck-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
+            <span class="home-luck-rank">${medal(e.rank)}</span>
+            ${luckAvatar(e)}
+            <span class="home-luck-name">${escapeHtml(e.displayName)}</span>
+            <span class="home-luck-meta">${e.pullCount} tirages</span>
+            <b>${formatLuckIndex(e.value)}</b>
+          </button>`).join('')}
+      </div>
+      <p class="home-luck-note">Indice calculé à partir de ${d.minPulls || 50} tirages minimum. ×1 = proche des taux de base.</p>`;
+  } catch { box.innerHTML = ''; }
+}
+
 // Accueil : tes propres stats (rien de personnel n'était visible sur cette
 // page jusqu'ici — tout le reste, quêtes/tirages/catalogue, est global).
 async function loadPersonalStats() {
@@ -2686,6 +2726,18 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('home-recent-pulls').addEventListener('click', (e) => {
     const b = e.target.closest('.recent-pull-card');
     if (b && typeof openCharacter === 'function') openCharacter(b.dataset.cid);
+  });
+  document.getElementById('home-luck-board').addEventListener('click', (e) => {
+    const seeAll = e.target.closest('#home-luck-see-all');
+    if (seeAll && typeof loadLeaderboard === 'function') {
+      showView('leaderboard');
+      document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'luck'));
+      loadLeaderboard('luck');
+      if (typeof loadSeasonBanner === 'function') loadSeasonBanner();
+      return;
+    }
+    const row = e.target.closest('[data-userid]');
+    if (row && typeof openPlayer === 'function') openPlayer(row.dataset.userid);
   });
   document.getElementById('home-changelog').addEventListener('click', (e) => {
     if (e.target.closest('#changelog-see-all')) openChangelogModal();

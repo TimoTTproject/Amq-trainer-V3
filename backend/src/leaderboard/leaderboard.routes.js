@@ -5,12 +5,36 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { tierFromMmr } = require('../mp/rank');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { weekKey } = require('../util/week');
+const { RARITY_RATES } = require('../gacha/rarity');
 
 const router = express.Router();
 const TOP_N = 50;
+const LUCK_MIN_PULLS = 50;
+const LUCK_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
 
 // Cadre d'avatar (cosmétique) prêt à appliquer côté front, ou null
 const frameOf = (u) => publicCosmetic(byId(u.avatarFrame));
+
+function pullCountsOf(u) {
+  return {
+    common: u.pullCommon || 0,
+    rare: u.pullRare || 0,
+    epic: u.pullEpic || 0,
+    legendary: u.pullLegendary || 0,
+    mythic: u.pullMythic || 0,
+  };
+}
+
+function luckPercentFromCounts(counts) {
+  const total = LUCK_RARITIES.reduce((sum, r) => sum + counts[r], 0);
+  if (total < LUCK_MIN_PULLS) return null;
+  const actualValue = LUCK_RARITIES.reduce((sum, r) => {
+    const p = RARITY_RATES[r] / 100;
+    return p > 0 ? sum + counts[r] * (1 / p) : sum;
+  }, 0);
+  const expectedValue = total * LUCK_RARITIES.length;
+  return Math.round((actualValue / expectedValue) * 100);
+}
 
 // Classé (MMR) : classement par MMR parmi les joueurs ayant joué en classé
 async function rankedBoard(meId) {
@@ -155,8 +179,56 @@ async function collectionBoard(meId) {
   return { top, me: myRank };
 }
 
+// Chance gacha : classement par indice relatif de raretés obtenues.
+// Minimum 50 tirages, sinon un seul Mythique rendrait le classement beaucoup trop
+// bruyant. Valeur front : 1 = proche des taux de base, 1.25 = +25% au-dessus.
+async function luckBoard(meId) {
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { pullCommon: { gt: 0 } },
+        { pullRare: { gt: 0 } },
+        { pullEpic: { gt: 0 } },
+        { pullLegendary: { gt: 0 } },
+        { pullMythic: { gt: 0 } },
+      ],
+    },
+    select: {
+      id: true, displayName: true, avatarUrl: true, avatarFrame: true,
+      pullCommon: true, pullRare: true, pullEpic: true, pullLegendary: true, pullMythic: true,
+    },
+  });
+
+  const ranked = users
+    .map((u) => {
+      const counts = pullCountsOf(u);
+      const total = LUCK_RARITIES.reduce((sum, r) => sum + counts[r], 0);
+      const luckPercent = luckPercentFromCounts(counts);
+      if (luckPercent == null) return null;
+      return {
+        userId: u.id,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        frame: frameOf(u),
+        value: luckPercent / 100,
+        pullCount: total,
+        isMe: u.id === meId,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.value - a.value) || (b.pullCount - a.pullCount) || a.displayName.localeCompare(b.displayName, 'fr'));
+
+  const withRanks = ranked.map((row, i) => ({ rank: i + 1, ...row }));
+  const me = withRanks.find((row) => row.userId === meId);
+  return {
+    top: withRanks.slice(0, TOP_N),
+    me: me ? { rank: me.rank, value: me.value, pullCount: me.pullCount } : null,
+    minPulls: LUCK_MIN_PULLS,
+  };
+}
+
 router.get('/', requireAuth, async (req, res) => {
-  const type = ['tokens', 'collection', 'ranked', 'solo', 'coop'].includes(req.query.type) ? req.query.type : 'tower';
+  const type = ['tokens', 'collection', 'ranked', 'solo', 'coop', 'luck'].includes(req.query.type) ? req.query.type : 'tower';
   const board =
     type === 'tokens'
       ? await tokensBoard(req.user.id)
@@ -168,6 +240,8 @@ router.get('/', requireAuth, async (req, res) => {
       ? await soloBoard(req.user.id)
       : type === 'coop'
       ? await coopBoard(req.user.id)
+      : type === 'luck'
+      ? await luckBoard(req.user.id)
       : await towerBoard(req.user.id);
   res.json({ type, ...board });
 });

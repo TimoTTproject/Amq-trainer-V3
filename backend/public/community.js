@@ -71,6 +71,9 @@ const LB_UNITS = {
   collection: (v) => `${v} cartes`,
   ranked: (v) => `${v} MMR`,
   solo: (v) => `${v} MMR`,
+  luck: (v) => (typeof formatLuckIndex === 'function'
+    ? formatLuckIndex(v)
+    : `×${Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
 };
 
 function openLeaderboard() {
@@ -144,16 +147,18 @@ async function loadLeaderboard(type) {
   meBox.innerHTML = '';
   const unit = LB_UNITS[type] || ((v) => v);
   try {
-    const { top, me, rewards } = await api(`/api/leaderboard?type=${type}`);
+    const { top, me, rewards, minPulls } = await api(`/api/leaderboard?type=${type}`);
     const note = document.getElementById('lb-note');
     if (note) {
-      note.classList.toggle('hidden', !rewards);
+      const luckNote = type === 'luck';
+      note.classList.toggle('hidden', !rewards && !luckNote);
+      if (luckNote) note.innerHTML = `🍀 <b>Indice de chance</b> — minimum ${minPulls || 50} tirages. ×1 = proche des taux de base ; ce n'est pas une probabilité.`;
       if (rewards) note.innerHTML = `🏆 <b>Récompense hebdo</b> — 1<sup>er</sup> : <b>${rewards[0]} 🪙</b> · 2<sup>e</sup> : <b>${rewards[1]} 🪙</b>. Classement remis à zéro chaque lundi.`;
     }
     if (me) {
       meBox.innerHTML = `<span class="lb-rank">#${me.rank}</span>
         <span class="lb-me-label">Ton rang</span>
-        <span class="lb-value">${unit(me.value)}</span>`;
+        <span class="lb-value">${unit(me.value)}${type === 'luck' && me.pullCount ? ` · ${me.pullCount} tirages` : ''}</span>`;
     } else {
       meBox.innerHTML = '<span class="muted">Pas encore classé sur ce tableau.</span>';
     }
@@ -167,7 +172,7 @@ async function loadLeaderboard(type) {
         (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
           <span class="lb-rank">${medal(e.rank)}</span>
           ${lbAvatar(e)}
-          <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ' ' + tierBadge(e.tier) : ''}</span>
+          <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ' ' + tierBadge(e.tier) : ''}${type === 'luck' && e.pullCount ? ` <small>${e.pullCount} tirages</small>` : ''}</span>
           <span class="lb-value">${unit(e.value)}</span>
         </li>`
       )

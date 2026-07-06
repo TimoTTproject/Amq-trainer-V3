@@ -2097,6 +2097,33 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .rp-avatar { width: 16px; height: 16px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .rp-time { font-size: .7rem; color: var(--text-3, var(--text-2)); opacity: .75; }
 
+/* Accueil : classement chance gacha */
+.home-luck-board { margin: 0 0 26px; padding: 18px; border-radius: 16px;
+  background: linear-gradient(160deg, rgba(62,201,138,.12), var(--bg-2) 42%, var(--bg));
+  border: 1px solid #2a2f42; border-left: 4px solid var(--green); }
+.home-luck-board:empty { display: none; }
+.luck-board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.luck-board-head .quests-title { margin-bottom: 0; }
+.home-luck-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.home-luck-row {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 9px;
+  padding: 11px 12px; border-radius: 12px; border: 1px solid #2a2f42; background: rgba(255,255,255,.025);
+  color: var(--text); text-align: left; cursor: pointer; transition: transform .15s, border-color .15s, background .15s;
+}
+.home-luck-row:hover { transform: translateY(-2px); border-color: var(--green); background: rgba(62,201,138,.08); }
+.home-luck-row.me { box-shadow: 0 0 0 1px rgba(62,201,138,.35) inset; }
+.home-luck-rank { font-weight: 900; color: var(--green); min-width: 2.1em; }
+.home-luck-name { min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-luck-meta { color: var(--text-2); font-size: .75rem; white-space: nowrap; }
+.home-luck-row b { color: var(--green); font-size: 1rem; }
+.home-luck-note { margin: 10px 0 0; color: var(--text-2); font-size: .78rem; }
+.lb-name small { display: inline-block; color: var(--text-2); font-size: .72rem; font-weight: 700; margin-left: 6px; }
+@media (max-width: 560px) {
+  .home-luck-row { grid-template-columns: auto auto minmax(0, 1fr); }
+  .home-luck-row b { grid-column: 3; }
+  .home-luck-meta { grid-column: 3; }
+}
+
 /* Amis */
 .friends-search { margin-bottom: 18px; }
 .friends-search input { width: 100%; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; }
