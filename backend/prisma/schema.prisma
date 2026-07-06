@@ -656,12 +656,17 @@ model CardAlbumItem {
   albumId     Int
   characterId Int
   addedAt     DateTime @default(now())
+  // Emplacement fixe dans le classeur (0-indexé, 9 par page) : contrairement à
+  // un simple tri, une carte retirée libère SON emplacement plutôt que de
+  // décaler les suivantes — comme une vraie pochette de classeur.
+  position    Int      @default(0)
 
   album     CardAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([albumId, characterId])
   @@index([albumId])
+  @@index([albumId, position])
 }
 
 // ─────────────────────────────────────────────

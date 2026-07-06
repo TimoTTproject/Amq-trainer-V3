@@ -26,7 +26,7 @@ function cardOut(row) {
   const c = row.character;
   return {
     id: c.id, name: c.name, imageUrl: c.imageUrl, rarity: c.rarity,
-    series: c.series || null,
+    series: c.series || null, position: row.position ?? 0,
   };
 }
 
@@ -116,7 +116,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     where: { id },
     include: {
       user: { select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true } },
-      cards: { orderBy: { addedAt: 'desc' }, include: { character: true } },
+      cards: { orderBy: { position: 'asc' }, include: { character: true } },
     },
   });
   if (!album) return res.status(404).json({ error: 'Album introuvable' });
@@ -158,6 +158,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
 // Ajoute une carte — propriétaire uniquement, et seulement une carte possédée
 // (un album range les cartes qu'on a, pas n'importe quel personnage du jeu).
+// `position` (optionnel) cible un emplacement précis du classeur (0-indexé,
+// 9 par page, cf. schema.prisma) — cliqué vide côté client ; sans lui, la
+// carte prend le premier emplacement libre après le dernier occupé.
 router.post('/:id/cards', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
   const characterId = parseInt(req.body?.characterId);
@@ -170,13 +173,27 @@ router.post('/:id/cards', requireAuth, async (req, res) => {
   if (!owned) return res.status(400).json({ error: 'Tu ne possèdes pas cette carte' });
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
-  await prisma.cardAlbumItem.upsert({
+
+  let position = req.body?.position != null ? parseInt(req.body.position) : null;
+  if (position != null && position >= 0) {
+    const occupant = await prisma.cardAlbumItem.findFirst({
+      where: { albumId: id, position }, select: { characterId: true },
+    });
+    if (occupant && occupant.characterId !== characterId) {
+      return res.status(400).json({ error: 'Cet emplacement est déjà occupé' });
+    }
+  } else {
+    const last = await prisma.cardAlbumItem.aggregate({ where: { albumId: id }, _max: { position: true } });
+    position = (last._max.position ?? -1) + 1;
+  }
+
+  const item = await prisma.cardAlbumItem.upsert({
     where: { albumId_characterId: { albumId: id, characterId } },
     update: {},
-    create: { albumId: id, characterId },
+    create: { albumId: id, characterId, position },
   });
   await prisma.cardAlbum.update({ where: { id }, data: { updatedAt: new Date() } });
-  res.status(201).json({ ok: true, card: cardOut({ character }) });
+  res.status(201).json({ ok: true, card: cardOut({ character, position: item.position }) });
 });
 
 // Retire une carte — propriétaire uniquement
@@ -211,7 +228,7 @@ router.post('/:id/clone', requireAuth, rateLimit({ windowMs: 3600000, max: 15, n
   const clone = await prisma.cardAlbum.create({
     data: {
       userId: req.user.id, name: name.slice(0, MAX_NAME_LEN), description: source.description, isPublic: false,
-      cards: { create: source.cards.filter((c) => ownedSet.has(c.characterId)).map((c) => ({ characterId: c.characterId })) },
+      cards: { create: source.cards.filter((c) => ownedSet.has(c.characterId)).map((c) => ({ characterId: c.characterId, position: c.position })) },
     },
     include: { _count: { select: { cards: true } } },
   });

@@ -179,6 +179,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 /* Modale générique */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
 .modal-card { position: relative; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 16px; padding: 28px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+.modal-card.wide { max-width: 640px; }
 .modal-card h2, .modal-card h3 { font-size: 1.3rem; margin-bottom: 20px; } .modal-card h2 i, .modal-card h3 i { color: var(--accent); }
 .modal-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-2); font-size: 1.1rem; }
 .modal-close:hover { color: var(--text); }
@@ -908,9 +909,14 @@ body.guest-mode .feedback-buttons { display: none !important; }
 .album-page {
   flex: 1;
   min-width: 0;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 14px;
-  padding: 14px;
+  display: grid;
+  /* 3×3 = 9 pochettes par page, comme un vrai classeur à cartes — moins
+     dense qu'une grille auto-fill, cartes plus grandes et plus lisibles. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 18px;
   background: repeating-linear-gradient(180deg, rgba(255,255,255,.015) 0 42px, transparent 42px 84px);
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,.04);
@@ -922,6 +928,24 @@ body.guest-mode .feedback-buttons { display: none !important; }
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.03), inset 0 2px 6px rgba(0,0,0,.35);
 }
 .album-page .alb-card-wrap .gcard { border-radius: 7px; }
+
+/* Pochette vide, cliquable pour ranger une carte à cet emplacement précis */
+.alb-slot-empty {
+  aspect-ratio: 3/4;
+  border: 2px dashed #3a404a;
+  border-radius: 10px;
+  background: rgba(0,0,0,.12);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; color: var(--text-2); font-size: .72rem;
+  cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+}
+.alb-slot-empty i { font-size: 1.3rem; }
+.alb-slot-empty:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(108, 140, 255, .06); }
+.alb-slot-empty:disabled { cursor: default; opacity: .4; }
+.alb-slot-empty.inert { cursor: default; opacity: .3; }
+.alb-slot-results { max-height: 55vh; overflow-y: auto; margin-top: 12px; }
+.alb-slot-results .gcard { cursor: pointer; }
+.alb-slot-results .gcard.disabled { opacity: .35; pointer-events: none; }
 
 /* ── Par série (progression de collection) ── */
 .series-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }

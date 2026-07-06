@@ -147,13 +147,14 @@ async function saveAlbsEdit() {
   }
 }
 
-// ── Détail d'un album ──
-let aldCurrent = null; // { id, isOwner, cards, … }
-let aldOwnedCards = null; // cache des cartes possédées (pour la recherche-ajout)
-let aldSearchQuery = ''; // recherche dans le picker « Ajouter des cartes »
-let aldFilter = 'all'; // 'all' | rareté — filtre les cartes DÉJÀ dans l'album
-let aldSort = 'rarity'; // 'rarity' | 'name' | 'recent'
-let aldFilterSearch = ''; // recherche dans les cartes DÉJÀ dans l'album
+// ── Détail d'un album : aspect « classeur » — emplacements fixes (9/page),
+// on clique une pochette vide pour y ranger une carte possédée, au lieu
+// d'une longue liste de tous ses persos à cocher. ──
+const ALD_PAGE_SLOTS = 9; // 3×3, comme une vraie page de classeur
+let aldCurrent = null; // { id, isOwner, cards: [{..., position}], … }
+let aldPage = 1;
+let aldOwnedCards = null; // cache des cartes possédées (pour le picker d'ajout)
+let aldSlotTarget = null; // position ciblée par la modale d'ajout en cours
 
 function openAlbumsHub() {
   showView('gacha-albums');
@@ -181,48 +182,47 @@ async function openAlbumDetail(id) {
   if (aldCurrent.description) { descEl.textContent = aldCurrent.description; descEl.classList.remove('hidden'); }
   document.getElementById('ald-owner-actions').classList.toggle('hidden', !aldCurrent.isOwner);
   document.getElementById('ald-clone-wrap').classList.toggle('hidden', aldCurrent.isOwner);
-  document.getElementById('ald-search-section').classList.toggle('hidden', !aldCurrent.isOwner);
-  aldOwnedCards = null; aldSearchQuery = '';
-  aldFilter = 'all'; aldSort = 'rarity'; aldFilterSearch = '';
-  const searchInput = document.getElementById('ald-search-input');
-  if (searchInput) searchInput.value = '';
-  const filterSearchInput = document.getElementById('ald-filter-search');
-  if (filterSearchInput) filterSearchInput.value = '';
-  document.getElementById('ald-sort').value = 'rarity';
-  if (aldCurrent.isOwner) renderAldSearch();
-  renderAldFilters();
+  aldOwnedCards = null;
+  aldPage = 1;
   renderAldGrid();
 }
 
-// Chips de filtre par rareté sur les cartes DÉJÀ dans l'album (effectifs locaux).
-function renderAldFilters() {
-  const byRarity = {};
-  aldCurrent.cards.forEach((c) => (byRarity[c.rarity] = (byRarity[c.rarity] || 0) + 1));
-  document.getElementById('ald-filters').innerHTML = typeof rarityFilterChips === 'function'
-    ? rarityFilterChips(byRarity, aldFilter) : '';
+// Nombre de pages du classeur : couvre le plus haut emplacement occupé, et
+// le propriétaire a toujours une page vide en plus pour continuer à ranger.
+function aldPageCount() {
+  const maxPos = aldCurrent.cards.reduce((m, c) => Math.max(m, c.position), -1);
+  const used = Math.floor(maxPos / ALD_PAGE_SLOTS) + 1;
+  return Math.max(1, used + (aldCurrent.isOwner ? 1 : 0));
 }
 
 function renderAldGrid() {
   const grid = document.getElementById('ald-grid');
-  if (!aldCurrent.cards.length) {
-    grid.innerHTML = `<p class="muted">${aldCurrent.isOwner ? 'Album vide. Ajoute des cartes ci-dessus.' : 'Cet album est vide.'}</p>`;
-    return;
+  const pages = aldPageCount();
+  aldPage = Math.min(Math.max(1, aldPage), pages);
+  const byPos = new Map(aldCurrent.cards.map((c) => [c.position, c]));
+  const base = (aldPage - 1) * ALD_PAGE_SLOTS;
+  const slots = [];
+  for (let i = 0; i < ALD_PAGE_SLOTS; i++) {
+    const position = base + i;
+    const card = byPos.get(position);
+    if (card) {
+      const removeBtn = aldCurrent.isOwner
+        ? `<button class="alb-card-remove" data-ald-remove data-cid="${card.id}" title="Retirer de l'album"><i class="fas fa-trash"></i></button>`
+        : '';
+      slots.push(`<div class="alb-card-wrap">${cardHTML(card)}${removeBtn}</div>`);
+    } else if (aldCurrent.isOwner) {
+      slots.push(`<button type="button" class="alb-slot-empty" data-ald-slot="${position}">
+        <i class="fas fa-plus"></i> Ranger une carte
+      </button>`);
+    } else {
+      slots.push('<div class="alb-slot-empty inert" aria-hidden="true"></div>');
+    }
   }
-  const q = aldFilterSearch.trim().toLowerCase();
-  let list = aldCurrent.cards.filter((c) => (aldFilter === 'all' || c.rarity === aldFilter) && (!q || c.name.toLowerCase().includes(q)));
-  if (aldSort === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-  else if (aldSort === 'rarity') {
-    const rank = (r) => RARITY_ORDER.indexOf(r);
-    list = [...list].sort((a, b) => rank(a.rarity) - rank(b.rarity) || a.name.localeCompare(b.name));
-  }
-  // 'recent' : garde l'ordre reçu du serveur (déjà trié par addedAt desc).
-  if (!list.length) { grid.innerHTML = '<p class="muted">Aucune carte ne correspond.</p>'; return; }
-  grid.innerHTML = list.map((c) => {
-    const removeBtn = aldCurrent.isOwner
-      ? `<button class="alb-card-remove" data-ald-remove data-cid="${c.id}" title="Retirer de l'album"><i class="fas fa-trash"></i></button>`
-      : '';
-    return `<div class="alb-card-wrap">${cardHTML(c)}${removeBtn}</div>`;
-  }).join('');
+  grid.innerHTML = slots.join('');
+  document.getElementById('ald-pageinfo').textContent = `Page ${aldPage} / ${pages}`;
+  document.getElementById('ald-page-prev').disabled = aldPage <= 1;
+  document.getElementById('ald-page-next').disabled = aldPage >= pages;
+  document.getElementById('ald-pager').classList.toggle('hidden', pages <= 1);
 }
 
 async function removeCardFromAlbumDetail(characterId) {
@@ -231,7 +231,67 @@ async function removeCardFromAlbumDetail(characterId) {
     aldCurrent.cards = aldCurrent.cards.filter((c) => c.id !== characterId);
     document.getElementById('ald-count').textContent = `${aldCurrent.cards.length} carte${aldCurrent.cards.length > 1 ? 's' : ''}`;
     renderAldGrid();
-    renderAldSearch();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// ── Modale « Ajouter une carte » : ciblée sur l'emplacement vide cliqué ──
+async function loadAldOwnedCards() {
+  if (aldOwnedCards) return aldOwnedCards;
+  const { cards } = await api('/api/gacha/collection');
+  aldOwnedCards = cards;
+  return cards;
+}
+
+function openAlbSlotPicker(position) {
+  aldSlotTarget = position;
+  document.getElementById('alb-slot-modal').classList.remove('hidden');
+  document.getElementById('alb-slot-search').value = '';
+  renderAlbSlotResults('');
+}
+function closeAlbSlotPicker() {
+  document.getElementById('alb-slot-modal').classList.add('hidden');
+  aldSlotTarget = null;
+}
+
+async function renderAlbSlotResults(query) {
+  const results = document.getElementById('alb-slot-results');
+  results.innerHTML = '<p class="muted">Chargement…</p>';
+  let owned;
+  try {
+    owned = await loadAldOwnedCards();
+  } catch (e) {
+    results.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  if (!owned.length) { results.innerHTML = '<p class="muted">Tu ne possèdes encore aucune carte — direction le tirage !</p>'; return; }
+  const q = query.trim().toLowerCase();
+  const matches = q ? owned.filter((c) => c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q)) : owned;
+  if (!matches.length) { results.innerHTML = '<p class="muted">Aucune carte possédée ne correspond.</p>'; return; }
+  const inAlbum = new Set(aldCurrent.cards.map((c) => c.id));
+  results.innerHTML = matches.map((c) => {
+    const already = inAlbum.has(c.id);
+    return `<div class="alb-card-wrap" data-cid="${c.id}">${cardHTML(c)}
+      ${already ? '<span class="alb-search-added"><i class="fas fa-check"></i> Déjà dedans</span>' : ''}
+    </div>`;
+  }).join('');
+  results.querySelectorAll('.alb-card-wrap').forEach((el) => {
+    if (el.querySelector('.alb-search-added')) el.querySelector('.gcard').classList.add('disabled');
+    else el.querySelector('.gcard').addEventListener('click', () => addCardToAlbumDetail(parseInt(el.dataset.cid), aldSlotTarget));
+  });
+}
+
+async function addCardToAlbumDetail(characterId, position) {
+  try {
+    const { card } = await api(`/api/albums/${aldCurrent.id}/cards`, {
+      method: 'POST', body: JSON.stringify({ characterId, position }),
+    });
+    aldCurrent.cards = aldCurrent.cards.filter((c) => c.id !== characterId);
+    aldCurrent.cards.push(card);
+    document.getElementById('ald-count').textContent = `${aldCurrent.cards.length} carte${aldCurrent.cards.length > 1 ? 's' : ''}`;
+    closeAlbSlotPicker();
+    renderAldGrid();
   } catch (e) {
     alert(e.message);
   }
@@ -256,53 +316,6 @@ async function cloneAlbumToMine() {
   } catch (e) {
     alert(e.message);
     btn.disabled = false;
-  }
-}
-
-// ── Recherche-ajout dans l'album ouvert : parmi les cartes qu'on possède ──
-async function loadAldOwnedCards() {
-  if (aldOwnedCards) return aldOwnedCards;
-  const { cards } = await api('/api/gacha/collection');
-  aldOwnedCards = cards;
-  return cards;
-}
-
-async function renderAldSearch() {
-  const results = document.getElementById('ald-search-results');
-  if (!results) return;
-  results.innerHTML = '<p class="muted">Chargement…</p>';
-  let owned;
-  try {
-    owned = await loadAldOwnedCards();
-  } catch (e) {
-    results.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
-    return;
-  }
-  if (!owned.length) { results.innerHTML = '<p class="muted">Tu ne possèdes encore aucune carte — direction le tirage !</p>'; return; }
-  const q = aldSearchQuery.trim().toLowerCase();
-  const matches = q ? owned.filter((c) => c.name.toLowerCase().includes(q) || (c.series || '').toLowerCase().includes(q)) : owned;
-  if (!matches.length) { results.innerHTML = '<p class="muted">Aucune carte possédée ne correspond.</p>'; return; }
-  const inAlbum = new Set((aldCurrent?.cards || []).map((c) => c.id));
-  results.innerHTML = matches.map((c) => {
-    const added = inAlbum.has(c.id);
-    const wrap = `<div class="alb-card-wrap" data-cid="${c.id}">${cardHTML(c)}
-      ${added
-        ? '<span class="alb-search-added"><i class="fas fa-check"></i> Ajouté</span>'
-        : `<button class="alb-search-add" data-ald-search-add data-cid="${c.id}"><i class="fas fa-plus"></i> Ajouter</button>`}
-    </div>`;
-    return wrap;
-  }).join('');
-}
-
-async function addCardToAlbumDetail(characterId) {
-  try {
-    const { card } = await api(`/api/albums/${aldCurrent.id}/cards`, { method: 'POST', body: JSON.stringify({ characterId }) });
-    aldCurrent.cards.unshift(card);
-    document.getElementById('ald-count').textContent = `${aldCurrent.cards.length} carte${aldCurrent.cards.length > 1 ? 's' : ''}`;
-    renderAldGrid();
-    renderAldSearch();
-  } catch (e) {
-    alert(e.message);
   }
 }
 
@@ -354,39 +367,23 @@ function initAlbumsUI() {
   document.getElementById('ald-grid').addEventListener('click', (e) => {
     const rm = e.target.closest('[data-ald-remove]');
     if (rm) return removeCardFromAlbumDetail(parseInt(rm.dataset.cid));
+    const slot = e.target.closest('[data-ald-slot]');
+    if (slot) return openAlbSlotPicker(parseInt(slot.dataset.aldSlot));
     const card = e.target.closest('.gcard[data-cid]');
-    if (card && !e.target.closest('[data-ald-remove]')) openCharacter(card.dataset.cid);
+    if (card) openCharacter(card.dataset.cid);
   });
+  document.getElementById('ald-page-prev').addEventListener('click', () => { aldPage--; renderAldGrid(); });
+  document.getElementById('ald-page-next').addEventListener('click', () => { aldPage++; renderAldGrid(); });
 
-  document.getElementById('ald-filters').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-filter]');
-    if (!btn) return;
-    aldFilter = btn.dataset.filter;
-    renderAldFilters();
-    renderAldGrid();
+  document.getElementById('alb-slot-close').addEventListener('click', closeAlbSlotPicker);
+  document.getElementById('alb-slot-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'alb-slot-modal') closeAlbSlotPicker();
   });
-  document.getElementById('ald-sort').addEventListener('change', (e) => {
-    aldSort = e.target.value;
-    renderAldGrid();
-  });
-  let aldFilterSearchTimer;
-  document.getElementById('ald-filter-search').addEventListener('input', (e) => {
-    clearTimeout(aldFilterSearchTimer);
-    aldFilterSearchTimer = setTimeout(() => { aldFilterSearch = e.target.value; renderAldGrid(); }, 200);
-  });
-
-  const aldSearchInput = document.getElementById('ald-search-input');
-  if (aldSearchInput) {
-    let aldSearchTimer = null;
-    aldSearchInput.addEventListener('input', (e) => {
-      clearTimeout(aldSearchTimer);
-      const v = e.target.value.trim();
-      aldSearchTimer = setTimeout(() => { aldSearchQuery = v; renderAldSearch(); }, 300);
-    });
-  }
-  document.getElementById('ald-search-results').addEventListener('click', (e) => {
-    const add = e.target.closest('[data-ald-search-add]');
-    if (add) return addCardToAlbumDetail(parseInt(add.dataset.cid));
+  let albSlotSearchTimer;
+  document.getElementById('alb-slot-search').addEventListener('input', (e) => {
+    clearTimeout(albSlotSearchTimer);
+    const v = e.target.value;
+    albSlotSearchTimer = setTimeout(() => renderAlbSlotResults(v), 250);
   });
 }
 

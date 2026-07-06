@@ -877,26 +877,24 @@
         <button class="btn-primary" id="ald-clone-btn"><i class="fas fa-clone"></i> Cloner dans mes albums</button>
       </div>
 
-      <section class="playlist-search hidden" id="ald-search-section">
-        <h3><i class="fas fa-magnifying-glass"></i> Ajouter des cartes possédées</h3>
-        <input type="search" id="ald-search-input" placeholder="Rechercher parmi tes cartes…" autocomplete="off" />
-        <div id="ald-search-results" class="card-grid"></div>
-      </section>
-
-      <div class="collection-toolbar">
-        <div class="coll-filters" id="ald-filters"></div>
-        <label class="coll-sort">Trier :
-          <select id="ald-sort">
-            <option value="rarity">Rareté</option>
-            <option value="name">Nom (A→Z)</option>
-            <option value="recent">Récemment ajoutées</option>
-          </select>
-        </label>
-        <input type="search" class="trade-search coll-search" id="ald-filter-search" placeholder="Rechercher dans l'album…" autocomplete="off" />
-      </div>
       <div class="album-binder">
         <div class="album-binder-rings"></div>
-        <div id="ald-grid" class="card-grid album-page"></div>
+        <div id="ald-grid" class="album-page"></div>
+      </div>
+      <div class="catalog-pager" id="ald-pager">
+        <button class="btn-secondary" id="ald-page-prev"><i class="fas fa-chevron-left"></i></button>
+        <span id="ald-pageinfo">Page 1 / 1</span>
+        <button class="btn-secondary" id="ald-page-next"><i class="fas fa-chevron-right"></i></button>
+      </div>
+    </div>
+
+    <!-- Modale « Ajouter une carte » à un emplacement du classeur -->
+    <div id="alb-slot-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Ajouter une carte à l'album">
+      <div class="modal-card wide">
+        <button class="modal-close" id="alb-slot-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-plus"></i> Ajouter une carte</h3>
+        <input type="search" id="alb-slot-search" placeholder="Rechercher parmi tes cartes possédées…" autocomplete="off" />
+        <div id="alb-slot-results" class="card-grid alb-slot-results"></div>
       </div>
     </div>
 
