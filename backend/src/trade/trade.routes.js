@@ -41,9 +41,10 @@ async function expandInstances(ids) {
 }
 
 // Exemplaires échangeables d'un joueur, groupés par personnage (pour le builder)
+// Exclut les exemplaires en vente sur le marché (gelés tant que l'annonce est active).
 router.get('/instances/:userId', requireAuth, async (req, res) => {
   const insts = await prisma.cardInstance.findMany({
-    where: { userId: req.params.userId },
+    where: { userId: req.params.userId, listed: false },
     orderBy: [{ characterId: 'asc' }, { serial: 'asc' }],
     select: { id: true, serial: true, character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
   });
@@ -75,14 +76,15 @@ router.post('/', requireAuth, async (req, res) => {
   const target = await prisma.user.findUnique({ where: { id: toUserId }, select: { id: true } });
   if (!target) return res.status(404).json({ error: 'Joueur introuvable' });
 
-  // Validation possession + devises (re-vérifiées à l'acceptation)
+  // Validation possession + devises (re-vérifiées à l'acceptation). Les
+  // exemplaires en vente sur le marché sont gelés et ne peuvent pas être échangés.
   if (offeredIds.length) {
-    const owned = await prisma.cardInstance.count({ where: { id: { in: offeredIds }, userId: fromId } });
-    if (owned !== offeredIds.length) return res.status(400).json({ error: 'Tu ne possèdes pas (plus) ces cartes' });
+    const owned = await prisma.cardInstance.count({ where: { id: { in: offeredIds }, userId: fromId, listed: false } });
+    if (owned !== offeredIds.length) return res.status(400).json({ error: 'Tu ne possèdes pas (plus) ces cartes (peut-être en vente sur le marché)' });
   }
   if (requestedIds.length) {
-    const owned = await prisma.cardInstance.count({ where: { id: { in: requestedIds }, userId: toUserId } });
-    if (owned !== requestedIds.length) return res.status(400).json({ error: 'Le joueur ne possède pas (plus) ces cartes' });
+    const owned = await prisma.cardInstance.count({ where: { id: { in: requestedIds }, userId: toUserId, listed: false } });
+    if (owned !== requestedIds.length) return res.status(400).json({ error: 'Le joueur ne possède pas (plus) ces cartes (peut-être en vente sur le marché)' });
   }
   if ((req.user.tokens || 0) < offeredTokens) return res.status(400).json({ error: 'Pas assez de tokens' });
   if ((req.user.dust || 0) < offeredDust) return res.status(400).json({ error: 'Pas assez de poussière' });
@@ -153,11 +155,12 @@ router.post('/:id/accept', requireAuth, async (req, res) => {
       if (!t || t.status !== 'pending') throw new Error('Échange indisponible');
       if (t.toUserId !== uid) throw new Error('Réservé au destinataire');
 
-      // Re-validation possession des deux côtés
-      const offered = await tx.cardInstance.findMany({ where: { id: { in: t.offeredIds } }, select: { id: true, userId: true, characterId: true } });
-      const requested = await tx.cardInstance.findMany({ where: { id: { in: t.requestedIds } }, select: { id: true, userId: true, characterId: true } });
-      if (offered.length !== t.offeredIds.length || offered.some((i) => i.userId !== t.fromUserId)) throw new Error('Le proposant ne possède plus ces cartes');
-      if (requested.length !== t.requestedIds.length || requested.some((i) => i.userId !== t.toUserId)) throw new Error('Tu ne possèdes plus ces cartes');
+      // Re-validation possession des deux côtés (et qu'aucun exemplaire n'a
+      // été mis en vente sur le marché depuis la proposition)
+      const offered = await tx.cardInstance.findMany({ where: { id: { in: t.offeredIds } }, select: { id: true, userId: true, characterId: true, listed: true } });
+      const requested = await tx.cardInstance.findMany({ where: { id: { in: t.requestedIds } }, select: { id: true, userId: true, characterId: true, listed: true } });
+      if (offered.length !== t.offeredIds.length || offered.some((i) => i.userId !== t.fromUserId || i.listed)) throw new Error('Le proposant ne possède plus ces cartes (peut-être en vente sur le marché)');
+      if (requested.length !== t.requestedIds.length || requested.some((i) => i.userId !== t.toUserId || i.listed)) throw new Error('Tu ne possèdes plus ces cartes (peut-être en vente sur le marché)');
 
       // Devises
       const from = await tx.user.findUnique({ where: { id: t.fromUserId }, select: { tokens: true, dust: true } });

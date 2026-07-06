@@ -787,6 +787,7 @@ async function openCharacter(id) {
     const c = d.character;
     const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
     const rate = d.pullRate != null ? `${d.pullRate.toFixed(d.pullRate < 1 ? 2 : 1)} %` : '—';
+    const unlistedInstances = (d.instances || []).filter((i) => !i.listed);
     body.innerHTML = `
       <div class="char-hero r-${c.rarity}">
         <div class="char-img" ${img}></div>
@@ -806,25 +807,36 @@ async function openCharacter(id) {
         <div class="cstat"><span>+${d.dupRefund} 🪙</span><label>Doublon</label></div>
       </div>
       ${d.serials && d.serials.length ? `<div class="char-serials"><i class="fas fa-hashtag"></i> Tes exemplaires : ${d.serials.map((s) => '#' + s).join(', ')}</div>` : ''}
-      ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}">
-        <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Mettre en favori'}
-      </button>` : ''}
-      <button class="btn-secondary char-wish${d.wished ? ' on' : ''}" id="char-wish-btn">
-        <i class="fa-heart ${d.wished ? 'fas' : 'far'}"></i> ${d.wished ? 'Dans ta wishlist ♥' : 'Ajouter à la wishlist'}
-      </button>
-      ${d.owned && d.stars < (d.maxStars || 5) ? `<button class="btn-secondary char-ascend" id="char-ascend-btn" ${(d.owned - 1) < d.ascendCost ? 'disabled' : ''}>
-        <i class="fas fa-star"></i> Ascensionner ★${d.stars + 1} · ${d.ascendCost} doublon(s)${(d.owned - 1) < d.ascendCost ? ` (tu en as ${d.owned - 1})` : ''}
-      </button>` : ''}
-      ${d.owned > 1 ? `<button class="btn-secondary char-goto-fuse" id="char-goto-fuse-btn">
-        <i class="fas fa-wand-magic-sparkles"></i> Fusionner tes doublons à l'Atelier →
-      </button>` : ''}
-      ${d.owned ? `<button class="btn-secondary char-album-toggle" id="char-album-btn" data-cid="${c.id}">
-        <i class="fas fa-book"></i> Ranger dans un album
-      </button>
-      <div class="char-album-picker hidden" id="char-album-picker"></div>` : ''}
-      <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
-        <i class="fas fa-external-link-alt"></i> Voir sur AniList
-      </a>`;
+      <div class="char-toolbar" role="group" aria-label="Actions rapides">
+        ${d.owned ? `<button class="btn-secondary char-fav${d.favorite ? ' on' : ''}" id="char-fav-btn" data-cid="${c.id}" aria-pressed="${d.favorite ? 'true' : 'false'}">
+          <i class="fa-star ${d.favorite ? 'fas' : 'far'}"></i> ${d.favorite ? 'Favori ★' : 'Favori'}
+        </button>` : ''}
+        <button class="btn-secondary char-wish${d.wished ? ' on' : ''}" id="char-wish-btn" aria-pressed="${d.wished ? 'true' : 'false'}">
+          <i class="fa-heart ${d.wished ? 'fas' : 'far'}"></i> ${d.wished ? 'Dans ta wishlist ♥' : 'Wishlist'}
+        </button>
+        ${unlistedInstances.length ? `<button class="btn-secondary char-sell-toggle" id="char-sell-btn" data-cid="${c.id}" aria-expanded="false" aria-controls="char-market-picker">
+          <i class="fas fa-store"></i> Vendre
+        </button>` : ''}
+      </div>
+      ${d.listings && d.listings.length ? `<div class="char-listings"><i class="fas fa-tags"></i> En vente sur le marché :
+        ${d.listings.map((l) => `<span class="char-listing-chip">#${l.serial} · ${l.price} 🪙 <button type="button" class="char-listing-cancel" data-lid="${l.id}" title="Annuler la vente" aria-label="Annuler la vente de l'exemplaire #${l.serial}"><i class="fas fa-xmark"></i></button></span>`).join('')}
+      </div>` : ''}
+      <div class="char-market-picker hidden" id="char-market-picker"></div>
+      <div class="char-secondary-actions">
+        ${d.owned && d.stars < (d.maxStars || 5) ? `<button class="btn-secondary char-ascend" id="char-ascend-btn" ${(d.owned - 1) < d.ascendCost ? 'disabled' : ''}>
+          <i class="fas fa-star"></i> Ascensionner ★${d.stars + 1} · ${d.ascendCost} doublon(s)${(d.owned - 1) < d.ascendCost ? ` (tu en as ${d.owned - 1})` : ''}
+        </button>` : ''}
+        ${d.owned > 1 ? `<button class="btn-secondary char-goto-fuse" id="char-goto-fuse-btn">
+          <i class="fas fa-wand-magic-sparkles"></i> Fusionner à l'Atelier →
+        </button>` : ''}
+        ${d.owned ? `<button class="btn-secondary char-album-toggle" id="char-album-btn" data-cid="${c.id}">
+          <i class="fas fa-book"></i> Ranger dans un album
+        </button>` : ''}
+        <a class="btn-secondary char-link" href="${d.anilistUrl}" target="_blank" rel="noopener">
+          <i class="fas fa-external-link-alt"></i> AniList
+        </a>
+      </div>
+      <div class="char-album-picker hidden" id="char-album-picker"></div>`;
     const gotoFuseBtn = document.getElementById('char-goto-fuse-btn');
     if (gotoFuseBtn) {
       gotoFuseBtn.addEventListener('click', () => {
@@ -865,7 +877,8 @@ async function openCharacter(id) {
           const r = await api('/api/gacha/wishlist', { method: 'POST', body: JSON.stringify({ characterId: c.id, wish: !wished }) });
           wished = r.wished;
           wishBtn.classList.toggle('on', wished);
-          wishBtn.innerHTML = `<i class="fa-heart ${wished ? 'fas' : 'far'}"></i> ${wished ? 'Dans ta wishlist ♥' : 'Ajouter à la wishlist'}`;
+          wishBtn.setAttribute('aria-pressed', wished ? 'true' : 'false');
+          wishBtn.innerHTML = `<i class="fa-heart ${wished ? 'fas' : 'far'}"></i> ${wished ? 'Dans ta wishlist ♥' : 'Wishlist'}`;
           if (wished && typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
         } catch (e) { alert(e.message); } finally { wishBtn.disabled = false; }
       });
@@ -893,7 +906,8 @@ async function openCharacter(id) {
           const r = await api('/api/gacha/favorite', { method: 'POST', body: JSON.stringify({ characterId: c.id, favorite: !fav }) });
           fav = r.favorite;
           favBtn.classList.toggle('on', fav);
-          favBtn.innerHTML = `<i class="fa-star ${fav ? 'fas' : 'far'}"></i> ${fav ? 'Favori ★' : 'Mettre en favori'}`;
+          favBtn.setAttribute('aria-pressed', fav ? 'true' : 'false');
+          favBtn.innerHTML = `<i class="fa-star ${fav ? 'fas' : 'far'}"></i> ${fav ? 'Favori ★' : 'Favori'}`;
           if (fav) sfx.correct();
         } catch (e) { alert(e.message); }
         finally { favBtn.disabled = false; }
@@ -903,11 +917,69 @@ async function openCharacter(id) {
     if (albumBtn) {
       albumBtn.addEventListener('click', () => toggleCharAlbumPicker(c.id));
     }
+    const sellBtn = document.getElementById('char-sell-btn');
+    if (sellBtn) {
+      sellBtn.addEventListener('click', () => toggleCharMarketPicker(c.id, unlistedInstances));
+    }
+    document.querySelectorAll('.char-listing-cancel').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api(`/api/market/${btn.dataset.lid}/cancel`, { method: 'POST' });
+          openCharacter(c.id); // recharge la fiche (annonce annulée, exemplaire libéré)
+        } catch (e) { alert(e.message); btn.disabled = false; }
+      });
+    });
   } catch (e) {
     body.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
   }
 }
 function closeCharacter() { document.getElementById('character-modal').classList.add('hidden'); }
+
+// Picker « Vendre sur le marché » : choisit l'exemplaire (si plusieurs
+// disponibles) et le prix en tokens, puis crée l'annonce.
+function toggleCharMarketPicker(characterId, unlistedInstances) {
+  const picker = document.getElementById('char-market-picker');
+  const btn = document.getElementById('char-sell-btn');
+  const wasHidden = picker.classList.contains('hidden');
+  if (!wasHidden) {
+    picker.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  picker.classList.remove('hidden');
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+  const single = unlistedInstances.length === 1;
+  picker.innerHTML = `
+    <p class="hint">${single ? `Exemplaire #${unlistedInstances[0].serial}` : 'Choisis l\'exemplaire à vendre :'}</p>
+    ${!single ? `<div class="char-market-serials">${unlistedInstances.map((i, idx) => `
+      <label class="char-market-serial"><input type="radio" name="market-serial" value="${i.id}" ${idx === 0 ? 'checked' : ''}> #${i.serial}</label>
+    `).join('')}</div>` : ''}
+    <div class="char-market-price-row">
+      <input type="number" min="1" max="999999" step="1" id="char-market-price" placeholder="Prix en tokens" aria-label="Prix en tokens" />
+      <button type="button" class="btn-primary" id="char-market-submit">Mettre en vente</button>
+    </div>
+    <p class="gacha-msg" id="char-market-msg"></p>`;
+  document.getElementById('char-market-submit').addEventListener('click', async () => {
+    const submitBtn = document.getElementById('char-market-submit');
+    const msg = document.getElementById('char-market-msg');
+    const price = parseInt(document.getElementById('char-market-price').value);
+    const selectedId = single
+      ? unlistedInstances[0].id
+      : parseInt(picker.querySelector('input[name="market-serial"]:checked')?.value);
+    if (!(price > 0)) { msg.textContent = 'Indique un prix valide.'; return; }
+    if (!selectedId) { msg.textContent = 'Choisis un exemplaire.'; return; }
+    submitBtn.disabled = true;
+    try {
+      await api('/api/market/list', { method: 'POST', body: JSON.stringify({ cardInstanceId: selectedId, price }) });
+      if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+      openCharacter(characterId); // recharge la fiche (annonce créée, exemplaire gelé)
+    } catch (e) {
+      msg.textContent = e.message;
+      submitBtn.disabled = false;
+    }
+  });
+}
 
 // ── Vote « Édition 2 » (promotion Mythique/Légendaire) ──
 function updatePromotionRemaining(remaining) {

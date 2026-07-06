@@ -397,10 +397,12 @@ async function mintInstance(tx, userId, characterId, source = 'pull') {
 
 // Détruit jusqu'à n exemplaires (les n° de série les plus hauts) d'un perso pour un joueur.
 // Rend les places au stock mondial (minted décrémenté, soldOut levé). Retourne le nb détruit.
+// Exclut les exemplaires en vente sur le marché (`listed`) : gelés tant que
+// l'annonce est active, ne doivent jamais être consommés par la fusion/l'ascension.
 async function destroyInstances(tx, userId, characterId, n) {
   if (n <= 0) return 0;
   const insts = await tx.cardInstance.findMany({
-    where: { userId, characterId }, orderBy: { serial: 'desc' }, take: n, select: { id: true },
+    where: { userId, characterId, listed: false }, orderBy: { serial: 'desc' }, take: n, select: { id: true },
   });
   if (!insts.length) return 0;
   await tx.cardInstance.deleteMany({ where: { id: { in: insts.map((i) => i.id) } } });
@@ -535,13 +537,15 @@ router.post('/fuse', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Les exemplaires choisis doivent être de la même rareté.' });
   }
 
-  const owned = await prisma.userCard.findMany({
-    where: { userId: req.user.id, characterId: { in: items.map((it) => it.characterId) } },
-  });
-  const copiesById = new Map(owned.map((c) => [c.characterId, c.copies]));
+  // Compte les exemplaires réellement disponibles (non gelés par une annonce
+  // active sur le marché) plutôt que l'agrégat UserCard.copies, qui inclut
+  // les exemplaires en vente.
   for (const it of items) {
-    if ((copiesById.get(it.characterId) || 0) < it.count) {
-      return res.status(400).json({ error: 'Tu ne possèdes pas assez d’exemplaires de ce personnage.' });
+    const available = await prisma.cardInstance.count({
+      where: { userId: req.user.id, characterId: it.characterId, listed: false },
+    });
+    if (available < it.count) {
+      return res.status(400).json({ error: 'Tu ne possèdes pas assez d’exemplaires disponibles de ce personnage (certains sont peut-être en vente sur le marché).' });
     }
   }
 
@@ -593,7 +597,10 @@ router.post('/ascend', requireAuth, async (req, res) => {
     const stars = card.stars || 1;
     if (stars >= MAX_STARS) return { error: 'Carte déjà au niveau maximum (★' + MAX_STARS + ')' };
     const cost = ascendCost(stars);
-    if (card.copies < 1 + cost) return { error: `Il faut ${cost} doublon(s) pour passer ★${stars + 1} (tu en as ${card.copies - 1}).` };
+    // Exemplaires réellement disponibles (hors ceux gelés par une annonce
+    // active sur le marché) : garde 1 exemplaire + consomme `cost` doublons.
+    const available = await tx.cardInstance.count({ where: { userId: req.user.id, characterId, listed: false } });
+    if (available < 1 + cost) return { error: `Il faut ${cost} doublon(s) disponible(s) pour passer ★${stars + 1} (tu en as ${Math.max(0, available - 1)}, certains sont peut-être en vente sur le marché).` };
     // Consomme les doublons (rend les places au stock) et garde 1 exemplaire.
     await destroyInstances(tx, req.user.id, characterId, cost);
     const updated = await tx.userCard.update({
@@ -739,7 +746,13 @@ router.get('/character/:id', requireAuth, async (req, res) => {
 
   // Numéros de série possédés par l'utilisateur pour ce personnage
   const myInstances = await prisma.cardInstance.findMany({
-    where: { userId: req.user.id, characterId: id }, orderBy: { serial: 'asc' }, select: { serial: true },
+    where: { userId: req.user.id, characterId: id }, orderBy: { serial: 'asc' }, select: { id: true, serial: true, listed: true },
+  });
+  // Mes annonces actives sur le marché pour ce personnage (pour proposer
+  // « annuler la vente » directement depuis la fiche).
+  const myListings = await prisma.marketListing.findMany({
+    where: { sellerId: req.user.id, characterId: id, status: 'active' },
+    select: { id: true, price: true, cardInstance: { select: { serial: true } } },
   });
   const wished = !!(await prisma.wishlist.findUnique({
     where: { userId_characterId: { userId: req.user.id, characterId: id } }, select: { id: true },
@@ -781,6 +794,8 @@ router.get('/character/:id', requireAuth, async (req, res) => {
     available: Math.max(0, character.maxSupply - character.minted),
     soldOut: character.soldOut,
     serials: myInstances.map((i) => i.serial),
+    instances: myInstances.map((i) => ({ id: i.id, serial: i.serial, listed: i.listed })),
+    listings: myListings.map((l) => ({ id: l.id, price: l.price, serial: l.cardInstance.serial })),
     anilistUrl: `https://anilist.co/character/${character.anilistId}`,
   });
 });

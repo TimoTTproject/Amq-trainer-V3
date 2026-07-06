@@ -49,7 +49,7 @@ test('fuse : refuse si les personnages ne sont pas de la même rareté', async (
 
 test("fuse : refuse si le joueur n'a pas assez d'exemplaires", async () => {
   prisma.character.findMany = async () => [dbCharacter(1)];
-  prisma.userCard.findMany = async () => [{ characterId: 1, copies: 2 }]; // < 3 requis
+  prisma.cardInstance.count = async () => 2; // < 3 requis (exemplaires réellement disponibles, hors marché)
   const res = await app.request('/api/gacha/fuse', {
     method: 'POST', cookie: app.authCookie('u1'), body: { items: [{ characterId: 1, count: 3 }] },
   });
@@ -59,9 +59,9 @@ test("fuse : refuse si le joueur n'a pas assez d'exemplaires", async () => {
 
 test('fuse : refuse si plus aucun personnage disponible dans la rareté (jamais de repli vers une autre)', async () => {
   prisma.character.findMany = async () => [dbCharacter(1)];
-  prisma.userCard.findMany = async () => [{ characterId: 1, copies: 3 }];
   prisma.character.findUnique = async () => null; // pas de boost vedette
   prisma.character.findFirst = async () => null; // ni vedette, ni pick final
+  prisma.cardInstance.count = async () => 3; // exemplaires réellement disponibles : suffisant
   prisma.character.count = async () => 0; // rareté épuisée
   const res = await app.request('/api/gacha/fuse', {
     method: 'POST', cookie: app.authCookie('u1'), body: { items: [{ characterId: 1, count: 3 }] },
@@ -72,7 +72,7 @@ test('fuse : refuse si plus aucun personnage disponible dans la rareté (jamais 
 
 test('fuse : succès → consomme les 3 exemplaires et mint 1 nouvelle carte aléatoire', async () => {
   prisma.character.findMany = async () => [dbCharacter(1)];
-  prisma.userCard.findMany = async () => [{ characterId: 1, copies: 3 }];
+  prisma.cardInstance.count = async () => 3;
   prisma.character.findUnique = async ({ where }) => (where.id === 42 ? dbCharacter(42, { minted: 5, nextSerial: 5 }) : null);
   prisma.character.findFirst = async ({ where }) => (where.featured ? null : dbCharacter(42));
   prisma.character.count = async () => 3;

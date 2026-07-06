@@ -535,9 +535,53 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .cstat span { display: block; font-size: 1.05rem; font-weight: 700; color: var(--text); }
 .cstat label { color: var(--text-2); font-size: .72rem; }
 .char-link { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
-.char-fav { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.char-fav { display: inline-flex; align-items: center; gap: 8px; }
 .char-fav.on { border: 1px solid #ffd34d; color: #ffd34d; }
 .char-fav i { color: #ffd34d; }
+
+/* Actions rapides (favori/wishlist/vendre) : rangée horizontale au lieu d'un
+   empilement vertical de boutons — hiérarchie claire, actions fréquentes en
+   haut, actions secondaires (ascension, fusion, album, lien externe) groupées
+   à part et visuellement plus discrètes. */
+.char-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; }
+.char-toolbar .btn-secondary { flex: 0 1 auto; }
+.char-secondary-actions {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%;
+  margin-top: 4px; padding-top: 10px; border-top: 1px solid #2a2f42;
+}
+.char-secondary-actions .btn-secondary,
+.char-secondary-actions .char-link { font-size: .82rem; opacity: .9; }
+.char-secondary-actions .btn-secondary:hover,
+.char-secondary-actions .char-link:hover { opacity: 1; }
+
+/* Vente sur le marché depuis la fiche personnage */
+.char-sell-toggle.on,
+.char-sell-toggle[aria-expanded="true"] { border: 1px solid var(--accent-2); color: var(--accent-2); }
+.char-listings {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%;
+  font-size: .8rem; color: var(--text-2);
+}
+.char-listing-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--bg-3);
+  border-radius: 999px; padding: 4px 6px 4px 10px; color: var(--text);
+}
+.char-listing-cancel {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  background: transparent; color: var(--text-2); cursor: pointer;
+}
+.char-listing-cancel:hover { background: var(--bg); color: var(--red); }
+.char-market-picker {
+  width: 100%; background: var(--bg); border: 1px solid #2a2f42; border-radius: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.char-market-serials { display: flex; flex-wrap: wrap; gap: 8px; }
+.char-market-serial { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; cursor: pointer; }
+.char-market-price-row { display: flex; gap: 8px; }
+.char-market-price-row input {
+  flex: 1; background: var(--bg-3); border: 1px solid #2a2f42; color: var(--text);
+  border-radius: 8px; padding: 8px 10px; font-size: .9rem;
+}
 
 /* ── Catalogue : lecteur audio par ligne ── */
 .cat-play-cell { width: 44px; }
@@ -1809,6 +1853,18 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 /* Wishlist */
 .char-wish.on { border-color: var(--red); color: var(--red); }
 .char-wish.on i { color: var(--red); }
+
+/* ── Marché ── */
+.market-card { position: relative; padding-bottom: 44px; }
+.market-seller { font-size: .72rem; margin-top: 2px; }
+.market-price {
+  position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.6); color: #ffd34d;
+  font-weight: 700; font-size: .72rem; padding: 3px 8px; border-radius: 8px;
+}
+.market-card .btn-primary,
+.market-card .btn-secondary {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; justify-content: center; font-size: .78rem; padding: 8px;
+}
 
 /* Édition de carte + vote « Édition 2 » */
 .char-edition {

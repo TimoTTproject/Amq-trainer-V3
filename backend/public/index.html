@@ -329,6 +329,12 @@
           <span class="hub-pin" data-pin="trades" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
           <i class="fas fa-chevron-right hub-go"></i>
         </button>
+        <button class="hub-card" data-nav="market" style="--c:#3ec98a">
+          <span class="hub-ico"><i class="fas fa-store"></i></span>
+          <span class="hub-txt"><h3 data-i18n="Marché">Marché</h3><p data-i18n="Achète et vends des cartes contre des tokens">Achète et vends des cartes contre des tokens</p></span>
+          <span class="hub-pin" data-pin="market" role="button" tabindex="0" title="Épingler dans le menu" data-i18n-title="Épingler dans le menu"><i class="fas fa-thumbtack"></i></span>
+          <i class="fas fa-chevron-right hub-go"></i>
+        </button>
         <a class="hub-card hub-card-feat" href="https://discord.gg/qsbn3bQh5K" target="_blank" rel="noopener" style="--c:#5865f2">
           <span class="hub-ico"><i class="fab fa-discord"></i></span>
           <span class="hub-txt"><h3>Discord <span class="hub-badge" data-i18n="Rejoins-nous">Rejoins-nous</span></h3><p data-i18n="Entraide, retours, annonces — toute la communauté est là-bas">Entraide, retours, annonces — toute la communauté est là-bas</p></span>
@@ -374,6 +380,43 @@
       </div>
       <p id="trade-msg" class="gacha-msg"></p>
       <button class="btn-primary" id="trade-send"><i class="fas fa-paper-plane"></i> Envoyer la proposition</button>
+    </div>
+
+    <!-- VUE MARCHÉ (vente/achat de cartes entre joueurs) -->
+    <div id="view-market" class="hidden">
+      <button class="btn-back" id="back-community-market"><i class="fas fa-arrow-left"></i> Communauté</button>
+      <div class="gacha-top"><h2><i class="fas fa-store"></i> Marché</h2></div>
+      <p class="gacha-sub">Achète et vends des exemplaires précis contre des tokens.</p>
+      <div class="mode-switch">
+        <button class="mode-btn market-tab active" data-market-tab="browse">Parcourir</button>
+        <button class="mode-btn market-tab" data-market-tab="mine">Mes annonces</button>
+      </div>
+      <div id="market-browse">
+        <div class="collection-toolbar">
+          <div class="coll-filters" id="market-filters"></div>
+          <input type="search" class="trade-search" id="market-search" placeholder="Rechercher un personnage…" autocomplete="off" />
+          <div class="coll-sort">
+            <label for="market-sort">Trier :</label>
+            <select id="market-sort">
+              <option value="price_asc">Prix croissant</option>
+              <option value="price_desc">Prix décroissant</option>
+              <option value="recent">Plus récentes</option>
+            </select>
+          </div>
+        </div>
+        <div id="market-list" class="card-grid"></div>
+        <div class="catalog-pager">
+          <button class="btn-secondary" id="market-prev"><i class="fas fa-chevron-left"></i></button>
+          <span id="market-pageinfo">—</span>
+          <button class="btn-secondary" id="market-next"><i class="fas fa-chevron-right"></i></button>
+        </div>
+      </div>
+      <div id="market-mine" class="hidden">
+        <h3 class="trades-hist-title"><i class="fas fa-tags"></i> En vente</h3>
+        <div id="market-mine-active" class="card-grid"></div>
+        <h3 class="trades-hist-title"><i class="fas fa-clock-rotate-left"></i> Historique</h3>
+        <div id="market-mine-history" class="trades-history"></div>
+      </div>
     </div>
 
     <!-- VUE JOUEURS (annuaire) -->
@@ -518,6 +561,7 @@
         <div class="home-quests" id="home-quests"></div>
         <div class="home-recent-pulls" id="home-recent-pulls"></div>
       </div>
+      <div class="home-recent-pulls" id="home-market-teaser"></div>
       <div class="home-highlights" id="home-highlights"></div>
       <div class="home-changelog" id="home-changelog"></div>
     </div>

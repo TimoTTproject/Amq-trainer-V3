@@ -114,6 +114,8 @@ model User {
   cosmetics       UserCosmetic[]
   tradesSent      Trade[]              @relation("TradeFrom")
   tradesReceived  Trade[]              @relation("TradeTo")
+  marketListings  MarketListing[]      @relation("MarketSeller")
+  marketPurchases MarketListing[]      @relation("MarketBuyer")
   friendsSent     Friendship[]         @relation("FriendReq")
   friendsReceived Friendship[]         @relation("FriendAdr")
   passwordResets  PasswordResetToken[]
@@ -535,6 +537,7 @@ model Character {
   wishedBy       Wishlist[]
   albumEntries   CardAlbumItem[]
   promotionVotes PromotionVote[]
+  marketListings MarketListing[]
 
   @@index([rarity])
   @@index([series])
@@ -572,14 +575,40 @@ model CardInstance {
   // qu'un personnage a déjà été obtenu par tirage au moins une fois avant de
   // pouvoir être fabriqué (pas de perso qui n'existe QUE par craft).
   source      String   @default("pull")
+  // En vente sur le marché : gèle l'exemplaire (protégé de la fusion/ascension
+  // et des échanges) tant qu'une annonce active existe pour lui.
+  listed      Boolean  @default(false)
 
-  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   MarketListing?
 
   @@unique([characterId, serial])
   @@index([userId])
   @@index([userId, characterId])
   @@index([obtainedAt])
+}
+
+// Annonce de vente d'un exemplaire précis (CardInstance) contre des tokens.
+model MarketListing {
+  id             Int       @id @default(autoincrement())
+  sellerId       String
+  buyerId        String?
+  cardInstanceId Int       @unique
+  characterId    Int
+  price          Int
+  status         String    @default("active") // active | sold | cancelled
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  seller       User         @relation("MarketSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  buyer        User?        @relation("MarketBuyer", fields: [buyerId], references: [id], onDelete: SetNull)
+  cardInstance CardInstance @relation(fields: [cardInstanceId], references: [id], onDelete: Cascade)
+  character    Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([status, characterId])
+  @@index([status, price])
+  @@index([sellerId, status])
 }
 
 model UserCard {

@@ -62,7 +62,7 @@ function ensureAppReady() {
   appReadyPromise = (async () => {
     await Promise.all([
       'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'albums.js', 'daily.js', 'gacha.js',
-      'catalog.js', 'community.js', 'profile.js', 'anime-autocomplete.js', 'tutorial.js',
+      'catalog.js', 'community.js', 'market.js', 'profile.js', 'anime-autocomplete.js', 'tutorial.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');
@@ -582,6 +582,7 @@ function showView(name, options = {}) {
   document.getElementById('view-players').classList.toggle('hidden', name !== 'players');
   document.getElementById('view-trades').classList.toggle('hidden', name !== 'trades');
   document.getElementById('view-trade').classList.toggle('hidden', name !== 'trade');
+  document.getElementById('view-market').classList.toggle('hidden', name !== 'market');
   document.getElementById('view-quiz').classList.toggle('hidden', name !== 'quiz');
   document.getElementById('view-gacha').classList.toggle('hidden', !name.startsWith('gacha'));
   document.getElementById('view-shop').classList.toggle('hidden', name !== 'shop');
@@ -631,6 +632,7 @@ function showView(name, options = {}) {
   if (name === 'home' && typeof loadChangelog === 'function') loadChangelog();
   if (name === 'home' && typeof loadHighlights === 'function') loadHighlights();
   if (name === 'home' && typeof loadPersonalStats === 'function') loadPersonalStats();
+  if (name === 'home' && typeof loadMarketTeaser === 'function') loadMarketTeaser();
 }
 
 // Rattache chaque vue de mode à son onglet hub (pour la surbrillance navbar)
@@ -640,6 +642,7 @@ const NAV_GROUP = {
   characters: 'collection', 'album-detail': 'collection',
   shop: 'extras', craft: 'extras', catalog: 'extras', playlist: 'extras', 'playlist-detail': 'extras',
   friends: 'community', leaderboard: 'community', players: 'community', trades: 'community', trade: 'community',
+  market: 'community',
 };
 
 // Navigation depuis la navbar
@@ -650,6 +653,7 @@ function navTo(name) {
   if (name === 'community') return showView('community');
   if (name === 'players') return openPlayers();
   if (name === 'trades') return openTrades();
+  if (name === 'market') return openMarket();
   if (name === 'craft') return openCraft();
   if (name === 'gacha') return openGacha('pull'); // compat anciens raccourcis épinglés / liens
   if (name === 'gacha-pull') return openGacha('pull');
@@ -1189,6 +1193,27 @@ function setupAppUI() {
   document.getElementById('trade-send').addEventListener('click', sendTrade);
   document.getElementById('trades-list').addEventListener('click', (e) => {
     const b = e.target.closest('.trade-act'); if (b) resolveTrade(b.dataset.id, b.dataset.act);
+  });
+  // Marché
+  document.getElementById('back-community-market').addEventListener('click', () => showView('community'));
+  document.querySelectorAll('.market-tab').forEach((b) => b.addEventListener('click', () => setMarketTab(b.dataset.marketTab)));
+  document.getElementById('market-filters').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-filter]'); if (b) setMarketRarity(b.dataset.filter);
+  });
+  let marketSearchTimer;
+  document.getElementById('market-search').addEventListener('input', (e) => {
+    clearTimeout(marketSearchTimer);
+    marketSearchTimer = setTimeout(() => { marketSearch = e.target.value.trim(); loadMarket(1); }, 300);
+  });
+  document.getElementById('market-sort').addEventListener('change', (e) => { marketSort = e.target.value; loadMarket(1); });
+  document.getElementById('market-prev').addEventListener('click', () => loadMarket(marketPage - 1));
+  document.getElementById('market-next').addEventListener('click', () => loadMarket(marketPage + 1));
+  document.getElementById('market-list').addEventListener('click', (e) => {
+    const buy = e.target.closest('.market-buy-btn'); if (buy) { e.stopPropagation(); return buyMarketListing(parseInt(buy.dataset.id)); }
+    const cancel = e.target.closest('.market-cancel-btn'); if (cancel) { e.stopPropagation(); return cancelMarketListing(parseInt(cancel.dataset.id)); }
+  });
+  document.getElementById('market-mine-active').addEventListener('click', (e) => {
+    const cancel = e.target.closest('.market-cancel-btn'); if (cancel) { e.stopPropagation(); return cancelMarketListing(parseInt(cancel.dataset.id)); }
   });
   document.getElementById('back-home-lb').addEventListener('click', () => showView('community'));
   document.getElementById('back-community-friends').addEventListener('click', () => showView('community'));
@@ -2662,6 +2687,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('home-changelog').addEventListener('click', (e) => {
     if (e.target.closest('#changelog-see-all')) openChangelogModal();
+  });
+  document.getElementById('home-market-teaser').addEventListener('click', (e) => {
+    if (e.target.closest('#home-market-see-all')) return navTo('market');
+    const b = e.target.closest('[data-market-id]');
+    if (b) navTo('market');
   });
   document.getElementById('changelog-modal-close').addEventListener('click', () => {
     document.getElementById('changelog-modal').classList.add('hidden');

@@ -27,6 +27,7 @@ const NAV_META = {
   leaderboard: { icon: 'fa-trophy', label: 'Classement' },
   players: { icon: 'fa-users', label: 'Joueurs' },
   trades: { icon: 'fa-right-left', label: 'Échanges' },
+  market: { icon: 'fa-store', label: 'Marché' },
 };
 
 // Bascule un raccourci épinglé/désépinglé, met à jour currentUser + l'affichage.
