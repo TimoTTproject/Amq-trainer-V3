@@ -1161,15 +1161,21 @@ function setupAppUI() {
     clearTimeout(tradeGiveSearchTimer);
     tradeGiveSearchTimer = setTimeout(() => {
       tradeGiveSearch = e.target.value;
-      renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch);
+      renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch, tradeGiveRarity);
     }, 200);
   });
   document.getElementById('trade-want-search').addEventListener('input', (e) => {
     clearTimeout(tradeWantSearchTimer);
     tradeWantSearchTimer = setTimeout(() => {
       tradeWantSearch = e.target.value;
-      renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch);
+      renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch, tradeWantRarity);
     }, 200);
+  });
+  document.getElementById('trade-give-filters').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-filter]'); if (b) setTradeRarity('give', b.dataset.filter);
+  });
+  document.getElementById('trade-want-filters').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-filter]'); if (b) setTradeRarity('want', b.dataset.filter);
   });
   document.getElementById('trade-send').addEventListener('click', sendTrade);
   document.getElementById('trades-list').addEventListener('click', (e) => {

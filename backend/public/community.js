@@ -241,6 +241,8 @@ let tradeGiveChars = []; // liste complète possédée par moi (pour filtrer san
 let tradeWantChars = []; // liste complète possédée par l'autre joueur
 let tradeGiveSearch = '';
 let tradeWantSearch = '';
+let tradeGiveRarity = 'all';
+let tradeWantRarity = 'all';
 const tradeGiveSel = new Map(); // characterId -> { count, serialIds }
 const tradeWantSel = new Map();
 
@@ -248,6 +250,7 @@ async function openTradeBuilder(userId, displayName) {
   tradeTarget = { id: userId, name: displayName };
   tradeGiveSel.clear(); tradeWantSel.clear();
   tradeGiveSearch = ''; tradeWantSearch = '';
+  tradeGiveRarity = 'all'; tradeWantRarity = 'all';
   showView('trade');
   document.getElementById('trade-with').textContent = displayName;
   document.getElementById('trade-msg').textContent = '';
@@ -263,12 +266,21 @@ async function openTradeBuilder(userId, displayName) {
     ]);
     tradeGiveChars = mine.characters;
     tradeWantChars = theirs.characters;
-    renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch);
-    renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch);
+    document.getElementById('trade-give-filters').innerHTML = rarityFilterChips(tradeByRarity(tradeGiveChars), tradeGiveRarity);
+    document.getElementById('trade-want-filters').innerHTML = rarityFilterChips(tradeByRarity(tradeWantChars), tradeWantRarity);
+    renderTradePool('trade-give', tradeGiveChars, tradeGiveSel, tradeGiveSearch, tradeGiveRarity);
+    renderTradePool('trade-want', tradeWantChars, tradeWantSel, tradeWantSearch, tradeWantRarity);
     updateTradeCounts();
   } catch (e) {
     document.getElementById('trade-msg').textContent = e.message;
   }
+}
+
+// Effectif par rareté (persos DISTINCTS possédés), pour les chips de filtre.
+function tradeByRarity(characters) {
+  const byRarity = {};
+  characters.forEach((c) => (byRarity[c.rarity] = (byRarity[c.rarity] || 0) + 1));
+  return byRarity;
 }
 
 function tradeSelectedTotal(selSet) {
@@ -282,11 +294,12 @@ function updateTradeCounts() {
   document.getElementById('trade-want-count').textContent = `${tradeSelectedTotal(tradeWantSel)}/${TRADE_MAX_ITEMS}`;
 }
 
-function renderTradePool(containerId, characters, selSet, search) {
+function renderTradePool(containerId, characters, selSet, search, rarity) {
   const el = document.getElementById(containerId);
   if (!characters.length) { el.innerHTML = '<p class="muted">Aucune carte possédée.</p>'; return; }
   const q = (search || '').trim().toLowerCase();
-  const list = q ? characters.filter((c) => c.name.toLowerCase().includes(q)) : characters;
+  let list = rarity && rarity !== 'all' ? characters.filter((c) => c.rarity === rarity) : characters;
+  if (q) list = list.filter((c) => c.name.toLowerCase().includes(q));
   if (!list.length) { el.innerHTML = '<p class="muted">Aucun personnage ne correspond.</p>'; return; }
   el.innerHTML = list.map((c) => {
     const sel = selSet.get(c.characterId);
@@ -320,7 +333,17 @@ function toggleTradeCard(containerId, characters, selSet, characterId) {
   }
   updateTradeCounts();
   const search = containerId === 'trade-give' ? tradeGiveSearch : tradeWantSearch;
-  renderTradePool(containerId, characters, selSet, search);
+  const rarity = containerId === 'trade-give' ? tradeGiveRarity : tradeWantRarity;
+  renderTradePool(containerId, characters, selSet, search, rarity);
+}
+
+function setTradeRarity(side, rarity) {
+  if (side === 'give') tradeGiveRarity = rarity; else tradeWantRarity = rarity;
+  const characters = side === 'give' ? tradeGiveChars : tradeWantChars;
+  const selSet = side === 'give' ? tradeGiveSel : tradeWantSel;
+  const search = side === 'give' ? tradeGiveSearch : tradeWantSearch;
+  document.getElementById(`trade-${side}-filters`).innerHTML = rarityFilterChips(tradeByRarity(characters), rarity);
+  renderTradePool(`trade-${side}`, characters, selSet, search, rarity);
 }
 
 async function sendTrade() {
