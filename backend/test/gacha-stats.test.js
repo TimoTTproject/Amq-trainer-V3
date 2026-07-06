@@ -18,7 +18,7 @@ test.beforeEach(() => {
     email: 'joueur@example.com',
     displayName: 'Joueur',
     pity: 4,
-    pullCommon: 9,
+    pullCommon: 49,
     pullRare: 0,
     pullEpic: 0,
     pullLegendary: 0,
@@ -31,8 +31,19 @@ test("stats gacha : expose la chance comme indice relatif et non comme probabili
   const res = await app.request('/api/gacha/stats', { cookie: app.authCookie(user.id) });
 
   assert.equal(res.status, 200);
-  assert.equal(res.json.total, 10);
+  assert.equal(res.json.total, 50);
   assert.ok(res.json.luck.percent > 100); // ancien format conservé pour compatibilité
   assert.equal(res.json.luck.index, res.json.luck.percent / 100);
   assert.ok(res.json.luck.index > 1);
+});
+
+test("stats gacha : n'évalue pas la chance sur un échantillon trop petit", async () => {
+  user.pullCommon = 9;
+
+  const res = await app.request('/api/gacha/stats', { cookie: app.authCookie(user.id) });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.json.total, 10);
+  assert.equal(res.json.luck.index, null);
+  assert.match(res.json.luck.label, /40 tirage/);
 });

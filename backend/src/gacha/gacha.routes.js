@@ -317,7 +317,10 @@ router.get('/recent-pulls', requireAuth, async (req, res) => {
 // + indice de chance. La « valeur » d'une rareté = 1/probabilité, si bien que
 // l'espérance par tirage vaut le nombre de raretés → indice 100% = pile dans la moyenne.
 const RARITY_KEYS = ['common', 'rare', 'epic', 'legendary', 'mythic'];
-const LUCK_MIN_PULLS = 10;
+// En dessous de 50 tirages, un seul Mythique suffit à faire varier l'indice
+// de plusieurs centaines de pourcents : l'échantillon est trop petit pour
+// donner une lecture utile au joueur.
+const LUCK_MIN_PULLS = 50;
 router.get('/stats', requireAuth, async (req, res) => {
   const u = req.user;
   const counts = {

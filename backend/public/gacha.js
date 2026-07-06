@@ -729,7 +729,7 @@ function renderGachaStats(d) {
          <div class="luck-kicker">Indice de chance</div>
          <div class="luck-pct"><span>×</span>${luckIndex.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
          <div class="luck-label">${escapeHtml(luck.label)}</div>
-         <div class="hint">×1 = conforme aux taux théoriques · ce n’est pas une probabilité de tirage</div>
+         <div class="hint">×1 = proche des taux de base · ce n’est pas une probabilité de tirage</div>
        </div>`;
   const rows = (d.perRarity || []).map((r) => {
     const delta = r.actualRate - r.expectedRate;
@@ -738,7 +738,7 @@ function renderGachaStats(d) {
     return `<div class="gs-row">
       <div class="gs-line">
         <span class="rb-pill r-${r.rarity}">${escapeHtml(r.label)}</span>
-        <span class="gs-rates">${r.actualRate.toFixed(1)}% <i class="hint">(attendu ${r.expectedRate.toFixed(1)}%)</i>
+        <span class="gs-rates">${r.actualRate.toFixed(1)}% <i class="hint">(base ${r.expectedRate.toFixed(1)}%)</i>
           ${dcls ? `<span class="gs-delta ${dcls}">${sign}${delta.toFixed(1)}</span>` : ''}</span>
         <span class="gs-count">×${r.count}</span>
       </div>
@@ -752,7 +752,7 @@ function renderGachaStats(d) {
     ${luckHead}
     <div class="gs-meta"><span><b>${d.total}</b> tirage(s)</span><span>Pitié : <b>${d.pity}</b>/${d.pityLimit}</span></div>
     <div class="gs-rows">${rows}</div>
-    <p class="hint gs-foot">Le repère clair sur chaque barre indique le taux attendu.</p>`;
+    <p class="hint gs-foot">Le repère clair indique le taux de base. La garantie des packs et la pitié augmentent naturellement les résultats Rare et Légendaire+.</p>`;
 }
 
 // ── Modale « le gacha a été réinitialisé » (une fois par joueur) ──
