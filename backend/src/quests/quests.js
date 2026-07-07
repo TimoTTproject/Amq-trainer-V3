@@ -54,33 +54,60 @@ function pickDaily(excludedTypes = []) {
   });
 }
 
+async function syncCompletedDailyQuests(userId, day, quests) {
+  const dailyQuests = quests.filter((q) => q.type === 'daily' && !q.claimed && q.progress < q.target);
+  if (!dailyQuests.length) return quests;
+
+  try {
+    const run = await prisma.dailyRun.findUnique({
+      where: { userId_day: { userId, day } },
+      select: { finished: true },
+    });
+    if (!run?.finished) return quests;
+
+    const ids = dailyQuests.map((q) => q.id);
+    await prisma.quest.updateMany({
+      where: { id: { in: ids }, userId, type: 'daily', claimed: false },
+      data: { progress: 1 },
+    });
+    return quests.map((q) => (ids.includes(q.id) ? { ...q, progress: q.target } : q));
+  } catch (e) {
+    // Ne bloque jamais l'affichage des quêtes.
+    return quests;
+  }
+}
+
 // Récupère (ou crée) les quêtes du jour pour un utilisateur
 async function ensureDailyQuests(userId) {
   const day = todayStr();
-  let quests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
-  if (!quests.length) {
+  let todayQuests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
+  if (!todayQuests.length) {
     await prisma.quest.createMany({
       data: pickDaily().map((p) => ({ userId, day, type: p.type, label: p.label, target: p.target, reward: p.reward })),
     });
-    quests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
-  } else if (quests.length < DAILY_COUNT) {
-    const missing = DAILY_COUNT - quests.length;
-    const additions = pickDaily(quests.map((q) => q.type)).slice(0, missing);
+    todayQuests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
+  } else if (todayQuests.length < DAILY_COUNT) {
+    const missing = DAILY_COUNT - todayQuests.length;
+    const additions = pickDaily(todayQuests.map((q) => q.type)).slice(0, missing);
     if (additions.length) {
       await prisma.quest.createMany({
         data: additions.map((p) => ({ userId, day, type: p.type, label: p.label, target: p.target, reward: p.reward })),
       });
-      quests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
+      todayQuests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
     }
   }
-  return quests;
+  const visibleQuests = await prisma.quest.findMany({
+    where: { userId, OR: [{ claimed: false }, { day }] },
+    orderBy: [{ day: 'desc' }, { id: 'asc' }],
+  });
+  return syncCompletedDailyQuests(userId, day, visibleQuests);
 }
 
 // Fait progresser les quêtes du jour d'un type donné (fire-and-forget)
 async function progressQuests(userId, type, amount = 1) {
   try {
     await prisma.quest.updateMany({
-      where: { userId, day: todayStr(), type, claimed: false },
+      where: { userId, type, claimed: false },
       data: { progress: { increment: amount } },
     });
   } catch (e) {

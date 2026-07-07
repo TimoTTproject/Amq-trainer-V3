@@ -153,6 +153,7 @@ const settings = {
   autoNext: localStorage.getItem('amq_autonext') === 'true',
   count: parseInt(localStorage.getItem('amq_count') ?? '0'), // 0 = illimité
   titleLang: localStorage.getItem('amq_titleLang') || 'en', // 'en' = anglais d'abord, 'jp' = japonais d'abord
+  quizLayout: localStorage.getItem('amq_quizLayout') === 'vertical' ? 'vertical' : 'horizontal',
 };
 let autoNextTimer = null; // enchaînement automatique vers la manche suivante
 // Session finie (solo classique) : compteur de sons et bonnes réponses
@@ -1094,6 +1095,13 @@ function setupAppUI() {
     localStorage.setItem('amq_quiz_type', quizType);
     syncTypeFilter();
   });
+  document.getElementById('view-quiz')?.addEventListener('click', (e) => {
+    const b = e.target.closest('.ql-btn');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setQuizLayout(b.dataset.layout);
+  });
   document.getElementById('daily-btn').addEventListener('click', claimDaily);
   document.getElementById('share-btn').addEventListener('click', shareGame);
   document.querySelectorAll('.mode-btn').forEach((btn) => {
@@ -1507,15 +1515,53 @@ function setupAppUI() {
       quizSessionEnded = true; // la prochaine manche démarre une nouvelle session
     });
   }
+  const optQuizLayout = document.getElementById('opt-quiz-layout');
+  if (optQuizLayout) {
+    optQuizLayout.value = settings.quizLayout;
+    optQuizLayout.addEventListener('change', () => {
+      setQuizLayout(optQuizLayout.value);
+    });
+  }
+  applyQuizLayout();
   // « Passer » : abandonne la manche (révèle la réponse, sans tokens).
   document.getElementById('skip-btn').addEventListener('click', () => {
     if (!currentSong || answered) return;
     if (isTraining) showAnswerCasual(); else guessAnswer('');
   });
+  document.getElementById('layout-toggle-btn')?.addEventListener('click', () => {
+    setQuizLayout(settings.quizLayout === 'vertical' ? 'horizontal' : 'vertical');
+  });
   document.getElementById('volume').addEventListener('input', (e) => setVolume(+e.target.value));
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => {
     b.addEventListener('click', () => sendFeedback(b.dataset.fb));
   });
+}
+
+function applyQuizLayout() {
+  const panel = document.getElementById('quiz-panel');
+  const vertical = settings.quizLayout === 'vertical';
+  if (panel) {
+    panel.classList.toggle('layout-vertical', vertical);
+    panel.classList.toggle('layout-horizontal', !vertical);
+  }
+  document.querySelectorAll('.ql-btn').forEach((b) =>
+    b.classList.toggle('active', b.dataset.layout === settings.quizLayout)
+  );
+  const select = document.getElementById('opt-quiz-layout');
+  if (select && select.value !== settings.quizLayout) select.value = settings.quizLayout;
+  const toggle = document.getElementById('layout-toggle-btn');
+  if (toggle) {
+    toggle.innerHTML = vertical
+      ? '<i class="fas fa-grip-lines"></i> Vertical'
+      : '<i class="fas fa-table-columns"></i> Horizontal';
+    toggle.setAttribute('aria-pressed', String(vertical));
+  }
+}
+
+function setQuizLayout(layout) {
+  settings.quizLayout = layout === 'vertical' ? 'vertical' : 'horizontal';
+  localStorage.setItem('amq_quizLayout', settings.quizLayout);
+  applyQuizLayout();
 }
 
 function applyModeUI() {
@@ -2396,6 +2442,7 @@ const QUEST_ICONS = {
 // Fragment réutilisé par le widget Accueil et le panneau d'en-tête.
 function questItemHtml(q) {
   const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
+  const carried = q.carried ? '<span class="quest-carried">Reportée</span>' : '';
   const right = q.claimed
     ? '<span class="quest-claimed">✓ Réclamé</span>'
     : q.done
@@ -2403,7 +2450,7 @@ function questItemHtml(q) {
     : `<span class="quest-reward">+${q.reward} 🪙</span>`;
   const ico = QUEST_ICONS[q.type] || 'fa-bullseye';
   return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
-    <div class="quest-top"><span class="quest-label"><i class="fas ${ico} quest-ico"></i> ${escapeHtml(q.label)}</span>${right}</div>
+    <div class="quest-top"><span class="quest-label"><i class="fas ${ico} quest-ico"></i> ${escapeHtml(q.label)}${carried}</span>${right}</div>
     <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
     <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
   </div>`;
@@ -2454,7 +2501,7 @@ async function loadHomeToday() {
         </div>`);
   } catch {}
 
-  // Quêtes du jour
+  // Quêtes
   try {
     const { quests } = await api('/api/quests');
     if (quests && quests.length) {
@@ -2494,7 +2541,7 @@ async function loadQuests() {
     const claimable = quests.filter((q) => q.done && !q.claimed).length;
     box.classList.toggle('has-claim', claimable > 0);
     box.innerHTML =
-      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes du jour ${questsBadgeHtml(quests)}</h3><div class="quests-list">` +
+      `<h3 class="quests-title"><i class="fas fa-bullseye"></i> Quêtes ${questsBadgeHtml(quests)}</h3><div class="quests-list">` +
       quests.map(questItemHtml).join('') + '</div>';
   } catch { box.innerHTML = ''; }
 }
@@ -2506,8 +2553,8 @@ async function renderQuestsPopover() {
   try {
     const { quests } = await api('/api/quests');
     updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length);
-    if (!quests || !quests.length) { box.innerHTML = '<p class="hint">Aucune quête aujourd\'hui.</p>'; return; }
-    box.innerHTML = `<h4>Quêtes du jour ${questsBadgeHtml(quests)}</h4>
+    if (!quests || !quests.length) { box.innerHTML = '<p class="hint">Aucune quête.</p>'; return; }
+    box.innerHTML = `<h4>Quêtes ${questsBadgeHtml(quests)}</h4>
       <div class="quests-pop-list">${quests.map(questItemHtml).join('')}</div>`;
   } catch (e) {
     box.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;

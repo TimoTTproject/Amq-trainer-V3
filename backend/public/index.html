@@ -589,6 +589,11 @@
           <button class="tf-btn" data-type="OP">Openings</button>
           <button class="tf-btn" data-type="ED">Endings</button>
         </div>
+        <div class="quiz-layout-switch" title="Changer la disposition du quiz">
+          <span>Disposition</span>
+          <button type="button" class="ql-btn active" data-layout="horizontal">Horizontale</button>
+          <button type="button" class="ql-btn" data-layout="vertical">Verticale</button>
+        </div>
       </div>
 
     <!-- Import + mode (replié : la plupart des joueurs n'y touchent qu'une fois) -->
@@ -622,7 +627,16 @@
 
     <!-- Réglages (repliés, valeurs par défaut sensées pour la plupart des joueurs) -->
     <details class="quiz-options-collapse">
-      <summary class="panel-summary"><span><i class="fas fa-sliders"></i> Réglages de la manche</span> <span class="quiz-collapse-hint">Durée, nombre de sons… <i class="fas fa-chevron-down"></i></span></summary>
+      <summary class="panel-summary">
+        <span><i class="fas fa-sliders"></i> Réglages de la manche</span>
+        <span class="quiz-summary-actions">
+          <span class="quiz-layout-inline" title="Changer la disposition du quiz">
+            <button type="button" class="ql-btn active" data-layout="horizontal">Horizontal</button>
+            <button type="button" class="ql-btn" data-layout="vertical">Vertical</button>
+          </span>
+          <span class="quiz-collapse-hint">Durée, nombre de sons… <i class="fas fa-chevron-down"></i></span>
+        </span>
+      </summary>
       <div class="quiz-options" id="quiz-options">
         <label><input type="checkbox" id="opt-random-start" checked /> Départ aléatoire</label>
         <label><input type="checkbox" id="opt-autonext" /> Manche suivante auto</label>
@@ -644,11 +658,17 @@
             <option value="20">20</option>
           </select>
         </label>
+        <label>Disposition :
+          <select id="opt-quiz-layout">
+            <option value="horizontal" selected>Horizontale</option>
+            <option value="vertical">Verticale</option>
+          </select>
+        </label>
       </div>
     </details>
 
     <!-- Quiz -->
-    <section class="quiz-panel">
+    <section class="quiz-panel layout-horizontal" id="quiz-panel">
       <div class="quiz-stage">
       <div class="media-wrapper" id="media-wrapper">
         <video id="quiz-video" class="quiz-video-el" playsinline preload="auto" disablepictureinpicture></video>
@@ -674,6 +694,7 @@
         <button id="like-btn" class="btn-secondary" title="Ajouter à ma playlist" disabled><i class="far fa-heart"></i></button>
         <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
         <button id="show-answer-btn" class="btn-secondary"><i class="fas fa-lightbulb"></i> Voir la réponse</button>
+        <button id="layout-toggle-btn" class="btn-secondary" title="Changer la disposition du quiz"><i class="fas fa-table-columns"></i> Horizontal</button>
         <button id="skip-btn" class="btn-secondary hidden" title="Passer (Échap)"><i class="fas fa-forward-step"></i> Passer</button>
         <button id="next-btn" class="btn-primary"><i class="fas fa-play"></i> Démarrer</button>
       </div>

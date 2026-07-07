@@ -8,9 +8,11 @@ const router = express.Router();
 
 function publicQuest(q) {
   const progress = Math.min(q.progress, q.target);
+  const today = todayStr();
   return {
     id: q.id, type: q.type, label: q.label, target: q.target, progress,
     reward: q.reward, claimed: q.claimed, done: q.progress >= q.target,
+    day: q.day, carried: q.day !== today,
   };
 }
 
@@ -21,7 +23,7 @@ router.get('/', requireAuth, async (req, res) => {
 
 router.post('/claim/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
-  const q = await prisma.quest.findFirst({ where: { id, userId: req.user.id, day: todayStr() } });
+  const q = await prisma.quest.findFirst({ where: { id, userId: req.user.id } });
   if (!q) return res.status(404).json({ error: 'Quête introuvable' });
   if (q.claimed) return res.status(400).json({ error: 'Déjà réclamée' });
   if (q.progress < q.target) return res.status(400).json({ error: 'Quête non terminée' });
