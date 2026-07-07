@@ -2256,7 +2256,7 @@ async function guessAnswer(forcedGuess) {
   if (r.correct && !isTraining && settings.count > 0) quizCorrect++;
   const verdict = document.getElementById('answer-verdict');
   if (r.correct) {
-    verdict.textContent = r.reward ? `✅ Bonne réponse !  +${r.reward} 🪙` : '✅ Bonne réponse !';
+    verdict.textContent = r.reward ? `Bonne réponse !  +${r.reward} 🪙` : 'Bonne réponse !';
     sfx.correct();
   } else {
     verdict.textContent = '❌ Raté';
@@ -2408,7 +2408,7 @@ function questsBadgeHtml(quests) {
   const claimable = quests.filter((q) => q.done && !q.claimed).length;
   const claimedAll = quests.every((q) => q.claimed);
   return claimable
-    ? `<span class="quests-badge ready">${claimable} à réclamer ✨</span>`
+    ? `<span class="quests-badge ready">${claimable} à réclamer</span>`
     : claimedAll
     ? '<span class="quests-badge done">Tout réclamé ✓</span>'
     : '<span class="quests-badge">+🪙 chaque jour</span>';

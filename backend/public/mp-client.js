@@ -447,7 +447,7 @@ function connectMp() {
         ? '<p class="hint">ⓘ Partie sur les listes des joueurs — ne compte pas pour le classement hebdo (catalogue global uniquement).</p>'
         : '';
       document.getElementById('mp-ranking').innerHTML =
-        `<p class="mp-coop-recap">Votre équipe a atteint l'étage <b>${floor}</b> (${cleared} étage${cleared > 1 ? 's' : ''} franchi${cleared > 1 ? 's' : ''}) !${iRecord ? ' <span class="mp-record">🎉 Nouveau record perso</span>' : ''}</p>${weeklyNote}`
+        `<p class="mp-coop-recap">Votre équipe a atteint l'étage <b>${floor}</b> (${cleared} étage${cleared > 1 ? 's' : ''} franchi${cleared > 1 ? 's' : ''}) !${iRecord ? ' <span class="mp-record">Nouveau record perso</span>' : ''}</p>${weeklyNote}`
         + (d.ranking || []).map((p, i) => {
           const isMe = p.name === currentUser.displayName;
           const av = otherAvatar({ avatarUrl: p.avatarUrl, frame: p.frame, displayName: p.name }, 'avatar-xs');

@@ -378,7 +378,7 @@ async function sendTrade() {
   btn.disabled = true;
   try {
     await api('/api/trade', { method: 'POST', body: JSON.stringify(body) });
-    msg.textContent = '✅ Proposition envoyée !';
+    msg.textContent = 'Proposition envoyée !';
     sfx.correct && sfx.correct();
     setTimeout(() => openTrades(), 700);
   } catch (e) {
@@ -740,7 +740,7 @@ async function runFusion() {
       ${c.isNew ? '<span class="badge new">NOUVEAU</span>' : '<span class="badge copies">Doublon</span>'}
     </div>`;
     result.classList.remove('hidden');
-    msg.textContent = `✨ Fusion réussie : ${escapeHtml(c.name)} (${RARITY_LABELS[c.rarity] || c.rarity})${c.isNew ? ' — nouveau !' : ' (doublon)'}`;
+    msg.textContent = `Fusion réussie : ${escapeHtml(c.name)} (${RARITY_LABELS[c.rarity] || c.rarity})${c.isNew ? ' — nouveau !' : ' (doublon)'}`;
     clearFuseSelection();
     loadCraft(craftPage); // rafraîchit la possession
   } catch (e) {
