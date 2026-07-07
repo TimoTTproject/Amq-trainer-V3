@@ -3907,19 +3907,6 @@ textarea::placeholder {
   box-shadow: inset 4px 0 color-mix(in srgb, var(--c, var(--accent)) 78%, transparent);
 }
 
-.hub-card::before {
-  content: '';
-  position: absolute;
-  inset: auto 12px 10px auto;
-  width: 82px;
-  height: 82px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--c, var(--accent)) 13%, transparent);
-  filter: blur(20px);
-  opacity: .55;
-  pointer-events: none;
-}
-
 .hub-card:hover {
   border-color: color-mix(in srgb, var(--c, var(--accent)) 58%, var(--line-strong));
   box-shadow: inset 4px 0 var(--c, var(--accent)), var(--shadow-step);
