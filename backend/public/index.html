@@ -732,6 +732,11 @@
         <button class="shop-tab" data-gtab="series"><i class="fas fa-clapperboard"></i> Par série</button>
         <button class="shop-tab" data-gtab="albums"><i class="fas fa-book"></i> Albums</button>
       </div>
+      <!-- Actions transversales du gacha (accessibles depuis tous les onglets) -->
+      <div class="gacha-quick-actions">
+        <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
+        <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
+      </div>
 
       <!-- Onglet Tirage : ressources (pitié) → tirage → résultat -->
       <div id="gacha-panel-pull" class="gacha-panel">
@@ -750,10 +755,6 @@
       <p id="gacha-msg" class="gacha-msg"></p>
       <div id="pull-result" class="pull-result hidden"></div>
       <button class="btn-secondary reveal-all hidden" id="reveal-all-btn"><i class="fas fa-hand-sparkles"></i> Tout retourner</button>
-      <div class="gacha-tools">
-        <button class="btn-secondary" id="open-chars-btn"><i class="fas fa-book-open"></i> Voir tous les personnages</button>
-        <button class="btn-secondary" id="gacha-stats-btn"><i class="fas fa-chart-simple"></i> Mes stats de tirage</button>
-      </div>
       </div><!-- /gacha-panel-pull -->
 
       <!-- Onglet Vedettes & vote -->
@@ -782,7 +783,6 @@
           </label>
           <input type="search" class="trade-search coll-search" id="coll-search" placeholder="Rechercher un personnage…" autocomplete="off" />
           <button class="btn-secondary" id="goto-fuse-btn"><i class="fas fa-wand-magic-sparkles"></i> Fusionner des doublons</button>
-          <button class="btn-secondary see-all-chars-btn" data-see-all-chars><i class="fas fa-book-open"></i> Voir tous les personnages (y compris non possédés)</button>
         </div>
         <div id="collection-grid" class="card-grid"></div>
       </div>
@@ -794,7 +794,6 @@
         <div class="series-toolbar">
           <input type="search" id="sprog-search" placeholder="Rechercher une série…" autocomplete="off" />
           <button class="btn-secondary hidden" id="series-clear-filter"><i class="fas fa-xmark"></i> Retour à toutes les séries</button>
-          <button class="btn-secondary see-all-chars-btn" data-see-all-chars><i class="fas fa-book-open"></i> Voir tous les personnages</button>
         </div>
         <div id="series-spotlight" class="series-spotlight hidden"></div>
         <div id="series-progress-list" class="series-progress-list"></div>
@@ -812,7 +811,6 @@
         <div id="albs-panel-mine" class="gacha-panel">
           <div class="pls-mine-actions">
             <button class="btn-primary" id="albs-create-btn"><i class="fas fa-plus"></i> Créer un album</button>
-            <button class="btn-secondary see-all-chars-btn" data-see-all-chars><i class="fas fa-book-open"></i> Voir tous les personnages</button>
           </div>
           <div class="collection-toolbar">
             <div class="coll-filters" id="albs-filters">

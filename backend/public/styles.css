@@ -1696,7 +1696,6 @@ select.album-form-control {
 .mp-reward { font-size: .8rem; font-weight: 700; color: var(--orange); margin-left: 6px; }
 
 /* ── Stats de tirage (chance) ── */
-.gacha-tools { display: flex; gap: 10px; flex-wrap: wrap; }
 .gacha-stats-body { padding: 4px 2px; }
 .gs-title { font-size: 1.2rem; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .gs-title i { color: var(--accent); }
@@ -4807,6 +4806,21 @@ textarea::placeholder {
   border-radius: 7px;
 }
 
+/* Actions transversales (Voir tous les personnages / Mes stats), sous les
+   onglets et communes à toutes les vues du gacha — plus d'un bouton répété
+   par onglet. */
+#view-gacha .gacha-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+#view-gacha .gacha-quick-actions .btn-secondary {
+  font-size: .82rem;
+  padding: 8px 14px;
+}
+
 #gacha-panel-pull {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, .42fr);
@@ -4814,8 +4828,7 @@ textarea::placeholder {
     "banner meta"
     "banner weekly"
     "message weekly"
-    "result result"
-    "tools tools";
+    "result result";
   gap: 12px;
   align-items: stretch;
 }
@@ -4841,9 +4854,6 @@ textarea::placeholder {
   grid-area: result;
 }
 
-#gacha-panel-pull .gacha-tools {
-  grid-area: tools;
-}
 
 #gacha-panel-pull .gacha-meta:empty,
 #gacha-panel-pull .gacha-weekly:empty,
@@ -4856,8 +4866,7 @@ textarea::placeholder {
   grid-template-areas:
     "banner"
     "message"
-    "result"
-    "tools";
+    "result";
 }
 
 #view-gacha .gacha-meta,
@@ -4938,16 +4947,6 @@ textarea::placeholder {
     var(--gacha-panel-bg);
 }
 
-#view-gacha .gacha-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 10px;
-  border: 1px solid rgba(255,255,255,.07);
-  border-radius: 10px;
-  background: rgba(255,255,255,.018);
-}
 
 #gacha-panel-events .gacha-events {
   display: grid;
@@ -5188,8 +5187,7 @@ textarea::placeholder {
     align-items: flex-start;
   }
 
-  #view-home .today-tile-action,
-  #view-gacha .gacha-tools > button {
+  #view-home .today-tile-action {
     width: 100%;
   }
 
