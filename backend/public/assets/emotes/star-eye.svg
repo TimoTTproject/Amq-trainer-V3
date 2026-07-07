@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="s"><stop stop-color="#ea8cd5"/><stop offset="1" stop-color="#6935a8"/></radialGradient></defs><path d="M8 51c16-27 31-36 42-36s26 9 42 36C76 77 61 86 50 86S24 77 8 51z" fill="#fff" stroke="#2a1637" stroke-width="5"/><ellipse cx="50" cy="51" rx="27" ry="25" fill="url(#s)"/><path d="m50 25 7 17 18 1-14 11 5 18-16-10-16 10 5-18-14-11 18-1z" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1a0f2b"/>
+    <defs><radialGradient id="oe"><stop stop-color="#f0a6e0"/><stop offset="1" stop-color="#6b32b0"/></radialGradient></defs>
+    <path d="M10 51c16-24 30-33 40-33s24 9 40 33c-16 24-30 33-40 33s-24-9-40-33z" fill="#fff" stroke="#2a1637" stroke-width="4"/>
+    <ellipse cx="50" cy="51" rx="24" ry="22" fill="url(#oe)"/>
+    <path d="m50 30 4.5 11 12 .6-9 8 3 11.4L50 65l-10.5 6 3-11.4-9-8 12-.6z" fill="#fff"/></svg>

@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="15" y="8" width="72" height="84" rx="5" fill="#090909" stroke="#555" stroke-width="4"/><path d="M22 10v80" stroke="#777" stroke-width="3"/><g fill="#eee" font-family="Georgia,serif" text-anchor="middle"><text x="54" y="43" font-size="18" font-weight="700">DEATH</text><text x="54" y="65" font-size="18" font-weight="700">NOTE</text></g><path d="m75 75 7 9m-7 0 7-9" stroke="#eee" stroke-width="2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0c0c0e"/>
+    <rect x="26" y="18" width="48" height="64" rx="4" fill="#1a1a1d" stroke="#3a3a40" stroke-width="2"/>
+    <rect x="30" y="22" width="40" height="56" rx="2" fill="#111114"/>
+    <text x="50" y="42" text-anchor="middle" font-family="Georgia,serif" font-size="11" fill="#e9e6df" font-weight="700">DEATH</text>
+    <text x="50" y="56" text-anchor="middle" font-family="Georgia,serif" font-size="11" fill="#e9e6df" font-weight="700">NOTE</text>
+    <path d="M34 66h32" stroke="#5a5a62" stroke-width="1.5"/></svg>

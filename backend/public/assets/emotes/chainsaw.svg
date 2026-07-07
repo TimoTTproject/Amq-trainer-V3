@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="14" fill="#e87323"/><path d="M28 30h44v32H28z" fill="#252525" stroke="#111" stroke-width="5"/><path d="M43 61v19h23V61" fill="none" stroke="#252525" stroke-width="8"/><circle cx="50" cy="45" r="11" fill="#ddd" stroke="#111" stroke-width="5"/><path d="M50 45c28-4 34 12 31 24" fill="none" stroke="#eee" stroke-width="5"/><path d="m79 65 8 7-11 5" fill="none" stroke="#111" stroke-width="4"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#e87a24"/>
+    <path d="M22 44v-8l10 4 6-8 6 8 6-8 6 8 10-4v8z" fill="#c85f10"/>
+    <ellipse cx="50" cy="58" rx="26" ry="22" fill="#f39536"/>
+    <path d="M50 12c3 0 3 6 0 8-3-2-3-8 0-8z" fill="#c85f10"/><rect x="48.5" y="16" width="3" height="8" fill="#c85f10"/>
+    <circle cx="40" cy="54" r="4.5" fill="#2a1608"/><circle cx="60" cy="54" r="4.5" fill="#2a1608"/>
+    <path d="M38 68h24l-3 6H41z" fill="#2a1608"/>
+    <g fill="#f0ece0" stroke="#2a1608" stroke-width="1"><path d="M40 68l2 5 3-5 3 5 3-5 3 5 3-5 3 5 2-5z"/></g></svg>
