@@ -249,21 +249,36 @@ router.post('/reset-weekly-votes', requireAuth, requireAdmin, async (req, res) =
 router.post('/refresh-featured', requireAuth, requireAdmin, async (req, res) => {
   const wk = currentWeek();
   const byRarity = {};
+  const detail = {};
   for (const r of ['mythic', 'legendary', 'epic']) {
     const winnerId = await topVotedWinner(wk, r);
-    if (winnerId) byRarity[r] = winnerId;
+    if (winnerId) { byRarity[r] = winnerId; detail[r] = winnerId; }
   }
   if (!Object.keys(byRarity).length) {
-    return res.status(400).json({ error: "Aucun vote cette semaine — rien à appliquer pour l'instant." });
+    return res.status(400).json({ error: "Aucun vote pour cette semaine (n°" + wk + ") — rien à appliquer pour l'instant." });
   }
   await prisma.appSetting.upsert({
     where: { key: 'featuredOverride' },
     update: { value: JSON.stringify({ week: wk, byRarity }) },
     create: { key: 'featuredOverride', value: JSON.stringify({ week: wk, byRarity }) },
   });
+  // Relancer une vedette implique d'afficher une bannière : si elle avait été
+  // supprimée cette semaine, on lève la suppression (sinon getWeeklyFeatured
+  // renvoie une bannière vide et l'override n'aurait aucun effet visible).
+  let unsuppressed = false;
+  if ((await bannerSuppressedWeek()) === wk) {
+    await prisma.appSetting.update({ where: { key: 'bannerSuppressedWeek' }, data: { value: '-1' } });
+    unsuppressed = true;
+  }
   invalidateWeeklyCaches();
   const weekly = await getWeeklyFeatured();
-  res.json({ ok: true, week: wk, applied: Object.keys(byRarity), featured: weekly.chars });
+  res.json({
+    ok: true, week: wk, unsuppressed,
+    applied: Object.keys(byRarity),
+    featured: weekly.chars,
+    // Noms retenus par rareté (pour un retour admin explicite).
+    winners: weekly.chars.filter((c) => c.voted).map((c) => ({ rarity: c.rarity, name: c.name })),
+  });
 });
 
 // ── Candidats du vote hebdomadaire (légendaires/mythiques/épiques tirés au sort) ──

@@ -405,8 +405,9 @@ async function runRefreshFeatured() {
   status.textContent = 'Relance en cours…';
   try {
     const r = await api('/api/gacha/refresh-featured', { method: 'POST' });
-    const names = (r.featured || []).filter((c) => c.voted).map((c) => c.name).join(', ');
-    status.textContent = `Vedette relancée (semaine ${r.week}) selon les votes : ${names || r.applied.join(', ')}.`;
+    const names = (r.winners || []).map((w) => `${w.name} (${w.rarity})`).join(', ');
+    const supp = r.unsuppressed ? ' (bannière supprimée réactivée)' : '';
+    status.textContent = `Vedette relancée selon les votes${supp} : ${names || r.applied.join(', ')}. Rouvre la page Gacha pour la voir.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
