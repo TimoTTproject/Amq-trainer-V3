@@ -398,6 +398,22 @@ async function runSuppressBanner() {
   }
 }
 
+async function runRefreshFeatured() {
+  const btn = document.getElementById('admin-refresh-featured-btn');
+  const status = document.getElementById('admin-refresh-featured-status');
+  btn.disabled = true;
+  status.textContent = 'Relance en cours…';
+  try {
+    const r = await api('/api/gacha/refresh-featured', { method: 'POST' });
+    const names = (r.featured || []).filter((c) => c.voted).map((c) => c.name).join(', ');
+    status.textContent = `Vedette relancée (semaine ${r.week}) selon les votes : ${names || r.applied.join(', ')}.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runResetWeeklyVotes() {
   const btn = document.getElementById('admin-reset-weekly-votes-btn');
   const status = document.getElementById('admin-reset-weekly-votes-status');

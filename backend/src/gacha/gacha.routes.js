@@ -97,11 +97,39 @@ async function drawWeightedWinner(week, rarity) {
   return votes[votes.length - 1].characterId;
 }
 
+// Personnage le PLUS voté d'une semaine/rareté (le vainqueur « au mérite »,
+// pour le relancement manuel de la vedette par l'admin — plus intuitif qu'un
+// tirage pondéré). Départage déterministe : plus grand nombre de voix, puis
+// plus petit id. Renvoie null s'il n'y a aucun vote.
+async function topVotedWinner(week, rarity) {
+  const votes = await prisma.featuredVote.groupBy({
+    by: ['characterId'], where: { week, rarity }, _count: { characterId: true },
+  });
+  if (!votes.length) return null;
+  const max = Math.max(...votes.map((v) => v._count.characterId));
+  return votes
+    .filter((v) => v._count.characterId === max)
+    .sort((a, b) => a.characterId - b.characterId)[0].characterId;
+}
+
 // Suppression manuelle (admin) de la bannière en cours : persistée en DB pour
 // survivre aux redéploiements, contrairement à weeklyCache.
 async function bannerSuppressedWeek() {
   const s = await prisma.appSetting.findUnique({ where: { key: 'bannerSuppressedWeek' } });
   return s ? parseInt(s.value) : null;
+}
+
+// Vedette forcée par l'admin pour une semaine donnée (relancée depuis les
+// votes en cours). Renvoie { rarity: characterId } si un override existe POUR
+// cette semaine précise, sinon null (l'override est horodaté → s'auto-annule
+// la semaine suivante sans nettoyage).
+async function featuredOverrideFor(week) {
+  const s = await prisma.appSetting.findUnique({ where: { key: 'featuredOverride' } });
+  if (!s) return null;
+  try {
+    const o = JSON.parse(s.value);
+    return o && o.week === week && o.byRarity ? o.byRarity : null;
+  } catch { return null; }
 }
 
 async function getWeeklyFeatured() {
@@ -140,6 +168,26 @@ async function getWeeklyFeatured() {
       if (i >= 0) chars[i] = entry; else chars.push(entry);
     }
   } catch (e) { console.warn('weekly vote winner unavailable:', e.message); }
+
+  // Override admin : vedette forcée depuis les votes de la semaine EN COURS
+  // (bouton « Relancer la vedette selon les votes »). Prime sur le tirage
+  // déterministe ET sur le gagnant du vote de la semaine précédente.
+  try {
+    const override = await featuredOverrideFor(wk);
+    if (override) {
+      for (const [, id] of Object.entries(override)) {
+        if (!id) continue;
+        const w = await prisma.character.findUnique({
+          where: { id }, select: { id: true, name: true, imageUrl: true, rarity: true },
+        });
+        if (!w) continue;
+        byRarity[w.rarity] = w.id;
+        const i = chars.findIndex((c) => c.rarity === w.rarity);
+        const entry = { ...w, voted: true };
+        if (i >= 0) chars[i] = entry; else chars.push(entry);
+      }
+    }
+  } catch (e) { console.warn('featured override unavailable:', e.message); }
 
   weeklyCache = { week: wk, byRarity, chars, resetAt: nextMondayResetAt() };
   return weeklyCache;
@@ -190,6 +238,32 @@ router.post('/reset-weekly-votes', requireAuth, requireAdmin, async (req, res) =
   invalidateWeeklyCaches();
   const weekly = await getWeeklyFeatured();
   res.json({ ok: true, deletedVotes: count, week: wk, weekly });
+});
+
+// Relance la vedette de LA SEMAINE EN COURS d'après les votes que les joueurs
+// ont déjà émis cette semaine (normalement ces votes ne s'appliqueraient que
+// la semaine prochaine). Prend le personnage le plus voté par rareté, le fixe
+// comme vedette via un override horodaté, puis rafraîchit les caches. Ne
+// supprime aucun vote. Réversible : re-cliquer applique l'état courant des
+// votes ; l'override disparaît de lui-même au prochain lundi.
+router.post('/refresh-featured', requireAuth, requireAdmin, async (req, res) => {
+  const wk = currentWeek();
+  const byRarity = {};
+  for (const r of ['mythic', 'legendary', 'epic']) {
+    const winnerId = await topVotedWinner(wk, r);
+    if (winnerId) byRarity[r] = winnerId;
+  }
+  if (!Object.keys(byRarity).length) {
+    return res.status(400).json({ error: "Aucun vote cette semaine — rien à appliquer pour l'instant." });
+  }
+  await prisma.appSetting.upsert({
+    where: { key: 'featuredOverride' },
+    update: { value: JSON.stringify({ week: wk, byRarity }) },
+    create: { key: 'featuredOverride', value: JSON.stringify({ week: wk, byRarity }) },
+  });
+  invalidateWeeklyCaches();
+  const weekly = await getWeeklyFeatured();
+  res.json({ ok: true, week: wk, applied: Object.keys(byRarity), featured: weekly.chars });
 });
 
 // ── Candidats du vote hebdomadaire (légendaires/mythiques/épiques tirés au sort) ──

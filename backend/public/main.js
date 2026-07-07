@@ -1319,6 +1319,7 @@ function setupAppUI() {
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-rarity-check-btn').addEventListener('click', runRarityCheck);
   document.getElementById('admin-fix-supply-btn').addEventListener('click', runFixSupply);
+  document.getElementById('admin-refresh-featured-btn').addEventListener('click', runRefreshFeatured);
   document.getElementById('admin-suppress-banner-btn').addEventListener('click', runSuppressBanner);
   document.getElementById('admin-reset-weekly-votes-btn').addEventListener('click', runResetWeeklyVotes);
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
