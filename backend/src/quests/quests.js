@@ -45,8 +45,9 @@ function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-function pickDaily() {
-  const types = shuffle([...new Set(POOL.map((q) => q.type))]).slice(0, DAILY_COUNT);
+function pickDaily(excludedTypes = []) {
+  const excluded = new Set(excludedTypes);
+  const types = shuffle([...new Set(POOL.map((q) => q.type))].filter((type) => !excluded.has(type))).slice(0, DAILY_COUNT);
   return types.map((t) => {
     const opts = POOL.filter((q) => q.type === t);
     return opts[(Math.random() * opts.length) | 0];
@@ -62,6 +63,15 @@ async function ensureDailyQuests(userId) {
       data: pickDaily().map((p) => ({ userId, day, type: p.type, label: p.label, target: p.target, reward: p.reward })),
     });
     quests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
+  } else if (quests.length < DAILY_COUNT) {
+    const missing = DAILY_COUNT - quests.length;
+    const additions = pickDaily(quests.map((q) => q.type)).slice(0, missing);
+    if (additions.length) {
+      await prisma.quest.createMany({
+        data: additions.map((p) => ({ userId, day, type: p.type, label: p.label, target: p.target, reward: p.reward })),
+      });
+      quests = await prisma.quest.findMany({ where: { userId, day }, orderBy: { id: 'asc' } });
+    }
   }
   return quests;
 }
