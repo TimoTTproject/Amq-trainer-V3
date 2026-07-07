@@ -77,10 +77,34 @@ test('ensureDailyQuests : garde les anciennes quêtes non réclamées avec celle
   ];
   const carried = { id: 99, userId: 'u1', day: '2026-07-01', type: 'mp', label: 'x', target: 2, reward: 50, progress: 1, claimed: false };
 
-  prisma.quest.findMany = async ({ where }) => (where.OR ? [carried, ...today] : today);
+  prisma.quest.findMany = async ({ where }) => (where.claimed === false ? [carried, ...today] : today);
   prisma.quest.createMany = async () => { throw new Error('createMany ne doit pas être appelé'); };
 
   const quests = await ensureDailyQuests('u1');
+  assert.equal(quests.length, 5);
+  assert.equal(quests.find((q) => q.id === 99), carried);
+});
+
+test('ensureDailyQuests : masque les quetes reclamees', async () => {
+  const day = todayStr();
+  const today = [
+    { id: 1, userId: 'u1', day, type: 'correct', label: 'x', target: 10, reward: 40, progress: 0, claimed: false },
+    { id: 2, userId: 'u1', day, type: 'played', label: 'x', target: 15, reward: 35, progress: 0, claimed: false },
+    { id: 3, userId: 'u1', day, type: 'pull', label: 'x', target: 5, reward: 30, progress: 0, claimed: false },
+    { id: 4, userId: 'u1', day, type: 'tower', label: 'x', target: 8, reward: 40, progress: 0, claimed: false },
+  ];
+  const carried = { id: 99, userId: 'u1', day: '2026-07-01', type: 'mp', label: 'x', target: 2, reward: 50, progress: 1, claimed: false };
+  let visibleWhere = null;
+
+  prisma.quest.findMany = async ({ where }) => {
+    if (where.day) return today;
+    visibleWhere = where;
+    return [carried, ...today];
+  };
+  prisma.quest.createMany = async () => { throw new Error('createMany ne doit pas etre appele'); };
+
+  const quests = await ensureDailyQuests('u1');
+  assert.deepEqual(visibleWhere, { userId: 'u1', claimed: false });
   assert.equal(quests.length, 5);
   assert.equal(quests.find((q) => q.id === 99), carried);
 });

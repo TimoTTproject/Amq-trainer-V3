@@ -97,7 +97,7 @@ async function ensureDailyQuests(userId) {
     }
   }
   const visibleQuests = await prisma.quest.findMany({
-    where: { userId, OR: [{ claimed: false }, { day }] },
+    where: { userId, claimed: false },
     orderBy: [{ day: 'desc' }, { id: 'asc' }],
   });
   return syncCompletedDailyQuests(userId, day, visibleQuests);
