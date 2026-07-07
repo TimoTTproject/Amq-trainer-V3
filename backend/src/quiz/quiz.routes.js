@@ -358,6 +358,20 @@ router.get('/training-stats', requireAuth, async (req, res) => {
 // Rafraîchit (si expiré) le cache des séries : titre + synonymes normalisés de
 // chaque anime distinct du catalogue. Partagé par /series (recherche serveur,
 // entraînement ciblé) et /series-all (liste complète, autocomplétion de réponse).
+// Normalisation pour la recherche/autocomplétion : minuscules, accents retirés,
+// espaces et ponctuation supprimés — pour que « re zero », « rezero » et
+// « Re:Zero » correspondent tous, idem « Fate/Zero » ↔ « fate zero » ou les
+// titres accentués tapés sans accent. DOIT rester STRICTEMENT identique à
+// `animeSearchNormalize` côté client (public/anime-autocomplete.js), sinon le
+// filtrage local ne trouverait plus rien.
+function animeSearchNormalize(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '') // diacritiques
+    .replace(/[^a-z0-9]/g, ''); // espaces + ponctuation
+}
+
 async function ensureSeriesSearchCache() {
   if (seriesSearchCache.expiresAt >= Date.now()) return;
   const rows = await prisma.song.findMany({
@@ -375,9 +389,13 @@ async function ensureSeriesSearchCache() {
         englishTitle,
         seasonNumber: row.seasonNumber || 0,
         popularity: row.popularity || 0,
-        searchTitles: [row.animeTitle, ...(row.altTitles || [])]
-          .filter((title) => !hasCjkTitle(title))
-          .map((title) => title.toLocaleLowerCase()),
+        // Titres de recherche normalisés (titre + anglais + synonymes), dédoublonnés.
+        searchTitles: [...new Set(
+          [row.animeTitle, englishTitle, ...(row.altTitles || [])]
+            .filter((title) => title && !hasCjkTitle(title))
+            .map(animeSearchNormalize)
+            .filter(Boolean)
+        )],
       };
     }),
   };
@@ -399,24 +417,32 @@ router.get('/series-all', requirePlayer, async (req, res) => {
 
 // Recherche de séries (animes) pour l'entraînement ciblé
 router.get('/series', requirePlayer, async (req, res) => {
-  const q = (req.query.q || '').trim();
-  if (q.length < 1) return res.json({ series: [], suggestions: [] });
+  const needle = animeSearchNormalize(req.query.q || '');
+  if (!needle) return res.json({ series: [], suggestions: [] });
   await ensureSeriesSearchCache();
-  const needle = q.toLocaleLowerCase();
-  // Un seul passage par entrée pour calculer l'index de correspondance (au lieu de
-  // le refaire à chaque comparaison du tri, ce qui rend la frappe saccadée quand le
-  // catalogue grossit) : on décore, on trie sur ces valeurs déjà calculées, on retire.
+  // Un seul passage par entrée : index de correspondance le plus tôt + match
+  // exact, calculés une fois puis réutilisés au tri (frappe fluide même sur un
+  // gros catalogue). Ordre : exact d'abord, puis préfixe (index le plus tôt),
+  // puis popularité, puis titre le plus court, puis alphabétique.
   const suggestions = seriesSearchCache.entries
     .map((entry) => {
       let matchIndex = Number.MAX_SAFE_INTEGER;
+      let exact = false;
       for (const title of entry.searchTitles) {
         const index = title.indexOf(needle);
-        if (index >= 0 && index < matchIndex) matchIndex = index;
+        if (index < 0) continue;
+        if (title === needle) exact = true;
+        if (index < matchIndex) matchIndex = index;
       }
-      return { entry, matchIndex };
+      return { entry, matchIndex, exact };
     })
     .filter(({ matchIndex }) => matchIndex !== Number.MAX_SAFE_INTEGER)
-    .sort((a, b) => a.matchIndex - b.matchIndex || b.entry.popularity - a.entry.popularity || a.entry.title.localeCompare(b.entry.title))
+    .sort((a, b) =>
+      (b.exact - a.exact) ||
+      a.matchIndex - b.matchIndex ||
+      b.entry.popularity - a.entry.popularity ||
+      a.entry.title.length - b.entry.title.length ||
+      a.entry.title.localeCompare(b.entry.title))
     .slice(0, 20)
     .map(({ entry }) => entry);
   res.json({
@@ -835,4 +861,4 @@ router.get('/highlights', requirePlayer, async (req, res) => {
   res.json(highlightsCache.data);
 });
 
-module.exports = { router, quizCapState, QUIZ_CAP };
+module.exports = { router, quizCapState, QUIZ_CAP, animeSearchNormalize };

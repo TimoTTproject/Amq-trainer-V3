@@ -49,19 +49,41 @@ function closeAnimeAutocomplete(inputId) {
   state.input.setAttribute('aria-expanded', 'false');
 }
 
+// Normalisation identique au serveur (src/quiz/quiz.routes.js) : minuscules,
+// accents retirés, espaces/ponctuation supprimés — « re zero », « rezero » et
+// « Re:Zero » deviennent tous « rezero ». DOIT rester synchronisée avec le
+// serveur, sinon `searchTitles` (déjà normalisés côté serveur) et `needle` ne
+// se compareraient plus.
+function animeSearchNormalize(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
 // Filtre/trie la liste complète en mémoire : même algorithme que le serveur
-// (index de correspondance le plus tôt, puis popularité, puis alphabétique).
+// (match exact d'abord, puis index le plus tôt, popularité, longueur, alpha).
 function filterAnimeEntries(entries, needle) {
+  if (!needle) return [];
   const scored = [];
   for (const entry of entries) {
     let matchIndex = -1;
+    let exact = false;
     for (const title of entry.searchTitles) {
       const index = title.indexOf(needle);
-      if (index >= 0 && (matchIndex < 0 || index < matchIndex)) matchIndex = index;
+      if (index < 0) continue;
+      if (title === needle) exact = true;
+      if (matchIndex < 0 || index < matchIndex) matchIndex = index;
     }
-    if (matchIndex >= 0) scored.push({ entry, matchIndex });
+    if (matchIndex >= 0) scored.push({ entry, matchIndex, exact });
   }
-  scored.sort((a, b) => a.matchIndex - b.matchIndex || (b.entry.popularity || 0) - (a.entry.popularity || 0) || a.entry.title.localeCompare(b.entry.title));
+  scored.sort((a, b) =>
+    (b.exact - a.exact) ||
+    a.matchIndex - b.matchIndex ||
+    (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
+    a.entry.title.length - b.entry.title.length ||
+    a.entry.title.localeCompare(b.entry.title));
   return scored.slice(0, 20).map(({ entry }) => ({ title: entry.title, englishTitle: entry.englishTitle, seasonNumber: entry.seasonNumber || 0 }));
 }
 
@@ -105,7 +127,7 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
     const request = ++state.request;
     const entries = await loadAnimeFullList();
     if (request !== state.request || input.value.trim() !== query || input.disabled) return;
-    state.suggestions = filterAnimeEntries(entries, query.toLocaleLowerCase());
+    state.suggestions = filterAnimeEntries(entries, animeSearchNormalize(query));
     state.activeIndex = -1;
     render();
   };
