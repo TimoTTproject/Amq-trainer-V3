@@ -649,6 +649,7 @@
 
     <!-- Quiz -->
     <section class="quiz-panel">
+      <div class="quiz-stage">
       <div class="media-wrapper" id="media-wrapper">
         <video id="quiz-video" class="quiz-video-el" playsinline preload="auto" disablepictureinpicture></video>
         <!-- 2ᵉ lecteur cachée : précharge la manche suivante pendant la révélation
@@ -663,6 +664,9 @@
       <div class="reward-cap hidden" id="reward-cap"></div>
       <p id="quiz-hint" class="quiz-hint">Clique sur « Démarrer » pour lancer une manche.</p>
 
+      </div>
+
+      <div class="quiz-action-panel">
       <div class="quiz-controls">
         <button id="play-btn" class="btn-secondary"><i class="fas fa-play"></i></button>
         <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
@@ -699,6 +703,7 @@
           <button class="btn-hard" data-fb="hard">Difficile</button>
           <button class="btn-again" data-fb="again">À revoir</button>
         </div>
+      </div>
       </div>
     </section>
 
