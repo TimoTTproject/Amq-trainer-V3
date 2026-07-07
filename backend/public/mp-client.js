@@ -209,6 +209,30 @@ function applySpectatorUI() {
   if (bar) bar.classList.toggle('hidden', !mpSpectating);
 }
 
+// Libelles AniList affiches apres la revelation.
+function mpStatusLabel(status) {
+  const labels = {
+    CURRENT: 'Watching',
+    COMPLETED: 'Completed',
+    PAUSED: 'Paused',
+    DROPPED: 'Dropped',
+    PLANNING: 'Planning',
+    REPEATING: 'Rewatching',
+  };
+  return labels[status] || status || 'Dans la liste';
+}
+
+function mpListMetaHtml(meta, compact = false) {
+  if (!meta) return '';
+  const bits = [`<span class="mp-list-status">${escapeHtml(mpStatusLabel(meta.status))}</span>`];
+  if (meta.score != null) bits.push(`<span class="mp-list-score">AniList ${escapeHtml(String(meta.score))}</span>`);
+  if (meta.rating != null) {
+    const rating = Math.max(0, Math.min(5, Number(meta.rating) || 0));
+    bits.push(`<span class="mp-list-rating" aria-label="Note perso ${rating}/5">${'&#9733;'.repeat(rating)}</span>`);
+  }
+  return `<span class="${compact ? 'mp-list-meta compact' : 'mp-list-meta'}">${bits.join('')}</span>`;
+}
+
 // hostId est l'userId de l'hôte (le serveur clé les joueurs par userId, pas par socket)
 function mpIsHost() { return !!(mpRoom && currentUser && mpRoom.hostId === currentUser.id); }
 
@@ -393,8 +417,15 @@ function connectMp() {
     document.getElementById('mp-overlay').classList.add('hidden'); // révèle la vidéo
     const res = document.getElementById('mp-result');
     res.classList.remove('hidden');
-    const englishTitle = d.answer.englishTitle && d.answer.englishTitle !== d.answer.animeTitle
-      ? ` <span class="mp-answer-english">(${escapeHtml(d.answer.englishTitle)})</span>`
+    const titleDisplay = typeof formatAnimeDisplay === 'function'
+      ? formatAnimeDisplay({ title: d.answer.animeTitle, englishTitle: d.answer.englishTitle, seasonNumber: d.answer.seasonNumber || 0 })
+      : { primary: d.answer.englishTitle || d.answer.animeTitle, secondary: d.answer.englishTitle ? d.answer.animeTitle : null };
+    const owners = d.answer.owners || [];
+    const ownersHtml = owners.length
+      ? `<div class="mp-answer-owners"><span class="mp-answer-owners-label">Dans la liste de</span>${owners.map((owner) => `<span class="mp-owner-chip">${escapeHtml(owner.name)}${mpListMetaHtml(owner, true)}</span>`).join('')}</div>`
+      : '';
+    const englishTitle = titleDisplay.secondary
+      ? ` <span class="mp-answer-english">(${escapeHtml(titleDisplay.secondary)})</span>`
       : '';
     const skippedBanner = d.skipped ? '<div class="mp-coop-banner">⏭️ Extrait passé au vote</div>' : '';
     const addedBy = d.answer.addedBy
@@ -404,6 +435,16 @@ function connectMp() {
       <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span>${addedBy}</div>`;
     // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
+    const answerEl = res.querySelector('.mp-answer');
+    const answerStrong = answerEl?.querySelector('strong');
+    if (answerStrong) {
+      const titleNode = document.createElement('span');
+      titleNode.className = 'mp-answer-title';
+      titleNode.innerHTML = `<strong>${escapeHtml(titleDisplay.primary)}</strong>${titleDisplay.secondary ? `<small>${escapeHtml(titleDisplay.secondary)}</small>` : ''}`;
+      answerStrong.replaceWith(titleNode);
+      answerEl?.querySelector('.mp-answer-english')?.remove();
+    }
+    if (ownersHtml && answerEl) answerEl.insertAdjacentHTML('beforeend', ownersHtml);
     if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('mp-like'), d.answer.songId);
     if (d.coop) {
       mpCoop = true;
@@ -711,11 +752,14 @@ function renderMpScores(results, withPoints) {
         else guess = '<span class="mp-guess none">pas de réponse</span>';
       }
       // 👁 : ce joueur a l'anime dans sa liste AniList (envoyé seulement à la révélation)
+      const listMeta = p.seenAnime
+        ? `<span class="mp-seen-detail">Liste${mpListMetaHtml(p.listMeta, true)}</span>`
+        : '';
       const seen = p.seenAnime
         ? ' <span class="mp-seen" title="A cet anime dans sa liste AniList">👁</span>'
         : '';
       return `<div class="mp-score-row${p.correct ? ' ok' : ''}${p.eliminated ? ' elim' : ''}">
-        <span class="mp-name"><span class="mp-name-top">${av}${escapeHtml(p.name)}${seen}${team}</span>${guess}</span>
+        <span class="mp-name"><span class="mp-name-top">${av}${escapeHtml(p.name)}${seen}${team}</span>${guess}${listMeta}</span>
         ${lives}
         ${withPoints && p.points ? `<span class="mp-pts">+${p.points}</span>` : '<span></span>'}
         <span class="mp-total">${p.score}</span>

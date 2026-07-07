@@ -476,10 +476,12 @@ model UserSongStat {
 
 // Mode « ma liste » : songs rattachées à un utilisateur (import AniList)
 model UserCatalogEntry {
-  id      Int      @id @default(autoincrement())
-  userId  String
-  songId  Int
-  addedAt DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  userId      String
+  songId      Int
+  mediaStatus String? // statut AniList au moment de l'import : CURRENT | COMPLETED | DROPPED...
+  mediaScore  Float?  // note AniList du joueur pour cet anime (si renseignee)
+  addedAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)

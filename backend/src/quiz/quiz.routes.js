@@ -4,7 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth, requirePlayer } = require('../auth/auth.middleware');
 const { issueRoundToken, verifyRoundToken, consumeRound } = require('./round-token');
 const { isCorrectGuess } = require('./matching');
-const { englishTitleFor } = require('./anime-titles');
+const { englishTitleFor, hasCjkTitle } = require('./anime-titles');
 const { proxyVideo } = require('../util/stream');
 const { rateLimit } = require('../util/ratelimit');
 const { progressQuests, todayStr } = require('../quests/quests');
@@ -375,7 +375,9 @@ async function ensureSeriesSearchCache() {
         englishTitle,
         seasonNumber: row.seasonNumber || 0,
         popularity: row.popularity || 0,
-        searchTitles: [row.animeTitle, ...(row.altTitles || [])].map((title) => title.toLocaleLowerCase()),
+        searchTitles: [row.animeTitle, ...(row.altTitles || [])]
+          .filter((title) => !hasCjkTitle(title))
+          .map((title) => title.toLocaleLowerCase()),
       };
     }),
   };

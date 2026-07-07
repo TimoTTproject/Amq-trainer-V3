@@ -2213,8 +2213,11 @@ async function requestChoices(level) {
     const box = document.getElementById('choice-buttons');
     box.innerHTML = r.options.map((o, i) => {
       const answer = englishFirst() && o.englishTitle ? o.englishTitle : o.title;
+      const display = typeof formatAnimeDisplay === 'function'
+        ? formatAnimeDisplay(o)
+        : { primary: answer, secondary: o.englishTitle && o.englishTitle !== o.title ? o.title : null };
       const seasonBadge = o.seasonNumber > 0 ? `<span class="choice-season">S${o.seasonNumber}</span>` : '';
-      return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span><span class="choice-body">${seasonBadge}<span class="choice-title">${escapeHtml(answer)}</span></span></button>`;
+      return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span><span class="choice-body">${seasonBadge}<span class="choice-title">${escapeHtml(display.primary)}</span>${display.secondary ? `<small class="choice-subtitle">${escapeHtml(display.secondary)}</small>` : ''}</span></button>`;
     }).join('');
     box.classList.remove('hidden');
   } catch (e) { setHint(e.message); }

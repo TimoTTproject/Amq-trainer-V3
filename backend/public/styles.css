@@ -1275,6 +1275,26 @@ select.album-form-control {
 .mp-answer strong { color: var(--accent); }
 .mp-answer-english { color: var(--text-2); font-size: .86rem; }
 .mp-answer .hint { display: block; margin-top: 4px; }
+.mp-answer-title { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; vertical-align: middle; }
+.mp-answer-title small { color: var(--text-2); font-size: .78rem; font-weight: 600; line-height: 1.2; }
+.mp-answer-owners { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+.mp-answer-owners-label { align-self: center; color: var(--text-2); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.mp-owner-chip,
+.mp-seen-detail {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  border: 1px solid #30384d; border-radius: 999px; background: rgba(255, 255, 255, .04);
+  color: var(--text); padding: 4px 8px; font-size: .78rem; font-weight: 700;
+}
+.mp-list-meta { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.mp-list-meta.compact { margin-left: 2px; }
+.mp-list-status,
+.mp-list-score,
+.mp-list-rating {
+  display: inline-flex; align-items: center; min-height: 18px; border-radius: 999px;
+  background: rgba(0, 224, 255, .12); color: #aeefff; padding: 1px 6px; font-size: .68rem; font-weight: 800;
+}
+.mp-list-score { background: rgba(255, 183, 77, .14); color: #ffd293; }
+.mp-list-rating { background: rgba(255, 64, 105, .14); color: #ff8aa4; letter-spacing: 0; }
 .mp-scores { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .mp-score-row { display: grid; grid-template-columns: 1fr auto auto 56px; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 8px; padding: 8px 14px; font-size: .9rem; }
 .mp-score-row.ok { border-color: var(--green); }
@@ -2480,6 +2500,7 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .choice-season { align-self: flex-start; font-size: .68rem; font-weight: 800; letter-spacing: .04em; line-height: 1;
   color: var(--accent-2); background: rgba(8, 174, 232, .16); padding: 3px 7px; border-radius: 999px; }
 .choice-title { font-weight: 600; overflow-wrap: anywhere; }
+.choice-subtitle { color: var(--text-2); font-size: .78rem; line-height: 1.25; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .choice-buttons { grid-template-columns: 1fr; } }
 
 /* ── Boutique de cosmétiques ── */

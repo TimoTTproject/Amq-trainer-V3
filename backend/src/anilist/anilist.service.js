@@ -41,8 +41,8 @@ async function anilistQuery(query, variables, accessToken, retries = 3) {
 async function getCompletedAnime(username, accessToken) {
   const query = `
     query ($name: String) {
-      MediaListCollection(userName: $name, type: ANIME, status: COMPLETED) {
-        lists { entries { media { id title { romaji english native } synonyms popularity format } } }
+      MediaListCollection(userName: $name, type: ANIME) {
+        lists { entries { status score media { id title { romaji english native } synonyms popularity format } } }
       }
     }`;
   let data;
@@ -57,7 +57,8 @@ async function getCompletedAnime(username, accessToken) {
   const map = new Map();
   for (const entry of lists.flatMap((l) => l.entries)) {
     const m = entry.media;
-    if (!map.has(m.id)) map.set(m.id, m);
+    if (!m?.id || map.has(m.id)) continue;
+    map.set(m.id, { ...m, listStatus: entry.status || null, listScore: entry.score || null });
   }
   return Array.from(map.values());
 }

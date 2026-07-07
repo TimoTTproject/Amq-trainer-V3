@@ -406,7 +406,7 @@ async function pickSong(room) {
     where,
     skip: Math.floor(Math.random() * total),
     select: {
-      id: true, anilistId: true, animeTitle: true, altTitles: true,
+      id: true, anilistId: true, animeTitle: true, altTitles: true, seasonNumber: true,
       title: true, artist: true, type: true, number: true, videoUrl: true, audioUrl: true,
       addedBy: { select: { id: true, displayName: true } },
     },
@@ -442,13 +442,22 @@ async function startRound(room) {
   if (!song) return endGame(room);
   // Qui a cet anime dans sa liste AniList importée ? Révélé UNIQUEMENT à l'écran
   // de résultat (jamais pendant la manche, sinon indice de triche).
-  let seenBy = new Set();
+  let listMeta = new Map();
   try {
     const entries = await prisma.userCatalogEntry.findMany({
       where: { userId: { in: [...room.players.keys()] }, song: { anilistId: song.anilistId } },
-      select: { userId: true },
+      select: { userId: true, mediaStatus: true, mediaScore: true },
     });
-    seenBy = new Set(entries.map((e) => e.userId));
+    const stats = await prisma.userSongStat.findMany({
+      where: { userId: { in: entries.map((e) => e.userId) }, songId: song.id },
+      select: { userId: true, rating: true },
+    });
+    const ratingByUser = new Map(stats.map((s) => [s.userId, s.rating]));
+    listMeta = new Map(entries.map((e) => [e.userId, {
+      status: e.mediaStatus || null,
+      score: e.mediaScore ?? null,
+      rating: ratingByUser.get(e.userId) ?? null,
+    }]));
   } catch (e) {
     console.error('mp seenBy:', e && e.message);
   }
@@ -456,7 +465,7 @@ async function startRound(room) {
   const durationMs = roundDurationMs(room);
   const startAt = Date.now() + prepMs;
   const endsAt = startAt + durationMs;
-  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set(), seenBy };
+  room.current = { song, startAt, endsAt, answers: new Map(), passed: new Set(), skipVotes: new Set(), listMeta };
   io.to(room.id).emit('mp:round:start', {
     round: room.round, total: room.mode === 'coop' ? null : room.settings.rounds,
     coop: room.mode === 'coop', teamLives: room.teamLives,
@@ -630,7 +639,8 @@ function endRound(room) {
           name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
           correct: !!a?.correct, points: a?.points || 0,
           guess: a?.guess || null, passed: cur.passed.has(p.userId), // réponse saisie par le joueur (révélée à tous)
-          seenAnime: !!cur.seenBy?.has(p.userId), // a cet anime dans sa liste AniList
+          seenAnime: !!cur.listMeta?.has(p.userId), // a cet anime dans sa liste AniList
+          listMeta: cur.listMeta?.get(p.userId) || null,
           score: p.score, team: p.team, lives: p.lives, eliminated: p.eliminated,
         };
       })
@@ -642,9 +652,12 @@ function endRound(room) {
       skipped: !!cur.votedSkip,
       answer: {
         songId: s.id,
-        animeTitle: s.animeTitle, englishTitle: englishTitleFor(s),
+        animeTitle: s.animeTitle, englishTitle: englishTitleFor(s), seasonNumber: s.seasonNumber || 0,
         title: s.title, artist: s.artist, type: s.type, number: s.number,
         addedBy: s.addedBy ? { id: s.addedBy.id, displayName: s.addedBy.displayName } : null,
+        owners: [...room.players.values()]
+          .filter((p) => cur.listMeta?.has(p.userId))
+          .map((p) => ({ userId: p.userId, name: p.name, ...cur.listMeta.get(p.userId) })),
       },
       results,
       teams: room.mode === 'teams' ? teamTotals(room) : null,

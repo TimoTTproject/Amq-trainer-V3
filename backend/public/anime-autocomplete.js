@@ -28,6 +28,14 @@ function formatAnimeLabel({ title, englishTitle, seasonNumber }) {
   return seasonNumber > 0 ? `S${seasonNumber} · ${base}` : base;
 }
 
+function formatAnimeDisplay({ title, englishTitle, seasonNumber }) {
+  const primary = formatAnimeLabel({ title, englishTitle, seasonNumber });
+  const secondary = englishFirst()
+    ? (englishTitle && englishTitle !== title ? title : null)
+    : (englishTitle && englishTitle !== title ? englishTitle : null);
+  return { primary, secondary };
+}
+
 const animeAutocompleteStates = new Map();
 
 function closeAnimeAutocomplete(inputId) {
@@ -67,12 +75,9 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
 
   const render = () => {
     if (!state.suggestions.length) return closeAnimeAutocomplete(inputId);
-    const enFirst = englishFirst();
     list.innerHTML = state.suggestions
       .map((suggestion, index) => {
-        const en = suggestion.englishTitle;
-        const primary = formatAnimeLabel(suggestion);
-        const secondary = enFirst && en ? suggestion.title : (en && en !== suggestion.title ? en : null);
+        const { primary, secondary } = formatAnimeDisplay(suggestion);
         return `<button type="button" class="anime-suggestion${index === state.activeIndex ? ' active' : ''}" role="option" aria-selected="${index === state.activeIndex}" data-anime-index="${index}">
         <span>${escapeHtml(primary)}</span>
         ${secondary ? `<small>${escapeHtml(secondary)}</small>` : ''}

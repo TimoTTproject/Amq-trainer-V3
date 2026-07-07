@@ -355,8 +355,8 @@ async function importUserList(userId, username, onProgress, limit = 1000, access
         for (const song of songs) {
           await prisma.userCatalogEntry.upsert({
             where: { userId_songId: { userId, songId: song.id } },
-            update: {},
-            create: { userId, songId: song.id },
+            update: { mediaStatus: media.listStatus || null, mediaScore: media.listScore || null },
+            create: { userId, songId: song.id, mediaStatus: media.listStatus || null, mediaScore: media.listScore || null },
           });
         }
       }
