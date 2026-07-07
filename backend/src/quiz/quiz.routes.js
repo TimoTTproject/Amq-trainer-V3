@@ -166,7 +166,7 @@ async function getReviewSongIds(userId) {
 
 // Récompense de base en tokens pour une bonne réponse (avant vitesse/niveau)
 function computeReward(song, firstCorrect) {
-  if (!firstCorrect) return 2; // rejeu : petite récompense (anti-farm)
+  if (!firstCorrect) return 5; // rejeu : gain réduit (anti-farm) mais pas punitif
   let reward = 10;
   const p = song.popularity || 0;
   if (p < 50000) reward += 5; // anime peu connu = plus difficile

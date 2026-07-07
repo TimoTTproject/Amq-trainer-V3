@@ -903,7 +903,7 @@ function rewardCapRow(label, cap) {
 
 // ── Page Économie : vue d'ensemble des gains/plafonds, en un coup d'œil ──
 const ECONOMY_EARN_SOURCES = [
-  { icon: '🎯', title: 'Quiz classique (solo)', desc: "10 🪙 à la 1ʳᵉ bonne réponse (+5/+2 si l'anime est peu connu), 2 🪙 en rejouant une musique déjà trouvée. Multiplié par le niveau d'aide (Cash ×1 · Carré ×0,5 · Duo ×0,3)." },
+  { icon: '🎯', title: 'Quiz classique (solo)', desc: "10 🪙 à la 1ʳᵉ bonne réponse (+5/+2 si l'anime est peu connu), 5 🪙 en rejouant une musique déjà trouvée. Multiplié par le niveau d'aide (Cash ×1 · Carré ×0,5 · Duo ×0,3)." },
   { icon: '🎓', title: 'Entraînement', desc: 'Aucun token — sert à réviser sans enjeu (séries, répétition espacée).' },
   { icon: '🏰', title: 'Château de l\'Infini', desc: 'Entrée 40 🪙 (1 gratuite/jour). Gain de fin = étages × 5, +25 🪙 tous les 10 étages — rentable dès ~8 étages.' },
   { icon: '🎮', title: 'Multijoueur (classique / équipes / élim.)', desc: '+2 🪙 par bonne réponse + bonus de classement (+20/+10/+5 pour le podium), max 40 🪙/partie.' },
