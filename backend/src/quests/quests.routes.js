@@ -9,7 +9,7 @@ const router = express.Router();
 function publicQuest(q) {
   const progress = Math.min(q.progress, q.target);
   return {
-    id: q.id, label: q.label, target: q.target, progress,
+    id: q.id, type: q.type, label: q.label, target: q.target, progress,
     reward: q.reward, claimed: q.claimed, done: q.progress >= q.target,
   };
 }

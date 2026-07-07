@@ -2382,6 +2382,13 @@ async function loadQuestsBadge() {
   try { const { quests } = await api('/api/quests'); updateQuestsBadge((quests || []).filter((q) => q.done && !q.claimed).length); } catch {}
 }
 
+// Icône par type de quête (pour un widget plus lisible d'un coup d'œil).
+const QUEST_ICONS = {
+  correct: 'fa-circle-check', played: 'fa-headphones', pull: 'fa-ticket',
+  fuse: 'fa-wand-magic-sparkles', tower: 'fa-chess-rook', mp: 'fa-users',
+  like: 'fa-heart', daily: 'fa-calendar-day', trade: 'fa-right-left', market: 'fa-store',
+};
+
 // Fragment réutilisé par le widget Accueil et le panneau d'en-tête.
 function questItemHtml(q) {
   const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
@@ -2390,8 +2397,9 @@ function questItemHtml(q) {
     : q.done
     ? `<button class="btn-primary quest-claim" data-qid="${q.id}">Réclamer +${q.reward} 🪙</button>`
     : `<span class="quest-reward">+${q.reward} 🪙</span>`;
+  const ico = QUEST_ICONS[q.type] || 'fa-bullseye';
   return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
-    <div class="quest-top"><span>${escapeHtml(q.label)}</span>${right}</div>
+    <div class="quest-top"><span class="quest-label"><i class="fas ${ico} quest-ico"></i> ${escapeHtml(q.label)}</span>${right}</div>
     <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
     <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
   </div>`;

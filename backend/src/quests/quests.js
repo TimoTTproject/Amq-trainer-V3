@@ -1,15 +1,40 @@
 // Quêtes quotidiennes : génération, progression, et réclamation.
 const { prisma } = require('../db');
 
+// Chaque `type` DOIT avoir un point de progression (progressQuests) câblé
+// quelque part dans le jeu, sinon la quête serait impossible à terminer.
+// Types câblés : correct, played (quiz) · pull, fuse (gacha) · tower · mp ·
+// like (playlist) · daily (défi) · trade (échange) · market (marché).
 const POOL = [
+  // Quiz — bonnes réponses
   { type: 'correct', label: 'Trouve 10 bonnes réponses', target: 10, reward: 40 },
   { type: 'correct', label: 'Trouve 20 bonnes réponses', target: 20, reward: 70 },
+  { type: 'correct', label: 'Trouve 35 bonnes réponses', target: 35, reward: 110 },
+  // Quiz — manches jouées (peu importe le résultat)
+  { type: 'played', label: 'Joue 15 manches de quiz', target: 15, reward: 35 },
+  { type: 'played', label: 'Joue 30 manches de quiz', target: 30, reward: 65 },
+  // Gacha
   { type: 'pull', label: 'Fais 5 tirages au gacha', target: 5, reward: 30 },
+  { type: 'pull', label: 'Fais 10 tirages au gacha', target: 10, reward: 55 },
+  // Atelier — fusion de doublons
+  { type: 'fuse', label: "Fusionne des cartes à l'Atelier", target: 1, reward: 40 },
+  // Château de l'Infini
   { type: 'tower', label: 'Franchis 8 étages au Château', target: 8, reward: 40 },
+  { type: 'tower', label: 'Franchis 15 étages au Château', target: 15, reward: 70 },
+  // Multijoueur
   { type: 'mp', label: 'Termine 2 parties multijoueur', target: 2, reward: 50 },
+  { type: 'mp', label: 'Termine 4 parties multijoueur', target: 4, reward: 90 },
+  // Playlist
   { type: 'like', label: 'Ajoute 3 sons à ta playlist', target: 3, reward: 20 },
+  // Défi du jour
   { type: 'daily', label: 'Termine le défi du jour', target: 1, reward: 30 },
+  // Échange entre joueurs
+  { type: 'trade', label: 'Réalise un échange de cartes', target: 1, reward: 45 },
+  // Marché — mets une carte en vente ou achètes-en une
+  { type: 'market', label: 'Mets une carte en vente ou achète au marché', target: 1, reward: 35 },
 ];
+
+const DAILY_COUNT = 4; // nombre de quêtes tirées chaque jour (types distincts)
 
 function todayStr() {
   const d = new Date();
@@ -21,7 +46,7 @@ function shuffle(a) {
   return a;
 }
 function pickDaily() {
-  const types = shuffle([...new Set(POOL.map((q) => q.type))]).slice(0, 3);
+  const types = shuffle([...new Set(POOL.map((q) => q.type))]).slice(0, DAILY_COUNT);
   return types.map((t) => {
     const opts = POOL.filter((q) => q.type === t);
     return opts[(Math.random() * opts.length) | 0];

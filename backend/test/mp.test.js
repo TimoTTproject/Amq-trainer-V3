@@ -78,8 +78,8 @@ test('adds only purchased anime emotes to the free multiplayer reactions', () =>
   const free = unlockedEmoteSymbols([]);
   const unlocked = unlockedEmoteSymbols(['emote-naruto', 'emote-death-note', 'unknown']);
   assert.equal(unlocked.length, free.length + 2);
-  assert.ok(unlocked.some((item) => item.id === 'emote-naruto' && item.imageUrl.endsWith('/official/sharingan.png')));
-  assert.ok(unlocked.some((item) => item.id === 'emote-death-note' && item.imageUrl.endsWith('/official/death-note.jpg')));
+  assert.ok(unlocked.some((item) => item.id === 'emote-naruto' && item.imageUrl.endsWith('/emotes/sharingan.svg')));
+  assert.ok(unlocked.some((item) => item.id === 'emote-death-note' && item.imageUrl.endsWith('/emotes/death-note.svg')));
 });
 
 test('vote-skip needs a strict majority of active (connected, non-eliminated) players', () => {

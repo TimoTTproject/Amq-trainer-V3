@@ -5,6 +5,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { notifyUser } = require('../mp/mp');
+const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
 
@@ -110,6 +111,7 @@ router.post('/list', requireAuth, async (req, res) => {
       data: { sellerId: req.user.id, cardInstanceId, characterId: inst.characterId, price },
     });
   });
+  progressQuests(req.user.id, 'market', 1); // quête « marché » : mettre en vente compte
   res.json({ ok: true, id: listing.id });
 });
 
@@ -167,6 +169,7 @@ router.post('/:id/buy', requireAuth, async (req, res) => {
       return { price: listing.price, sellerId: listing.sellerId };
     });
     notifyUser(result.sellerId, 'market:sold', { by: req.user.displayName, price: result.price });
+    progressQuests(uid, 'market', 1); // quête « marché » : acheter compte aussi
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: e.message });

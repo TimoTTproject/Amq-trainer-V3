@@ -4,6 +4,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { notifyUser } = require('../mp/mp');
+const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
 
@@ -149,9 +150,11 @@ router.get('/history', requireAuth, async (req, res) => {
 router.post('/:id/accept', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id);
   const uid = req.user.id;
+  let otherUserId = null; // proposant, pour créditer sa quête « échange » aussi
   try {
     await prisma.$transaction(async (tx) => {
       const t = await tx.trade.findUnique({ where: { id } });
+      otherUserId = t?.fromUserId || null;
       if (!t || t.status !== 'pending') throw new Error('Échange indisponible');
       if (t.toUserId !== uid) throw new Error('Réservé au destinataire');
 
@@ -185,6 +188,9 @@ router.post('/:id/accept', requireAuth, async (req, res) => {
       await tx.trade.update({ where: { id }, data: { status: 'accepted', resolvedAt: new Date() } });
       notifyUser(t.fromUserId, 'trade:accepted', { by: req.user.displayName });
     });
+    // Quête « Réalise un échange » pour les deux joueurs (l'échange est conclu).
+    progressQuests(uid, 'trade', 1);
+    if (otherUserId) progressQuests(otherUserId, 'trade', 1);
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: e.message });

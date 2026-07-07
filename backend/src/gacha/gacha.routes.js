@@ -611,6 +611,7 @@ router.post('/fuse', requireAuth, async (req, res) => {
     }
     throw e;
   }
+  progressQuests(req.user.id, 'fuse', 1); // quête « Fusionne des cartes à l'Atelier »
   res.json({ ok: true, card: result });
 });
 

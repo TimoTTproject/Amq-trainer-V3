@@ -2388,6 +2388,9 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .quest-item { background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 12px; padding: 14px; }
 .quest-item.ready { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
 .quest-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .9rem; margin-bottom: 10px; }
+.quest-label { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.quest-ico { color: var(--accent); font-size: .82rem; flex-shrink: 0; }
+.quest-item.ready .quest-ico { color: var(--green); }
 .quest-reward { color: var(--orange); font-weight: 700; white-space: nowrap; }
 .quest-claimed { color: var(--green); font-weight: 700; font-size: .85rem; }
 .quest-claim { font-size: .82rem; padding: 6px 12px; white-space: nowrap; }

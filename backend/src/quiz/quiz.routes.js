@@ -698,6 +698,7 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   });
 
   if (correct) progressQuests(userId, 'correct', 1);
+  progressQuests(userId, 'played', 1); // quête « manches jouées » (peu importe le résultat)
 
   res.json({
     correct,
