@@ -440,6 +440,10 @@ router.get('/series', requirePlayer, async (req, res) => {
     .sort((a, b) =>
       (b.exact - a.exact) ||
       a.matchIndex - b.matchIndex ||
+      // Saisons d'une même chaîne dans l'ordre (S1 avant S2 avant S3…) ;
+      // seasonNumber 0 = hors chaîne. Prioritaire sur la popularité pour que
+      // la saison 1 ressorte toujours en premier.
+      (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
       b.entry.popularity - a.entry.popularity ||
       a.entry.title.length - b.entry.title.length ||
       a.entry.title.localeCompare(b.entry.title))

@@ -81,6 +81,8 @@ function filterAnimeEntries(entries, needle) {
   scored.sort((a, b) =>
     (b.exact - a.exact) ||
     a.matchIndex - b.matchIndex ||
+    // Saisons d'une même chaîne dans l'ordre (S1 avant S2…), avant la popularité.
+    (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
     (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
     a.entry.title.length - b.entry.title.length ||
     a.entry.title.localeCompare(b.entry.title));
