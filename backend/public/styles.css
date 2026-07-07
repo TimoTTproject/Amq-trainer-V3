@@ -1302,7 +1302,171 @@ select.album-form-control {
 .mp-total { color: var(--accent); font-weight: 700; text-align: right; }
 
 /* Menu multi */
-.mp-menu-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+#view-mp .gacha-top { margin-bottom: 24px; }
+#mp-menu.mp-hub {
+  max-width: 1040px;
+  text-align: left;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .75fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.mp-hub-main,
+.mp-private-card,
+.mp-rooms,
+.mp-help {
+  background: #11141a;
+  border: 1px solid #2b303a;
+  border-radius: var(--radius);
+}
+.mp-hub-main {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px;
+  background:
+    linear-gradient(135deg, rgba(208, 22, 36, .14), transparent 48%),
+    linear-gradient(160deg, #151922 0%, #0d0f14 76%);
+}
+.mp-hub-main::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+.mp-hub-copy { max-width: 620px; }
+.mp-hub-kicker {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-2);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.mp-hub .tower-rules {
+  max-width: 560px;
+  margin: 0;
+  color: #c4c9d2;
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+.mp-hub .mp-myrank {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  margin: 14px 0 0;
+  padding: 9px 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #313746;
+  border-radius: 6px;
+  text-align: left;
+}
+.mp-menu-btns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+.mp-mode-card {
+  min-height: 106px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-direction: column;
+  gap: 7px;
+  padding: 16px;
+  border-radius: var(--radius);
+  text-align: left;
+}
+.mp-mode-card i { display: block; font-size: 1.25rem; margin-bottom: auto; }
+.mp-mode-card span {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  display: block;
+  font-size: 1.42rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.mp-mode-card small {
+  display: block;
+  color: inherit;
+  opacity: .78;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.mp-mode-quick {
+  color: #fff;
+  background:
+    linear-gradient(150deg, rgba(255,255,255,.10), transparent 35%),
+    var(--accent);
+  border-color: #ff8793;
+}
+.mp-mode-ranked {
+  color: #251100;
+  border: 1px solid #ffd08a;
+}
+.mp-private-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background:
+    linear-gradient(140deg, rgba(8, 174, 232, .10), transparent 52%),
+    #12151b;
+}
+.mp-private-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.mp-private-head > i {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-2);
+  background: rgba(8, 174, 232, .11);
+  border: 1px solid rgba(8, 174, 232, .34);
+  border-radius: 6px;
+}
+.mp-private-head h3 {
+  margin: 0 0 3px;
+  font-size: 1.35rem;
+  text-transform: uppercase;
+}
+.mp-private-head p {
+  color: var(--text-2);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+.mp-private-card #mp-create {
+  width: 100%;
+  min-height: 54px;
+  justify-content: center;
+  border-color: #3a4050;
+}
+.mp-private-card .mp-join-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.mp-private-card .mp-join-row input {
+  width: 100%;
+  min-height: 46px;
+}
+.mp-private-card .mp-join-row button {
+  min-height: 46px;
+}
+.mp-hub #mp-menu-msg {
+  grid-column: 1 / -1;
+  min-height: 20px;
+  margin: 0;
+  text-align: center;
+}
 
 /* Entrée Coop : créer / rejoindre */
 .mp-coopmenu { max-width: 480px; margin: 0 auto; }
@@ -1315,10 +1479,26 @@ select.album-form-control {
 .mp-coop-entry .mp-join-row input { flex: 1; text-align: center; letter-spacing: 4px; text-transform: uppercase; font-size: 1.1rem; }
 
 /* Parties en cours (liste publique) + mode spectateur */
-.mp-rooms { margin-top: 18px; }
-.mp-rooms-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-weight: 700; }
+.mp-rooms {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  padding: 18px;
+}
+.mp-rooms-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; font-weight: 800; }
+.mp-rooms-head span { display: inline-flex; align-items: center; gap: 8px; }
+.mp-rooms-head i { color: var(--accent); }
 .mp-rooms-list { display: flex; flex-direction: column; gap: 8px; }
-.mp-room-item { display: flex; align-items: center; gap: 12px; justify-content: space-between; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 10px; padding: 10px 14px; }
+.mp-rooms-list > .muted {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 84px;
+  color: var(--text-2);
+  border: 1px dashed #343a46;
+  border-radius: 6px;
+  background: rgba(255,255,255,.018);
+}
+.mp-room-item { display: flex; align-items: center; gap: 12px; justify-content: space-between; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: 8px; padding: 12px 14px; }
 .mp-room-item-info { min-width: 0; }
 .mp-room-item-top { font-size: .92rem; }
 .mp-room-item-sub { font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1407,8 +1587,36 @@ select.album-form-control {
 
 /* Classé */
 .mp-ranked-btn { background: linear-gradient(135deg, var(--orange), #ff5d8f); color: #2a1400; }
-.mp-quick-rounds { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; color: var(--text-2); font-size: .9rem; }
-.mp-quick-rounds .hint { font-size: .75rem; }
+.mp-quick-rounds {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.mp-quick-rounds select {
+  min-height: 38px;
+  color: var(--text);
+  background: #0c0e13;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  padding: 7px 32px 7px 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+.mp-quick-rounds .hint {
+  color: var(--text-2);
+  font-size: .76rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
 .mp-myrank { text-align: center; color: var(--text-2); margin-bottom: 14px; }
 .mp-myrank b { color: var(--text); }
 .mp-mmr { font-size: .8rem; font-weight: 700; }
@@ -1422,14 +1630,48 @@ select.album-form-control {
 .mp-ranked-note b { color: var(--text); }
 
 /* Aide repliable « Comment fonctionne le classé ? » */
-.mp-help { text-align: left; margin: 16px auto 0; max-width: 460px; border: 1px solid #2a2f42; border-radius: 12px; background: var(--bg-2); }
-.mp-help summary { cursor: pointer; padding: 12px 14px; font-weight: 600; color: var(--text-2); list-style: none; display: flex; align-items: center; gap: 8px; }
+.mp-help {
+  grid-column: 1 / -1;
+  text-align: left;
+  margin: 0;
+  max-width: none;
+  overflow: hidden;
+}
+.mp-help summary { cursor: pointer; padding: 14px 16px; font-weight: 800; color: var(--text-2); list-style: none; display: flex; align-items: center; gap: 8px; }
 .mp-help summary::-webkit-details-marker { display: none; }
 .mp-help summary i { color: var(--accent); }
 .mp-help[open] summary { border-bottom: 1px solid #2a2f42; color: var(--text); }
-.mp-help-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: .85rem; line-height: 1.55; color: var(--text-2); }
+.mp-help-body { padding: 14px 16px 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; font-size: .85rem; line-height: 1.55; color: var(--text-2); }
 .mp-help-body b { color: var(--text); }
+.mp-help-body p { margin: 0; }
 .mp-mmr.gain { color: var(--green); } .mp-mmr.spend { color: var(--red); }
+
+@media (max-width: 980px) {
+  #mp-menu.mp-hub { grid-template-columns: 1fr; }
+  .mp-private-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .8fr); align-items: center; }
+  .mp-private-head { grid-column: 1 / -1; }
+}
+
+@media (max-width: 680px) {
+  #view-mp .gacha-top { margin-bottom: 18px; }
+  #mp-menu.mp-hub { gap: 12px; }
+  .mp-hub-main,
+  .mp-private-card,
+  .mp-rooms { padding: 16px; }
+  .mp-menu-btns { grid-template-columns: 1fr; margin-top: 18px; }
+  .mp-mode-card { min-height: 104px; }
+  .mp-mode-card i { font-size: 1.2rem; }
+  .mp-mode-card span { font-size: 1.35rem; }
+  .mp-private-card { display: flex; }
+  .mp-private-card .mp-join-row { grid-template-columns: 1fr; }
+  .mp-private-card .mp-join-row button,
+  .mp-private-card #mp-create { width: 100%; }
+  .mp-quick-rounds { align-items: stretch; }
+  .mp-quick-rounds select,
+  .mp-quick-rounds .hint { flex: 1 1 100%; }
+  .mp-rooms-head { align-items: flex-start; }
+  .mp-help-body { grid-template-columns: 1fr; }
+}
 .daily-delta { font-size: 1.05rem; margin: 6px 0 10px; }
 .daily-delta .gain { color: var(--green); font-weight: 700; } .daily-delta .spend { color: var(--red); font-weight: 700; }
 .daily-streak-line { font-size: .95rem; color: var(--text-2); margin: 0 0 18px; }

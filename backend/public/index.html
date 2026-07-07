@@ -1494,40 +1494,65 @@
       <div class="gacha-top"><h2><i class="fas fa-users"></i> Multijoueur</h2></div>
 
       <!-- 1. Menu -->
-      <div id="mp-menu" class="tower-intro">
-        <p class="tower-rules">
-          Devine l'anime au plus vite (texte libre). Score à la vitesse, classement final.
-          <b>Partie rapide</b> utilise les listes AniList réunies des joueurs présents.
-          Crée une <b>salle privée</b> pour jouer entre amis.
-        </p>
-        <div id="mp-myrank" class="mp-myrank hidden"></div>
-        <div class="mp-menu-btns">
-          <button class="btn-primary btn-lg" id="mp-quick"><i class="fas fa-bolt"></i> Partie rapide</button>
-          <button class="btn-lg mp-ranked-btn" id="mp-ranked"><i class="fas fa-ranking-star"></i> Partie classée</button>
+      <div id="mp-menu" class="tower-intro mp-hub">
+        <section class="mp-hub-main" aria-label="Modes multijoueur">
+          <div class="mp-hub-copy">
+            <span class="mp-hub-kicker">Temps réel · texte libre</span>
+            <p class="tower-rules">
+              Devine l'anime au plus vite. Le score récompense la vitesse,
+              puis le classement final départage la salle.
+            </p>
+            <div id="mp-myrank" class="mp-myrank hidden"></div>
+          </div>
+
+          <div class="mp-menu-btns">
+            <button class="btn-primary btn-lg mp-mode-card mp-mode-quick" id="mp-quick">
+              <i class="fas fa-bolt"></i>
+              <span>Partie rapide</span>
+              <small>Listes AniList réunies</small>
+            </button>
+            <button class="btn-lg mp-ranked-btn mp-mode-card mp-mode-ranked" id="mp-ranked">
+              <i class="fas fa-ranking-star"></i>
+              <span>Partie classée</span>
+              <small>Format fixe · MMR</small>
+            </button>
+          </div>
+
+          <label class="mp-quick-rounds">Longueur rapide
+            <select id="mp-quick-rounds">
+              <option value="5">5 sons</option>
+              <option value="10" selected>10 sons</option>
+              <option value="15">15 sons</option>
+              <option value="20">20 sons</option>
+            </select>
+            <span class="hint">le 1er à lancer fixe la longueur</span>
+          </label>
+        </section>
+
+        <section class="mp-private-card" aria-label="Salle privée">
+          <div class="mp-private-head">
+            <i class="fas fa-lock"></i>
+            <div>
+              <h3>Salle privée</h3>
+              <p>Crée un salon ou rejoins tes amis avec un code.</p>
+            </div>
+          </div>
           <button class="btn-secondary btn-lg" id="mp-create"><i class="fas fa-plus"></i> Créer une salle</button>
-        </div>
-        <label class="mp-quick-rounds">Partie rapide :
-          <select id="mp-quick-rounds">
-            <option value="5">5 sons</option>
-            <option value="10" selected>10 sons</option>
-            <option value="15">15 sons</option>
-            <option value="20">20 sons</option>
-          </select>
-          <span class="hint">le 1er à lancer fixe la longueur</span>
-        </label>
-        <div class="mp-join-row">
-          <input type="text" id="mp-code-input" placeholder="CODE" maxlength="4" />
-          <button class="btn-secondary" id="mp-join">Rejoindre</button>
-        </div>
+          <div class="mp-join-row">
+            <input type="text" id="mp-code-input" placeholder="CODE" maxlength="4" />
+            <button class="btn-secondary" id="mp-join"><i class="fas fa-right-to-bracket"></i> Rejoindre</button>
+          </div>
+        </section>
+
         <p id="mp-menu-msg" class="gacha-msg"></p>
 
-        <div class="mp-rooms">
+        <section class="mp-rooms" aria-label="Parties publiques">
           <div class="mp-rooms-head">
             <span><i class="fas fa-tower-broadcast"></i> Parties en cours</span>
             <button class="btn-link" id="mp-rooms-refresh"><i class="fas fa-rotate"></i> Rafraîchir</button>
           </div>
           <div id="mp-rooms-list" class="mp-rooms-list"></div>
-        </div>
+        </section>
 
         <details class="mp-help">
           <summary><i class="fas fa-circle-info"></i> Comment fonctionne le classé&nbsp;?</summary>
