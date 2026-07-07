@@ -3898,19 +3898,14 @@ textarea::placeholder {
   gap: 16px;
   padding: 18px;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--c, var(--accent)) 13%, transparent), transparent 46%),
-    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)),
-    var(--surface-1);
+  background: var(--surface-1);
   border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  box-shadow: inset 4px 0 color-mix(in srgb, var(--c, var(--accent)) 78%, transparent);
+  border-radius: 6px;
 }
 
 .hub-card:hover {
-  border-color: color-mix(in srgb, var(--c, var(--accent)) 58%, var(--line-strong));
-  box-shadow: inset 4px 0 var(--c, var(--accent)), var(--shadow-step);
-  transform: translate(-2px, -2px);
+  border-color: var(--c, var(--accent));
+  transform: translateY(-2px);
 }
 
 .hub-card:focus-visible {
@@ -3924,10 +3919,9 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  color: color-mix(in srgb, var(--c, var(--accent)) 78%, #fff);
-  background: color-mix(in srgb, var(--c, var(--accent)) 15%, #11151d);
-  border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 28%, #343b49);
+  border-radius: 6px;
+  color: #0a0c11;
+  background: var(--c, var(--accent));
   font-size: 1.12rem;
 }
 
@@ -3975,10 +3969,7 @@ textarea::placeholder {
 
 .hub-card-feat {
   min-height: 156px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--c, var(--accent-2)) 18%, transparent), transparent 54%),
-    linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.01)),
-    var(--surface-1);
+  background: var(--surface-1);
 }
 
 .panel,
