@@ -453,6 +453,7 @@ let shopData = null;
 let charShop = { series: '', q: '', page: 1, total: 0, pageSize: 24, items: [], seriesList: [] };
 let charShellRendered = false;
 let charLoaded = false; // chargé à la 1re ouverture de l'onglet Personnages
+let shopLicenseSel = null; // licence sélectionnée dans l'onglet Licences (une à la fois)
 let charSearchTimer = null;
 
 async function openShop() {
@@ -553,17 +554,10 @@ function renderShop() {
     </div>
   `).join('');
 
-  // Onglet Licences : un bloc par franchise (artwork officiel AniList).
-  const licenses = shopData.licenses || [];
-  document.getElementById('shop-licenses-panel').innerHTML = licenses.length ? `
-    <p class="muted shop-panel-intro">Dos de carte et bannières aux couleurs de tes séries préférées.</p>
-    ${licenses.map((g) => `
-      <div class="shop-group shop-group-license" style="${g.color ? `--lic-color:${g.color}` : ''}">
-        <h3>${escapeHtml(g.license)}</h3>
-        <div class="shop-grid">${g.items.map((item) => shopItemHtml(item, SLOT_SHORT[item.slot] || item.name)).join('')}</div>
-      </div>
-    `).join('')}
-  ` : '<p class="muted">Aucune licence disponible.</p>';
+  // Onglet Licences : sélecteur (une franchise à la fois) — évite un scroll
+  // interminable des 30+ licences empilées. Chips horizontales défilantes +
+  // les items de la licence choisie en dessous.
+  renderShopLicenses();
 
   const emotes = shopData.emotes || [];
   document.getElementById('shop-emotes').innerHTML = `
@@ -571,7 +565,33 @@ function renderShop() {
     <div class="shop-grid">${emotes.map(shopEmoteHtml).join('')}</div>`;
 }
 
+// Onglet Licences : chips de franchises (défilement horizontal) + les 2 items
+// (dos de carte + bannière) de la licence sélectionnée seulement.
+function renderShopLicenses() {
+  const panel = document.getElementById('shop-licenses-panel');
+  const licenses = shopData.licenses || [];
+  if (!licenses.length) { panel.innerHTML = '<p class="muted">Aucune licence disponible.</p>'; return; }
+  if (!shopLicenseSel || !licenses.some((g) => g.license === shopLicenseSel)) shopLicenseSel = licenses[0].license;
+  const sel = licenses.find((g) => g.license === shopLicenseSel) || licenses[0];
+  // Une licence est « possédée » dès qu'un de ses items l'est (pastille).
+  const chips = licenses.map((g) => {
+    const owned = g.items.some((it) => it.owned);
+    return `<button type="button" class="lic-chip${g.license === shopLicenseSel ? ' active' : ''}" data-lic="${escapeHtml(g.license)}" style="${g.color ? `--lic-color:${g.color}` : ''}">
+      ${escapeHtml(g.license)}${owned ? ' <i class="fas fa-check lic-chip-owned"></i>' : ''}
+    </button>`;
+  }).join('');
+  panel.innerHTML = `
+    <p class="muted shop-panel-intro">Dos de carte et bannières aux couleurs de tes séries préférées.</p>
+    <div class="lic-chips">${chips}</div>
+    <div class="shop-group shop-group-license" style="${sel.color ? `--lic-color:${sel.color}` : ''}">
+      <h3>${escapeHtml(sel.license)}</h3>
+      <div class="shop-grid">${sel.items.map((item) => shopItemHtml(item, SLOT_SHORT[item.slot] || item.name)).join('')}</div>
+    </div>`;
+}
+
 function onShopClick(e) {
+  const chip = e.target.closest('.lic-chip');
+  if (chip) { shopLicenseSel = chip.dataset.lic; renderShopLicenses(); return; }
   const btn = e.target.closest('.shop-btn');
   if (!btn) return;
   if (btn.dataset.act === 'buy') buyCosmetic(btn.dataset.id);
