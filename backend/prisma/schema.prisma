@@ -94,6 +94,7 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  lastSeenAt DateTime? // dernière connexion socket (présence) — pour l'annuaire des joueurs
 
   songStats       UserSongStat[]
   catalogEntries  UserCatalogEntry[]

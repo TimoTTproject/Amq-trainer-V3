@@ -77,15 +77,23 @@ let publicRoomId = null;
 let rankedRoomId = null;
 let io = null;
 
+// Marque la dernière présence en base (annuaire des joueurs : « vu il y a X »).
+// Fire-and-forget : la présence en temps réel vit dans la Map `online`, ceci
+// ne sert qu'à retrouver l'horodatage après déconnexion / redémarrage serveur.
+function touchLastSeen(uid) {
+  prisma.user.update({ where: { id: uid }, data: { lastSeenAt: new Date() } }).catch(() => {});
+}
 function addOnline(socket) {
   const uid = socket.data.user.id;
   if (!online.has(uid)) online.set(uid, new Set());
   online.get(uid).add(socket.id);
+  touchLastSeen(uid);
 }
 function removeOnline(socket) {
   const uid = socket.data.user.id;
   const set = online.get(uid);
   if (set) { set.delete(socket.id); if (!set.size) online.delete(uid); }
+  touchLastSeen(uid);
 }
 function isOnline(userId) {
   return online.has(userId);

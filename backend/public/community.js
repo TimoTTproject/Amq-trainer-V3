@@ -206,15 +206,21 @@ async function loadPlayers(page) {
       const isAdmin = currentUser && currentUser.isAdmin;
       list.innerHTML = r.players.map((p) => {
         const tier = p.tier ? tierBadge(p.tier) : '';
-        const floor = p.towerBestFloor ? `<span class="pl-floor"><i class="fas fa-chess-rook"></i> ${p.towerBestFloor}</span>` : '';
+        const floor = p.towerBestFloor ? `<span class="pl-floor"><i class="fas fa-chess-rook"></i> Étage ${p.towerBestFloor}</span>` : '';
+        // Statut : en ligne (point vert) ou « vu il y a X » via timeAgo (helper global).
+        const status = p.online
+          ? '<span class="pl-status online"><span class="pl-dot"></span> En ligne</span>'
+          : (p.lastSeenAt ? `<span class="pl-status"><i class="far fa-clock"></i> vu ${timeAgo(p.lastSeenAt)}</span>` : '<span class="pl-status muted">Jamais connecté</span>');
         // Suppression de compte (admin only, ex. comptes de test/diagnostic) — jamais sur soi.
         const del = isAdmin && !p.isMe
           ? `<button type="button" class="pl-delete" data-del-userid="${p.userId}" data-del-name="${escapeHtml(p.displayName)}" title="Supprimer ce compte"><i class="fas fa-trash"></i></button>`
           : '';
-        return `<div class="pl-row${p.isMe ? ' me' : ''}" data-userid="${p.userId}">
-          ${otherAvatar(p, 'avatar-sm')}
-          <span class="pl-name">${escapeHtml(p.displayName)}${p.isMe ? ' <span class="hint">(toi)</span>' : ''}</span>
-          ${tier}${floor}
+        return `<div class="pl-row${p.isMe ? ' me' : ''}${p.online ? ' online' : ''}" data-userid="${p.userId}">
+          <span class="pl-av-wrap">${otherAvatar(p, 'avatar-md')}${p.online ? '<span class="pl-online-dot"></span>' : ''}</span>
+          <div class="pl-main">
+            <div class="pl-name-line"><span class="pl-name">${escapeHtml(p.displayName)}${p.isMe ? ' <span class="hint">(toi)</span>' : ''}</span>${tier}</div>
+            <div class="pl-sub">${status}${floor}</div>
+          </div>
           ${del}
           <i class="fas fa-chevron-right pl-go"></i>
         </div>`;

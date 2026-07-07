@@ -172,6 +172,7 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 }
 .avatar-xs { width: 22px; height: 22px; font-size: .72rem; }
 .avatar-sm { width: 30px; height: 30px; font-size: .9rem; }
+.avatar-md { width: 44px; height: 44px; font-size: 1.15rem; }
 .avatar-lg { width: 96px; height: 96px; font-size: 2.4rem; }
 .profile-chip { display: flex; align-items: center; gap: 8px; background: var(--bg-3); border: none; color: var(--text); padding: 4px 12px 4px 4px; border-radius: 20px; }
 .profile-chip:hover { filter: brightness(1.12); }
@@ -1738,18 +1739,40 @@ select.album-form-control {
 #fuse-result .gcard { max-width: 220px; margin: 0 auto; }
 
 /* ── Annuaire des joueurs ── */
-.players-list { display: flex; flex-direction: column; gap: 8px; }
-.pl-row { display: flex; align-items: center; gap: 12px; background: var(--bg-2); border: 1px solid #2a2f42; border-radius: var(--radius); padding: 10px 14px; cursor: pointer; transition: border-color .15s, transform .05s; }
-.pl-row:hover { border-color: var(--accent); transform: translateX(2px); }
-.pl-row.me { border-color: var(--accent); }
-.pl-name { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl-floor { color: var(--text-2); font-size: .82rem; }
+.players-list { display: flex; flex-direction: column; gap: 10px; }
+.pl-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--bg-2); border: 1px solid var(--line-soft, #2a2f42); border-radius: 14px;
+  padding: 12px 16px; cursor: pointer;
+  transition: border-color .15s, transform .08s, box-shadow .15s, background .15s;
+}
+.pl-row:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,.28); }
+.pl-row.me { border-color: var(--accent); background: linear-gradient(120deg, rgba(108,140,255,.10), transparent 70%); }
+/* Avatar + pastille de présence */
+.pl-av-wrap { position: relative; flex-shrink: 0; display: inline-flex; }
+.pl-online-dot {
+  position: absolute; right: -1px; bottom: -1px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--green); border: 2px solid var(--bg-2);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+}
+.pl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pl-name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pl-name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-name .hint { font-weight: 400; }
+.pl-sub { display: flex; align-items: center; gap: 14px; font-size: .8rem; color: var(--text-2); flex-wrap: wrap; }
+.pl-status { display: inline-flex; align-items: center; gap: 6px; }
+.pl-status.online { color: var(--green); font-weight: 600; }
+.pl-status.muted { color: var(--text-muted); }
+.pl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.pl-floor { display: inline-flex; align-items: center; gap: 5px; }
 .pl-floor i { color: var(--accent); }
-.pl-go { color: var(--text-2); }
+.pl-go { color: var(--text-muted); flex-shrink: 0; transition: transform .15s, color .15s; }
+.pl-row:hover .pl-go { color: var(--accent); transform: translateX(3px); }
 .pl-delete {
   background: none; border: 1px solid #4a2530; color: #e88; border-radius: 8px;
-  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer; flex: 0 0 auto; font-size: .8rem;
+  width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex: 0 0 auto; font-size: .82rem;
 }
 .pl-delete:hover { background: #3a1620; border-color: var(--red); color: #ffc4ce; }
 

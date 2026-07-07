@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { publicUser } = require('../auth/auth.routes');
 const { tierFromMmr } = require('../mp/rank');
+const { isOnline } = require('../mp/mp');
 const { resolveEquipped, byId, publicCosmetic } = require('../shop/cosmetics');
 
 const router = express.Router();
@@ -154,23 +155,31 @@ router.get('/players/list', requireAuth, async (req, res) => {
     prisma.user.count({ where }),
     prisma.user.findMany({
       where,
-      orderBy: [{ mmr: 'desc' }, { createdAt: 'asc' }],
+      // Annuaire trié par activité récente : dernière connexion en tête
+      // (les comptes jamais connectés depuis l'ajout du champ finissent en bas).
+      orderBy: [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { mmr: 'desc' }, { createdAt: 'asc' }],
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, mmr: true, rankedGames: true, towerBestFloor: true, createdAt: true },
+      select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, mmr: true, rankedGames: true, towerBestFloor: true, createdAt: true, lastSeenAt: true },
     }),
   ]);
   res.json({
     total, page, pages: Math.ceil(total / perPage),
-    players: users.map((u) => ({
-      userId: u.id,
-      displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
-      frame: publicCosmetic(byId(u.avatarFrame)),
-      tier: u.rankedGames > 0 ? tierFromMmr(u.mmr) : null,
-      towerBestFloor: u.towerBestFloor || 0,
-      isMe: u.id === req.user.id,
-    })),
+    players: users.map((u) => {
+      const online = isOnline(u.id);
+      return {
+        userId: u.id,
+        displayName: u.displayName,
+        avatarUrl: u.avatarUrl,
+        frame: publicCosmetic(byId(u.avatarFrame)),
+        tier: u.rankedGames > 0 ? tierFromMmr(u.mmr) : null,
+        towerBestFloor: u.towerBestFloor || 0,
+        online,
+        // Masqué si en ligne (on affiche « En ligne » à la place).
+        lastSeenAt: online ? null : (u.lastSeenAt || null),
+        isMe: u.id === req.user.id,
+      };
+    }),
   });
 });
 
