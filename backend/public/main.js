@@ -2217,7 +2217,9 @@ function setOverlayEnded(ended) {
 }
 
 function resetQuizUI() {
-  document.getElementById('answer-result').classList.add('hidden');
+  const resultBox = document.getElementById('answer-result');
+  resultBox.classList.add('hidden');
+  resultBox.classList.remove('ok', 'ko');
   document.getElementById('answer-input').value = '';
   if (typeof closeAnimeAutocomplete === 'function') closeAnimeAutocomplete('answer-input');
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = false));
@@ -2313,6 +2315,11 @@ async function guessAnswer(forcedGuess) {
     sfx.wrong();
   }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
+  // Encadré de résultat coloré selon la réponse (vert = bon, rouge = raté) :
+  // sans ça il gardait un fond rougeâtre même sur une bonne réponse.
+  const resultBox = document.getElementById('answer-result');
+  resultBox.classList.toggle('ok', r.correct);
+  resultBox.classList.toggle('ko', !r.correct);
   if (r.rewardCap) { rewardCap = r.rewardCap; renderRewardCap(rewardCap); }
   const detail = document.getElementById('reward-detail');
   if (detail) {

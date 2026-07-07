@@ -465,7 +465,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .reward-stake { display: flex; width: fit-content; align-items: center; gap: 6px; margin: 6px auto 2px; padding: 3px 10px; border-radius: 999px; background: var(--bg-3); color: var(--accent-2); font-weight: 700; font-size: .9rem; }
 .reward-stake.hidden { display: none; }
 .reward-stake .fa-bolt { color: var(--accent); }
-.reward-stake.low { color: var(--red); }
+/* Récompense réduite (vitesse/plafond) : ambre, pas rouge — le rouge est
+   réservé aux mauvaises réponses, sinon un gain réduit passe pour une erreur. */
+.reward-stake.low { color: var(--orange); }
 .reward-detail { color: var(--text-2); font-size: .85rem; margin: -2px 0 8px; }
 .reward-detail:empty { display: none; }
 .reward-cap { text-align: center; font-size: .82rem; color: var(--text-2); margin: 2px 0 4px; }
@@ -4271,9 +4273,18 @@ textarea::placeholder {
   border: 1px solid var(--line-soft);
   border-left: 4px solid var(--accent);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(208,22,36,.10), transparent 42%),
-    #0d1016;
+  background: #0d1016;
+}
+/* Encadré coloré selon le résultat : vert = bonne réponse, rouge = raté.
+   Avant, le fond restait rougeâtre même sur une bonne réponse, ce qui donnait
+   l'impression de s'être trompé. */
+.answer-result.ok {
+  border-left-color: var(--green);
+  background: linear-gradient(135deg, rgba(62,201,138,.12), transparent 44%), #0d1016;
+}
+.answer-result.ko {
+  border-left-color: var(--red);
+  background: linear-gradient(135deg, rgba(208,22,36,.12), transparent 44%), #0d1016;
 }
 
 .stats-strip {
