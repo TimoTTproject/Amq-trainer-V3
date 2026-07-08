@@ -536,6 +536,55 @@ async function runBackfillSeasons() {
   }
 }
 
+// Audit des numéros de saison : recalcule chaque numéro depuis AniList et
+// compare au stocké (le backfill ne repasse jamais sur une valeur posée, elle
+// peut se périmer quand une chaîne se complète après coup). fix=true corrige.
+async function runSeasonCheck(fix) {
+  const checkBtn = document.getElementById('admin-season-check-btn');
+  const fixBtn = document.getElementById('admin-season-fix-btn');
+  const status = document.getElementById('admin-season-check-status');
+  checkBtn.disabled = true;
+  fixBtn.disabled = true;
+  let cursor = 0, total = 0, fixed = 0, fails = 0;
+  const mismatches = [];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const renderMismatches = () => mismatches.length
+    ? `<table class="catalog-table"><thead><tr><th>Anime</th><th>Stocké</th><th>Recalculé</th></tr></thead><tbody>${
+      mismatches.slice(0, 60).map((m) =>
+        `<tr><td>${escapeHtml(m.title)}</td><td>${m.stored ? 'S' + m.stored : '—'}</td><td>${m.computed ? 'S' + m.computed : '—'}</td></tr>`
+      ).join('')}</tbody></table>${mismatches.length > 60 ? `<p class="muted">… et ${mismatches.length - 60} autre(s).</p>` : ''}`
+    : '';
+  try {
+    while (true) {
+      let r;
+      try {
+        r = await api('/api/admin/season-check', { method: 'POST', body: JSON.stringify({ cursor, fix: !!fix }) });
+      } catch (e) {
+        if (++fails > 5) throw e;
+        status.textContent = `Pause (AniList saturé)… réessai ${fails}/5`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
+      total += r.processed;
+      fixed += r.fixed;
+      mismatches.push(...r.mismatches);
+      status.innerHTML = `${total} animes vérifiés · ${mismatches.length} écart(s)${fix ? ` · ${fixed} musiques corrigées` : ''}…${renderMismatches()}`;
+      if (r.done || !r.nextCursor) break;
+      cursor = r.nextCursor;
+      await sleep(1500); // throttle AniList
+    }
+    status.innerHTML = mismatches.length
+      ? `${fix ? '✅ Corrigé' : '⚠️ Vérification terminée'} : ${mismatches.length} écart(s) sur ${total} animes${fix ? ` (${fixed} musiques mises à jour)` : ' — clique « Corriger les écarts » pour appliquer les numéros recalculés'}.${renderMismatches()}`
+      : `✅ Vérification terminée : ${total} animes, aucun écart.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    checkBtn.disabled = false;
+    fixBtn.disabled = false;
+  }
+}
+
 async function runBackfillSeries() {
   const btn = document.getElementById('admin-backfill-btn');
   const status = document.getElementById('admin-backfill-status');

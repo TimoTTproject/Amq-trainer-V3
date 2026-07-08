@@ -7,7 +7,7 @@ const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacte
 const { rarityForRank, MAX_SUPPLY, RARITY_RATES, RARITY_LABELS } = require('../gacha/rarity');
 const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
 const { broadcastAll } = require('../mp/mp');
-const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
+const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, verifySeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
   r2Status,
@@ -224,6 +224,23 @@ router.post('/backfill-format', requireAuth, requireAdmin, async (req, res) => {
 router.post('/backfill-seasons', requireAuth, requireAdmin, async (req, res) => {
   try {
     const r = await backfillSeasonsBatch(30);
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Vérifie les numéros de saison déjà stockés en les recalculant depuis le
+// graphe PREQUEL/SEQUEL AniList (le backfill ne repasse jamais sur une valeur
+// posée, elle peut se périmer). Parcours par curseur : appeler en boucle avec
+// le nextCursor renvoyé jusqu'à done === true. fix=true corrige les écarts.
+router.post('/season-check', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await verifySeasonsBatch({
+      cursor: parseInt(req.body?.cursor) || 0,
+      limit: 30,
+      fix: !!req.body?.fix,
+    });
     res.json(r);
   } catch (e) {
     res.status(502).json({ error: e.message });

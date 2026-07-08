@@ -439,21 +439,11 @@ async function backfillFormatsBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
-// Backfill du numéro de saison (position dans la chaîne PREQUEL/SEQUEL AniList)
-// pour distinguer les saisons d'une même œuvre dans les propositions du quiz
-// (ex. Kaguya-sama S1/S2, dont les titres romaji ne diffèrent que par un « ? »).
-// Traite un lot d'anilistId distincts encore sans seasonNumber (appeler en
-// boucle jusqu'à remaining === 0, même mécanique que backfillFormatsBatch).
-async function backfillSeasonsBatch(limit = 30) {
-  const rows = await prisma.song.findMany({
-    where: { seasonNumber: null },
-    distinct: ['anilistId'],
-    select: { anilistId: true },
-    take: limit,
-  });
-  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
-
-  const seedIds = rows.map((r) => r.anilistId);
+// Numéro de saison (position dans la chaîne PREQUEL/SEQUEL AniList) des
+// anilistId donnés — Map(anilistId → numéro), 0 = hors chaîne (jamais eu de
+// suite). Partagé par le backfill (écrit les null) et la vérification (audit
+// des valeurs déjà stockées).
+async function computeSeasonNumbers(seedIds) {
   // Résolution du graphe de relations par frontière successive : on part du lot
   // et on élargit aux voisins PREQUEL/SEQUEL pas encore vus, même hors catalogue
   // (un maillon manquant du catalogue ne doit pas casser la numérotation de la
@@ -527,17 +517,75 @@ async function backfillSeasonsBatch(limit = 30) {
   // Nœuds visités jamais atteints (composante réduite à eux-mêmes) → isolés.
   for (const id of visited.keys()) if (!globalSeen.has(id)) seasonById.set(id, 0);
 
-  let updated = 0;
+  const result = new Map();
   for (const anilistId of seedIds) {
     const seasonNumber = seasonById.get(anilistId) ?? 0;
     // seasonNumber === 1 seul dans sa composante (pas de sequel trouvé) : pas
     // besoin d'afficher « S1 » pour une œuvre qui n'a jamais eu de suite.
-    const finalNumber = seasonNumber === 1 && !hasIncoming.has(anilistId) && !(forward.get(anilistId)?.size) ? 0 : seasonNumber;
-    const res = await prisma.song.updateMany({ where: { anilistId, seasonNumber: null }, data: { seasonNumber: finalNumber } });
+    result.set(anilistId, seasonNumber === 1 && !hasIncoming.has(anilistId) && !(forward.get(anilistId)?.size) ? 0 : seasonNumber);
+  }
+  return result;
+}
+
+// Backfill du numéro de saison pour distinguer les saisons d'une même œuvre
+// dans les propositions du quiz (ex. Kaguya-sama S1/S2, dont les titres romaji
+// ne diffèrent que par un « ? »). Traite un lot d'anilistId distincts encore
+// sans seasonNumber (appeler en boucle jusqu'à remaining === 0).
+async function backfillSeasonsBatch(limit = 30) {
+  const rows = await prisma.song.findMany({
+    where: { seasonNumber: null },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const seedIds = rows.map((r) => r.anilistId);
+  const computed = await computeSeasonNumbers(seedIds);
+  let updated = 0;
+  for (const anilistId of seedIds) {
+    const res = await prisma.song.updateMany({ where: { anilistId, seasonNumber: null }, data: { seasonNumber: computed.get(anilistId) ?? 0 } });
     updated += res.count;
   }
   const remaining = await prisma.song.count({ where: { seasonNumber: null } });
   return { processed: seedIds.length, updated, remaining };
+}
+
+// Vérification des numéros de saison DÉJÀ stockés : recalcule depuis le graphe
+// AniList et compare, par curseur anilistId croissant (appeler en boucle
+// jusqu'à done === true). Lecture seule par défaut ; fix=true corrige les
+// écarts trouvés dans le lot. Sert d'audit : le backfill ne repasse jamais sur
+// une valeur posée, donc une chaîne complétée après coup (prequel importé plus
+// tard, relations AniList corrigées…) peut laisser des numéros périmés.
+async function verifySeasonsBatch({ cursor = 0, limit = 30, fix = false } = {}) {
+  const rows = await prisma.song.findMany({
+    where: { anilistId: { gt: cursor }, seasonNumber: { not: null } },
+    distinct: ['anilistId'],
+    orderBy: { anilistId: 'asc' },
+    select: { anilistId: true, animeTitle: true, seasonNumber: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, mismatches: [], fixed: 0, nextCursor: null, done: true };
+
+  const computed = await computeSeasonNumbers(rows.map((r) => r.anilistId));
+  const mismatches = [];
+  let fixed = 0;
+  for (const row of rows) {
+    const expected = computed.get(row.anilistId) ?? 0;
+    if ((row.seasonNumber || 0) === expected) continue;
+    mismatches.push({ anilistId: row.anilistId, title: row.animeTitle, stored: row.seasonNumber || 0, computed: expected });
+    if (fix) {
+      const res = await prisma.song.updateMany({ where: { anilistId: row.anilistId }, data: { seasonNumber: expected } });
+      fixed += res.count;
+    }
+  }
+  return {
+    processed: rows.length,
+    mismatches,
+    fixed,
+    nextCursor: rows[rows.length - 1].anilistId,
+    done: rows.length < limit,
+  };
 }
 
 // Backfill des jaquettes AniList (`coverUrl`) — identité visuelle par licence
@@ -617,6 +665,7 @@ module.exports = {
   scanEndingsBatch,
   backfillFormatsBatch,
   backfillSeasonsBatch,
+  verifySeasonsBatch,
   backfillCoversBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,
