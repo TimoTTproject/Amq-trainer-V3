@@ -69,18 +69,27 @@ function filterAnimeEntries(entries, needle) {
   const scored = [];
   for (const entry of entries) {
     let matchIndex = -1;
+    let matchLen = Number.MAX_SAFE_INTEGER;
     let exact = false;
     for (const title of entry.searchTitles) {
       const index = title.indexOf(needle);
       if (index < 0) continue;
       if (title === needle) exact = true;
-      if (matchIndex < 0 || index < matchIndex) matchIndex = index;
+      // Le titre matché le plus court l'emporte à index égal : « Magi » doit
+      // battre « Magical Girl Site » quand les deux commencent par « magi »,
+      // sans quoi la popularité (ci-dessous) fait remonter un titre sans
+      // rapport juste parce qu'il partage ce préfixe.
+      if (matchIndex < 0 || index < matchIndex || (index === matchIndex && title.length < matchLen)) {
+        matchIndex = index;
+        matchLen = title.length;
+      }
     }
-    if (matchIndex >= 0) scored.push({ entry, matchIndex, exact });
+    if (matchIndex >= 0) scored.push({ entry, matchIndex, matchLen, exact });
   }
   scored.sort((a, b) =>
     (b.exact - a.exact) ||
     a.matchIndex - b.matchIndex ||
+    a.matchLen - b.matchLen ||
     // Saisons d'une même chaîne dans l'ordre (S1 avant S2…), avant la popularité.
     (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
     (b.entry.popularity || 0) - (a.entry.popularity || 0) ||

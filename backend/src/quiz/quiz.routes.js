@@ -427,19 +427,28 @@ router.get('/series', requirePlayer, async (req, res) => {
   const suggestions = seriesSearchCache.entries
     .map((entry) => {
       let matchIndex = Number.MAX_SAFE_INTEGER;
+      let matchLen = Number.MAX_SAFE_INTEGER;
       let exact = false;
       for (const title of entry.searchTitles) {
         const index = title.indexOf(needle);
         if (index < 0) continue;
         if (title === needle) exact = true;
-        if (index < matchIndex) matchIndex = index;
+        // Le titre matché le plus court l'emporte à index égal : « Magi »
+        // doit battre « Magical Girl Site » quand les deux commencent par
+        // « magi », sans quoi la popularité fait remonter un titre sans
+        // rapport juste parce qu'il partage ce préfixe.
+        if (index < matchIndex || (index === matchIndex && title.length < matchLen)) {
+          matchIndex = index;
+          matchLen = title.length;
+        }
       }
-      return { entry, matchIndex, exact };
+      return { entry, matchIndex, matchLen, exact };
     })
     .filter(({ matchIndex }) => matchIndex !== Number.MAX_SAFE_INTEGER)
     .sort((a, b) =>
       (b.exact - a.exact) ||
       a.matchIndex - b.matchIndex ||
+      a.matchLen - b.matchLen ||
       // Saisons d'une même chaîne dans l'ordre (S1 avant S2 avant S3…) ;
       // seasonNumber 0 = hors chaîne. Prioritaire sur la popularité pour que
       // la saison 1 ressorte toujours en premier.
