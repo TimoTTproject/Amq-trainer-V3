@@ -265,7 +265,7 @@ setInterval(checkCoopWeeklyPayout, 60 * 60 * 1000);
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
 // Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
-const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch, backfillCoversBatch } = require('./catalog/catalog.service');
+const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch, backfillCoversBatch, backfillYearsBatch } = require('./catalog/catalog.service');
 
 // Backfill AUTOMATIQUE des formats (TV/Film/OAV…) : tant que des musiques ont
 // `format: null`, elles passent le filtre « série principale » et polluent les
@@ -298,6 +298,19 @@ async function autoBackfillFormats() {
     }
     if (covers) console.log(`  → Backfill jaquettes terminé : ${covers} musique(s).`);
   } catch (e) { console.error('backfill jaquettes:', e && e.message); }
+  // Puis les années de diffusion (filtre par période du quiz), même passe.
+  try {
+    let years = 0;
+    for (let guard = 0; guard < 120; guard++) {
+      const r = await backfillYearsBatch(50);
+      if (!r.processed) break;
+      years += r.updated;
+      if (r.remaining) console.log(`  → Années : ${r.updated} taguées (${r.remaining} restantes)`);
+      if (!r.remaining) break;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    if (years) console.log(`  → Backfill années terminé : ${years} musique(s).`);
+  } catch (e) { console.error('backfill années:', e && e.message); }
 }
 setTimeout(() => {
   // Verrou court partagé : évite deux passes simultanées (multi-instance/redémarrages rapprochés).

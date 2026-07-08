@@ -216,6 +216,19 @@ async function getAnimeRelationsByIds(ids) {
   return data?.Page?.media || [];
 }
 
+// Année de diffusion (seasonYear, sinon startDate.year) d'un lot d'animes —
+// pour le filtre par période du quiz.
+async function getAnimeYearsByIds(ids) {
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(id_in: $ids, type: ANIME) { id seasonYear startDate { year } }
+      }
+    }`;
+  const data = await anilistQuery(query, { ids });
+  return data?.Page?.media || [];
+}
+
 // Jaquettes (coverImage) d'un lot d'animes — identité visuelle par licence.
 async function getAnimeCoversByIds(ids) {
   const query = `
@@ -228,4 +241,4 @@ async function getAnimeCoversByIds(ids) {
   return data?.Page?.media || [];
 }
 
-module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getTopCharacters, getAnimeCharacters, getCharacterMedia, seriesOfCharacter };
+module.exports = { AniListError, anilistQuery, getCompletedAnime, getViewer, getPopularAnime, getAnimeTitlesByIds, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeYearsByIds, getTopCharacters, getAnimeCharacters, getCharacterMedia, seriesOfCharacter };

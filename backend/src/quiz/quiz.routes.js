@@ -11,6 +11,7 @@ const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations, artistTokens, isSideContent } = require('./recommendations');
 const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('./filters');
 
 const router = express.Router();
 
@@ -89,7 +90,10 @@ async function buildChoices(song, count, titlePool = null) {
 // déjà sous la main sans requête supplémentaire (cas 'mine'/'series', les plus
 // courants) : /choices les réutilise directement au lieu de re-scanner les
 // mêmes ids une seconde fois pour construire les distracteurs Carré/Duo.
-async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
+async function resolveSourceSongIds({ userId, source, series, typeFilter, extraWhere }) {
+  // Filtres additionnels (difficulté par popularité, période) : fragment de
+  // `where` Prisma déjà construit par l'appelant, vide en son absence.
+  const extra = extraWhere && Object.keys(extraWhere).length ? extraWhere : null;
   let songIds;
   let titleRows = null;
   if (source === 'review') {
@@ -101,6 +105,8 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
     });
     songIds = stats.map((s) => s.songId);
   } else if (source === 'series') {
+    // Entraînement ciblé : on ne filtre PAS par difficulté/période — le joueur
+    // a explicitement demandé CET anime, vider sa sélection serait absurde.
     const rows = await prisma.song.findMany({
       where: { animeTitle: series || '', videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) },
       select: { id: true, animeTitle: true, altTitles: true, seasonNumber: true },
@@ -117,10 +123,14 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter }) {
     const entries = await prisma.userCatalogEntry.findMany({ where: { userId }, select: { songId: true } });
     songIds = entries.map((e) => e.songId);
   }
-  // Filtre OP/ED sur les ids retenus (sauf déjà filtré pour 'series') : invalide
-  // titleRows (les lignes déjà en main ne correspondent plus au sous-ensemble filtré).
-  if (typeFilter && source !== 'series' && songIds.length) {
-    const f = await prisma.song.findMany({ where: { id: { in: songIds }, type: typeFilter }, select: { id: true } });
+  // Filtres OP/ED + difficulté/période sur les ids retenus (sauf 'series', déjà
+  // traité) : invalide titleRows (les lignes déjà en main ne correspondent plus
+  // au sous-ensemble filtré).
+  if ((typeFilter || extra) && source !== 'series' && songIds.length) {
+    const f = await prisma.song.findMany({
+      where: { id: { in: songIds }, ...(typeFilter ? { type: typeFilter } : {}), ...(extra || {}) },
+      select: { id: true },
+    });
     songIds = f.map((s) => s.id);
     titleRows = null;
   }
@@ -216,20 +226,31 @@ router.get('/random', requirePlayer, async (req, res) => {
   const typeFilter = ['OP', 'ED'].includes(req.query.type) ? req.query.type : null;
 
   const series = source === 'series' ? (req.query.series || '').trim() : undefined;
+  // Filtres de sélection : difficulté (popularité) et période de diffusion.
+  const difficulty = DIFFICULTIES.includes(req.query.difficulty) ? req.query.difficulty : 'all';
+  const yearMin = sanitizeYear(req.query.yearMin);
+  const yearMax = sanitizeYear(req.query.yearMax);
+  const extraWhere = { ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax) };
+  const filtersActive = Object.keys(extraWhere).length > 0;
   let song = null;
   if (!source && mode === 'global') {
     // Perf : on évite de charger tous les ids → count + skip aléatoire.
     // Priorité à la série principale (exclut films/OAV connus), avec repli si vide.
-    const baseFilter = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}) };
+    const baseFilter = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}), ...extraWhere };
     let where = { ...baseFilter, ...preferMainContent };
     let total = await prisma.song.count({ where });
     if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
-    if (!total) return res.status(404).json({ error: 'Aucune musique disponible' });
+    if (!total) {
+      return res.status(404).json({ error: filtersActive ? 'Aucune musique ne correspond à ces filtres (difficulté/période)' : 'Aucune musique disponible' });
+    }
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
-    const { ids: songIds } = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter });
+    const { ids: songIds } = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter, extraWhere });
     if (!songIds.length) {
-      return res.status(404).json({ error: source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode' });
+      const noMatch = filtersActive && !source
+        ? 'Aucune musique ne correspond à ces filtres (difficulté/période)'
+        : (source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode');
+      return res.status(404).json({ error: noMatch });
     }
     const randomId = songIds[Math.floor(Math.random() * songIds.length)];
     song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });

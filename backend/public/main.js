@@ -154,7 +154,24 @@ const settings = {
   count: parseInt(localStorage.getItem('amq_count') ?? '0'), // 0 = illimité
   titleLang: localStorage.getItem('amq_titleLang') || 'en', // 'en' = anglais d'abord, 'jp' = japonais d'abord
   quizLayout: localStorage.getItem('amq_quizLayout') === 'vertical' ? 'vertical' : 'horizontal',
+  difficulty: localStorage.getItem('amq_difficulty') || 'all', // all | popular | medium | obscure
+  yearMin: parseInt(localStorage.getItem('amq_yearMin') ?? '0'), // 0 = pas de borne
+  yearMax: parseInt(localStorage.getItem('amq_yearMax') ?? '0'),
+  answerSeconds: parseInt(localStorage.getItem('amq_answer') ?? '0'), // temps pour répondre après l'extrait (0 = illimité)
+  autoNextDelay: parseInt(localStorage.getItem('amq_autonextDelay') ?? '4'), // délai avant la manche suivante auto (s)
 };
+
+// Remplit un <select> d'années : « — » (0 = pas de borne) puis années
+// décroissantes de l'année courante à 1965. Partagé solo + salon multi.
+function fillYearSelect(select, value) {
+  if (!select) return;
+  const current = new Date().getFullYear();
+  let html = '<option value="0">—</option>';
+  for (let y = current; y >= 1965; y--) html += `<option value="${y}">${y}</option>`;
+  select.innerHTML = html;
+  select.value = String(value || 0);
+  if (select.value === '') select.value = '0';
+}
 let autoNextTimer = null; // enchaînement automatique vers la manche suivante
 // Session finie (solo classique) : compteur de sons et bonnes réponses
 let quizCount = 0, quizCorrect = 0, quizSessionEnded = false;
@@ -1512,9 +1529,56 @@ function setupAppUI() {
   if (optCount) {
     optCount.value = String(settings.count);
     optCount.addEventListener('change', () => {
-      settings.count = parseInt(optCount.value);
-      localStorage.setItem('amq_count', optCount.value);
+      // Saisie libre 0–100 (0 = illimité), clampée pour rester saine.
+      const n = Math.max(0, Math.min(100, parseInt(optCount.value) || 0));
+      optCount.value = String(n);
+      settings.count = n;
+      localStorage.setItem('amq_count', String(n));
       quizSessionEnded = true; // la prochaine manche démarre une nouvelle session
+    });
+  }
+  const optDifficulty = document.getElementById('opt-difficulty');
+  if (optDifficulty) {
+    optDifficulty.value = settings.difficulty;
+    optDifficulty.addEventListener('change', () => {
+      settings.difficulty = optDifficulty.value;
+      localStorage.setItem('amq_difficulty', settings.difficulty);
+    });
+  }
+  // Période : bornes inversées re-triées à la volée (pas de plage vide possible).
+  const optYearMin = document.getElementById('opt-year-min');
+  const optYearMax = document.getElementById('opt-year-max');
+  if (optYearMin && optYearMax) {
+    fillYearSelect(optYearMin, settings.yearMin);
+    fillYearSelect(optYearMax, settings.yearMax);
+    const onYearChange = () => {
+      let min = parseInt(optYearMin.value) || 0;
+      let max = parseInt(optYearMax.value) || 0;
+      if (min && max && min > max) [min, max] = [max, min];
+      settings.yearMin = min;
+      settings.yearMax = max;
+      optYearMin.value = String(min);
+      optYearMax.value = String(max);
+      localStorage.setItem('amq_yearMin', String(min));
+      localStorage.setItem('amq_yearMax', String(max));
+    };
+    optYearMin.addEventListener('change', onYearChange);
+    optYearMax.addEventListener('change', onYearChange);
+  }
+  const optAnswerTime = document.getElementById('opt-answer-time');
+  if (optAnswerTime) {
+    optAnswerTime.value = String(settings.answerSeconds);
+    optAnswerTime.addEventListener('change', () => {
+      settings.answerSeconds = parseInt(optAnswerTime.value) || 0;
+      localStorage.setItem('amq_answer', String(settings.answerSeconds));
+    });
+  }
+  const optAutoDelay = document.getElementById('opt-autonext-delay');
+  if (optAutoDelay) {
+    optAutoDelay.value = String(settings.autoNextDelay);
+    optAutoDelay.addEventListener('change', () => {
+      settings.autoNextDelay = parseInt(optAutoDelay.value) || 4;
+      localStorage.setItem('amq_autonextDelay', String(settings.autoNextDelay));
     });
   }
   const optQuizLayout = document.getElementById('opt-quiz-layout');
@@ -1895,6 +1959,11 @@ function buildRandomQuery() {
     qs = `mode=${mode}&ranked=${gameMode === 'ranked'}`;
   }
   if (quizType && quizType !== 'all') qs += `&type=${quizType}`;
+  // Difficulté (popularité) + période. Pas en entraînement ciblé (série choisie
+  // explicitement, le serveur les ignore de toute façon).
+  if (settings.difficulty && settings.difficulty !== 'all') qs += `&difficulty=${settings.difficulty}`;
+  if (settings.yearMin) qs += `&yearMin=${settings.yearMin}`;
+  if (settings.yearMax) qs += `&yearMax=${settings.yearMax}`;
   return qs;
 }
 
@@ -2079,6 +2148,19 @@ function armClipCutoff(ms) {
     const v = video();
     if (!answered && v) { v.pause(); setOverlayEnded(true); } // extrait fini → invite à répondre/passer
     setPlayIcon();
+    // Temps de réponse limité (réglage) : compte à rebours après l'extrait,
+    // temps écoulé = raté. Le mode chrono de l'entraînement garde sa propre
+    // échéance (clip + 4 s, déjà armée) — pas de double compte à rebours.
+    if (!answered && settings.answerSeconds > 0 && !(isTraining && trainingChrono)) {
+      clearTimeout(chronoTimer);
+      startQuizTimebar(settings.answerSeconds);
+      setHint(`⏱ ${settings.answerSeconds} s pour répondre !`);
+      chronoTimer = setTimeout(() => {
+        if (answered) return;
+        setHint('⏱ Temps écoulé !');
+        if (isTraining) showAnswerCasual(); else guessAnswer('');
+      }, settings.answerSeconds * 1000);
+    }
   }, ms);
 }
 
@@ -2367,7 +2449,7 @@ function revealAnswerBox(answer) {
     document.getElementById('next-btn').innerHTML = '<i class="fas fa-rotate-right"></i> Nouvelle partie';
   } else if (settings.autoNext) {
     // Enchaînement automatique vers la manche suivante (option)
-    autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, 4000);
+    autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, (settings.autoNextDelay || 4) * 1000);
   }
   // Profite du temps mort de la révélation (4 s d'auto-enchaînement, ou le temps
   // que le joueur clique sur « Manche suivante ») pour précharger la manche

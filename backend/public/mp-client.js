@@ -630,9 +630,16 @@ function renderRoom(d) {
     document.getElementById('mp-set-mode').value = d.settings.mode || 'classic';
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
     document.getElementById('mp-set-source').value = d.settings.songSource || (d.isPublic ? 'lists' : 'global');
+    document.getElementById('mp-set-difficulty').value = d.settings.difficulty || 'all';
+    // Les selects d'années sont remplis à l'init (fillYearSelect, cf. main.js).
+    document.getElementById('mp-set-year-min').value = String(d.settings.yearMin || 0);
+    document.getElementById('mp-set-year-max').value = String(d.settings.yearMax || 0);
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
     document.getElementById('mp-set-source').disabled = !isHost;
+    document.getElementById('mp-set-difficulty').disabled = !isHost;
+    document.getElementById('mp-set-year-min').disabled = !isHost;
+    document.getElementById('mp-set-year-max').disabled = !isHost;
     // Coop : mode figé (lancé via « Jouer ») + étages infinis / temps auto +
     // catalogue global et openings IMPOSÉS par le serveur → on masque tous les
     // champs de réglage (l'encart coop explique tout).
@@ -641,6 +648,8 @@ function renderRoom(d) {
     document.getElementById('mp-field-speed').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-theme').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-source').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-difficulty').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-years').classList.toggle('hidden', isCoop);
   }
   // Encart explicatif du mode Coop (Tour en équipe)
   const coopInfo = document.getElementById('mp-coop-info');
@@ -903,6 +912,9 @@ function mpSettingsPayload() {
     mode: document.getElementById('mp-set-mode').value,
     themeType: document.getElementById('mp-set-theme').value,
     songSource: document.getElementById('mp-set-source').value,
+    difficulty: document.getElementById('mp-set-difficulty').value,
+    yearMin: parseInt(document.getElementById('mp-set-year-min').value) || 0,
+    yearMax: parseInt(document.getElementById('mp-set-year-max').value) || 0,
   };
 }
 
@@ -974,6 +986,14 @@ function initMpUI() {
   document.getElementById('mp-set-mode').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-theme').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-source').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  // Selects d'années remplis une fois (même helper que le quiz solo).
+  if (typeof fillYearSelect === 'function') {
+    fillYearSelect(document.getElementById('mp-set-year-min'), 0);
+    fillYearSelect(document.getElementById('mp-set-year-max'), 0);
+  }
+  document.getElementById('mp-set-difficulty').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-year-min').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-year-max').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {

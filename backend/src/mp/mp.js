@@ -24,6 +24,7 @@ const VALID_ROUNDMS = [15000, 25000, 40000];
 const VALID_MODES = ['classic', 'teams', 'elim', 'coop'];
 const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
 const VALID_SONG_SOURCES = ['global', 'lists'];
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('../quiz/filters');
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
 // Coop (Tour en équipe) : vies partagées, étages infinis, l'étage est validé si
@@ -42,7 +43,7 @@ function roundDurationMs(room) {
 const TEAM_NAMES = ['Rouge', 'Bleu'];
 const FREE_EMOTES = ['😂', '🔥', '👍', '😮', '😭', '🎉', '👏', '💀', '🤓'];
 const ANIME_EMOTE_BY_ID = new Map(ANIME_EMOTES.map((item) => [item.id, item]));
-const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all' };
+const RANKED_SETTINGS = { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', difficulty: 'all', yearMin: 0, yearMax: 0 };
 
 // Récompense en tokens (perf + plafond anti-abus). Le farm entre amis est
 // toléré (jeu pour s'amuser) ; le plafond borne les dérives (bots/nuit).
@@ -170,7 +171,7 @@ function newRoom({ isPublic, ranked }) {
     // présents (par défaut en partie rapide, comme avant) ; 'global' pioche dans
     // tout le catalogue (par défaut en salon privé, comme avant). Modifiable par
     // l'hôte dans les deux cas (hors classé, toujours 'global', figé).
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global' },
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global', difficulty: 'all', yearMin: 0, yearMax: 0 },
     status: 'lobby', chat: [], round: 0, current: null,
     spectators: new Set(), // userIds qui regardent (pas des joueurs)
     usedSongIds: new Set(), usedAnilistIds: new Set(),
@@ -292,6 +293,14 @@ function applySettings(room, s) {
   if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
   if (VALID_THEME_TYPES.includes(s.themeType)) room.settings.themeType = s.themeType;
   if (VALID_SONG_SOURCES.includes(s.songSource)) room.settings.songSource = s.songSource;
+  if (DIFFICULTIES.includes(s.difficulty)) room.settings.difficulty = s.difficulty;
+  // Période : bornes validées individuellement ; min > max = filtre ignoré au
+  // tirage (yearWhere renverra un intervalle vide, corrigé ici par sécurité).
+  if (s.yearMin !== undefined) room.settings.yearMin = sanitizeYear(s.yearMin);
+  if (s.yearMax !== undefined) room.settings.yearMax = sanitizeYear(s.yearMax);
+  if (room.settings.yearMin && room.settings.yearMax && room.settings.yearMin > room.settings.yearMax) {
+    [room.settings.yearMin, room.settings.yearMax] = [room.settings.yearMax, room.settings.yearMin];
+  }
 }
 function setSettings(socket, s) {
   const room = rooms.get(socket.data.roomId);
@@ -427,6 +436,11 @@ function availableSongWhere(room) {
     videoUrl: { not: null },
     ...(Array.isArray(room.songPoolIds) ? { id: { in: room.songPoolIds } } : {}),
     ...(themeType ? { type: themeType } : {}),
+    // Difficulté (popularité) + période choisies par l'hôte. Ignorées en coop
+    // (classement hebdo : conditions identiques pour tous) comme en classé
+    // (réglages figés à 'all' par RANKED_SETTINGS).
+    ...(room.mode === 'coop' ? {} : difficultyWhere(room.settings?.difficulty)),
+    ...(room.mode === 'coop' ? {} : yearWhere(room.settings?.yearMin, room.settings?.yearMax)),
     ...(room.usedAnilistIds.size ? { anilistId: { notIn: [...room.usedAnilistIds] } } : {}),
   };
 }

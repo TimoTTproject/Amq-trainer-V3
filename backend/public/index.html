@@ -156,11 +156,6 @@
           <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" aria-label="Volume de la musique" />
           <button id="mute-btn" class="btn-secondary" title="Activer ou couper les effets sonores" aria-label="Activer ou couper les effets sonores"><i class="fas fa-volume-high"></i></button>
           <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language" aria-label="Changer de langue">EN</button>
-          <label for="opt-title-lang" class="header-menu-label">Noms d'anime</label>
-          <select id="opt-title-lang" class="header-menu-select" title="Langue affichée en premier dans les suggestions (tous les modes)">
-            <option value="en">🇬🇧 Anglais d'abord</option>
-            <option value="jp">🇯🇵 Japonais d'abord</option>
-          </select>
           <button id="logout-btn" class="btn-secondary" aria-label="Se déconnecter"><i class="fas fa-sign-out-alt"></i><span>Déconnexion</span></button>
         </div>
       </div>
@@ -634,36 +629,80 @@
             <button type="button" class="ql-btn active" data-layout="horizontal">Horizontal</button>
             <button type="button" class="ql-btn" data-layout="vertical">Vertical</button>
           </span>
-          <span class="quiz-collapse-hint">Durée, nombre de sons… <i class="fas fa-chevron-down"></i></span>
+          <span class="quiz-collapse-hint">Difficulté, durée, période… <i class="fas fa-chevron-down"></i></span>
         </span>
       </summary>
-      <div class="quiz-options" id="quiz-options">
-        <label><input type="checkbox" id="opt-random-start" checked /> Départ aléatoire</label>
-        <label><input type="checkbox" id="opt-autonext" /> Manche suivante auto</label>
-        <label>Durée d'écoute :
-          <select id="opt-clip">
-            <option value="0">Illimitée</option>
-            <option value="5">5 s</option>
-            <option value="10">10 s</option>
-            <option value="15">15 s</option>
-            <option value="20" selected>20 s</option>
-            <option value="30">30 s</option>
-          </select>
-        </label>
-        <label>Nombre de sons :
-          <select id="opt-count">
-            <option value="0" selected>Illimité</option>
-            <option value="5">5</option>
-            <option value="10">10</option>
-            <option value="20">20</option>
-          </select>
-        </label>
-        <label>Disposition :
-          <select id="opt-quiz-layout">
-            <option value="horizontal" selected>Horizontale</option>
-            <option value="vertical">Verticale</option>
-          </select>
-        </label>
+      <div class="quiz-options quiz-options-grid" id="quiz-options">
+        <fieldset class="opt-group">
+          <legend><i class="fas fa-filter"></i> Sélection des musiques</legend>
+          <label>Difficulté :
+            <select id="opt-difficulty" title="Selon la popularité AniList de l'anime">
+              <option value="all" selected>Tous les animes</option>
+              <option value="popular">Populaires (plus facile)</option>
+              <option value="medium">Moyennement connus</option>
+              <option value="obscure">Obscurs (plus difficile)</option>
+            </select>
+          </label>
+          <label>Période :
+            <select id="opt-year-min" title="Année minimum"></select>
+            →
+            <select id="opt-year-max" title="Année maximum"></select>
+          </label>
+          <p class="hint opt-hint">Ignorés en entraînement ciblé (série choisie explicitement).</p>
+        </fieldset>
+        <fieldset class="opt-group">
+          <legend><i class="fas fa-stopwatch"></i> Déroulement</legend>
+          <label><input type="checkbox" id="opt-random-start" checked /> Départ aléatoire dans l'extrait</label>
+          <label>Durée d'écoute :
+            <select id="opt-clip">
+              <option value="0">Illimitée</option>
+              <option value="5">5 s</option>
+              <option value="10">10 s</option>
+              <option value="15">15 s</option>
+              <option value="20" selected>20 s</option>
+              <option value="30">30 s</option>
+              <option value="45">45 s</option>
+              <option value="60">60 s</option>
+            </select>
+          </label>
+          <label>Temps pour répondre après l'extrait :
+            <select id="opt-answer-time" title="Une fois l'extrait terminé — temps écoulé = raté">
+              <option value="0" selected>Illimité</option>
+              <option value="5">5 s</option>
+              <option value="10">10 s</option>
+              <option value="15">15 s</option>
+              <option value="20">20 s</option>
+            </select>
+          </label>
+          <label>Nombre de sons :
+            <input type="number" id="opt-count" min="0" max="100" step="1" value="0" inputmode="numeric" />
+            <span class="hint">0 = illimité</span>
+          </label>
+          <label><input type="checkbox" id="opt-autonext" /> Manche suivante auto</label>
+          <label>Délai avant la manche suivante :
+            <select id="opt-autonext-delay">
+              <option value="2">2 s</option>
+              <option value="4" selected>4 s</option>
+              <option value="6">6 s</option>
+              <option value="10">10 s</option>
+            </select>
+          </label>
+        </fieldset>
+        <fieldset class="opt-group">
+          <legend><i class="fas fa-display"></i> Affichage</legend>
+          <label>Noms d'anime :
+            <select id="opt-title-lang" title="Langue affichée en premier dans les suggestions (tous les modes)">
+              <option value="en">🇬🇧 Anglais d'abord</option>
+              <option value="jp">🇯🇵 Japonais d'abord</option>
+            </select>
+          </label>
+          <label>Disposition :
+            <select id="opt-quiz-layout">
+              <option value="horizontal" selected>Horizontale</option>
+              <option value="vertical">Verticale</option>
+            </select>
+          </label>
+        </fieldset>
       </div>
     </details>
 
@@ -1671,6 +1710,21 @@
                   <option value="global" selected>Catalogue global</option>
                   <option value="lists">Listes des joueurs présents</option>
                 </select>
+              </label>
+              <label id="mp-field-difficulty">Difficulté
+                <select id="mp-set-difficulty" title="Selon la popularité AniList de l'anime">
+                  <option value="all" selected>Tous les animes</option>
+                  <option value="popular">Populaires (facile)</option>
+                  <option value="medium">Moyennement connus</option>
+                  <option value="obscure">Obscurs (difficile)</option>
+                </select>
+              </label>
+              <label id="mp-field-years">Période
+                <span class="mp-years-range">
+                  <select id="mp-set-year-min" title="Année minimum"></select>
+                  →
+                  <select id="mp-set-year-max" title="Année maximum"></select>
+                </span>
               </label>
             </div>
             <div id="mp-coop-info" class="mp-coop-info hidden"></div>

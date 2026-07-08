@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeYearsByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
 const { norm } = require('../quiz/matching');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
@@ -643,6 +643,39 @@ async function backfillCoversBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
+// Backfill de l'année de diffusion (`seasonYear`) — filtre par période du
+// quiz. Même mécanique que les jaquettes : lot d'anilistId distincts encore
+// sans année, sentinelle 0 pour les inconnues côté AniList.
+async function backfillYearsBatch(limit = 50) {
+  const rows = await prisma.song.findMany({
+    where: { seasonYear: null },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const ids = rows.map((r) => r.anilistId);
+  let updated = 0;
+  try {
+    const media = await getAnimeYearsByIds(ids);
+    const yearById = new Map(media.map((m) => [m.id, m.seasonYear || m.startDate?.year || 0]));
+    for (const [anilistId, seasonYear] of yearById) {
+      const res = await prisma.song.updateMany({ where: { anilistId, seasonYear: null }, data: { seasonYear } });
+      updated += res.count;
+    }
+    // ids sans réponse AniList (supprimés/introuvables) : sentinelle 0 pour ne pas reboucler.
+    const missing = ids.filter((id) => !yearById.has(id));
+    if (missing.length) {
+      await prisma.song.updateMany({ where: { anilistId: { in: missing }, seasonYear: null }, data: { seasonYear: 0 } });
+    }
+  } catch (err) {
+    console.warn('backfill years error:', err.message);
+  }
+  const remaining = await prisma.song.count({ where: { seasonYear: null } });
+  return { processed: ids.length, updated, remaining };
+}
+
 // Répare les `animeTitle` corrompus (fragments de saison « 2nd Season », titres
 // vides « Anime inconnu »…) : re-récupère le vrai titre sur AniList par anilistId
 // et recalcule animeTitle + altTitles (+ format). À appeler en boucle jusqu'à
@@ -691,6 +724,7 @@ module.exports = {
   verifySeasonsBatch,
   computeSeasonNumbers,
   backfillCoversBatch,
+  backfillYearsBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,
   computeAmbiguousTitleKeys,

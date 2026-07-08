@@ -485,6 +485,15 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .quiz-options label { display: flex; align-items: center; gap: 6px; }
 .quiz-options select { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
 .quiz-options input[type="checkbox"] { accent-color: var(--accent); }
+/* Panneau de réglages unifié : sections (Sélection / Déroulement / Affichage) */
+.quiz-options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: start; }
+.quiz-options-grid label { flex-wrap: wrap; }
+.opt-group { border: 1px solid #2a2f42; border-radius: 12px; padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.opt-group legend { padding: 0 6px; font-weight: 600; color: var(--text); font-size: .85rem; }
+.opt-group legend i { color: var(--accent); margin-right: 4px; }
+.opt-group input[type="number"] { width: 72px; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
+.opt-hint { margin: 0; font-size: .76rem; }
+.mp-years-range { display: inline-flex; align-items: center; gap: 6px; }
 
 .answer-area { display: flex; gap: 10px; flex-wrap: wrap; }
 .answer-area input { flex: 1; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; }
