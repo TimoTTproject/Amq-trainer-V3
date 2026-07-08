@@ -18,14 +18,27 @@ function englishFirst() {
   return typeof settings === 'undefined' || settings.titleLang !== 'jp';
 }
 
+// Le titre porte-t-il déjà son propre ordinal (« Fourth Stage », « 2nd
+// Season », « Part 2 », « III »…) ? Dans ce cas le préfixe S# n'apporte rien
+// et peut même le contredire : le S# compte les saisons TV de la chaîne
+// AniList, alors que le nom officiel compte parfois aussi les films (Initial D
+// Third Stage est un film → Fourth Stage serait affiché « S3 »). Volontairement
+// conservateur : v/x seuls et les nombres non finaux (Mob Psycho 100) ne
+// déclenchent pas, pour ne pas masquer le préfixe des titres quasi identiques
+// (Kaguya-sama S1/S2) qui en ont vraiment besoin.
+function titleHasOwnOrdinal(base) {
+  return /\b(?:season|saison)\s*\d|\b\d(?:st|nd|rd|th)\s*(?:season|saison)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|final)\s+(?:season|saison|stage|part|act|arc|chapter)\b|\bpart\s+(?:\d+|[ivx]+)\b|\b(?:ii|iii|iv|vi|vii|viii|ix)\b|\s[2-9]$/i.test(base || '');
+}
+
 // Libellé d'affichage d'un anime : titre choisi selon `englishFirst()`, préfixé
 // du numéro de saison (S1/S2…) quand il fait partie d'une chaîne détectée —
 // ex. distinguer Kaguya-sama S1/S2 dont les titres romaji ne diffèrent que par
-// un « ? ». Le préfixe est purement visuel : ne pas l'inclure dans un texte
-// soumis en réponse (le matching se fait sur `title`/`englishTitle` seuls).
+// un « ? » — sauf si le titre contient déjà son propre ordinal. Le préfixe est
+// purement visuel : ne pas l'inclure dans un texte soumis en réponse (le
+// matching se fait sur `title`/`englishTitle` seuls).
 function formatAnimeLabel({ title, englishTitle, seasonNumber }) {
   const base = englishFirst() && englishTitle ? englishTitle : title;
-  return seasonNumber > 0 ? `S${seasonNumber} · ${base}` : base;
+  return seasonNumber > 0 && !titleHasOwnOrdinal(base) ? `S${seasonNumber} · ${base}` : base;
 }
 
 function formatAnimeDisplay({ title, englishTitle, seasonNumber }) {
@@ -85,8 +98,11 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
         else if (matchedTitle && matchedTitle !== entry.title && matchedTitle !== entry.englishTitle) {
           via = `≈ ${highlightAnimeHtml(matchedTitle, query)}`;
         }
-        // Le préfixe S1/S2 est purement visuel : on surligne seulement le titre.
-        const seasonPrefix = entry.seasonNumber > 0 ? `S${entry.seasonNumber} · ` : '';
+        // Le préfixe S1/S2 est purement visuel (et pas toujours présent, cf.
+        // titleHasOwnOrdinal) : on surligne seulement le titre, dérivé par
+        // longueur pour rester juste quel que soit le choix du libellé.
+        const base = englishFirst() && entry.englishTitle ? entry.englishTitle : entry.title;
+        const seasonPrefix = primary.length > base.length ? primary.slice(0, primary.length - base.length) : '';
         const primaryBase = primary.slice(seasonPrefix.length);
         return `<button type="button" class="anime-suggestion" role="option" aria-selected="false" data-anime-index="${index}">
         <span class="anime-suggestion-body">

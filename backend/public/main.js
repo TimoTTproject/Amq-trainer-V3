@@ -2263,10 +2263,14 @@ async function requestChoices(level) {
     const box = document.getElementById('choice-buttons');
     box.innerHTML = r.options.map((o, i) => {
       const answer = englishFirst() && o.englishTitle ? o.englishTitle : o.title;
+      // seasonNumber: 0 → le badge dédié porte seul le numéro (sinon il
+      // doublonnait avec le préfixe « S2 · » du titre). Badge masqué quand le
+      // titre contient déjà son propre ordinal (« Fourth Stage », « Part 2 »…).
       const display = typeof formatAnimeDisplay === 'function'
-        ? formatAnimeDisplay(o)
+        ? formatAnimeDisplay({ ...o, seasonNumber: 0 })
         : { primary: answer, secondary: o.englishTitle && o.englishTitle !== o.title ? o.title : null };
-      const seasonBadge = o.seasonNumber > 0 ? `<span class="choice-season">S${o.seasonNumber}</span>` : '';
+      const showBadge = o.seasonNumber > 0 && !(typeof titleHasOwnOrdinal === 'function' && titleHasOwnOrdinal(answer));
+      const seasonBadge = showBadge ? `<span class="choice-season">S${o.seasonNumber}</span>` : '';
       return `<button class="choice-opt" data-answer="${escapeHtml(answer)}"><span class="choice-num">${i + 1}</span><span class="choice-body">${seasonBadge}<span class="choice-title">${escapeHtml(display.primary)}</span>${display.secondary ? `<small class="choice-subtitle">${escapeHtml(display.secondary)}</small>` : ''}</span></button>`;
     }).join('');
     box.classList.remove('hidden');
