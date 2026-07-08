@@ -62,7 +62,7 @@ function ensureAppReady() {
   appReadyPromise = (async () => {
     await Promise.all([
       'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'albums.js', 'daily.js', 'gacha.js',
-      'catalog.js', 'community.js', 'market.js', 'profile.js', 'anime-autocomplete.js', 'tutorial.js',
+      'catalog.js', 'community.js', 'market.js', 'profile.js', 'anime-search-core.js', 'anime-autocomplete.js', 'tutorial.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');

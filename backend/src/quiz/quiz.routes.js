@@ -358,35 +358,10 @@ router.get('/training-stats', requireAuth, async (req, res) => {
 // Rafraîchit (si expiré) le cache des séries : titre + synonymes normalisés de
 // chaque anime distinct du catalogue. Partagé par /series (recherche serveur,
 // entraînement ciblé) et /series-all (liste complète, autocomplétion de réponse).
-// Normalisation pour la recherche/autocomplétion : minuscules, accents retirés,
-// espaces et ponctuation supprimés — pour que « re zero », « rezero » et
-// « Re:Zero » correspondent tous, idem « Fate/Zero » ↔ « fate zero » ou les
-// titres accentués tapés sans accent. DOIT rester STRICTEMENT identique à
-// `animeSearchNormalize` côté client (public/anime-autocomplete.js), sinon le
-// filtrage local ne trouverait plus rien.
-function animeSearchNormalize(s) {
-  return (s || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '') // diacritiques
-    .replace(/[^a-z0-9]/g, ''); // espaces + ponctuation
-}
-
-// Variante qui garde un séparateur (espace unique) entre les mots au lieu de
-// tout coller : sert à détecter les correspondances qui tombent pile sur une
-// frontière de mot (ex. « Magi » dans « Magi: The Labyrinth of Magic »),
-// pour les distinguer d'un match en plein milieu d'un mot plus long (ex.
-// « magi » dans « Magical Girl Site » ou « Magic Warfare »).
-function animeSearchWordTokens(s) {
-  return (s || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean);
-}
+// Normalisation, matching et tri vivent dans public/anime-search-core.js,
+// module PARTAGÉ avec le navigateur — une seule implémentation, plus de copies
+// à garder synchronisées.
+const { animeSearchNormalize, buildAnimeSearchFields, filterAnimeEntries } = require('../../public/anime-search-core');
 
 async function ensureSeriesSearchCache() {
   if (seriesSearchCache.expiresAt >= Date.now()) return;
@@ -405,20 +380,12 @@ async function ensureSeriesSearchCache() {
         englishTitle,
         seasonNumber: row.seasonNumber || 0,
         popularity: row.popularity || 0,
-        // Titres de recherche normalisés (titre + anglais + synonymes), dédoublonnés.
-        searchTitles: [...new Set(
+        // Champs de recherche précalculés (chaînes collées, mots par variante,
+        // acronymes) sur titre + anglais + synonymes, hors titres CJK.
+        ...buildAnimeSearchFields(
           [row.animeTitle, englishTitle, ...(row.altTitles || [])]
             .filter((title) => title && !hasCjkTitle(title))
-            .map(animeSearchNormalize)
-            .filter(Boolean)
-        )],
-        // Mots individuels (toutes variantes de titre confondues) pour la
-        // détection de match sur frontière de mot, cf. animeSearchWordTokens.
-        wordTokens: [...new Set(
-          [row.animeTitle, englishTitle, ...(row.altTitles || [])]
-            .filter((title) => title && !hasCjkTitle(title))
-            .flatMap(animeSearchWordTokens)
-        )],
+        ),
       };
     }),
   };
@@ -432,63 +399,18 @@ async function ensureSeriesSearchCache() {
 router.get('/series-all', requirePlayer, async (req, res) => {
   await ensureSeriesSearchCache();
   res.json({
-    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles, wordTokens }) => ({
-      title, englishTitle, seasonNumber, popularity, searchTitles, wordTokens,
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles, titleTokens, acronyms }) => ({
+      title, englishTitle, seasonNumber, popularity, searchTitles, titleTokens, acronyms,
     })),
   });
 });
 
-// Recherche de séries (animes) pour l'entraînement ciblé
+// Recherche de séries (animes) pour l'entraînement ciblé — même matching/tri
+// que l'autocomplétion de réponse (anime-search-core.js).
 router.get('/series', requirePlayer, async (req, res) => {
-  const needle = animeSearchNormalize(req.query.q || '');
-  if (!needle) return res.json({ series: [], suggestions: [] });
+  if (!animeSearchNormalize(req.query.q || '')) return res.json({ series: [], suggestions: [] });
   await ensureSeriesSearchCache();
-  // Un seul passage par entrée : index de correspondance le plus tôt + match
-  // exact, calculés une fois puis réutilisés au tri (frappe fluide même sur un
-  // gros catalogue). Ordre : exact d'abord, puis préfixe (index le plus tôt),
-  // puis popularité, puis titre le plus court, puis alphabétique.
-  const suggestions = seriesSearchCache.entries
-    .map((entry) => {
-      let matchIndex = Number.MAX_SAFE_INTEGER;
-      let matchLen = Number.MAX_SAFE_INTEGER;
-      let exact = false;
-      for (const title of entry.searchTitles) {
-        const index = title.indexOf(needle);
-        if (index < 0) continue;
-        if (title === needle) exact = true;
-        // Le titre matché le plus court l'emporte à index égal : « Magi »
-        // doit battre « Magical Girl Site » quand les deux commencent par
-        // « magi », sans quoi la popularité fait remonter un titre sans
-        // rapport juste parce qu'il partage ce préfixe.
-        if (index < matchIndex || (index === matchIndex && title.length < matchLen)) {
-          matchIndex = index;
-          matchLen = title.length;
-        }
-      }
-      // Un match qui tombe pile sur un mot entier (« Magi » dans « Magi:
-      // The Labyrinth of Magic ») doit battre un match en plein milieu d'un
-      // mot plus long (« magi » dans « Magical Girl Site ») même si ce
-      // dernier a un titre plus court ou plus populaire.
-      const wholeWord = entry.wordTokens.includes(needle);
-      const wordStart = wholeWord || entry.wordTokens.some((t) => t.startsWith(needle));
-      return { entry, matchIndex, matchLen, exact, wholeWord, wordStart };
-    })
-    .filter(({ matchIndex }) => matchIndex !== Number.MAX_SAFE_INTEGER)
-    .sort((a, b) =>
-      (b.exact - a.exact) ||
-      (b.wholeWord - a.wholeWord) ||
-      (b.wordStart - a.wordStart) ||
-      a.matchIndex - b.matchIndex ||
-      a.matchLen - b.matchLen ||
-      // Saisons d'une même chaîne dans l'ordre (S1 avant S2 avant S3…) ;
-      // seasonNumber 0 = hors chaîne. Prioritaire sur la popularité pour que
-      // la saison 1 ressorte toujours en premier.
-      (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
-      b.entry.popularity - a.entry.popularity ||
-      a.entry.title.length - b.entry.title.length ||
-      a.entry.title.localeCompare(b.entry.title))
-    .slice(0, 20)
-    .map(({ entry }) => entry);
+  const suggestions = filterAnimeEntries(seriesSearchCache.entries, req.query.q || '');
   res.json({
     series: suggestions.map((entry) => entry.title),
     suggestions: suggestions.map(({ title, englishTitle }) => ({ title, englishTitle })),

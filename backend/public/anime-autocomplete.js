@@ -49,63 +49,8 @@ function closeAnimeAutocomplete(inputId) {
   state.input.setAttribute('aria-expanded', 'false');
 }
 
-// Normalisation identique au serveur (src/quiz/quiz.routes.js) : minuscules,
-// accents retirés, espaces/ponctuation supprimés — « re zero », « rezero » et
-// « Re:Zero » deviennent tous « rezero ». DOIT rester synchronisée avec le
-// serveur, sinon `searchTitles` (déjà normalisés côté serveur) et `needle` ne
-// se compareraient plus.
-function animeSearchNormalize(s) {
-  return (s || '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]/g, '');
-}
-
-// Filtre/trie la liste complète en mémoire : même algorithme que le serveur
-// (match exact d'abord, puis index le plus tôt, popularité, longueur, alpha).
-function filterAnimeEntries(entries, needle) {
-  if (!needle) return [];
-  const scored = [];
-  for (const entry of entries) {
-    let matchIndex = -1;
-    let matchLen = Number.MAX_SAFE_INTEGER;
-    let exact = false;
-    for (const title of entry.searchTitles) {
-      const index = title.indexOf(needle);
-      if (index < 0) continue;
-      if (title === needle) exact = true;
-      // Le titre matché le plus court l'emporte à index égal : « Magi » doit
-      // battre « Magical Girl Site » quand les deux commencent par « magi »,
-      // sans quoi la popularité (ci-dessous) fait remonter un titre sans
-      // rapport juste parce qu'il partage ce préfixe.
-      if (matchIndex < 0 || index < matchIndex || (index === matchIndex && title.length < matchLen)) {
-        matchIndex = index;
-        matchLen = title.length;
-      }
-    }
-    if (matchIndex < 0) continue;
-    // Un match qui tombe pile sur un mot entier (« Magi » dans « Magi: The
-    // Labyrinth of Magic ») doit battre un match en plein milieu d'un mot
-    // plus long (« magi » dans « Magical Girl Site »), même si ce dernier a
-    // un titre plus court ou plus populaire.
-    const wholeWord = entry.wordTokens.includes(needle);
-    const wordStart = wholeWord || entry.wordTokens.some((t) => t.startsWith(needle));
-    scored.push({ entry, matchIndex, matchLen, exact, wholeWord, wordStart });
-  }
-  scored.sort((a, b) =>
-    (b.exact - a.exact) ||
-    (b.wholeWord - a.wholeWord) ||
-    (b.wordStart - a.wordStart) ||
-    a.matchIndex - b.matchIndex ||
-    a.matchLen - b.matchLen ||
-    // Saisons d'une même chaîne dans l'ordre (S1 avant S2…), avant la popularité.
-    (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
-    (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
-    a.entry.title.length - b.entry.title.length ||
-    a.entry.title.localeCompare(b.entry.title));
-  return scored.slice(0, 20).map(({ entry }) => ({ title: entry.title, englishTitle: entry.englishTitle, seasonNumber: entry.seasonNumber || 0 }));
-}
+// Le matching et le tri vivent dans anime-search-core.js (module PARTAGÉ avec
+// le serveur — une seule implémentation, chargée avant ce fichier par main.js).
 
 function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const input = document.getElementById(inputId);
@@ -147,7 +92,10 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
     const request = ++state.request;
     const entries = await loadAnimeFullList();
     if (request !== state.request || input.value.trim() !== query || input.disabled) return;
-    state.suggestions = filterAnimeEntries(entries, animeSearchNormalize(query));
+    // Saisie BRUTE (le core normalise lui-même) : les espaces portent le
+    // découpage en mots du matching multi-mots.
+    state.suggestions = filterAnimeEntries(entries, query)
+      .map(({ title, englishTitle, seasonNumber }) => ({ title, englishTitle, seasonNumber: seasonNumber || 0 }));
     state.activeIndex = -1;
     render();
   };
