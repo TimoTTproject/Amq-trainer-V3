@@ -1024,6 +1024,18 @@
     </div>
 
     <!-- Modale vote « Édition 2 » -->
+    <!-- Résultat de fusion (Atelier) : en modale pour rester visible jusqu'à
+         fermeture — en encart sous la grille, il partait hors écran dès le
+         rechargement des cartes possédées. -->
+    <div id="fuse-reveal-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Résultat de la fusion">
+      <div class="modal-card">
+        <button class="modal-close" id="fuse-reveal-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-wand-magic-sparkles"></i> Résultat de la fusion</h3>
+        <div id="fuse-reveal-card" class="pull-result"></div>
+        <p id="fuse-reveal-caption" class="gacha-sub"></p>
+      </div>
+    </div>
+
     <div id="promotion-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Vote Édition 2">
       <div class="modal-card">
         <button class="modal-close" id="promotion-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
@@ -1274,7 +1286,6 @@
         <button class="btn-primary" id="fuse-btn" disabled><i class="fas fa-wand-magic-sparkles"></i> Fusionner</button>
       </div>
       <div id="craft-grid" class="card-grid"></div>
-      <div id="fuse-result" class="pull-result hidden"></div>
       <div class="catalog-pager">
         <button class="btn-secondary" id="craft-prev"><i class="fas fa-chevron-left"></i></button>
         <span id="craft-pageinfo">—</span>

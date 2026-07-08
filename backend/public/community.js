@@ -615,7 +615,6 @@ function openCraft() {
   document.getElementById('craft-search').value = '';
   craftSearch = ''; craftRarity = 'all';
   document.getElementById('craft-msg').textContent = '';
-  document.getElementById('fuse-result').classList.add('hidden');
   clearFuseSelection();
   loadCraft(1);
 }
@@ -730,8 +729,9 @@ async function runFusion() {
     const c = r.card;
     if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(c.rarity);
     if (['legendary', 'mythic'].includes(c.rarity) && typeof burstConfetti === 'function') burstConfetti(c.rarity === 'mythic' ? 40 : 26);
-    const result = document.getElementById('fuse-result');
-    result.innerHTML = `<div class="gcard r-${c.rarity}">
+    // Résultat en MODALE : reste affiché jusqu'à fermeture par le joueur
+    // (l'ancien encart sous la grille partait hors écran au rechargement).
+    document.getElementById('fuse-reveal-card').innerHTML = `<div class="gcard r-${c.rarity}">
       <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
       <div class="gcard-info">
         <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -739,7 +739,9 @@ async function runFusion() {
       </div>
       ${c.isNew ? '<span class="badge new">NOUVEAU</span>' : '<span class="badge copies">Doublon</span>'}
     </div>`;
-    result.classList.remove('hidden');
+    document.getElementById('fuse-reveal-caption').textContent =
+      `${c.name} (${RARITY_LABELS[c.rarity] || c.rarity})${c.isNew ? ' — nouveau personnage !' : ' — doublon'}`;
+    document.getElementById('fuse-reveal-modal').classList.remove('hidden');
     msg.textContent = `Fusion réussie : ${escapeHtml(c.name)} (${RARITY_LABELS[c.rarity] || c.rarity})${c.isNew ? ' — nouveau !' : ' (doublon)'}`;
     clearFuseSelection();
     loadCraft(craftPage); // rafraîchit la possession

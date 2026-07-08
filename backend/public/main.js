@@ -1315,6 +1315,7 @@ function setupAppUI() {
   });
   document.getElementById('fuse-clear-btn').addEventListener('click', clearFuseSelection);
   document.getElementById('fuse-btn').addEventListener('click', runFusion);
+  document.getElementById('fuse-reveal-close').addEventListener('click', () => document.getElementById('fuse-reveal-modal').classList.add('hidden'));
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
   let adminSearchTimer;
