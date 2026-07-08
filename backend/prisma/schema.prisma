@@ -375,6 +375,9 @@ model Song {
   altTitles  String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
   seasonNumber Int? // position dans la chaîne PREQUEL/SEQUEL AniList (0 = hors chaîne, null = pas encore calculé)
   seasonYear   Int? // année de diffusion AniList (seasonYear sinon startDate.year) — filtre par période du quiz (0 = inconnue, null = pas encore récupérée)
+  guessCount   Int  @default(0) // nb total de réponses tous joueurs (solo + multi) — difficulté réelle
+  guessCorrect Int  @default(0) // dont bonnes réponses
+  guessRate    Int? // % de bonnes réponses (0-100), null tant que l'échantillon est trop petit (cf. song-stats.js)
   addedByUserId String? // joueur dont l'import a fait entrer ce son dans le catalogue global (null = antérieur à cette fonctionnalité)
   addedBy       User?   @relation(fields: [addedByUserId], references: [id])
 

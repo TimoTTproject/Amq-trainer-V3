@@ -12,6 +12,13 @@ const { rankRecommendations, artistTokens, isSideContent } = require('./recommen
 const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
 const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('./filters');
+const { recordGlobalGuess } = require('./song-stats');
+
+// Stats communautaires d'une musique pour la révélation : % de joueurs qui la
+// trouvent (null tant que l'échantillon est trop petit) + taille d'échantillon.
+function communityStats(song) {
+  return { rate: song.guessRate ?? null, sample: song.guessCount || 0 };
+}
 
 const router = express.Router();
 
@@ -235,9 +242,12 @@ router.get('/random', requirePlayer, async (req, res) => {
   let song = null;
   if (!source && mode === 'global') {
     // Perf : on évite de charger tous les ids → count + skip aléatoire.
-    // Priorité à la série principale (exclut films/OAV connus), avec repli si vide.
+    // Priorité à la série principale (exclut films/OAV connus), avec repli si
+    // vide. Combinaison via AND : baseFilter (filtre difficulté) et
+    // preferMainContent contiennent chacun un OR — un étalement écraserait
+    // silencieusement l'un des deux.
     const baseFilter = { videoUrl: { not: null }, ...(typeFilter ? { type: typeFilter } : {}), ...extraWhere };
-    let where = { ...baseFilter, ...preferMainContent };
+    let where = { AND: [baseFilter, preferMainContent] };
     let total = await prisma.song.count({ where });
     if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
     if (!total) {
@@ -638,9 +648,11 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
     if (!round || !(await consumeRound(round))) {
       return res.status(409).json({ error: 'Manche invalide ou déjà jouée' });
     }
+    recordGlobalGuess(songId, correct); // fire-and-forget (les invités comptent aussi)
     return res.json({
       correct,
       reward: 0,
+      community: communityStats(song),
       answer: {
         animeTitle: song.animeTitle,
         englishTitle: englishTitleFor(song),
@@ -714,10 +726,12 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
 
   if (correct) progressQuests(userId, 'correct', 1);
   progressQuests(userId, 'played', 1); // quête « manches jouées » (peu importe le résultat)
+  recordGlobalGuess(songId, correct); // stats globales de difficulté, fire-and-forget
 
   res.json({
     correct,
     reward: grant,
+    community: communityStats(song),
     // Détail du calcul (transparence) quand le gain n'est pas écrêté par le plafond.
     ...(grant > 0 && !capped
       ? {
@@ -752,7 +766,9 @@ router.get('/answer/:songId', requirePlayer, async (req, res) => {
   }
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
+  recordGlobalGuess(songId, false); // révéler sans répondre = raté (signal de difficulté)
   res.json({
+    community: communityStats(song),
     answer: {
       animeTitle: song.animeTitle,
       englishTitle: englishTitleFor(song),

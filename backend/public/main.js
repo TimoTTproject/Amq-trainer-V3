@@ -2416,7 +2416,7 @@ async function guessAnswer(forcedGuess) {
       : (r.reward ? rewardDetailText(r.breakdown) : '');
   }
 
-  revealAnswerBox(r.answer);
+  revealAnswerBox(r.answer, r.community);
   recordTraining(r.correct);
 
   if (typeof r.tokens === 'number' && currentUser) {
@@ -2427,10 +2427,22 @@ async function guessAnswer(forcedGuess) {
 }
 
 // Affiche le bloc réponse + autorise la vidéo
-function revealAnswerBox(answer) {
+function revealAnswerBox(answer, community) {
   document.getElementById('answer-anime').textContent = formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber });
   document.getElementById('answer-title').textContent = answer.title;
   document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';
+  // Difficulté réelle : % de joueurs qui trouvent cette musique (masqué tant
+  // que l'échantillon global est trop petit pour être significatif).
+  const communityEl = document.getElementById('answer-community');
+  if (communityEl) {
+    if (community && community.rate != null) {
+      communityEl.textContent = `🎯 Trouvée par ${community.rate}% des joueurs`;
+      communityEl.title = `${community.sample} réponses enregistrées`;
+      communityEl.classList.remove('hidden');
+    } else {
+      communityEl.classList.add('hidden');
+    }
+  }
   document.getElementById('answer-result').classList.remove('hidden');
   stopQuizTimebar();
   setOverlayEnded(false);
@@ -2472,8 +2484,8 @@ async function showAnswerCasual() {
   document.getElementById('answer-verdict').textContent = '🎓 Réponse révélée (entraînement)';
   document.getElementById('answer-verdict').className = 'verdict';
   try {
-    const { answer } = await api(`/api/quiz/answer/${currentSong.id}?roundToken=${encodeURIComponent(currentRoundToken || '')}`);
-    revealAnswerBox(answer);
+    const { answer, community } = await api(`/api/quiz/answer/${currentSong.id}?roundToken=${encodeURIComponent(currentRoundToken || '')}`);
+    revealAnswerBox(answer, community);
   } catch (e) { setHint(e.message); }
 }
 

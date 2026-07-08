@@ -494,6 +494,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .opt-group input[type="number"] { width: 72px; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); border-radius: 8px; padding: 5px 8px; }
 .opt-hint { margin: 0; font-size: .76rem; }
 .mp-years-range { display: inline-flex; align-items: center; gap: 6px; }
+/* Difficulté réelle à la révélation : « 🎯 Trouvée par X% des joueurs » */
+.result-community { margin-top: 6px; color: var(--text-2); font-size: .84rem; }
+.mp-community { white-space: nowrap; }
 
 .answer-area { display: flex; gap: 10px; flex-wrap: wrap; }
 .answer-area input { flex: 1; background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 12px 14px; border-radius: 10px; }

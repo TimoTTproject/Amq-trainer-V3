@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { verifyToken, COOKIE_NAME } = require('../auth/jwt');
 const { isCorrectGuess } = require('../quiz/matching');
 const { englishTitleFor } = require('../quiz/anime-titles');
+const { recordGlobalGuess } = require('../quiz/song-stats');
 const { computeMmrDeltas } = require('./rank');
 const { progressQuests } = require('../quests/quests');
 const { weekKey } = require('../util/week');
@@ -398,11 +399,13 @@ async function startGame(room) {
 async function pickSong(room) {
   const base = availableSongWhere(room);
   // Priorité à la série principale (exclut films/OAV connus), repli si vide ou
-  // si le filtre échoue (ex. colonne format absente) → ne doit jamais figer la manche.
+  // si le filtre échoue (ex. colonne format absente) → ne doit jamais figer la
+  // manche. AND explicite : base (filtre difficulté) et preferMainContent
+  // contiennent chacun un OR, un étalement écraserait l'un des deux.
   let where = base;
   let total = 0;
   try {
-    where = { ...base, ...preferMainContent };
+    where = { AND: [base, preferMainContent] };
     total = await prisma.song.count({ where });
     if (!total) { where = base; total = await prisma.song.count({ where }); }
   } catch (e) {
@@ -417,6 +420,7 @@ async function pickSong(room) {
     select: {
       id: true, anilistId: true, animeTitle: true, altTitles: true, seasonNumber: true,
       title: true, artist: true, type: true, number: true, videoUrl: true, audioUrl: true,
+      guessRate: true, guessCount: true, // stats communautaires pour la révélation
       addedBy: { select: { id: true, displayName: true } },
     },
   });
@@ -539,6 +543,7 @@ function onGuess(socket, text) {
   const timeLeft = correct ? Math.max(0, cur.endsAt - Date.now()) : 0;
   const points = correct ? 300 + Math.round((timeLeft / roundDurationMs(room)) * 700) : 0;
   cur.answers.set(uid, { correct, points, guess: text });
+  recordGlobalGuess(cur.song.id, correct); // stats globales de difficulté, fire-and-forget
   if (correct) {
     player.score += points;
     player.correct = (player.correct || 0) + 1;
@@ -559,6 +564,7 @@ function onSkip(socket) {
   const cur = room.current;
   if (cur.answers.has(uid) || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   cur.passed.add(uid);
+  recordGlobalGuess(cur.song.id, false); // passer = ne sait pas (signal de difficulté)
   socket.emit('mp:skip:ack', {});
   emitProgress(room);
   if (everyoneResolved(room)) { clearTimeout(room.timer); endRound(room); }
@@ -668,6 +674,7 @@ function endRound(room) {
         songId: s.id,
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s), seasonNumber: s.seasonNumber || 0,
         title: s.title, artist: s.artist, type: s.type, number: s.number,
+        community: { rate: s.guessRate ?? null, sample: s.guessCount || 0 },
         addedBy: s.addedBy ? { id: s.addedBy.id, displayName: s.addedBy.displayName } : null,
         owners: [...room.players.values()]
           .filter((p) => cur.listMeta?.has(p.userId))

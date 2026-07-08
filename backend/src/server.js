@@ -311,6 +311,14 @@ async function autoBackfillFormats() {
     }
     if (years) console.log(`  → Backfill années terminé : ${years} musique(s).`);
   } catch (e) { console.error('backfill années:', e && e.message); }
+  // Puis les stats globales de réussite (difficulté réelle) : copie one-shot de
+  // l'historique UserSongStat vers les compteurs par musique (aucun réseau,
+  // idempotent — ne touche que les musiques encore à zéro).
+  try {
+    const { backfillGuessStats } = require('./quiz/song-stats');
+    const r = await backfillGuessStats();
+    if (r.updated) console.log(`  → Stats de réussite copiées sur ${r.updated} musique(s).`);
+  } catch (e) { console.error('backfill stats réussite:', e && e.message); }
 }
 setTimeout(() => {
   // Verrou court partagé : évite deux passes simultanées (multi-instance/redémarrages rapprochés).

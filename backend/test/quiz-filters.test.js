@@ -4,10 +4,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('../src/quiz/filters');
 
-test('difficulté : paliers de popularité contigus (pas de zone morte)', () => {
-  assert.deepEqual(difficultyWhere('popular'), { popularity: { gte: 100000 } });
-  assert.deepEqual(difficultyWhere('medium'), { popularity: { gte: 30000, lt: 100000 } });
-  assert.deepEqual(difficultyWhere('obscure'), { popularity: { lt: 30000 } });
+test('difficulté : taux de réussite réel d\'abord, popularité en repli, paliers contigus', () => {
+  assert.deepEqual(difficultyWhere('popular'), {
+    OR: [{ guessRate: { gte: 60 } }, { guessRate: null, popularity: { gte: 100000 } }],
+  });
+  assert.deepEqual(difficultyWhere('medium'), {
+    OR: [{ guessRate: { gte: 25, lt: 60 } }, { guessRate: null, popularity: { gte: 30000, lt: 100000 } }],
+  });
+  assert.deepEqual(difficultyWhere('obscure'), {
+    OR: [{ guessRate: { lt: 25 } }, { guessRate: null, popularity: { lt: 30000 } }],
+  });
   assert.deepEqual(difficultyWhere('all'), {});
   assert.deepEqual(difficultyWhere(undefined), {});
   assert.ok(DIFFICULTIES.includes('all'));

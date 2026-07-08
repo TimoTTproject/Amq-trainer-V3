@@ -2,14 +2,25 @@
 // multijoueur (mp.js) : difficulté par popularité AniList et période de
 // diffusion. Renvoient des fragments de `where` Prisma à étaler.
 
-// Paliers de popularité (nb de membres AniList de l'anime) :
-// populaires ≥ 100 000, moyens 30 000–99 999, obscurs < 30 000 (les animes à
-// popularité inconnue — 0 — tombent dans « obscurs », faute de mieux).
+// Difficulté RÉELLE d'abord : % de joueurs qui trouvent la musique
+// (Song.guessRate, alimenté par song-stats.js), avec repli sur la popularité
+// AniList tant que l'échantillon est trop petit (guessRate null). Paliers :
+// faciles ≥ 60 % de réussite (repli : popularité ≥ 100 000), moyens 25-59 %
+// (repli 30 000-99 999), difficiles < 25 % (repli < 30 000 — popularité
+// inconnue = 0 y tombe aussi, faute de mieux).
+// ATTENTION : le fragment renvoyé contient un OR — le combiner aux autres
+// filtres OR (ex. preferMainContent) via AND: [...], jamais par étalement.
 const DIFFICULTIES = ['all', 'popular', 'medium', 'obscure'];
 function difficultyWhere(difficulty) {
-  if (difficulty === 'popular') return { popularity: { gte: 100000 } };
-  if (difficulty === 'medium') return { popularity: { gte: 30000, lt: 100000 } };
-  if (difficulty === 'obscure') return { popularity: { lt: 30000 } };
+  if (difficulty === 'popular') {
+    return { OR: [{ guessRate: { gte: 60 } }, { guessRate: null, popularity: { gte: 100000 } }] };
+  }
+  if (difficulty === 'medium') {
+    return { OR: [{ guessRate: { gte: 25, lt: 60 } }, { guessRate: null, popularity: { gte: 30000, lt: 100000 } }] };
+  }
+  if (difficulty === 'obscure') {
+    return { OR: [{ guessRate: { lt: 25 } }, { guessRate: null, popularity: { lt: 30000 } }] };
+  }
   return {};
 }
 

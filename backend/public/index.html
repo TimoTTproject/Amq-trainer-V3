@@ -636,11 +636,11 @@
         <fieldset class="opt-group">
           <legend><i class="fas fa-filter"></i> Sélection des musiques</legend>
           <label>Difficulté :
-            <select id="opt-difficulty" title="Selon la popularité AniList de l'anime">
-              <option value="all" selected>Tous les animes</option>
-              <option value="popular">Populaires (plus facile)</option>
-              <option value="medium">Moyennement connus</option>
-              <option value="obscure">Obscurs (plus difficile)</option>
+            <select id="opt-difficulty" title="Selon le taux de réussite réel des joueurs (popularité AniList en repli)">
+              <option value="all" selected>Toutes</option>
+              <option value="popular">Faciles (souvent trouvées)</option>
+              <option value="medium">Moyennes</option>
+              <option value="obscure">Difficiles (rarement trouvées)</option>
             </select>
           </label>
           <label>Période :
@@ -758,6 +758,7 @@
         <div id="reward-detail" class="reward-detail"></div>
         <div class="result-line">Réponse : <strong id="answer-anime"></strong></div>
         <div class="result-sub"><span id="answer-title"></span> — <span id="answer-artist"></span></div>
+        <div id="answer-community" class="result-community hidden"></div>
         <div class="feedback-buttons">
           <button class="btn-easy" data-fb="easy">Facile</button>
           <button class="btn-hard" data-fb="hard">Difficile</button>
@@ -1712,11 +1713,11 @@
                 </select>
               </label>
               <label id="mp-field-difficulty">Difficulté
-                <select id="mp-set-difficulty" title="Selon la popularité AniList de l'anime">
-                  <option value="all" selected>Tous les animes</option>
-                  <option value="popular">Populaires (facile)</option>
-                  <option value="medium">Moyennement connus</option>
-                  <option value="obscure">Obscurs (difficile)</option>
+                <select id="mp-set-difficulty" title="Selon le taux de réussite réel des joueurs (popularité AniList en repli)">
+                  <option value="all" selected>Toutes</option>
+                  <option value="popular">Faciles (souvent trouvées)</option>
+                  <option value="medium">Moyennes</option>
+                  <option value="obscure">Difficiles (rarement trouvées)</option>
                 </select>
               </label>
               <label id="mp-field-years">Période

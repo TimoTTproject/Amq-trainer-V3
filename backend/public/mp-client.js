@@ -431,9 +431,13 @@ function connectMp() {
     const addedBy = d.answer.addedBy
       ? ` <span class="hint">· Ajouté au catalogue par <button type="button" class="btn-link" data-userid="${d.answer.addedBy.id}">${escapeHtml(d.answer.addedBy.displayName)}</button></span>`
       : '';
+    // Difficulté réelle : % de joueurs (tous modes) qui trouvent cette musique.
+    const community = d.answer.community && d.answer.community.rate != null
+      ? `<span class="hint mp-community" title="${d.answer.community.sample} réponses enregistrées">· 🎯 Trouvée par ${d.answer.community.rate}% des joueurs</span>`
+      : '';
     res.innerHTML = `${skippedBanner}<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
-      <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span>${addedBy}</div>`;
+      <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span>${addedBy}${community}</div>`;
     // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
     const answerEl = res.querySelector('.mp-answer');
     const answerStrong = answerEl?.querySelector('strong');
