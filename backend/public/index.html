@@ -648,7 +648,15 @@
             →
             <select id="opt-year-max" title="Année maximum"></select>
           </label>
-          <p class="hint opt-hint">Ignorés en entraînement ciblé (série choisie explicitement).</p>
+          <div class="opt-status" id="opt-list-status" title="Statut AniList des animes (mode « Ma liste » uniquement)">
+            <span class="opt-status-label">Statut (Ma liste) :</span>
+            <label><input type="checkbox" value="COMPLETED" checked /> Terminés</label>
+            <label><input type="checkbox" value="CURRENT" checked /> En cours</label>
+            <label><input type="checkbox" value="PAUSED" checked /> En pause</label>
+            <label><input type="checkbox" value="DROPPED" checked /> Abandonnés</label>
+            <label><input type="checkbox" value="PLANNING" checked /> Prévus</label>
+          </div>
+          <p class="hint opt-hint">Ignorés en entraînement ciblé. Statuts : ré-importe ta liste si elle date d'avant l'ajout des statuts.</p>
         </fieldset>
         <fieldset class="opt-group">
           <legend><i class="fas fa-stopwatch"></i> Déroulement</legend>
@@ -1710,6 +1718,12 @@
                 <select id="mp-set-source">
                   <option value="global" selected>Catalogue global</option>
                   <option value="lists">Listes des joueurs présents</option>
+                </select>
+              </label>
+              <label id="mp-field-list-scope">Statuts des listes
+                <select id="mp-set-list-scope" title="Ne s'applique qu'au pool « Listes des joueurs présents »">
+                  <option value="all" selected>Tous (même prévus)</option>
+                  <option value="seen">Vus uniquement (terminés + en cours)</option>
                 </select>
               </label>
               <label id="mp-field-difficulty">Difficulté

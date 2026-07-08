@@ -25,6 +25,10 @@ const VALID_ROUNDMS = [15000, 25000, 40000];
 const VALID_MODES = ['classic', 'teams', 'elim', 'coop'];
 const VALID_THEME_TYPES = ['all', 'OP', 'ED'];
 const VALID_SONG_SOURCES = ['global', 'lists'];
+// Portée du pool « listes des joueurs » : tous les statuts AniList, ou
+// seulement les animes vus (terminés + re-visionnés + en cours).
+const VALID_LIST_SCOPES = ['all', 'seen'];
+const SEEN_STATUSES = ['COMPLETED', 'REPEATING', 'CURRENT'];
 const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('../quiz/filters');
 const ELIM_LIVES = 3;
 const ELIM_MAX_ROUNDS = 25; // garde-fou en élimination
@@ -172,7 +176,7 @@ function newRoom({ isPublic, ranked }) {
     // présents (par défaut en partie rapide, comme avant) ; 'global' pioche dans
     // tout le catalogue (par défaut en salon privé, comme avant). Modifiable par
     // l'hôte dans les deux cas (hors classé, toujours 'global', figé).
-    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global', difficulty: 'all', yearMin: 0, yearMax: 0 },
+    settings: ranked ? { ...RANKED_SETTINGS } : { rounds: 10, roundMs: 25000, mode: 'classic', themeType: 'all', songSource: isPublic ? 'lists' : 'global', listScope: 'all', difficulty: 'all', yearMin: 0, yearMax: 0 },
     status: 'lobby', chat: [], round: 0, current: null,
     spectators: new Set(), // userIds qui regardent (pas des joueurs)
     usedSongIds: new Set(), usedAnilistIds: new Set(),
@@ -294,6 +298,7 @@ function applySettings(room, s) {
   if (VALID_MODES.includes(s.mode)) room.settings.mode = s.mode;
   if (VALID_THEME_TYPES.includes(s.themeType)) room.settings.themeType = s.themeType;
   if (VALID_SONG_SOURCES.includes(s.songSource)) room.settings.songSource = s.songSource;
+  if (VALID_LIST_SCOPES.includes(s.listScope)) room.settings.listScope = s.listScope;
   if (DIFFICULTIES.includes(s.difficulty)) room.settings.difficulty = s.difficulty;
   // Période : bornes validées individuellement ; min > max = filtre ignoré au
   // tirage (yearWhere renverra un intervalle vide, corrigé ici par sécurité).
@@ -349,7 +354,12 @@ async function startGame(room) {
   if (!room.ranked && room.settings.mode !== 'coop' && room.settings.songSource === 'lists') {
     try {
       const entries = await prisma.userCatalogEntry.findMany({
-        where: { userId: { in: [...room.players.keys()] } },
+        where: {
+          userId: { in: [...room.players.keys()] },
+          // « Vus uniquement » : terminés / re-visionnés / en cours. Les entrées
+          // sans statut (import antérieur au champ) sont exclues dans ce cas.
+          ...(room.settings.listScope === 'seen' ? { mediaStatus: { in: SEEN_STATUSES } } : {}),
+        },
         select: { songId: true },
       });
       room.songPoolIds = [...new Set(entries.map((entry) => entry.songId))];

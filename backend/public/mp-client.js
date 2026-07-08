@@ -635,6 +635,10 @@ function renderRoom(d) {
     document.getElementById('mp-set-theme').value = d.settings.themeType || 'all';
     document.getElementById('mp-set-source').value = d.settings.songSource || (d.isPublic ? 'lists' : 'global');
     document.getElementById('mp-set-difficulty').value = d.settings.difficulty || 'all';
+    document.getElementById('mp-set-list-scope').value = d.settings.listScope || 'all';
+    document.getElementById('mp-set-list-scope').disabled = !isHost;
+    // La portée des listes n'a de sens que si le pool vient des listes.
+    document.getElementById('mp-field-list-scope').classList.toggle('hidden', isCoop || (d.settings.songSource || (d.isPublic ? 'lists' : 'global')) !== 'lists');
     // Les selects d'années sont remplis à l'init (fillYearSelect, cf. main.js).
     document.getElementById('mp-set-year-min').value = String(d.settings.yearMin || 0);
     document.getElementById('mp-set-year-max').value = String(d.settings.yearMax || 0);
@@ -916,6 +920,7 @@ function mpSettingsPayload() {
     mode: document.getElementById('mp-set-mode').value,
     themeType: document.getElementById('mp-set-theme').value,
     songSource: document.getElementById('mp-set-source').value,
+    listScope: document.getElementById('mp-set-list-scope').value,
     difficulty: document.getElementById('mp-set-difficulty').value,
     yearMin: parseInt(document.getElementById('mp-set-year-min').value) || 0,
     yearMax: parseInt(document.getElementById('mp-set-year-max').value) || 0,

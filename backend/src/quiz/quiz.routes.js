@@ -11,7 +11,7 @@ const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations, artistTokens, isSideContent } = require('./recommendations');
 const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
-const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('./filters');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeListStatuses } = require('./filters');
 const { recordGlobalGuess } = require('./song-stats');
 
 // Stats communautaires d'une musique pour la révélation : % de joueurs qui la
@@ -97,7 +97,7 @@ async function buildChoices(song, count, titlePool = null) {
 // déjà sous la main sans requête supplémentaire (cas 'mine'/'series', les plus
 // courants) : /choices les réutilise directement au lieu de re-scanner les
 // mêmes ids une seconde fois pour construire les distracteurs Carré/Duo.
-async function resolveSourceSongIds({ userId, source, series, typeFilter, extraWhere }) {
+async function resolveSourceSongIds({ userId, source, series, typeFilter, extraWhere, listStatuses }) {
   // Filtres additionnels (difficulté par popularité, période) : fragment de
   // `where` Prisma déjà construit par l'appelant, vide en son absence.
   const extra = extraWhere && Object.keys(extraWhere).length ? extraWhere : null;
@@ -127,7 +127,13 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter, extraW
     const stats = await prisma.userSongStat.findMany({ where, select: { songId: true } });
     songIds = stats.map((s) => s.songId);
   } else {
-    const entries = await prisma.userCatalogEntry.findMany({ where: { userId }, select: { songId: true } });
+    // Mode « Ma liste » : filtre optionnel par statut AniList (terminés, en
+    // cours…). Les entrées sans statut (importées avant que le champ existe)
+    // sont exclues quand un filtre est actif — un ré-import de la liste les tague.
+    const entries = await prisma.userCatalogEntry.findMany({
+      where: { userId, ...(listStatuses ? { mediaStatus: { in: listStatuses } } : {}) },
+      select: { songId: true },
+    });
     songIds = entries.map((e) => e.songId);
   }
   // Filtres OP/ED + difficulté/période sur les ids retenus (sauf 'series', déjà
@@ -238,7 +244,10 @@ router.get('/random', requirePlayer, async (req, res) => {
   const yearMin = sanitizeYear(req.query.yearMin);
   const yearMax = sanitizeYear(req.query.yearMax);
   const extraWhere = { ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax) };
-  const filtersActive = Object.keys(extraWhere).length > 0;
+  // Statuts AniList (mode « Ma liste » uniquement — le catalogue global n'a pas
+  // de notion de statut, et l'entraînement cible déjà un sous-ensemble choisi).
+  const listStatuses = sanitizeListStatuses(req.query.statuses);
+  const filtersActive = Object.keys(extraWhere).length > 0 || !!listStatuses;
   let song = null;
   if (!source && mode === 'global') {
     // Perf : on évite de charger tous les ids → count + skip aléatoire.
@@ -255,10 +264,13 @@ router.get('/random', requirePlayer, async (req, res) => {
     }
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
-    const { ids: songIds } = await resolveSourceSongIds({ userId: req.user.id, source, series, typeFilter, extraWhere });
+    const { ids: songIds } = await resolveSourceSongIds({
+      userId: req.user.id, source, series, typeFilter, extraWhere,
+      listStatuses: source ? null : listStatuses,
+    });
     if (!songIds.length) {
       const noMatch = filtersActive && !source
-        ? 'Aucune musique ne correspond à ces filtres (difficulté/période)'
+        ? 'Aucune musique ne correspond à ces filtres (difficulté/période/statut) — les entrées importées avant l\'ajout des statuts nécessitent un ré-import de la liste'
         : (source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode');
       return res.status(404).json({ error: noMatch });
     }
@@ -648,7 +660,9 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
     if (!round || !(await consumeRound(round))) {
       return res.status(409).json({ error: 'Manche invalide ou déjà jouée' });
     }
-    recordGlobalGuess(songId, correct); // fire-and-forget (les invités comptent aussi)
+    // Les invités jouent toujours en mode normal (pas d'entraînement) : leurs
+    // réponses comptent dans les stats globales de difficulté.
+    recordGlobalGuess(songId, correct);
     return res.json({
       correct,
       reward: 0,
@@ -726,7 +740,11 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
 
   if (correct) progressQuests(userId, 'correct', 1);
   progressQuests(userId, 'played', 1); // quête « manches jouées » (peu importe le résultat)
-  recordGlobalGuess(songId, correct); // stats globales de difficulté, fire-and-forget
+  // Stats globales de difficulté : JEU NORMAL uniquement. Les sources
+  // d'entraînement (« À revoir », « Ratés », répétition espacée…) sélectionnent
+  // les musiques que le joueur rate — les compter fausserait le taux (un hit
+  // révisé en boucle paraîtrait « difficile »).
+  if (round && !round.source) recordGlobalGuess(songId, correct);
 
   res.json({
     correct,
@@ -766,7 +784,8 @@ router.get('/answer/:songId', requirePlayer, async (req, res) => {
   }
   const song = await prisma.song.findUnique({ where: { id: songId } });
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
-  recordGlobalGuess(songId, false); // révéler sans répondre = raté (signal de difficulté)
+  // Pas d'enregistrement global ici : cette route ne sert qu'à l'entraînement,
+  // dont les échecs sont sur-représentés par construction (cf. song-stats.js).
   res.json({
     community: communityStats(song),
     answer: {

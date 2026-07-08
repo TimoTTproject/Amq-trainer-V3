@@ -32,34 +32,11 @@ async function recordGlobalGuess(songId, correct) {
   }
 }
 
-// Backfill one-shot depuis l'historique UserSongStat : copie playCount/
-// correctCount agrégés vers les compteurs globaux des musiques encore à zéro.
-// Idempotent : une musique déjà comptée (guessCount > 0) n'est jamais retouchée,
-// les réponses en direct s'ajoutent ensuite par-dessus.
-async function backfillGuessStats() {
-  const [aggregates, empty] = await Promise.all([
-    prisma.userSongStat.groupBy({
-      by: ['songId'],
-      _sum: { playCount: true, correctCount: true },
-      having: { playCount: { _sum: { gt: 0 } } },
-    }),
-    prisma.song.findMany({ where: { guessCount: 0 }, select: { id: true } }),
-  ]);
-  const emptyIds = new Set(empty.map((s) => s.id));
-  let updated = 0;
-  for (const row of aggregates) {
-    if (!emptyIds.has(row.songId)) continue;
-    const count = row._sum.playCount || 0;
-    const correct = row._sum.correctCount || 0;
-    // guessCount: 0 en garde-fou : si une réponse en direct est arrivée entre
-    // la lecture et l'écriture, on ne l'écrase pas.
-    const res = await prisma.song.updateMany({
-      where: { id: row.songId, guessCount: 0 },
-      data: { guessCount: count, guessCorrect: correct, guessRate: computeRate(count, correct) },
-    });
-    updated += res.count;
-  }
-  return { updated };
-}
-
-module.exports = { MIN_GUESS_SAMPLE, recordGlobalGuess, backfillGuessStats };
+// PAS de backfill depuis UserSongStat : l'historique est structurellement
+// biaisé — les modes d'entraînement (« À revoir », « Ratés », répétition
+// espacée) SÉLECTIONNENT les musiques que le joueur rate, donc leurs stats
+// sont gorgées d'échecs (un hit très joué en révision paraîtrait « difficile »
+// alors qu'un anime de niche joué par ses seuls fans paraîtrait « facile »).
+// Les compteurs ne s'alimentent qu'en direct, sur les manches de JEU (solo
+// normal + multi), jamais en entraînement — cf. les appelants.
+module.exports = { MIN_GUESS_SAMPLE, recordGlobalGuess };

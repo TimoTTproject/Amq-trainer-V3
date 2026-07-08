@@ -159,6 +159,8 @@ const settings = {
   yearMax: parseInt(localStorage.getItem('amq_yearMax') ?? '0'),
   answerSeconds: parseInt(localStorage.getItem('amq_answer') ?? '0'), // temps pour répondre après l'extrait (0 = illimité)
   autoNextDelay: parseInt(localStorage.getItem('amq_autonextDelay') ?? '4'), // délai avant la manche suivante auto (s)
+  // Statuts AniList cochés (mode « Ma liste ») ; null = tous.
+  listStatuses: (() => { try { return JSON.parse(localStorage.getItem('amq_listStatuses')) || null; } catch { return null; } })(),
 };
 
 // Remplit un <select> d'années : « — » (0 = pas de borne) puis années
@@ -1573,6 +1575,28 @@ function setupAppUI() {
       localStorage.setItem('amq_answer', String(settings.answerSeconds));
     });
   }
+  // Statuts AniList (mode « Ma liste ») : toutes cases cochées = pas de filtre.
+  const statusBox = document.getElementById('opt-list-status');
+  if (statusBox) {
+    const boxes = [...statusBox.querySelectorAll('input[type="checkbox"]')];
+    const applyStored = () => {
+      const active = Array.isArray(settings.listStatuses) && settings.listStatuses.length;
+      boxes.forEach((b) => { b.checked = active ? settings.listStatuses.includes(b.value) : true; });
+    };
+    applyStored();
+    statusBox.addEventListener('change', () => {
+      const checked = boxes.filter((b) => b.checked).map((b) => b.value);
+      if (!checked.length) {
+        // Tout décocher = plus rien à jouer : on repart sur « tous ».
+        settings.listStatuses = null;
+        applyStored();
+      } else {
+        settings.listStatuses = checked.length === boxes.length ? null : checked;
+      }
+      if (settings.listStatuses) localStorage.setItem('amq_listStatuses', JSON.stringify(settings.listStatuses));
+      else localStorage.removeItem('amq_listStatuses');
+    });
+  }
   const optAutoDelay = document.getElementById('opt-autonext-delay');
   if (optAutoDelay) {
     optAutoDelay.value = String(settings.autoNextDelay);
@@ -1964,6 +1988,10 @@ function buildRandomQuery() {
   if (settings.difficulty && settings.difficulty !== 'all') qs += `&difficulty=${settings.difficulty}`;
   if (settings.yearMin) qs += `&yearMin=${settings.yearMin}`;
   if (settings.yearMax) qs += `&yearMax=${settings.yearMax}`;
+  // Statuts AniList cochés (le serveur ne l'applique qu'au mode « Ma liste »).
+  if (Array.isArray(settings.listStatuses) && settings.listStatuses.length) {
+    qs += `&statuses=${settings.listStatuses.join(',')}`;
+  }
   return qs;
 }
 

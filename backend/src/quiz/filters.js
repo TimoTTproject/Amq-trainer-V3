@@ -39,4 +39,19 @@ function sanitizeYear(value) {
   return year >= 1950 && year <= 2100 ? year : 0;
 }
 
-module.exports = { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear };
+// Statuts AniList filtrables (mode « Ma liste » et pool multi « listes »).
+// REPEATING (re-visionnage) est assimilé à COMPLETED côté client : cocher
+// « Terminés » couvre les deux.
+const LIST_STATUSES = ['COMPLETED', 'CURRENT', 'PAUSED', 'DROPPED', 'PLANNING'];
+// Parse une liste de statuts venue du client (CSV) : whitelist + expansion
+// COMPLETED→REPEATING. Renvoie null si vide ou complète (= pas de filtre).
+function sanitizeListStatuses(raw) {
+  const wanted = String(raw || '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => LIST_STATUSES.includes(s));
+  if (!wanted.length || wanted.length === LIST_STATUSES.length) return null;
+  return wanted.includes('COMPLETED') ? [...wanted, 'REPEATING'] : wanted;
+}
+
+module.exports = { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, LIST_STATUSES, sanitizeListStatuses };
