@@ -84,10 +84,19 @@ function filterAnimeEntries(entries, needle) {
         matchLen = title.length;
       }
     }
-    if (matchIndex >= 0) scored.push({ entry, matchIndex, matchLen, exact });
+    if (matchIndex < 0) continue;
+    // Un match qui tombe pile sur un mot entier (« Magi » dans « Magi: The
+    // Labyrinth of Magic ») doit battre un match en plein milieu d'un mot
+    // plus long (« magi » dans « Magical Girl Site »), même si ce dernier a
+    // un titre plus court ou plus populaire.
+    const wholeWord = entry.wordTokens.includes(needle);
+    const wordStart = wholeWord || entry.wordTokens.some((t) => t.startsWith(needle));
+    scored.push({ entry, matchIndex, matchLen, exact, wholeWord, wordStart });
   }
   scored.sort((a, b) =>
     (b.exact - a.exact) ||
+    (b.wholeWord - a.wholeWord) ||
+    (b.wordStart - a.wordStart) ||
     a.matchIndex - b.matchIndex ||
     a.matchLen - b.matchLen ||
     // Saisons d'une même chaîne dans l'ordre (S1 avant S2…), avant la popularité.

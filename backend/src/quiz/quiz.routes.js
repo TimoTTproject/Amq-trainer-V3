@@ -372,6 +372,22 @@ function animeSearchNormalize(s) {
     .replace(/[^a-z0-9]/g, ''); // espaces + ponctuation
 }
 
+// Variante qui garde un séparateur (espace unique) entre les mots au lieu de
+// tout coller : sert à détecter les correspondances qui tombent pile sur une
+// frontière de mot (ex. « Magi » dans « Magi: The Labyrinth of Magic »),
+// pour les distinguer d'un match en plein milieu d'un mot plus long (ex.
+// « magi » dans « Magical Girl Site » ou « Magic Warfare »).
+function animeSearchWordTokens(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
 async function ensureSeriesSearchCache() {
   if (seriesSearchCache.expiresAt >= Date.now()) return;
   const rows = await prisma.song.findMany({
@@ -396,6 +412,13 @@ async function ensureSeriesSearchCache() {
             .map(animeSearchNormalize)
             .filter(Boolean)
         )],
+        // Mots individuels (toutes variantes de titre confondues) pour la
+        // détection de match sur frontière de mot, cf. animeSearchWordTokens.
+        wordTokens: [...new Set(
+          [row.animeTitle, englishTitle, ...(row.altTitles || [])]
+            .filter((title) => title && !hasCjkTitle(title))
+            .flatMap(animeSearchWordTokens)
+        )],
       };
     }),
   };
@@ -409,8 +432,8 @@ async function ensureSeriesSearchCache() {
 router.get('/series-all', requirePlayer, async (req, res) => {
   await ensureSeriesSearchCache();
   res.json({
-    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles }) => ({
-      title, englishTitle, seasonNumber, popularity, searchTitles,
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles, wordTokens }) => ({
+      title, englishTitle, seasonNumber, popularity, searchTitles, wordTokens,
     })),
   });
 });
@@ -442,11 +465,19 @@ router.get('/series', requirePlayer, async (req, res) => {
           matchLen = title.length;
         }
       }
-      return { entry, matchIndex, matchLen, exact };
+      // Un match qui tombe pile sur un mot entier (« Magi » dans « Magi:
+      // The Labyrinth of Magic ») doit battre un match en plein milieu d'un
+      // mot plus long (« magi » dans « Magical Girl Site ») même si ce
+      // dernier a un titre plus court ou plus populaire.
+      const wholeWord = entry.wordTokens.includes(needle);
+      const wordStart = wholeWord || entry.wordTokens.some((t) => t.startsWith(needle));
+      return { entry, matchIndex, matchLen, exact, wholeWord, wordStart };
     })
     .filter(({ matchIndex }) => matchIndex !== Number.MAX_SAFE_INTEGER)
     .sort((a, b) =>
       (b.exact - a.exact) ||
+      (b.wholeWord - a.wholeWord) ||
+      (b.wordStart - a.wordStart) ||
       a.matchIndex - b.matchIndex ||
       a.matchLen - b.matchLen ||
       // Saisons d'une même chaîne dans l'ordre (S1 avant S2 avant S3…) ;
