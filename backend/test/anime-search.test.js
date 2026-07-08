@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { fakePrisma } = require('./helpers/api');
 const core = require('../public/anime-search-core');
-const { animeSearchNormalize, buildAnimeSearchFields, filterAnimeEntries } = core;
+const { animeSearchNormalize, buildAnimeSearchFields, filterAnimeEntries, animeSearchHighlightRanges } = core;
 
 fakePrisma(); // quiz.routes require('../db')
 
@@ -45,7 +45,7 @@ const catalog = [
   entry('Kimetsu no Yaiba', 'Demon Slayer: Kimetsu no Yaiba', 9400),
   entry('Mahou Shoujo Madoka★Magica', 'Puella Magi Madoka Magica', 8000),
 ];
-const titles = (q) => filterAnimeEntries(catalog, q).map((e) => e.title);
+const titles = (q) => filterAnimeEntries(catalog, q).map(({ entry }) => entry.title);
 
 test('mot entier avant milieu de mot : « magi » propose Magi en premier', () => {
   assert.equal(titles('magi')[0], 'Magi: The Labyrinth of Magic');
@@ -75,4 +75,30 @@ test('substring reste un filet de sécurité (saisie collée sans espaces)', () 
 test('saisie vide ou sans caractères utiles : aucune suggestion', () => {
   assert.deepEqual(titles(''), []);
   assert.deepEqual(titles('  !! '), []);
+});
+
+test('le match remonte la variante qui a matché (pour le « ≈ … » de l\'UI)', () => {
+  const [top] = filterAnimeEntries(catalog, 'demon slayer');
+  assert.equal(top.entry.title, 'Kimetsu no Yaiba');
+  assert.equal(top.matchedTitle, 'Demon Slayer: Kimetsu no Yaiba');
+  assert.equal(top.matchedAcronym, null);
+  const [aot] = filterAnimeEntries(catalog, 'aot');
+  assert.equal(aot.entry.title, 'Shingeki no Kyojin');
+  assert.equal(aot.matchedAcronym, 'aot');
+});
+
+test('surlignage : plages sur la chaîne brute, accents/ponctuation absorbés', () => {
+  const slice = (raw, q) => animeSearchHighlightRanges(raw, q).map(({ start, end }) => raw.slice(start, end));
+  // Début de mot simple.
+  assert.deepEqual(slice('Magi: The Labyrinth of Magic', 'magi'), ['Magi']);
+  // Multi-mots, ordre du titre non respecté : chaque mot tapé a sa plage.
+  assert.deepEqual(slice('Attack on Titan', 'titan attack'), ['Attack', 'Titan']);
+  // Ponctuation dans le titre, saisie sans ponctuation.
+  assert.deepEqual(slice('Re:Zero kara Hajimeru', 're zero'), ['Re', 'Zero']);
+  // Accent dans le titre, saisie sans accent.
+  assert.deepEqual(slice('Mahou Shoujo Madoka★Magica', 'madoka magica'), ['Madoka', 'Magica']);
+  // Match « collé » au milieu d'un mot (filet substring).
+  assert.deepEqual(slice('Shingeki no Kyojin', 'nokyojin'), ['no Kyojin']);
+  // Plages qui se chevauchent fusionnées.
+  assert.deepEqual(slice('Magical Warfare', 'ma magic'), ['Magic']);
 });

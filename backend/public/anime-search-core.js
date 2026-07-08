@@ -29,23 +29,31 @@ function animeSearchWordTokens(s) {
 
 // Champs de recherche précalculés d'une entrée à partir de ses variantes de
 // titre (titre + anglais + synonymes, déjà filtrées côté appelant) :
-// - searchTitles : chaînes collées, pour exact/substring ;
-// - titleTokens  : mots de chaque variante, pour le matching multi-mots ;
-// - acronyms     : initiales de chaque variante multi-mots (« aot » pour
-//                  Attack on Titan, « kny » pour Kimetsu no Yaiba…).
+// - variants : une par titre distinct — { title (brut, pour l'affichage
+//              « ≈ synonyme »), collapsed (chaîne collée, exact/substring),
+//              words (mots, matching multi-mots) } ;
+// - acronyms : initiales de chaque variante multi-mots — { acronym, title }
+//              (« aot » pour Attack on Titan, « kny » pour Kimetsu no Yaiba…).
 function buildAnimeSearchFields(titles) {
-  const clean = titles.filter(Boolean);
-  const titleTokens = clean.map(animeSearchWordTokens).filter((tokens) => tokens.length);
-  return {
-    searchTitles: [...new Set(clean.map(animeSearchNormalize).filter(Boolean))],
-    titleTokens,
-    acronyms: [...new Set(
-      titleTokens
-        .filter((tokens) => tokens.length >= 2)
-        .map((tokens) => tokens.map((t) => t[0]).join(''))
-        .filter((a) => a.length >= 2)
-    )],
-  };
+  const variants = [];
+  const seen = new Set();
+  for (const title of titles) {
+    if (!title) continue;
+    const collapsed = animeSearchNormalize(title);
+    if (!collapsed || seen.has(collapsed)) continue;
+    seen.add(collapsed);
+    variants.push({ title, collapsed, words: animeSearchWordTokens(title) });
+  }
+  const acronyms = [];
+  const seenAcronyms = new Set();
+  for (const { title, words } of variants) {
+    if (words.length < 2) continue;
+    const acronym = words.map((w) => w[0]).join('');
+    if (acronym.length < 2 || seenAcronyms.has(acronym)) continue;
+    seenAcronyms.add(acronym);
+    acronyms.push({ acronym, title });
+  }
+  return { variants, acronyms };
 }
 
 // Paliers de correspondance, du meilleur au moins bon :
@@ -56,36 +64,31 @@ function buildAnimeSearchFields(titles) {
 // 3 wordStarts  — chaque mot tapé est un DÉBUT de mot d'une même variante,
 //                 dans n'importe quel ordre (« attack titan », « titan attack ») ;
 // 4 substring   — la saisie collée est contenue quelque part (filet de sécurité).
-// Renvoie null si l'entrée ne matche pas.
+// Renvoie null si l'entrée ne matche pas, sinon le score + la variante qui a
+// produit le meilleur match (matchedTitle brut, matchedAcronym si palier 2) —
+// pour que l'UI puisse expliquer le résultat (« ≈ Demon Slayer », « ≈ AOT »).
 function scoreAnimeEntry(entry, needle, qTokens) {
-  let tier = -1;
-  let inOrder = false;
-  let matchIndex = Number.MAX_SAFE_INTEGER;
-  let matchLen = Number.MAX_SAFE_INTEGER;
-  // Un candidat par palier atteignable ; on garde le meilleur.
-  const consider = (t, ordered, index, len) => {
+  let best = null;
+  const consider = (tier, inOrder, matchIndex, matchLen, matchedTitle, matchedAcronym) => {
     if (
-      tier < 0 || t < tier ||
-      (t === tier && (
-        (ordered - inOrder) > 0 ||
-        (ordered === inOrder && (index < matchIndex || (index === matchIndex && len < matchLen)))
+      !best || tier < best.tier ||
+      (tier === best.tier && (
+        (inOrder - best.inOrder) > 0 ||
+        (inOrder === best.inOrder && (matchIndex < best.matchIndex ||
+          (matchIndex === best.matchIndex && matchLen < best.matchLen)))
       ))
     ) {
-      tier = t;
-      inOrder = ordered;
-      matchIndex = index;
-      matchLen = len;
+      best = { entry, tier, inOrder, matchIndex, matchLen, matchedTitle, matchedAcronym: matchedAcronym || null };
     }
   };
 
-  for (const title of entry.searchTitles) {
-    if (title === needle) consider(0, true, 0, title.length);
-    const index = title.indexOf(needle);
-    if (index >= 0) consider(4, false, index, title.length);
-  }
-  if (needle.length >= 2 && entry.acronyms.includes(needle)) consider(2, true, 0, needle.length);
+  for (const { title, collapsed, words } of entry.variants) {
+    if (collapsed === needle) consider(0, true, 0, collapsed.length, title);
+    const index = collapsed.indexOf(needle);
+    if (index >= 0) consider(4, false, index, collapsed.length, title);
 
-  for (const words of entry.titleTokens) {
+    // Matching multi-mots : chaque mot tapé doit être un début de mot de CETTE
+    // variante (mot entier → palier 1, simple début → palier 3).
     let allWhole = true;
     let allStart = true;
     let firstIndex = Number.MAX_SAFE_INTEGER;
@@ -95,9 +98,8 @@ function scoreAnimeEntry(entry, needle, qTokens) {
       for (let i = 0; i < words.length; i++) {
         if (!words[i].startsWith(q)) continue;
         start = true;
-        if (words[i] === q) whole = true;
         if (i < firstIndex) firstIndex = i;
-        if (whole) break;
+        if (words[i] === q) { whole = true; break; }
       }
       if (!whole) allWhole = false;
       if (!start) { allStart = false; break; }
@@ -111,17 +113,24 @@ function scoreAnimeEntry(entry, needle, qTokens) {
       if (cursor >= words.length) { ordered = false; break; }
       cursor++;
     }
-    const len = words.join('').length;
-    if (allWhole) consider(1, ordered, firstIndex, len);
-    consider(3, ordered, firstIndex, len);
+    if (allWhole) consider(1, ordered, firstIndex, collapsed.length, title);
+    consider(3, ordered, firstIndex, collapsed.length, title);
   }
 
-  return tier < 0 ? null : { entry, tier, inOrder, matchIndex, matchLen };
+  if (needle.length >= 2) {
+    for (const { acronym, title } of entry.acronyms) {
+      if (acronym === needle) consider(2, true, 0, acronym.length, title, acronym);
+    }
+  }
+
+  return best;
 }
 
 // Filtre + trie les entrées pour une saisie brute. Ordre : palier, mots dans
 // l'ordre du titre, position du match, longueur de la variante matchée, saison
 // (S1 avant S2…), popularité, titre le plus court, alphabétique.
+// Renvoie des objets { entry, matchedTitle, matchedAcronym } — l'appelant
+// affiche entry.* et peut expliquer le match via matchedTitle/matchedAcronym.
 function filterAnimeEntries(entries, rawQuery, limit = 20) {
   const needle = animeSearchNormalize(rawQuery);
   if (!needle) return [];
@@ -140,10 +149,56 @@ function filterAnimeEntries(entries, rawQuery, limit = 20) {
     (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
     a.entry.title.length - b.entry.title.length ||
     a.entry.title.localeCompare(b.entry.title));
-  return scored.slice(0, limit).map(({ entry }) => entry);
+  return scored.slice(0, limit).map(({ entry, matchedTitle, matchedAcronym }) => ({ entry, matchedTitle, matchedAcronym }));
+}
+
+// Plages [start, end) à surligner dans `raw` (chaîne BRUTE, telle qu'affichée)
+// pour la saisie `rawQuery` : chaque mot tapé surligne le début de mot qu'il
+// matche ; si aucun mot ne matche (match substring « collé »), on surligne la
+// première occurrence de la saisie collée. Le mapping caractère normalisé →
+// caractère brut absorbe accents, ponctuation et casse.
+function animeSearchHighlightRanges(raw, rawQuery) {
+  const needle = animeSearchNormalize(rawQuery);
+  if (!raw || !needle) return [];
+  // norm[j] = j-ième caractère normalisé ; map[j] = index du caractère brut d'origine.
+  let norm = '';
+  const map = [];
+  for (let i = 0; i < raw.length; i++) {
+    const n = animeSearchNormalize(raw[i]);
+    for (const c of n) { norm += c; map.push(i); }
+  }
+  const isWordStart = (j) => j === 0 || map[j] > map[j - 1] + 1; // caractère(s) séparateur(s) sautés
+  const ranges = [];
+  const pushRange = (j, len) => ranges.push({ start: map[j], end: map[j + len - 1] + 1 });
+
+  let matchedToken = false;
+  for (const q of animeSearchWordTokens(rawQuery)) {
+    for (let j = 0; j + q.length <= norm.length; j++) {
+      if (!isWordStart(j) || norm.slice(j, j + q.length) !== q) continue;
+      pushRange(j, q.length);
+      matchedToken = true;
+      break;
+    }
+  }
+  if (!matchedToken) {
+    const idx = norm.indexOf(needle);
+    if (idx >= 0) pushRange(idx, needle.length);
+  }
+  // Fusionne les plages qui se chevauchent (ex. saisie « ma mag »).
+  ranges.sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push(r);
+  }
+  return merged;
 }
 
 // Export Node (le navigateur consomme directement les globals ci-dessus).
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { animeSearchNormalize, animeSearchWordTokens, buildAnimeSearchFields, filterAnimeEntries };
+  module.exports = {
+    animeSearchNormalize, animeSearchWordTokens, buildAnimeSearchFields,
+    filterAnimeEntries, animeSearchHighlightRanges,
+  };
 }

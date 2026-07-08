@@ -380,8 +380,8 @@ async function ensureSeriesSearchCache() {
         englishTitle,
         seasonNumber: row.seasonNumber || 0,
         popularity: row.popularity || 0,
-        // Champs de recherche précalculés (chaînes collées, mots par variante,
-        // acronymes) sur titre + anglais + synonymes, hors titres CJK.
+        // Champs de recherche précalculés (variantes de titre + acronymes)
+        // sur titre + anglais + synonymes, hors titres CJK.
         ...buildAnimeSearchFields(
           [row.animeTitle, englishTitle, ...(row.altTitles || [])]
             .filter((title) => title && !hasCjkTitle(title))
@@ -399,8 +399,8 @@ async function ensureSeriesSearchCache() {
 router.get('/series-all', requirePlayer, async (req, res) => {
   await ensureSeriesSearchCache();
   res.json({
-    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, searchTitles, titleTokens, acronyms }) => ({
-      title, englishTitle, seasonNumber, popularity, searchTitles, titleTokens, acronyms,
+    entries: seriesSearchCache.entries.map(({ title, englishTitle, seasonNumber, popularity, variants, acronyms }) => ({
+      title, englishTitle, seasonNumber, popularity, variants, acronyms,
     })),
   });
 });
@@ -410,7 +410,7 @@ router.get('/series-all', requirePlayer, async (req, res) => {
 router.get('/series', requirePlayer, async (req, res) => {
   if (!animeSearchNormalize(req.query.q || '')) return res.json({ series: [], suggestions: [] });
   await ensureSeriesSearchCache();
-  const suggestions = filterAnimeEntries(seriesSearchCache.entries, req.query.q || '');
+  const suggestions = filterAnimeEntries(seriesSearchCache.entries, req.query.q || '').map(({ entry }) => entry);
   res.json({
     series: suggestions.map((entry) => entry.title),
     suggestions: suggestions.map(({ title, englishTitle }) => ({ title, englishTitle })),

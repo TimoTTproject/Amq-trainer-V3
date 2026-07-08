@@ -52,6 +52,19 @@ function closeAnimeAutocomplete(inputId) {
 // Le matching et le tri vivent dans anime-search-core.js (module PARTAGÉ avec
 // le serveur — une seule implémentation, chargée avant ce fichier par main.js).
 
+// HTML d'un texte avec la partie qui matche la saisie enveloppée de <mark>
+// (plages calculées par le core sur la chaîne brute, tout est échappé).
+function highlightAnimeHtml(raw, rawQuery) {
+  const ranges = animeSearchHighlightRanges(raw, rawQuery);
+  let html = '';
+  let pos = 0;
+  for (const { start, end } of ranges) {
+    html += `${escapeHtml(raw.slice(pos, start))}<mark>${escapeHtml(raw.slice(start, end))}</mark>`;
+    pos = end;
+  }
+  return html + escapeHtml(raw.slice(pos));
+}
+
 function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
@@ -60,20 +73,43 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const state = { input, list, suggestions: [], activeIndex: -1, timer: null, request: 0, onSubmit };
   animeAutocompleteStates.set(inputId, state);
 
-  const render = () => {
+  const render = (query) => {
     if (!state.suggestions.length) return closeAnimeAutocomplete(inputId);
     list.innerHTML = state.suggestions
-      .map((suggestion, index) => {
-        const { primary, secondary } = formatAnimeDisplay(suggestion);
-        return `<button type="button" class="anime-suggestion${index === state.activeIndex ? ' active' : ''}" role="option" aria-selected="${index === state.activeIndex}" data-anime-index="${index}">
-        <span>${escapeHtml(primary)}</span>
-        ${secondary ? `<small>${escapeHtml(secondary)}</small>` : ''}
+      .map(({ entry, matchedTitle, matchedAcronym }, index) => {
+        const { primary, secondary } = formatAnimeDisplay(entry);
+        // Explique le match quand il vient d'ailleurs que des titres affichés :
+        // acronyme (« ≈ AOT ») ou synonyme (« ≈ Demon Slayer »).
+        let via = null;
+        if (matchedAcronym) via = `≈ ${escapeHtml(matchedAcronym.toUpperCase())}`;
+        else if (matchedTitle && matchedTitle !== entry.title && matchedTitle !== entry.englishTitle) {
+          via = `≈ ${highlightAnimeHtml(matchedTitle, query)}`;
+        }
+        // Le préfixe S1/S2 est purement visuel : on surligne seulement le titre.
+        const seasonPrefix = entry.seasonNumber > 0 ? `S${entry.seasonNumber} · ` : '';
+        const primaryBase = primary.slice(seasonPrefix.length);
+        return `<button type="button" class="anime-suggestion" role="option" aria-selected="false" data-anime-index="${index}">
+        <span class="anime-suggestion-body">
+          <span class="anime-suggestion-title">${escapeHtml(seasonPrefix)}${highlightAnimeHtml(primaryBase, query)}</span>
+          ${secondary ? `<small>${highlightAnimeHtml(secondary, query)}</small>` : ''}
+          ${via ? `<small class="anime-suggestion-via">${via}</small>` : ''}
+        </span>
       </button>`;
       })
       .join('');
     list.classList.remove('hidden');
     input.setAttribute('aria-expanded', 'true');
-    if (state.activeIndex >= 0) list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+  };
+
+  // Déplace le surlignage clavier SANS reconstruire la liste (pas de flash,
+  // l'état hover/scroll est préservé).
+  const setActive = (index) => {
+    state.activeIndex = index;
+    list.querySelectorAll('.anime-suggestion').forEach((el, i) => {
+      el.classList.toggle('active', i === index);
+      el.setAttribute('aria-selected', String(i === index));
+    });
+    if (index >= 0) list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
   };
 
   const choose = (index) => {
@@ -81,7 +117,7 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
     if (!suggestion) return;
     // On remplit avec le titre affiché en premier (anglais si dispo selon la
     // préférence). Le matching accepte aussi bien l'anglais que le romaji.
-    input.value = englishFirst() && suggestion.englishTitle ? suggestion.englishTitle : suggestion.title;
+    input.value = englishFirst() && suggestion.entry.englishTitle ? suggestion.entry.englishTitle : suggestion.entry.title;
     closeAnimeAutocomplete(inputId);
     input.focus();
   };
@@ -94,10 +130,9 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
     if (request !== state.request || input.value.trim() !== query || input.disabled) return;
     // Saisie BRUTE (le core normalise lui-même) : les espaces portent le
     // découpage en mots du matching multi-mots.
-    state.suggestions = filterAnimeEntries(entries, query)
-      .map(({ title, englishTitle, seasonNumber }) => ({ title, englishTitle, seasonNumber: seasonNumber || 0 }));
+    state.suggestions = filterAnimeEntries(entries, query);
     state.activeIndex = -1;
-    render();
+    render(query);
   };
 
   input.addEventListener('input', () => {
@@ -111,12 +146,15 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   input.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' && state.suggestions.length) {
       event.preventDefault();
-      state.activeIndex = (state.activeIndex + 1) % state.suggestions.length;
-      render();
+      setActive((state.activeIndex + 1) % state.suggestions.length);
     } else if (event.key === 'ArrowUp' && state.suggestions.length) {
       event.preventDefault();
-      state.activeIndex = (state.activeIndex - 1 + state.suggestions.length) % state.suggestions.length;
-      render();
+      setActive((state.activeIndex - 1 + state.suggestions.length) % state.suggestions.length);
+    } else if (event.key === 'Tab' && !event.shiftKey && state.suggestions.length) {
+      // Tab complète la suggestion active (ou la première) SANS soumettre —
+      // le réflexe AMQ : trois lettres, Tab, Entrée.
+      event.preventDefault();
+      choose(state.activeIndex >= 0 ? state.activeIndex : 0);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (state.activeIndex >= 0) choose(state.activeIndex);
