@@ -449,6 +449,7 @@ async function computeSeasonNumbers(seedIds) {
   // (un maillon manquant du catalogue ne doit pas casser la numérotation de la
   // chaîne). Bornée à 6 tours pour éviter une explosion sur une franchise géante.
   const visited = new Map(); // anilistId -> [{ relationType, nodeId }]
+  const nodeFormat = new Map(); // anilistId -> format AniList (TV, OVA, MOVIE…)
   let frontier = [...seedIds];
   let rounds = 0;
   while (frontier.length && rounds < 6) {
@@ -465,9 +466,13 @@ async function computeSeasonNumbers(seedIds) {
         continue;
       }
       for (const m of media) {
+        if (m.format) nodeFormat.set(m.id, m.format);
         const edges = (m.relations?.edges || [])
           .filter((e) => e.node?.type === 'ANIME' && (e.relationType === 'PREQUEL' || e.relationType === 'SEQUEL'))
           .map((e) => ({ relationType: e.relationType, nodeId: e.node.id }));
+        for (const e of m.relations?.edges || []) {
+          if (e.node?.format && !nodeFormat.has(e.node.id)) nodeFormat.set(e.node.id, e.node.format);
+        }
         visited.set(m.id, edges);
         for (const e of edges) if (!visited.has(e.nodeId)) nextFrontier.add(e.nodeId);
       }
@@ -494,36 +499,54 @@ async function computeSeasonNumbers(seedIds) {
     }
   }
 
+  // Seuls certains formats « portent » un numéro de saison : TV, TV court et
+  // ONA (les vraies saisons des œuvres web/Netflix sont souvent des ONA).
+  // OAV, spéciaux, films et clips sont des maillons PASSANTS : ils relient la
+  // chaîne mais n'incrémentent pas la numérotation et n'affichent jamais de
+  // S# — ex. l'OAV entre Vinland Saga S1 et S2 ne doit ni s'afficher « S2 »,
+  // ni transformer la vraie saison 2 en « S3 ». Format inconnu (nœud AniList
+  // sans format renseigné) : compté comme une saison, comme avant.
+  const SEASON_FORMATS = new Set(['TV', 'TV_SHORT', 'ONA']);
+  const bearsSeason = (id) => !nodeFormat.has(id) || SEASON_FORMATS.has(nodeFormat.get(id));
+
   // Numérotation par composante : BFS depuis chaque racine (nœud sans arête
-  // entrante) — racine = saison 1, ses SEQUEL directs = saison 2, etc.
+  // entrante). Chaque chemin transporte le nombre de saisons déjà rencontrées :
+  // premier porteur = S1, porteur suivant = S2… (les passants transmettent le
+  // compteur tel quel et valent 0).
   const seasonById = new Map();
   const globalSeen = new Set();
+  const components = []; // listes d'ids, pour la règle « moins de 2 vraies saisons »
   for (const id of visited.keys()) {
     if (hasIncoming.has(id) || globalSeen.has(id)) continue;
-    let level = 1;
-    let queue = [id];
+    const componentIds = [];
+    let queue = [{ id, count: 0 }];
     while (queue.length) {
       const next = [];
-      for (const n of queue) {
+      for (const { id: n, count } of queue) {
         if (globalSeen.has(n)) continue;
         globalSeen.add(n);
-        seasonById.set(n, level);
-        for (const v of forward.get(n) || []) if (!globalSeen.has(v)) next.push(v);
+        componentIds.push(n);
+        const c = bearsSeason(n) ? count + 1 : count;
+        seasonById.set(n, bearsSeason(n) ? c : 0);
+        for (const v of forward.get(n) || []) if (!globalSeen.has(v)) next.push({ id: v, count: c });
       }
       queue = next;
-      level++;
     }
+    components.push(componentIds);
   }
   // Nœuds visités jamais atteints (composante réduite à eux-mêmes) → isolés.
   for (const id of visited.keys()) if (!globalSeen.has(id)) seasonById.set(id, 0);
 
-  const result = new Map();
-  for (const anilistId of seedIds) {
-    const seasonNumber = seasonById.get(anilistId) ?? 0;
-    // seasonNumber === 1 seul dans sa composante (pas de sequel trouvé) : pas
-    // besoin d'afficher « S1 » pour une œuvre qui n'a jamais eu de suite.
-    result.set(anilistId, seasonNumber === 1 && !hasIncoming.has(anilistId) && !(forward.get(anilistId)?.size) ? 0 : seasonNumber);
+  // Moins de 2 vraies saisons dans la composante (œuvre isolée, ou TV + OAV
+  // seulement) : aucun préfixe — « S1 » seul n'apporte rien et sème le doute.
+  for (const componentIds of components) {
+    if (componentIds.filter(bearsSeason).length < 2) {
+      for (const id of componentIds) seasonById.set(id, 0);
+    }
   }
+
+  const result = new Map();
+  for (const anilistId of seedIds) result.set(anilistId, seasonById.get(anilistId) ?? 0);
   return result;
 }
 
@@ -666,6 +689,7 @@ module.exports = {
   backfillFormatsBatch,
   backfillSeasonsBatch,
   verifySeasonsBatch,
+  computeSeasonNumbers,
   backfillCoversBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,

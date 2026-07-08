@@ -197,15 +197,17 @@ async function getAnimeFormatsByIds(ids) {
 }
 
 // Relations directes (PREQUEL/SEQUEL…) d'un lot d'animes — pour reconstruire
-// la chaîne de saisons d'une œuvre (cf. backfillSeasonsBatch).
+// la chaîne de saisons d'une œuvre (cf. backfillSeasonsBatch). Le format de
+// chaque maillon (TV/OVA/film…) sert à ne compter que les vraies saisons.
 async function getAnimeRelationsByIds(ids) {
   const query = `
     query ($ids: [Int]) {
       Page(perPage: 50) {
         media(id_in: $ids, type: ANIME) {
           id
+          format
           relations {
-            edges { relationType(version: 2) node { id type } }
+            edges { relationType(version: 2) node { id type format } }
           }
         }
       }
