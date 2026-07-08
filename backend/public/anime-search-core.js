@@ -127,8 +127,10 @@ function scoreAnimeEntry(entry, needle, qTokens) {
 }
 
 // Filtre + trie les entrées pour une saisie brute. Ordre : palier, mots dans
-// l'ordre du titre, position du match, longueur de la variante matchée, saison
-// (S1 avant S2…), popularité, titre le plus court, alphabétique.
+// l'ordre du titre, position du match, saison (S1 avant S2… — AVANT la longueur
+// de la variante matchée, sinon « Yu-Gi-Oh! GX » passe devant « Yu-Gi-Oh! Duel
+// Monsters » juste parce que son titre est plus court), longueur de la variante
+// matchée, popularité, titre le plus court, alphabétique.
 // Renvoie des objets { entry, matchedTitle, matchedAcronym } — l'appelant
 // affiche entry.* et peut expliquer le match via matchedTitle/matchedAcronym.
 function filterAnimeEntries(entries, rawQuery, limit = 20) {
@@ -144,8 +146,8 @@ function filterAnimeEntries(entries, rawQuery, limit = 20) {
     a.tier - b.tier ||
     (b.inOrder - a.inOrder) ||
     a.matchIndex - b.matchIndex ||
-    a.matchLen - b.matchLen ||
     (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
+    a.matchLen - b.matchLen ||
     (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
     a.entry.title.length - b.entry.title.length ||
     a.entry.title.localeCompare(b.entry.title));
