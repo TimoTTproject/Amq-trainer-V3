@@ -232,6 +232,14 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .collection-progress { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .prog { font-size: .78rem; padding: 4px 10px; border-radius: 12px; background: var(--bg-3); font-weight: 600; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+/* Avec très peu de cartes (ou un conteneur étroit), auto-fill ne crée qu'UNE
+   colonne dont le 1fr occupe alors toute la largeur du conteneur — la carte
+   devenait géante (ratio 3/4 sur gcard-img : la hauteur suivait). Les grilles
+   CSS n'acceptent pas min(1fr, 160px) dans minmax() (fr non mixable avec une
+   longueur) : on plafonne donc l'item lui-même, qui reste simplement plus
+   petit que sa colonne (alignement par défaut : à gauche) plutôt que de
+   l'étirer. */
+.card-grid > .gcard { max-width: 160px; }
 .card-grid .muted { grid-column: 1/-1; color: var(--text-2); text-align: center; padding: 30px; }
 .empty-state { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 34px 20px; }
 .empty-state .muted { padding: 0; }
