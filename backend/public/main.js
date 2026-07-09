@@ -928,7 +928,7 @@ const ECONOMY_EARN_SOURCES = [
   { icon: '🎮', title: 'Multijoueur (classique / équipes / élim.)', desc: '+2 🪙 par bonne réponse + bonus de classement (+20/+10/+5 pour le podium), max 40 🪙/partie.' },
   { icon: '🤝', title: 'Tour en équipe (coop)', desc: '+1 🪙 par étage franchi, max 30 🪙/partie. Partage le même plafond que le multijoueur.' },
   { icon: '📅', title: 'Défi du jour', desc: '20 à 100 🪙 selon ta série de jours consécutifs — une tentative par jour.' },
-  { icon: '🎁', title: 'Bonus quotidien, quêtes & niveaux', desc: '50 🪙 de connexion par jour, + récompenses de quêtes et de paliers d\'XP à réclamer.' },
+  { icon: '🎁', title: 'Bonus quotidien, quêtes & niveaux', desc: '100 🪙 de connexion par jour, + récompenses de quêtes et de paliers d\'XP à réclamer.' },
   { icon: '♻️', title: 'Doublons gacha', desc: 'Chaque doublon obtenu au tirage rembourse des tokens selon la rareté de la carte.' },
 ];
 const ECONOMY_SPEND_SOURCES = [

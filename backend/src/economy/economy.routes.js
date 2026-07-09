@@ -7,7 +7,7 @@ const { mpCapState, MP_REWARD_CAP } = require('../mp/mp');
 
 const router = express.Router();
 
-const DAILY_BONUS = 50;
+const DAILY_BONUS = 100;
 
 // Libellés lisibles pour l'historique
 const REASON_LABELS = {
