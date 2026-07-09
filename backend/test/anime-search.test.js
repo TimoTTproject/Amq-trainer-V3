@@ -66,6 +66,23 @@ test('acronymes : « aot » et « kny » trouvent le bon anime', () => {
   assert.equal(titles('kny')[0], 'Kimetsu no Yaiba');
 });
 
+test('seasonNumber 0 (OAV/spécial hors chaîne) ne double pas la vraie saison 1', () => {
+  // Ryusui (OAV, seasonNumber=0) plus populaire que Dr. Stone S1 : avant le
+  // fix, 0 triait AVANT 1 (tri ascendant naïf) et prenait la tête malgré une
+  // correspondance de même palier — Dr. Stone S1 ressortait 5e.
+  const drStone = [
+    entry('Dr. Stone', null, 200000, 1),
+    entry('Dr. Stone: Stone Wars', null, 150000, 2),
+    entry('Dr. Stone: New World', null, 140000, 3),
+    entry('Dr. Stone: Ryusui', null, 999000, 0),
+    entry('Dr. Stone: Reboot: Byakuya', null, 900000, 0),
+  ];
+  assert.deepEqual(
+    filterAnimeEntries(drStone, 'dr stone').map(({ entry }) => entry.title),
+    ['Dr. Stone', 'Dr. Stone: Stone Wars', 'Dr. Stone: New World', 'Dr. Stone: Ryusui', 'Dr. Stone: Reboot: Byakuya']
+  );
+});
+
 test('substring reste un filet de sécurité (saisie collée sans espaces)', () => {
   assert.ok(titles('okakyo').length === 0 || true); // pas de crash sur du bruit
   assert.equal(titles('shingekinokyojin')[0], 'Shingeki no Kyojin');

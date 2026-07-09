@@ -142,11 +142,16 @@ function filterAnimeEntries(entries, rawQuery, limit = 20) {
     const s = scoreAnimeEntry(entry, needle, qTokens);
     if (s) scored.push(s);
   }
+  // seasonNumber 0 = hors chaîne numérotée (OAV/film/spécial, ou œuvre isolée
+  // — cf. computeSeasonNumbers côté serveur), PAS « avant la saison 1 » : sans
+  // ce garde-fou, un OAV (0) doublait la vraie saison 1 (1) puisque 0 < 1 en
+  // tri ascendant (« dr stone » faisait ressortir Ryusui avant Dr. Stone S1).
+  const seasonRank = (n) => (n > 0 ? n : Infinity);
   scored.sort((a, b) =>
     a.tier - b.tier ||
     (b.inOrder - a.inOrder) ||
     a.matchIndex - b.matchIndex ||
-    (a.entry.seasonNumber || 0) - (b.entry.seasonNumber || 0) ||
+    seasonRank(a.entry.seasonNumber) - seasonRank(b.entry.seasonNumber) ||
     a.matchLen - b.matchLen ||
     (b.entry.popularity || 0) - (a.entry.popularity || 0) ||
     a.entry.title.length - b.entry.title.length ||
