@@ -78,6 +78,24 @@ function highlightAnimeHtml(raw, rawQuery) {
   return html + escapeHtml(raw.slice(pos));
 }
 
+// Repositionne la liste de suggestions pour qu'elle reste ENTIÈREMENT visible
+// dans la fenêtre, sans avoir à scroller la page — y compris quand le champ de
+// réponse est bas dans le viewport (mise en page verticale, petit écran). Par
+// défaut la liste s'ouvre sous le champ ; si la place manque en dessous mais
+// qu'il y en a davantage au-dessus, elle s'ouvre vers le haut à la place. Dans
+// les deux cas sa hauteur max est bornée à l'espace réellement disponible.
+function positionAnimeSuggestions(input, list) {
+  const MARGIN = 8;
+  const rect = input.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+  const spaceAbove = rect.top - MARGIN;
+  const preferredMax = 320; // cf. styles.css .anime-suggestions
+  const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+  list.classList.toggle('suggestions-up', openUp);
+  const available = openUp ? spaceAbove : spaceBelow;
+  list.style.maxHeight = Math.max(120, Math.min(preferredMax, available)) + 'px';
+}
+
 function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
@@ -115,6 +133,7 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
       .join('');
     list.classList.remove('hidden');
     input.setAttribute('aria-expanded', 'true');
+    positionAnimeSuggestions(input, list);
   };
 
   // Déplace le surlignage clavier SANS reconstruire la liste (pas de flash,
@@ -180,6 +199,12 @@ function setupAnimeAutocomplete({ inputId, listId, onSubmit }) {
     }
   });
   input.addEventListener('blur', () => setTimeout(() => closeAnimeAutocomplete(inputId), 120));
+  // Reflow (rotation d'écran, clavier virtuel qui s'ouvre/se ferme sur mobile,
+  // options de la manche qu'on déplie…) : la place disponible peut changer
+  // pendant que la liste est ouverte.
+  window.addEventListener('resize', () => {
+    if (!list.classList.contains('hidden')) positionAnimeSuggestions(input, list);
+  });
   list.addEventListener('mousedown', (event) => {
     const option = event.target.closest('[data-anime-index]');
     if (!option) return;

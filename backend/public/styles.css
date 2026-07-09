@@ -1271,6 +1271,13 @@ select.album-form-control {
   background: #12151c; border: 1px solid #343943; border-radius: 12px;
   box-shadow: 0 18px 40px rgba(0,0,0,.5);
 }
+/* Ouverte vers le haut quand la place manque en dessous (cf.
+   positionAnimeSuggestions dans anime-autocomplete.js) : toute la liste doit
+   rester visible sans avoir à scroller la page. */
+.anime-suggestions.suggestions-up {
+  top: auto; bottom: calc(100% + 6px);
+  box-shadow: 0 -18px 40px rgba(0,0,0,.5);
+}
 .anime-suggestion {
   width: 100%; display: flex; align-items: center; gap: 11px; padding: 11px 13px;
   border: 0; border-radius: 9px; background: transparent; color: var(--text);
