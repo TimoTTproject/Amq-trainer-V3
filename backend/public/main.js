@@ -1315,7 +1315,10 @@ function setupAppUI() {
   });
   document.getElementById('fuse-clear-btn').addEventListener('click', clearFuseSelection);
   document.getElementById('fuse-btn').addEventListener('click', runFusion);
-  document.getElementById('fuse-reveal-close').addEventListener('click', () => document.getElementById('fuse-reveal-modal').classList.add('hidden'));
+  // Optionnel : dégrade proprement (pas de crash) si le HTML servi est en
+  // retard d'un déploiement sur ce script (cache navigateur/CDN pendant un
+  // déploiement), plutôt que de casser toute l'init — y compris la connexion.
+  document.getElementById('fuse-reveal-close')?.addEventListener('click', () => document.getElementById('fuse-reveal-modal')?.classList.add('hidden'));
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
   let adminSearchTimer;

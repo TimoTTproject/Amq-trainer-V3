@@ -1000,9 +1000,12 @@ function initMpUI() {
     fillYearSelect(document.getElementById('mp-set-year-min'), 0);
     fillYearSelect(document.getElementById('mp-set-year-max'), 0);
   }
-  document.getElementById('mp-set-difficulty').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
-  document.getElementById('mp-set-year-min').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
-  document.getElementById('mp-set-year-max').addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  // Optionnel (?.) : un HTML servi en retard d'un déploiement sur ce script
+  // (cache navigateur/CDN pendant un déploiement) ne doit pas faire planter
+  // toute l'init de l'app — initMpUI tourne avant même setupAppUI/la connexion.
+  document.getElementById('mp-set-difficulty')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-year-min')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  document.getElementById('mp-set-year-max')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {
