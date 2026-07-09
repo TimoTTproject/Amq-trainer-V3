@@ -161,6 +161,7 @@ const settings = {
   autoNextDelay: parseInt(localStorage.getItem('amq_autonextDelay') ?? '4'), // délai avant la manche suivante auto (s)
   // Statuts AniList cochés (mode « Ma liste ») ; null = tous.
   listStatuses: (() => { try { return JSON.parse(localStorage.getItem('amq_listStatuses')) || null; } catch { return null; } })(),
+  noDuplicate: localStorage.getItem('amq_noDuplicate') === 'true', // ne repropose pas un anime déjà sorti cette session
 };
 
 // Remplit un <select> d'années : « — » (0 = pas de borne) puis années
@@ -177,6 +178,10 @@ function fillYearSelect(select, value) {
 let autoNextTimer = null; // enchaînement automatique vers la manche suivante
 // Session finie (solo classique) : compteur de sons et bonnes réponses
 let quizCount = 0, quizCorrect = 0, quizSessionEnded = false;
+// Anti-doublon (option) : anilistId déjà sortis cette session, alimenté à
+// chaque révélation (cf. revealAnswerBox) — reset avec le reste de la session
+// (nouvelle partie, changement de mode/source/filtres…).
+let sessionSeenAnilistIds = new Set();
 
 // ── helpers API ──
 async function api(path, opts = {}) {
@@ -187,7 +192,14 @@ async function api(path, opts = {}) {
   });
   let data = null;
   try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error(data?.error || `Erreur ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Erreur ${res.status}`);
+    // Champs additionnels du corps JSON d'erreur (ex. exhaustedByExclude sur
+    // /quiz/random) : les appelants qui en ont besoin les lisent sur l'erreur
+    // plutôt que de re-parser le message.
+    if (data) Object.assign(err, data);
+    throw err;
+  }
   return data;
 }
 
@@ -1601,6 +1613,15 @@ function setupAppUI() {
       else localStorage.removeItem('amq_listStatuses');
     });
   }
+  const optNoDuplicate = document.getElementById('opt-no-duplicate');
+  if (optNoDuplicate) {
+    optNoDuplicate.checked = settings.noDuplicate;
+    optNoDuplicate.addEventListener('change', () => {
+      settings.noDuplicate = optNoDuplicate.checked;
+      localStorage.setItem('amq_noDuplicate', String(settings.noDuplicate));
+      sessionSeenAnilistIds.clear(); // active en cours de partie : repart propre
+    });
+  }
   const optAutoDelay = document.getElementById('opt-autonext-delay');
   if (optAutoDelay) {
     optAutoDelay.value = String(settings.autoNextDelay);
@@ -1996,6 +2017,11 @@ function buildRandomQuery() {
   if (Array.isArray(settings.listStatuses) && settings.listStatuses.length) {
     qs += `&statuses=${settings.listStatuses.join(',')}`;
   }
+  // Anti-doublon : anilistId déjà sortis cette session (accumulés à la
+  // révélation). Pas en entraînement ciblé, comme les autres filtres.
+  if (settings.noDuplicate && !(trainingSource === 'series') && sessionSeenAnilistIds.size) {
+    qs += `&excludeAnilist=${[...sessionSeenAnilistIds].join(',')}`;
+  }
   return qs;
 }
 
@@ -2035,7 +2061,7 @@ function swapToPreloadedVideo() {
 async function nextSong() {
   clearTimeout(autoNextTimer);
   // Nouvelle session finie (solo classique) : remet les compteurs à zéro.
-  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; }
+  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; sessionSeenAnilistIds.clear(); }
   resetQuizUI();
   const qs = buildRandomQuery();
   let song, roundToken, liked, reward;
@@ -2053,6 +2079,16 @@ async function nextSong() {
       rewardCap = capData || null; // null en entraînement/non classé
       renderRewardCap(rewardCap);
     } catch (err) {
+      if (err.exhaustedByExclude) {
+        // Anti-doublon (illimité) : le pool est épuisé — fin de session propre,
+        // comme une partie à nombre de sons fixé qui arrive à son terme, plutôt
+        // qu'un message d'erreur sec sur lequel rien ne se passe si on reclique.
+        quizSessionEnded = true;
+        setHint(`🏁 Tu as fait le tour : ${quizCorrect}/${quizCount} bonne(s) réponse(s) sur ${quizCount} son(s), tous différents !`);
+        document.getElementById('next-btn').innerHTML = '<i class="fas fa-rotate-right"></i> Nouvelle partie';
+        document.getElementById('next-btn').disabled = false;
+        return;
+      }
       setHint(err.message + (!trainingSource && mode === 'mine' ? " — importe d'abord ta liste, ou passe en « Catalogue global »." : ''));
       return;
     }
@@ -2460,6 +2496,10 @@ async function guessAnswer(forcedGuess) {
 
 // Affiche le bloc réponse + autorise la vidéo
 function revealAnswerBox(answer, community) {
+  // Anti-doublon : n'accumule qu'APRÈS révélation (avant, l'anilistId n'est
+  // jamais envoyé par le serveur — ce serait un raccourci pour retrouver le
+  // titre sur AniList avant d'avoir répondu).
+  if (answer.anilistId) sessionSeenAnilistIds.add(answer.anilistId);
   document.getElementById('answer-anime').textContent = formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber });
   document.getElementById('answer-title').textContent = answer.title;
   document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';

@@ -54,4 +54,24 @@ function sanitizeListStatuses(raw) {
   return wanted.includes('COMPLETED') ? [...wanted, 'REPEATING'] : wanted;
 }
 
-module.exports = { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, LIST_STATUSES, sanitizeListStatuses };
+// Anti-doublon (solo « Ma liste »/« Catalogue global » — le multijoueur a son
+// propre mécanisme serveur, room.usedAnilistIds, déjà actif dans tous les
+// modes) : liste d'anilistId à exclure du tirage, reçue en CSV depuis le
+// client (accumulée manche après manche, cf. anime-search-core côté client
+// non — plutôt main.js). Whitelist stricte (entiers positifs) + plafond pour
+// ne pas laisser un client malveillant gonfler la requête indéfiniment.
+const MAX_EXCLUDE_ANILIST = 2000;
+function sanitizeExcludeAnilist(raw) {
+  if (!raw) return [];
+  const ids = String(raw)
+    .split(',')
+    .map((s) => parseInt(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return [...new Set(ids)].slice(0, MAX_EXCLUDE_ANILIST);
+}
+
+module.exports = {
+  DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear,
+  LIST_STATUSES, sanitizeListStatuses,
+  sanitizeExcludeAnilist,
+};

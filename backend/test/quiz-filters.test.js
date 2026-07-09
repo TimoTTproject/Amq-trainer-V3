@@ -2,7 +2,7 @@
 // fragments de `where` Prisma partagés solo + multijoueur.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear } = require('../src/quiz/filters');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeExcludeAnilist } = require('../src/quiz/filters');
 
 test('difficulté : taux de réussite réel d\'abord, popularité en repli, paliers contigus', () => {
   assert.deepEqual(difficultyWhere('popular'), {
@@ -33,4 +33,13 @@ test('sanitizeYear : bornes plausibles uniquement', () => {
   assert.equal(sanitizeYear(2101), 0);
   assert.equal(sanitizeYear('abc'), 0);
   assert.equal(sanitizeYear(undefined), 0);
+});
+
+test('sanitizeExcludeAnilist (anti-doublon) : entiers positifs, dédupliqués, plafonnés', () => {
+  assert.deepEqual(sanitizeExcludeAnilist(''), []);
+  assert.deepEqual(sanitizeExcludeAnilist(undefined), []);
+  assert.deepEqual(sanitizeExcludeAnilist('101,102,101, 103'), [101, 102, 103]);
+  assert.deepEqual(sanitizeExcludeAnilist('101,abc,-5,0,12.9'), [101, 12]);
+  const huge = Array.from({ length: 3000 }, (_, i) => i + 1).join(',');
+  assert.equal(sanitizeExcludeAnilist(huge).length, 2000);
 });

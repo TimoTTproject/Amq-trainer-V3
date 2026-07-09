@@ -11,7 +11,7 @@ const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations, artistTokens, isSideContent } = require('./recommendations');
 const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
-const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeListStatuses } = require('./filters');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeListStatuses, sanitizeExcludeAnilist } = require('./filters');
 const { recordGlobalGuess } = require('./song-stats');
 
 // Stats communautaires d'une musique pour la révélation : % de joueurs qui la
@@ -243,7 +243,15 @@ router.get('/random', requirePlayer, async (req, res) => {
   const difficulty = DIFFICULTIES.includes(req.query.difficulty) ? req.query.difficulty : 'all';
   const yearMin = sanitizeYear(req.query.yearMin);
   const yearMax = sanitizeYear(req.query.yearMax);
-  const extraWhere = { ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax) };
+  // Anti-doublon : le client accumule les anilistId déjà sortis cette session
+  // (à partir des réponses révélées) et les renvoie ici à exclure. Ignoré en
+  // entraînement ciblé (source) : cibler délibérément un petit ensemble puis
+  // l'exclure au fur et à mesure viderait vite le pool pour rien.
+  const excludeAnilist = sanitizeExcludeAnilist(req.query.excludeAnilist);
+  const extraWhere = {
+    ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax),
+    ...(excludeAnilist.length ? { anilistId: { notIn: excludeAnilist } } : {}),
+  };
   // Statuts AniList (mode « Ma liste » uniquement — le catalogue global n'a pas
   // de notion de statut, et l'entraînement cible déjà un sous-ensemble choisi).
   const listStatuses = sanitizeListStatuses(req.query.statuses);
@@ -260,7 +268,13 @@ router.get('/random', requirePlayer, async (req, res) => {
     let total = await prisma.song.count({ where });
     if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
     if (!total) {
-      return res.status(404).json({ error: filtersActive ? 'Aucune musique ne correspond à ces filtres (difficulté/période)' : 'Aucune musique disponible' });
+      return res.status(404).json({
+        error: filtersActive ? 'Aucune musique ne correspond à ces filtres (difficulté/période/anti-doublon)' : 'Aucune musique disponible',
+        // Signal dédié (plutôt que de parser le message) : le client sait déjà
+        // s'il a demandé l'anti-doublon et peut afficher « tu as fait le tour ! »
+        // au lieu d'un message d'erreur générique.
+        exhaustedByExclude: excludeAnilist.length > 0,
+      });
     }
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
@@ -270,9 +284,9 @@ router.get('/random', requirePlayer, async (req, res) => {
     });
     if (!songIds.length) {
       const noMatch = filtersActive && !source
-        ? 'Aucune musique ne correspond à ces filtres (difficulté/période/statut) — les entrées importées avant l\'ajout des statuts nécessitent un ré-import de la liste'
+        ? 'Aucune musique ne correspond à ces filtres (difficulté/période/statut/anti-doublon) — les entrées importées avant l\'ajout des statuts nécessitent un ré-import de la liste'
         : (source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode');
-      return res.status(404).json({ error: noMatch });
+      return res.status(404).json({ error: noMatch, exhaustedByExclude: !source && excludeAnilist.length > 0 });
     }
     const randomId = songIds[Math.floor(Math.random() * songIds.length)];
     song = await prisma.song.findUnique({ where: { id: randomId }, select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
@@ -668,6 +682,10 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
       reward: 0,
       community: communityStats(song),
       answer: {
+        // anilistId : sûr à exposer ICI (réponse déjà révélée en clair juste
+        // au-dessus) — sert au client à bâtir la liste anti-doublon de la
+        // session. Jamais renvoyé par /random (avant révélation).
+        anilistId: song.anilistId,
         animeTitle: song.animeTitle,
         englishTitle: englishTitleFor(song),
         seasonNumber: song.seasonNumber || 0,
@@ -763,6 +781,7 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
     ...(ranked ? { rewardCap: { used: cap.used + grant, max: QUIZ_CAP, resetAt: cap.resetAt, capped } } : {}),
     ...(result.tokens !== null ? { tokens: result.tokens } : {}),
     answer: {
+      anilistId: song.anilistId, // cf. commentaire sur /guess (invité) plus haut
       animeTitle: song.animeTitle,
       englishTitle: englishTitleFor(song),
       seasonNumber: song.seasonNumber || 0,
@@ -789,6 +808,7 @@ router.get('/answer/:songId', requirePlayer, async (req, res) => {
   res.json({
     community: communityStats(song),
     answer: {
+      anilistId: song.anilistId, // cf. commentaire sur /guess (invité) plus haut
       animeTitle: song.animeTitle,
       englishTitle: englishTitleFor(song),
       seasonNumber: song.seasonNumber || 0,
