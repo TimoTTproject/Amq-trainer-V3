@@ -8,6 +8,11 @@ let dailyDuration = 30000;  // ms (fourni par le serveur)
 let dailyTimer = null;      // chrono de la chanson
 let dailyAnswering = false;
 let dailyMyScore = 0; // mon score du jour (pour le partage)
+// Résultat par chanson de MON run (🟩 trouvé / 🟥 raté), accumulé côté client à
+// chaque soumission — sert à la grille de partage façon Wordle. Un run repris
+// après rechargement est complété par des ⬜ (résultats des chansons d'avant
+// inconnus du client).
+let dailyMarks = [];
 const dailyVideo = () => document.getElementById('daily-video');
 
 function dailyShow(panel) {
@@ -194,7 +199,16 @@ function buildDailyShareImage(res) {
 }
 
 async function shareDaily() {
-  const text = `J'ai marqué ${dailyMyScore} pts au Défi du jour sur AMQTrainer 🎵 — bats-moi !`;
+  // Grille façon Wordle (🟩 trouvé / 🟥 raté / ⬜ inconnu) : lisible telle
+  // quelle dans un chat, sans ouvrir l'image. Seulement si on a le résultat
+  // de chaque chanson du run (jouées dans cette session du navigateur).
+  const total = dailyLastResult?.total || 0;
+  const grid = total && dailyMarks.length >= total ? dailyMarks.slice(0, total).join('') : '';
+  const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  const streak = dailyLastResult?.streak > 1 ? ` · 🔥 ${dailyLastResult.streak} j` : '';
+  const text = grid
+    ? `Défi du jour AMQTrainer ${date}\n${grid} ${dailyLastResult.correct}/${total} · ${dailyMyScore} pts${streak}\nBats-moi !`
+    : `J'ai marqué ${dailyMyScore} pts au Défi du jour sur AMQTrainer 🎵 — bats-moi !`;
   const url = location.origin;
   try {
     const blob = await buildDailyShareImage(dailyLastResult);
@@ -256,6 +270,7 @@ async function startDaily() {
     return;
   }
   dailyScore = 0;
+  dailyMarks = [];
   document.getElementById('daily-score').textContent = '0 pts';
   dailyShow('game');
   playDailySong(s);
@@ -264,6 +279,9 @@ async function startDaily() {
 async function playDailySong(s) {
   dailyAnswering = false;
   dailyIndex = s.index;
+  // Grille de partage : complète les positions inconnues (run repris après
+  // rechargement) sans jamais écraser les résultats déjà enregistrés.
+  while (dailyMarks.length < s.index) dailyMarks.push('⬜');
   dailyDuration = s.durationMs || 30000;
   document.getElementById('daily-index').textContent = s.index + 1;
   document.getElementById('daily-total').textContent = s.total;
@@ -337,6 +355,7 @@ async function submitDaily(forced) {
   }
 
   dailyVideo().play().catch(() => {}); // révèle le son en entier
+  dailyMarks[dailyIndex] = r.correct ? '🟩' : '🟥';
   dailyScore += r.points || 0;
   document.getElementById('daily-score').textContent = `${dailyScore} pts`;
   const fb = document.getElementById('daily-feedback');
@@ -348,7 +367,7 @@ async function submitDaily(forced) {
         : r.answer.animeTitle)
     : '';
   const eng = answerLabel ? `<strong>${escapeHtml(answerLabel)}</strong>` : '';
-  fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `Réponse : ${eng}`
+  fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `${t('Réponse :')} ${eng}`
     + ` <button class="like-reveal hidden" id="daily-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`;
   if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('daily-like'), r.answer && r.answer.songId);
   r.correct ? sfx.correct() : sfx.wrong();

@@ -152,6 +152,31 @@ function setVolume(v) {
   }, true);
 });
 
+// ── Thème clair/sombre (persistant, posé avant le premier rendu par le
+// snippet inline d'index.html ; ici on synchronise logo, meta et bouton) ──
+function applyTheme() {
+  const light = localStorage.getItem('amq_theme') === 'light';
+  if (light) document.documentElement.dataset.theme = 'light';
+  else delete document.documentElement.dataset.theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', light ? '#f3f1ea' : '#0f1117');
+  // Le logo « on-dark » devient illisible sur fond clair : variante standard.
+  document.querySelectorAll('img[src*="logo-horizontal"]').forEach((img) => {
+    img.src = light ? '/assets/brand/logo-horizontal.png' : '/assets/brand/logo-horizontal-on-dark.png';
+  });
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.innerHTML = light
+      ? `<i class="fas fa-moon"></i><span>${t('Thème sombre')}</span>`
+      : `<i class="fas fa-sun"></i><span>${t('Thème clair')}</span>`;
+  }
+}
+function toggleTheme() {
+  const light = localStorage.getItem('amq_theme') === 'light';
+  if (light) localStorage.removeItem('amq_theme');
+  else localStorage.setItem('amq_theme', 'light');
+  applyTheme();
+}
+
 // Réglages quiz (persistés)
 const settings = {
   randomStart: localStorage.getItem('amq_randomStart') !== 'false',
@@ -188,6 +213,9 @@ let quizCount = 0, quizCorrect = 0, quizSessionEnded = false;
 // chaque révélation (cf. revealAnswerBox) — reset avec le reste de la session
 // (nouvelle partie, changement de mode/source/filtres…).
 let sessionSeenAnilistIds = new Set();
+// Historique de la session : manches déjà révélées (la plus récente en tête),
+// pour retrouver « le son d'avant » sans rien redemander au serveur.
+let sessionHistory = [];
 
 // ── helpers API ──
 async function api(path, opts = {}) {
@@ -224,6 +252,7 @@ function pingVisit() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  applyTheme(); // avant tout affichage : logo/meta au bon thème (écran auth compris)
   setupAuthUI();
   setupGlobalAccessibility();
   pingVisit();
@@ -559,12 +588,36 @@ function setupGlobalAccessibility() {
   });
 
   // Jouable 100% au clavier : 1-9 choisit une réponse en QCM (Carré/Duo), Échap
-  // passe la manche (solo + multi), Maj+Échap vote pour passer (multi). Un Échap
-  // ferme d'abord les suggestions d'autocomplétion si elles sont ouvertes, comme
-  // avant — ce n'est que sans suggestions ouvertes qu'il déclenche « Passer ».
+  // passe la manche (solo + multi), Maj+Échap vote pour passer (multi), Entrée
+  // enchaîne sur la manche suivante une fois la réponse révélée, R réécoute
+  // l'extrait (hors saisie). Un Échap ferme d'abord les suggestions
+  // d'autocomplétion si elles sont ouvertes, comme avant — ce n'est que sans
+  // suggestions ouvertes qu'il déclenche « Passer ».
   document.addEventListener('keydown', (event) => {
     if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
     if (document.querySelector('.modal-overlay:not(.hidden)')) return;
+
+    // Entrée après la révélation = « Manche suivante » : le réflexe AMQ
+    // (taper, Entrée, lire la réponse, Entrée) sans reprendre la souris. Pas
+    // quand le focus est sur un bouton (l'activation native suffirait, on
+    // cliquerait deux fois) ni pendant la manche (le champ de réponse gère
+    // déjà son propre Entrée via l'autocomplétion).
+    if (event.key === 'Enter' && currentView === 'quiz' && answered) {
+      if (document.activeElement?.tagName === 'BUTTON') return;
+      const next = document.getElementById('next-btn');
+      if (next && !next.disabled) { event.preventDefault(); next.click(); }
+      return;
+    }
+
+    // R = réécouter l'extrait (hors champ de saisie — pendant la manche le
+    // focus est dans le champ de réponse, la lettre y reste une lettre).
+    if ((event.key === 'r' || event.key === 'R') && currentView === 'quiz') {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+      const btn = document.getElementById('replay-btn');
+      if (btn && !btn.disabled && currentSong) { event.preventDefault(); btn.click(); }
+      return;
+    }
 
     if (event.key === 'Escape') {
       const suggList = document.getElementById(currentView === 'mp' ? 'mp-suggestions' : 'answer-suggestions');
@@ -1118,6 +1171,8 @@ function setupAppUI() {
   };
   updateMuteIcon();
   muteBtn.addEventListener('click', () => { sfx.toggleMute(); updateMuteIcon(); });
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+  applyTheme(); // synchronise logo/meta/libellé avec le thème posé au chargement
   const headerVol = document.getElementById('header-volume');
   if (headerVol) headerVol.addEventListener('input', (e) => setVolume(+e.target.value));
   const mpVol = document.getElementById('mp-volume');
@@ -1661,6 +1716,14 @@ function setupAppUI() {
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => {
     b.addEventListener('click', () => sendFeedback(b.dataset.fb));
   });
+  // Historique de session : like direct depuis une ligne (délégation — la
+  // liste est re-rendue à chaque révélation).
+  document.getElementById('session-history-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sh-like]');
+    if (!btn) return;
+    const h = sessionHistory[+btn.dataset.shLike];
+    if (h?.songId) quickLike(btn, h.songId);
+  });
 }
 
 function applyQuizLayout() {
@@ -1859,6 +1922,7 @@ function startTraining(source, label) {
   trainingSource = source;
   trainingChrono = document.getElementById('train-chrono').checked;
   trainPlayed = trainCorrect = trainStreak = 0;
+  clearSessionHistory(); // nouvelle session d'entraînement
   document.getElementById('training-banner').classList.remove('hidden');
   document.getElementById('training-label').innerHTML = `🎓 <b>${escapeHtml(label || 'Entraînement')}</b>${trainingChrono ? ' · ⏱' : ''}`;
   renderTrainSession();
@@ -2072,7 +2136,7 @@ function swapToPreloadedVideo() {
 async function nextSong() {
   clearTimeout(autoNextTimer);
   // Nouvelle session finie (solo classique) : remet les compteurs à zéro.
-  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; sessionSeenAnilistIds.clear(); }
+  if (quizSessionEnded) { quizCount = 0; quizCorrect = 0; quizSessionEnded = false; sessionSeenAnilistIds.clear(); clearSessionHistory(); }
   resetQuizUI();
   const qs = buildRandomQuery();
   let song, roundToken, liked, reward;
@@ -2083,7 +2147,7 @@ async function nextSong() {
     renderRewardCap(rewardCap);
   } else {
     prefetchedRound = null; // périmé (réglages différents) ou jamais abouti → on jette
-    setHint('Chargement…');
+    setHint(t('Chargement…'));
     try {
       let capData;
       ({ song, roundToken, liked, reward, rewardCap: capData } = await api(`/api/quiz/random?${qs}`));
@@ -2096,7 +2160,7 @@ async function nextSong() {
         // qu'un message d'erreur sec sur lequel rien ne se passe si on reclique.
         quizSessionEnded = true;
         setHint(`🏁 Tu as fait le tour : ${quizCorrect}/${quizCount} bonne(s) réponse(s) sur ${quizCount} son(s), tous différents !`);
-        document.getElementById('next-btn').innerHTML = '<i class="fas fa-rotate-right"></i> Nouvelle partie';
+        document.getElementById('next-btn').innerHTML = `<i class="fas fa-rotate-right"></i> ${t('Nouvelle partie')}`;
         document.getElementById('next-btn').disabled = false;
         return;
       }
@@ -2133,7 +2197,7 @@ async function nextSong() {
   document.getElementById('reveal-btn').disabled = false;
   document.getElementById('answer-input').focus();
   document.getElementById('skip-btn').classList.remove('hidden'); // « Passer » pendant la manche
-  document.getElementById('next-btn').innerHTML = '<i class="fas fa-forward"></i> Manche suivante';
+  document.getElementById('next-btn').innerHTML = `<i class="fas fa-forward"></i> ${t('Manche suivante')}`;
   document.getElementById('next-btn').disabled = true; // pas de saut sans répondre (fausserait les stats) → utiliser « Passer »
   updateVideoButtonVisibility(); // cache la vidéo en classé tant qu'on n'a pas répondu
   refreshQuizOptionsLock(); // manche en cours → fige les réglages
@@ -2170,7 +2234,7 @@ async function startClip() {
         v.src = mediaUrlWithRetry(clipUrl, attempt);
         v.load();
       } else {
-        setHint('Chargement du son…');
+        setHint(t('Chargement du son…'));
       }
       await waitForMediaEvent(v, 'loadedmetadata');
       seek();
@@ -2180,7 +2244,7 @@ async function startClip() {
     } catch (error) {
       lastPlayError = error;
       if (error?.name === 'NotAllowedError') {
-        setHint('▶ Lecture bloquée par le navigateur — clique sur le bouton lecture.');
+        setHint(t('▶ Lecture bloquée par le navigateur — clique sur le bouton lecture.'));
         break;
       }
     }
@@ -2189,14 +2253,14 @@ async function startClip() {
   if (!playing) {
     const mediaReady = v.readyState >= 2 && !v.error;
     setHint(mediaReady
-      ? '▶ Son prêt — appuie sur lecture pour démarrer.'
-      : '⚠️ Le son ne charge pas. Clique sur réécouter pour relancer.');
+      ? t('▶ Son prêt — appuie sur lecture pour démarrer.')
+      : t('⚠️ Le son ne charge pas. Clique sur réécouter pour relancer.'));
     if (!mediaReady && lastPlayError) console.warn('Lecture du quiz impossible :', lastPlayError.name || lastPlayError.message);
     setPlayIcon();
     return;
   }
   const sessionTag = (!isTraining && settings.count > 0) ? ` · Son ${quizCount}/${settings.count}` : '';
-  setHint("🎵 Devine l'anime à partir de l'extrait." + sessionTag);
+  setHint(t("🎵 Devine l'anime à partir de l'extrait.") + sessionTag);
   setPlayIcon();
 
   // Coupure après la durée choisie (sauf "Illimitée" ou si la vidéo est révélée)
@@ -2214,7 +2278,7 @@ async function startClip() {
   if (isTraining && trainingChrono) {
     const limitMs = ((settings.clipSeconds || 20) + 4) * 1000;
     chronoTimer = setTimeout(() => {
-      if (!answered) { setHint('⏱ Temps écoulé !'); showAnswerCasual(); }
+      if (!answered) { setHint(t('⏱ Temps écoulé !')); showAnswerCasual(); }
     }, limitMs);
   }
 }
@@ -2236,7 +2300,7 @@ function armClipCutoff(ms) {
       setHint(`⏱ ${settings.answerSeconds} s pour répondre !`);
       chronoTimer = setTimeout(() => {
         if (answered) return;
-        setHint('⏱ Temps écoulé !');
+        setHint(t('⏱ Temps écoulé !'));
         if (isTraining) showAnswerCasual(); else guessAnswer('');
       }, settings.answerSeconds * 1000);
     }
@@ -2251,7 +2315,7 @@ async function replayClip() {
     try {
       v.currentTime = roundClipStart;
       await v.play();
-      setHint("🎵 Devine l'anime à partir de l'extrait.");
+      setHint(t("🎵 Devine l'anime à partir de l'extrait."));
       if (settings.clipSeconds > 0) {
         startQuizTimebar(settings.clipSeconds);
         armClipCutoff(settings.clipSeconds * 1000);
@@ -2362,7 +2426,7 @@ function capResetText(ts) {
 // Détail du calcul de récompense (transparence), affiché au verdict.
 function rewardDetailText(b) {
   if (!b) return '';
-  if (!b.firstCorrect) return 'Rejeu : gain réduit (anti-farm)';
+  if (!b.firstCorrect) return t('Rejeu : gain réduit (anti-farm)');
   const parts = [`${b.base} de base`];
   if (b.speedMult < 0.999) parts.push(`vitesse ×${b.speedMult.toFixed(2)}`);
   if (b.levelMult < 0.999) parts.push(`${b.level} ×${b.levelMult}`);
@@ -2375,7 +2439,7 @@ function setOverlayEnded(ended) {
   if (!ov) return;
   ov.classList.toggle('ended', ended);
   ov.innerHTML = ended
-    ? '<div class="overlay-ended"><i class="fas fa-clock"></i><span>Extrait terminé</span><small>Propose une réponse ou passe</small></div>'
+    ? `<div class="overlay-ended"><i class="fas fa-clock"></i><span>${t('Extrait terminé')}</span><small>${t('Propose une réponse ou passe')}</small></div>`
     : '<i class="fas fa-music"></i>';
 }
 
@@ -2475,10 +2539,10 @@ async function guessAnswer(forcedGuess) {
   if (r.correct && !isTraining && settings.count > 0) quizCorrect++;
   const verdict = document.getElementById('answer-verdict');
   if (r.correct) {
-    verdict.textContent = r.reward ? `Bonne réponse !  +${r.reward} 🪙` : 'Bonne réponse !';
+    verdict.textContent = r.reward ? `${t('Bonne réponse !')}  +${r.reward} 🪙` : t('Bonne réponse !');
     sfx.correct();
   } else {
-    verdict.textContent = '❌ Raté';
+    verdict.textContent = t('❌ Raté');
     sfx.wrong();
   }
   verdict.className = 'verdict ' + (r.correct ? 'ok' : 'ko');
@@ -2496,6 +2560,7 @@ async function guessAnswer(forcedGuess) {
   }
 
   revealAnswerBox(r.answer, r.community);
+  pushSessionHistory(r.answer, r.correct);
   recordTraining(r.correct);
 
   if (typeof r.tokens === 'number' && currentUser) {
@@ -2503,6 +2568,50 @@ async function guessAnswer(forcedGuess) {
     renderHeaderUser();
   }
   refreshStats();
+}
+
+// ── Historique de session ──
+// `correct` : true/false, ou null pour une réponse simplement révélée
+// (entraînement). Alimenté uniquement à la révélation — mêmes données que le
+// bloc réponse, aucun appel serveur.
+function pushSessionHistory(answer, correct) {
+  sessionHistory.unshift({
+    songId: currentSong?.id || null,
+    label: formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber || 0 }),
+    song: answer.title || '',
+    artist: answer.artist || '',
+    theme: `${answer.type || ''}${answer.number || ''}`,
+    correct,
+  });
+  if (sessionHistory.length > 50) sessionHistory.pop();
+  renderSessionHistory();
+}
+function clearSessionHistory() {
+  sessionHistory = [];
+  renderSessionHistory();
+}
+function renderSessionHistory() {
+  const box = document.getElementById('session-history');
+  const list = document.getElementById('session-history-list');
+  if (!box || !list) return;
+  box.classList.toggle('hidden', !sessionHistory.length);
+  const count = document.getElementById('session-history-count');
+  if (count) count.textContent = String(sessionHistory.length);
+  list.innerHTML = sessionHistory.map((h, i) => {
+    const mark = h.correct === true
+      ? '<i class="fas fa-circle-check sh-ok" title="Trouvé"></i>'
+      : h.correct === false
+      ? '<i class="fas fa-circle-xmark sh-ko" title="Raté"></i>'
+      : '<i class="fas fa-lightbulb sh-reveal" title="Réponse révélée"></i>';
+    const like = h.songId
+      ? `<button class="like-reveal sh-like" data-sh-like="${i}" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`
+      : '';
+    return `<li class="session-history-item">
+      ${mark}
+      <span class="sh-body"><b>${escapeHtml(h.label)}</b><small>${escapeHtml(h.theme)}${h.theme ? ' · ' : ''}${escapeHtml(h.song)}${h.artist ? ' — ' + escapeHtml(h.artist) : ''}</small></span>
+      ${like}
+    </li>`;
+  }).join('');
 }
 
 // Affiche le bloc réponse + autorise la vidéo
@@ -2513,7 +2622,7 @@ function revealAnswerBox(answer, community) {
   if (answer.anilistId) sessionSeenAnilistIds.add(answer.anilistId);
   document.getElementById('answer-anime').textContent = formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber });
   document.getElementById('answer-title').textContent = answer.title;
-  document.getElementById('answer-artist').textContent = answer.artist || 'Artiste inconnu';
+  document.getElementById('answer-artist').textContent = answer.artist || t('Artiste inconnu');
   // Difficulté réelle : % de joueurs qui trouvent cette musique (masqué tant
   // que l'échantillon global est trop petit pour être significatif).
   const communityEl = document.getElementById('answer-community');
@@ -2541,7 +2650,7 @@ function revealAnswerBox(answer, community) {
   if (sessionDone) {
     quizSessionEnded = true;
     setHint(`🏁 Partie terminée : ${quizCorrect}/${settings.count} bonne(s) réponse(s) !`);
-    document.getElementById('next-btn').innerHTML = '<i class="fas fa-rotate-right"></i> Nouvelle partie';
+    document.getElementById('next-btn').innerHTML = `<i class="fas fa-rotate-right"></i> ${t('Nouvelle partie')}`;
   } else if (settings.autoNext) {
     // Enchaînement automatique vers la manche suivante (option)
     autoNextTimer = setTimeout(() => { if (answered) nextSong(); }, (settings.autoNextDelay || 4) * 1000);
@@ -2564,11 +2673,12 @@ async function showAnswerCasual() {
   document.querySelectorAll('#choice-buttons .choice-opt').forEach((b) => (b.disabled = true));
   document.getElementById('answer-input').disabled = true;
   document.getElementById('reveal-btn').disabled = true;
-  document.getElementById('answer-verdict').textContent = '🎓 Réponse révélée (entraînement)';
+  document.getElementById('answer-verdict').textContent = t('🎓 Réponse révélée (entraînement)');
   document.getElementById('answer-verdict').className = 'verdict';
   try {
     const { answer, community } = await api(`/api/quiz/answer/${currentSong.id}?roundToken=${encodeURIComponent(currentRoundToken || '')}`);
     revealAnswerBox(answer, community);
+    pushSessionHistory(answer, null); // révélée sans répondre (entraînement)
   } catch (e) { setHint(e.message); }
 }
 
@@ -2580,7 +2690,7 @@ async function sendFeedback(type) {
       body: JSON.stringify({ songId: currentSong.id, feedbackType: type }),
     });
   } catch {}
-  setHint('Noté ✓ — clique sur « Manche suivante » pour continuer.');
+  setHint(t('Noté ✓ — clique sur « Manche suivante » pour continuer.'));
   document.querySelectorAll('.feedback-buttons [data-fb]').forEach((b) => (b.disabled = true));
 }
 

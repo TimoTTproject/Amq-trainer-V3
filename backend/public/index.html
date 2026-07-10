@@ -38,6 +38,17 @@
        de cette page — sinon un déploiement pouvait rester invisible tant
        qu'un cache intermédiaire gardait l'ancienne version de ces fichiers. -->
   <script>window.BUILD_ID = "";</script>
+  <!-- Thème (clair/sombre) posé AVANT le premier rendu pour éviter le flash
+       de thème sombre quand l'utilisateur a choisi le clair. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('amq_theme') === 'light') {
+          document.documentElement.dataset.theme = 'light';
+        }
+      } catch (e) { /* stockage indisponible : thème sombre par défaut */ }
+    })();
+  </script>
 </head>
 <body class="session-pending">
   <div id="session-loader" class="session-loader" role="status" aria-live="polite">
@@ -162,6 +173,7 @@
           <input type="range" id="header-volume" class="header-volume" min="0" max="1" step="0.05" value="0.8" title="Volume de la musique" aria-label="Volume de la musique" />
           <button id="mute-btn" class="btn-secondary" title="Activer ou couper les effets sonores" aria-label="Activer ou couper les effets sonores"><i class="fas fa-volume-high"></i></button>
           <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language" aria-label="Changer de langue">EN</button>
+          <button id="theme-toggle" class="btn-secondary" title="Thème clair ou sombre" aria-label="Changer de thème"><i class="fas fa-sun"></i><span>Thème clair</span></button>
           <button id="logout-btn" class="btn-secondary" aria-label="Se déconnecter"><i class="fas fa-sign-out-alt"></i><span>Déconnexion</span></button>
         </div>
       </div>
@@ -781,6 +793,14 @@
           <button class="btn-again" data-fb="again">À revoir</button>
         </div>
       </div>
+
+      <!-- Historique de la session : les manches déjà révélées (« c'était quoi
+           le son d'avant ? »), rempli à chaque révélation, vidé à chaque
+           nouvelle session. -->
+      <details id="session-history" class="session-history hidden">
+        <summary><i class="fas fa-clock-rotate-left"></i> <span data-i18n="Historique de la session">Historique de la session</span> (<span id="session-history-count">0</span>)</summary>
+        <ol id="session-history-list" class="session-history-list"></ol>
+      </details>
       </div>
     </section>
 
