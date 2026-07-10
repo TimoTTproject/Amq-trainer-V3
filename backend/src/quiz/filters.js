@@ -30,6 +30,10 @@ function difficultyWhere(difficulty) {
 // servir un anime hors période demandée.
 function yearWhere(yearMin, yearMax) {
   if (!yearMin && !yearMax) return {};
+  // Bornes inversées réordonnées ici (dernier filet) : l'UI solo et le salon
+  // multi les échangent déjà à la saisie, mais une valeur persistée avant ce
+  // garde-fou (localStorage) produirait un intervalle vide → « aucune musique ».
+  if (yearMin && yearMax && yearMin > yearMax) [yearMin, yearMax] = [yearMax, yearMin];
   return { seasonYear: { gte: yearMin || 1, lte: yearMax || 9999 } };
 }
 

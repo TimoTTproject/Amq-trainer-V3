@@ -663,15 +663,21 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   if (!song) return res.status(404).json({ error: 'Musique introuvable' });
 
   const userId = req.user.id;
-  const correct = isCorrectGuess(guess, song);
 
   // Le mode classé est décidé par le jeton de manche émis au tirage, pas par le
-  // client. Sans jeton valide et non rejoué pour CETTE manche → aucun token.
+  // client. Jeton valide EXIGÉ pour tout le monde : sans ça, un simple POST avec
+  // un songId révélait la réponse (puis on rejouait la manche avec le jeton et
+  // la bonne réponse pour le gain plein) et gonflait stats/quêtes à volonté.
   const round = verifyRoundToken(req.body?.roundToken, { userId, songId });
-  const ranked = !!(round && round.ranked && (await consumeRound(round)));
+  if (!round) return res.status(400).json({ error: 'Manche invalide ou expirée' });
+  const correct = isCorrectGuess(guess, song);
+  // Rejoué (jeton déjà consommé) → la manche est simplement déclassée : aucun
+  // token, mais la réponse reste consultable (idempotent pour un client qui
+  // resoumet après une erreur réseau).
+  const ranked = !!(round.ranked && (await consumeRound(round)));
 
   if (req.user.isGuest) {
-    if (!round || !(await consumeRound(round))) {
+    if (!(await consumeRound(round))) {
       return res.status(409).json({ error: 'Manche invalide ou déjà jouée' });
     }
     // Les invités jouent toujours en mode normal (pas d'entraînement) : leurs

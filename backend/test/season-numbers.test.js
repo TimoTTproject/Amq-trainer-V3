@@ -4,7 +4,6 @@
 // entre S1 et S2 s'affichait « S2 » et transformait la vraie S2 en « S3 »).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('path');
 const { fakePrisma } = require('./helpers/api');
 
 fakePrisma(); // catalog.service require('../db')

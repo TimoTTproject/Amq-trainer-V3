@@ -80,3 +80,14 @@ test('rejects empty, too-short or wrong guesses', () => {
   assert.equal(isCorrectGuess('na', song), false); // < 3 caractères
   assert.equal(isCorrectGuess('One Piece', song), false);
 });
+
+test('accepts very short titles typed exactly (86, K)', () => {
+  const eightySix = { animeTitle: '86', altTitles: ['Eighty-Six', '86-Eighty Six'] };
+  assert.ok(isCorrectGuess('86', eightySix)); // match exact, même < 3 caractères
+  assert.ok(isCorrectGuess('Eighty Six', eightySix));
+  const k = { animeTitle: 'K', altTitles: ['K Project'] };
+  assert.ok(isCorrectGuess('K', k));
+  assert.ok(isCorrectGuess('k', k));
+  // La tolérance aux fautes reste désactivée sous 3 caractères : « 87 » ≠ « 86 ».
+  assert.equal(isCorrectGuess('87', eightySix), false);
+});

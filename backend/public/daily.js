@@ -326,6 +326,13 @@ async function submitDaily(forced) {
     r = await api('/api/daily/guess', { method: 'POST', body: JSON.stringify({ guess }) });
   } catch (e) {
     document.getElementById('daily-feedback').textContent = e.message;
+    // Erreur réseau : on redonne la main pour resoumettre — sinon la partie
+    // restait figée (champ/boutons désactivés, dailyAnswering jamais remis à
+    // false). Le serveur reste juge du temps (tooLate) : pas de triche possible.
+    dailyAnswering = false;
+    input.disabled = false;
+    document.getElementById('daily-submit').disabled = false;
+    document.getElementById('daily-skip').disabled = false;
     return;
   }
 
@@ -333,7 +340,14 @@ async function submitDaily(forced) {
   dailyScore += r.points || 0;
   document.getElementById('daily-score').textContent = `${dailyScore} pts`;
   const fb = document.getElementById('daily-feedback');
-  const eng = r.answer ? `<strong>${escapeHtml(r.answer.animeTitle)}</strong>` : '';
+  // Même libellé que les révélations solo/multi : préférence de langue
+  // (anglais/romaji, cf. formatAnimeLabel) + préfixe S# des chaînes de saisons.
+  const answerLabel = r.answer
+    ? (typeof formatAnimeLabel === 'function'
+        ? formatAnimeLabel({ title: r.answer.animeTitle, englishTitle: r.answer.englishTitle, seasonNumber: r.answer.seasonNumber || 0 })
+        : r.answer.animeTitle)
+    : '';
+  const eng = answerLabel ? `<strong>${escapeHtml(answerLabel)}</strong>` : '';
   fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `Réponse : ${eng}`
     + ` <button class="like-reveal hidden" id="daily-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`;
   if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('daily-like'), r.answer && r.answer.songId);

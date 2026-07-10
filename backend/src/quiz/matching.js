@@ -30,12 +30,18 @@ function editDistance(a, b) {
 
 function isCorrectGuess(guess, song) {
   const g = norm(guess);
-  if (g.length < 3) return false;
+  if (!g.length) return false;
   const candidates = [song.animeTitle, ...(song.altTitles || [])]
     .map(norm)
     .filter((t) => t.length);
+  // Match exact accepté quelle que soit la longueur : sans ça, les titres très
+  // courts (« 86 », « K »… → moins de 3 caractères normalisés) ne pouvaient
+  // JAMAIS être validés, même tapés exactement. La tolérance aux fautes et les
+  // variantes restent réservées aux saisies d'au moins 3 caractères (trop de
+  // faux positifs en dessous).
+  if (candidates.some((t) => t === g)) return true;
+  if (g.length < 3) return false;
   return candidates.some((t) => {
-    if (t === g) return true;
     // Une apostrophe finale marque parfois une suite différente de l'original
     // (« Gintama' » est un autre anime que « Gintama », pas juste une saison) :
     // si les deux chaînes ne diffèrent QUE par cette apostrophe, on refuse — la

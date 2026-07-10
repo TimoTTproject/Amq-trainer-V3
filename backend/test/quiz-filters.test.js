@@ -25,6 +25,8 @@ test('période : bornes ouvertes, années inconnues (0/null) exclues si filtre a
   // Borne min seule : le gte à 1 exclut la sentinelle 0 (année inconnue).
   assert.deepEqual(yearWhere(2010, 0), { seasonYear: { gte: 2010, lte: 9999 } });
   assert.deepEqual(yearWhere(0, 1999), { seasonYear: { gte: 1, lte: 1999 } });
+  // Bornes inversées : réordonnées (jamais d'intervalle vide silencieux).
+  assert.deepEqual(yearWhere(2020, 2010), { seasonYear: { gte: 2010, lte: 2020 } });
 });
 
 test('sanitizeYear : bornes plausibles uniquement', () => {

@@ -4,6 +4,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { isCorrectGuess } = require('../quiz/matching');
+const { englishTitleFor } = require('../quiz/anime-titles');
 const { tierFromMmr } = require('../mp/rank');
 const { proxyVideo } = require('../util/stream');
 const { preferredMediaUrl } = require('../storage/r2');
@@ -126,7 +127,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
   const songId = run.songIds[run.index];
   const song = await prisma.song.findUnique({
     where: { id: songId },
-    select: { id: true, animeTitle: true, altTitles: true, title: true, artist: true, type: true, number: true },
+    select: { id: true, animeTitle: true, altTitles: true, seasonNumber: true, title: true, artist: true, type: true, number: true },
   });
   if (!song) return res.status(404).json({ error: 'Chanson introuvable' });
 
@@ -142,7 +143,13 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
   const isLast = nextIndex >= run.songIds.length;
 
   // songId révélé ici seulement (post-réponse) → permet d'ajouter la musique à sa playlist.
-  const answer = { songId: song.id, animeTitle: song.animeTitle, title: song.title, artist: song.artist, type: song.type, number: song.number };
+  // englishTitle/seasonNumber : mêmes champs que les révélations solo/multi, pour
+  // que le client applique la préférence de langue et le préfixe S# partout pareil.
+  const answer = {
+    songId: song.id, animeTitle: song.animeTitle,
+    englishTitle: englishTitleFor(song), seasonNumber: song.seasonNumber || 0,
+    title: song.title, artist: song.artist, type: song.type, number: song.number,
+  };
 
   if (!isLast) {
     const updated = await prisma.dailyRun.update({
