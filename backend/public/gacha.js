@@ -246,10 +246,13 @@ async function doPull(type) {
   try {
     const r = await api('/api/gacha/pull', { method: 'POST', body: JSON.stringify({ type }) });
     currentUser.tokens = r.tokens;
-    if (typeof r.pity === 'number') currentUser.pity = r.pity;
     renderHeaderUser();
     setGachaTokens();
-    renderGachaMeta(r.pityLimit);
+    // Pitié : appliquée seulement une fois TOUTES les cartes révélées (cf.
+    // onAllRevealed), pas ici — sinon la jauge retombant à 0 avant même le
+    // premier clic trahirait qu'un Légendaire+ se cache dans le paquet.
+    pendingPity = typeof r.pity === 'number' ? r.pity : null;
+    pendingPityLimit = r.pityLimit;
     pullRefundMsg = r.refundTotal ? ` · ${r.refundTotal} 🪙` : '';
     pullCost = r.cost;
     result.innerHTML = r.cards.map((c, i) => flipCardHTML(c, i)).join('');
@@ -272,6 +275,8 @@ async function doPull(type) {
 
 let pullRefundMsg = '';
 let pullCost = 0;
+let pendingPity = null; // pitié du tirage en cours, appliquée seulement à la fin (anti-spoil)
+let pendingPityLimit = 60;
 
 function flipPullCard(card) {
   if (card.classList.contains('flipped')) { openCharacter(card.dataset.cid); return; }
@@ -300,6 +305,12 @@ function revealAllPull() {
 function onAllRevealed() {
   document.getElementById('reveal-all-btn').classList.add('hidden');
   document.getElementById('gacha-msg').textContent = `−${pullCost} 🪙${pullRefundMsg}`;
+  // Applique la pitié du tirage maintenant que tout est révélé (cf. doPull).
+  if (pendingPity !== null) {
+    currentUser.pity = pendingPity;
+    renderGachaMeta(pendingPityLimit);
+    pendingPity = null;
+  }
   loadCollection();
 }
 
@@ -346,7 +357,7 @@ function renderCollection() {
     grid.innerHTML = `<div class="empty-state">
       <div class="empty-card-stack" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
       <h3>Ton classeur est vide</h3>
-      <p class="muted">Ouvre un paquet ×5 pour lancer ta collection Édition 1.</p>
+      <p class="muted">Ouvre un paquet ×6 pour lancer ta collection Édition 1.</p>
       <button class="btn-primary" id="collection-empty-pull"><i class="fas fa-ticket"></i> Faire mon premier tirage</button>
     </div>`;
     const btn = document.getElementById('collection-empty-pull');

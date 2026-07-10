@@ -89,7 +89,7 @@ const MAX_SUPPLY = {
 
 // Prix et contenu des achats
 const PRICES = {
-  pack: { cost: 100, count: 5, guaranteeRarePlus: true },
+  pack: { cost: 100, count: 6, guaranteeRarePlus: true },
 };
 
 module.exports = {
