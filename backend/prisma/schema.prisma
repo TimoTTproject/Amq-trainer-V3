@@ -588,7 +588,10 @@ model CardInstance {
 
   character Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listing   MarketListing?
+  // Un exemplaire accumule des annonces au fil du temps (annulées, vendues…) ;
+  // au plus UNE est active à la fois (flag `listed` + index unique partiel en
+  // base, cf. migration fix_market_relist).
+  listings  MarketListing[]
 
   @@unique([characterId, serial])
   @@index([userId])
@@ -601,7 +604,10 @@ model MarketListing {
   id             Int       @id @default(autoincrement())
   sellerId       String
   buyerId        String?
-  cardInstanceId Int       @unique
+  // PAS @unique : les annonces résolues (cancelled/sold) restent en base pour
+  // l'historique — une contrainte unique interdisait de REMETTRE en vente un
+  // exemplaire déjà passé par le marché (P2002 → « Erreur serveur »).
+  cardInstanceId Int
   characterId    Int
   price          Int
   status         String    @default("active") // active | sold | cancelled
@@ -616,6 +622,7 @@ model MarketListing {
   @@index([status, characterId])
   @@index([status, price])
   @@index([sellerId, status])
+  @@index([cardInstanceId])
 }
 
 model UserCard {

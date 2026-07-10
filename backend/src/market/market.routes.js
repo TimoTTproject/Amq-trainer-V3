@@ -105,12 +105,20 @@ router.post('/list', requireAuth, async (req, res) => {
   if (!inst || inst.userId !== req.user.id) return res.status(404).json({ error: 'Tu ne possèdes pas cet exemplaire' });
   if (inst.listed) return res.status(400).json({ error: 'Cet exemplaire est déjà en vente' });
 
-  const listing = await prisma.$transaction(async (tx) => {
-    await tx.cardInstance.update({ where: { id: cardInstanceId }, data: { listed: true } });
-    return tx.marketListing.create({
-      data: { sellerId: req.user.id, cardInstanceId, characterId: inst.characterId, price },
+  let listing;
+  try {
+    listing = await prisma.$transaction(async (tx) => {
+      await tx.cardInstance.update({ where: { id: cardInstanceId }, data: { listed: true } });
+      return tx.marketListing.create({
+        data: { sellerId: req.user.id, cardInstanceId, characterId: inst.characterId, price },
+      });
     });
-  });
+  } catch (e) {
+    // Course (double clic / double onglet) : l'index unique partiel sur les
+    // annonces ACTIVES refuse la seconde — message clair plutôt qu'un 500.
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Cet exemplaire est déjà en vente' });
+    throw e;
+  }
   progressQuests(req.user.id, 'market', 1); // quête « marché » : mettre en vente compte
   res.json({ ok: true, id: listing.id });
 });
