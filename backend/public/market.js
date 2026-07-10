@@ -42,7 +42,9 @@ function marketListingHTML(l) {
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(l.character.name)}</div>
       <div class="gcard-rarity">${RARITY_LABELS[rar] || rar} · #${l.serial}</div>
-      <div class="market-seller hint">${l.mine ? 'Ton annonce' : 'Vendu par ' + escapeHtml(l.seller.displayName)}</div>
+      <div class="market-seller hint">${l.mine
+        ? 'Ton annonce'
+        : `Vendu par <button type="button" class="btn-link" data-userid="${l.seller.id}">${escapeHtml(l.seller.displayName)}</button>`}</div>
     </div>
     <span class="badge market-price">${l.price} 🪙</span>
     ${l.mine

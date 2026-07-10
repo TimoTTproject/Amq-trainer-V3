@@ -1251,6 +1251,9 @@ function setupAppUI() {
   document.getElementById('market-list').addEventListener('click', (e) => {
     const buy = e.target.closest('.market-buy-btn'); if (buy) { e.stopPropagation(); return buyMarketListing(parseInt(buy.dataset.id)); }
     const cancel = e.target.closest('.market-cancel-btn'); if (cancel) { e.stopPropagation(); return cancelMarketListing(parseInt(cancel.dataset.id)); }
+    // « Vendu par <pseudo> » : ouvre la fiche du vendeur (manquait — le nom
+    // était juste du texte, aucun moyen de voir qui vend quoi).
+    const seller = e.target.closest('[data-userid]'); if (seller) { e.stopPropagation(); return openPlayer(seller.dataset.userid); }
   });
   document.getElementById('market-mine-active').addEventListener('click', (e) => {
     const cancel = e.target.closest('.market-cancel-btn'); if (cancel) { e.stopPropagation(); return cancelMarketListing(parseInt(cancel.dataset.id)); }

@@ -240,6 +240,11 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
    petit que sa colonne (alignement par défaut : à gauche) plutôt que de
    l'étirer. */
 .card-grid > .gcard { max-width: 160px; }
+/* Le marché a plus de contenu par carte (vendeur, prix, bouton) : 160px les
+   faisait paraître lourdes/trop grandes. Aligné sur la taille « compacte »
+   déjà utilisée ailleurs (.pull-result, .player-best : 130px). */
+#market-list.card-grid > .gcard,
+#market-mine-active.card-grid > .gcard { max-width: 130px; }
 .card-grid .muted { grid-column: 1/-1; color: var(--text-2); text-align: center; padding: 30px; }
 .empty-state { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 34px 20px; }
 .empty-state .muted { padding: 0; }
@@ -2165,6 +2170,11 @@ body.profile-public .token-history { display: none; }
 
 /* Vitrine de cartes */
 .profile-showcase { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 12px; }
+/* Même bug que .card-grid (cf. plus haut) : un joueur avec 1-2 cartes dans sa
+   vitrine (ou la wishlist) les voyait s'étirer sur toute la largeur. Enfant
+   direct générique : la vitrine contient des .gcard, la wishlist des
+   .wish-card (qui enveloppent un .gcard un niveau plus bas). */
+.profile-showcase > * { max-width: 100px; }
 .profile-showcase .gcard-info { padding: 5px 6px; }
 .profile-showcase .gcard-name { font-size: .7rem; }
 .profile-showcase .gcard-rarity { font-size: .62rem; }
