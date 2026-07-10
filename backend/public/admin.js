@@ -601,7 +601,8 @@ async function runSongsSearch() {
     box.innerHTML = r.animes.map((a) => `
       <div class="admin-anime-group">
         <div class="admin-anime-head">
-          <b>${escapeHtml(a.animeTitle)}</b> <span class="hint">anilistId ${a.anilistId} · ${a.songs.length} musique(s)</span>
+          <b>${escapeHtml(a.animeTitle)}</b>
+          <span class="hint">anilistId ${a.anilistId} · ${a.format || 'format inconnu'} · saison ${a.seasonNumber ?? '?'} · ${a.songs.length} musique(s)</span>
           <button type="button" class="btn-secondary admin-reset-anime-btn" data-anilist="${a.anilistId}">Réinitialiser</button>
         </div>
         <ul class="admin-anime-songs">

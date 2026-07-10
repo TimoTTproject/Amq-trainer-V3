@@ -280,13 +280,18 @@ router.get('/songs-search', requireAuth, requireAdmin, async (req, res) => {
   if (q.length < 2) return res.json({ animes: [] });
   const rows = await prisma.song.findMany({
     where: { animeTitle: { contains: q, mode: 'insensitive' } },
-    select: { anilistId: true, animeTitle: true, title: true, artist: true, type: true, number: true, videoUrl: true },
-    orderBy: { anilistId: 'asc' },
+    select: { anilistId: true, animeTitle: true, format: true, seasonNumber: true, title: true, artist: true, type: true, number: true, videoUrl: true },
+    orderBy: [{ seasonNumber: 'asc' }, { anilistId: 'asc' }],
     take: 300,
   });
   const byAnime = new Map();
   for (const r of rows) {
-    if (!byAnime.has(r.anilistId)) byAnime.set(r.anilistId, { anilistId: r.anilistId, animeTitle: r.animeTitle, songs: [] });
+    if (!byAnime.has(r.anilistId)) {
+      byAnime.set(r.anilistId, {
+        anilistId: r.anilistId, animeTitle: r.animeTitle, format: r.format,
+        seasonNumber: r.seasonNumber, songs: [],
+      });
+    }
     byAnime.get(r.anilistId).songs.push({ title: r.title, artist: r.artist, type: r.type, number: r.number, videoUrl: r.videoUrl });
   }
   res.json({ animes: [...byAnime.values()].slice(0, 30) });
