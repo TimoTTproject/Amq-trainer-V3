@@ -270,31 +270,45 @@ router.post('/dedupe-alt-titles', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-// Recherche d'animes du catalogue par titre — sert à repérer un anime mal
-// rattaché (ex. openings d'un autre anime attribués par erreur, cf. le fix de
-// fetchThemesFromAnimeThemes qui vérifie désormais l'ID AniList quand
-// animethemes le connaît, au lieu de la seule similarité textuelle). Groupé
-// par anilistId avec un échantillon de musique pour vérifier au coup d'œil.
+// Recherche d'animes du catalogue par titre OU synonyme — sert à repérer un
+// anime mal rattaché (ex. openings d'un autre anime attribués par erreur, cf.
+// le fix de fetchThemesFromAnimeThemes) ou un surnom de franchise manquant
+// (ex. « Tensura » présent sur une seule saison de Tensei Slime — cf.
+// computeAmbiguousTitleKeys : un synonyme partagé par ≥2 anilistId est retiré
+// de TOUS les entrées pour ne jamais accepter une réponse ambiguë, ce qui
+// peut aussi le faire disparaître de l'autocomplétion sur certaines saisons
+// si AniList ne le liste pas sur toutes). Recherche sur altTitles faite en
+// mémoire (substring insensible à la casse) : Prisma ne sait pas filtrer un
+// String[] ainsi côté base. Groupé par anilistId, avec échantillon de musique.
 router.get('/songs-search', requireAuth, requireAdmin, async (req, res) => {
-  const q = (req.query.q || '').trim();
+  const q = (req.query.q || '').trim().toLowerCase();
   if (q.length < 2) return res.json({ animes: [] });
-  const rows = await prisma.song.findMany({
-    where: { animeTitle: { contains: q, mode: 'insensitive' } },
-    select: { anilistId: true, animeTitle: true, format: true, seasonNumber: true, title: true, artist: true, type: true, number: true, videoUrl: true },
-    orderBy: [{ seasonNumber: 'asc' }, { anilistId: 'asc' }],
-    take: 300,
+  const distinctAnime = await prisma.song.findMany({
+    distinct: ['anilistId'],
+    select: { anilistId: true, animeTitle: true, altTitles: true, format: true, seasonNumber: true },
   });
-  const byAnime = new Map();
-  for (const r of rows) {
-    if (!byAnime.has(r.anilistId)) {
-      byAnime.set(r.anilistId, {
-        anilistId: r.anilistId, animeTitle: r.animeTitle, format: r.format,
-        seasonNumber: r.seasonNumber, songs: [],
-      });
-    }
-    byAnime.get(r.anilistId).songs.push({ title: r.title, artist: r.artist, type: r.type, number: r.number, videoUrl: r.videoUrl });
+  const matched = distinctAnime
+    .filter((a) => a.animeTitle.toLowerCase().includes(q) || (a.altTitles || []).some((t) => t.toLowerCase().includes(q)))
+    .sort((a, b) => (a.seasonNumber || 0) - (b.seasonNumber || 0) || a.anilistId - b.anilistId)
+    .slice(0, 30);
+  const ids = matched.map((a) => a.anilistId);
+  const songs = ids.length
+    ? await prisma.song.findMany({
+        where: { anilistId: { in: ids } },
+        select: { anilistId: true, title: true, artist: true, type: true, number: true, videoUrl: true },
+      })
+    : [];
+  const songsByAnime = new Map();
+  for (const s of songs) {
+    if (!songsByAnime.has(s.anilistId)) songsByAnime.set(s.anilistId, []);
+    songsByAnime.get(s.anilistId).push({ title: s.title, artist: s.artist, type: s.type, number: s.number, videoUrl: s.videoUrl });
   }
-  res.json({ animes: [...byAnime.values()].slice(0, 30) });
+  res.json({
+    animes: matched.map((a) => ({
+      anilistId: a.anilistId, animeTitle: a.animeTitle, format: a.format, seasonNumber: a.seasonNumber,
+      altTitles: a.altTitles || [], songs: songsByAnime.get(a.anilistId) || [],
+    })),
+  });
 });
 
 // Purge les musiques d'un anime (par anilistId) + son verrou « déjà exploré »

@@ -585,10 +585,11 @@ async function runSeasonCheck(fix) {
   }
 }
 
-// Recherche d'un anime mal rattaché (mauvais opening/ending — cf. le fix qui
-// vérifie désormais l'ID AniList d'un candidat plutôt que la seule similarité
-// textuelle). Affiche chaque anilistId trouvé avec un échantillon de ses
-// musiques pour vérifier au coup d'œil, et un bouton pour le réinitialiser.
+// Recherche d'un anime mal rattaché (mauvais opening/ending) ou d'un surnom de
+// franchise manquant sur certaines saisons (cherche aussi dans les synonymes,
+// ex. « Tensura » présent sur une seule saison de Tensei Slime). Affiche
+// chaque anilistId trouvé avec ses synonymes + un échantillon de musiques, et
+// un bouton pour le réinitialiser.
 async function runSongsSearch() {
   const input = document.getElementById('admin-songs-search');
   const box = document.getElementById('admin-songs-search-results');
@@ -605,6 +606,7 @@ async function runSongsSearch() {
           <span class="hint">anilistId ${a.anilistId} · ${a.format || 'format inconnu'} · saison ${a.seasonNumber ?? '?'} · ${a.songs.length} musique(s)</span>
           <button type="button" class="btn-secondary admin-reset-anime-btn" data-anilist="${a.anilistId}">Réinitialiser</button>
         </div>
+        <p class="hint admin-anime-alts">Synonymes : ${a.altTitles.length ? a.altTitles.map(escapeHtml).join(' · ') : '<i>aucun</i>'}</p>
         <ul class="admin-anime-songs">
           ${a.songs.map((s) => `<li>${escapeHtml(s.type)}${s.number} — ${escapeHtml(s.title)}${s.artist ? ' — ' + escapeHtml(s.artist) : ''}
             ${s.videoUrl ? `<a href="${escapeHtml(s.videoUrl)}" target="_blank" rel="noopener" class="btn-link">vidéo</a>` : ''}</li>`).join('')}
