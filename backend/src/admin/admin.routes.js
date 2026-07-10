@@ -270,6 +270,45 @@ router.post('/dedupe-alt-titles', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
+// Recherche d'animes du catalogue par titre — sert à repérer un anime mal
+// rattaché (ex. openings d'un autre anime attribués par erreur, cf. le fix de
+// fetchThemesFromAnimeThemes qui vérifie désormais l'ID AniList quand
+// animethemes le connaît, au lieu de la seule similarité textuelle). Groupé
+// par anilistId avec un échantillon de musique pour vérifier au coup d'œil.
+router.get('/songs-search', requireAuth, requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return res.json({ animes: [] });
+  const rows = await prisma.song.findMany({
+    where: { animeTitle: { contains: q, mode: 'insensitive' } },
+    select: { anilistId: true, animeTitle: true, title: true, artist: true, type: true, number: true, videoUrl: true },
+    orderBy: { anilistId: 'asc' },
+    take: 300,
+  });
+  const byAnime = new Map();
+  for (const r of rows) {
+    if (!byAnime.has(r.anilistId)) byAnime.set(r.anilistId, { anilistId: r.anilistId, animeTitle: r.animeTitle, songs: [] });
+    byAnime.get(r.anilistId).songs.push({ title: r.title, artist: r.artist, type: r.type, number: r.number, videoUrl: r.videoUrl });
+  }
+  res.json({ animes: [...byAnime.values()].slice(0, 30) });
+});
+
+// Purge les musiques d'un anime (par anilistId) + son verrou « déjà exploré »
+// (ScannedAnime) : au prochain import qui le touche, getOrCreateSongsForAnime
+// re-cherchera sur animethemes.moe depuis zéro — avec la vérification par ID
+// AniList désormais en place. Sert à réparer un mauvais rattachement (ex. les
+// openings du « One Piece » classique collés sur la fiche du remake CGI
+// « THE ONE PIECE », détectés textuellement proches avant ce fix). Cascade
+// Prisma : UserSongStat/UserCatalogEntry/PlaylistSong liés sont nettoyés avec.
+router.post('/reset-anime', requireAuth, requireAdmin, async (req, res) => {
+  const anilistId = parseInt(req.body?.anilistId);
+  if (!anilistId) return res.status(400).json({ error: 'anilistId requis' });
+  const [deleted] = await prisma.$transaction([
+    prisma.song.deleteMany({ where: { anilistId } }),
+    prisma.scannedAnime.deleteMany({ where: { anilistId } }),
+  ]);
+  res.json({ deletedSongs: deleted.count });
+});
+
 // Importe davantage de personnages AniList (par popularité) dans le pool.
 // N'ajoute que les nouveaux (en « common », l'admin ajuste ensuite) via createMany
 // — insertion groupée rapide. Appeler en boucle pour avancer dans les pages.

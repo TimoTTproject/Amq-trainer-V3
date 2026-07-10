@@ -1360,6 +1360,8 @@ function setupAppUI() {
   document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);
   document.getElementById('admin-season-check-btn').addEventListener('click', () => runSeasonCheck(false));
   document.getElementById('admin-season-fix-btn').addEventListener('click', () => runSeasonCheck(true));
+  document.getElementById('admin-songs-search-btn').addEventListener('click', runSongsSearch);
+  document.getElementById('admin-songs-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSongsSearch(); });
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
   document.getElementById('admin-recompute-btn').addEventListener('click', runRecomputeRarities);
   document.getElementById('admin-rarity-check-btn').addEventListener('click', runRarityCheck);

@@ -1352,6 +1352,15 @@
         <div id="admin-season-check-status" class="hint"></div>
       </div>
       <div class="admin-backfill">
+        <label for="admin-songs-search"><i class="fas fa-magnifying-glass"></i> Chercher un anime mal rattaché (mauvais opening/ending)</label>
+        <div class="panel-row">
+          <input type="text" id="admin-songs-search" placeholder="Ex. one piece" />
+          <button class="btn-secondary" id="admin-songs-search-btn">Chercher</button>
+        </div>
+        <p class="hint">Réinitialiser purge les musiques de cet anilistId + son verrou d'exploration : le prochain import qui le touche le re-cherche depuis zéro sur animethemes.moe.</p>
+        <div id="admin-songs-search-results"></div>
+      </div>
+      <div class="admin-backfill">
         <button class="btn-secondary" id="admin-r2-btn"><i class="fas fa-cloud-arrow-up"></i> Lancer la migration R2</button>
         <span id="admin-r2-status" class="hint"></span>
       </div>

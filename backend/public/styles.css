@@ -1126,6 +1126,12 @@ select.album-form-control {
 
 /* ── Admin personnages ── */
 .admin-backfill { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.admin-backfill label[for="admin-songs-search"] { flex-basis: 100%; font-weight: 600; }
+.admin-backfill #admin-songs-search-results { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; }
+.admin-anime-group { border: 1px solid #2a2f42; border-radius: 8px; padding: 10px 12px; }
+.admin-anime-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.admin-anime-songs { margin: 8px 0 0; padding-left: 18px; font-size: .85rem; color: var(--text-2); }
+.admin-anime-songs li { margin-bottom: 3px; }
 .admin-table th:first-child, .admin-table td:first-child { width: 44px; }
 .admin-thumb { display: inline-block; width: 34px; height: 44px; border-radius: 5px; background-size: cover; background-position: center top; background-color: var(--bg-3); }
 .admin-rarity { background: var(--bg); border: 1px solid #2a2f42; color: var(--text); padding: 5px 8px; border-radius: 8px; font-size: .82rem; cursor: pointer; }

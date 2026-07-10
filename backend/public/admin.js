@@ -585,6 +585,48 @@ async function runSeasonCheck(fix) {
   }
 }
 
+// Recherche d'un anime mal rattaché (mauvais opening/ending — cf. le fix qui
+// vérifie désormais l'ID AniList d'un candidat plutôt que la seule similarité
+// textuelle). Affiche chaque anilistId trouvé avec un échantillon de ses
+// musiques pour vérifier au coup d'œil, et un bouton pour le réinitialiser.
+async function runSongsSearch() {
+  const input = document.getElementById('admin-songs-search');
+  const box = document.getElementById('admin-songs-search-results');
+  const q = input.value.trim();
+  if (q.length < 2) { box.innerHTML = '<p class="hint">Tape au moins 2 caractères.</p>'; return; }
+  box.innerHTML = '<p class="muted">Recherche…</p>';
+  try {
+    const r = await api(`/api/admin/songs-search?q=${encodeURIComponent(q)}`);
+    if (!r.animes.length) { box.innerHTML = '<p class="muted">Aucun anime trouvé.</p>'; return; }
+    box.innerHTML = r.animes.map((a) => `
+      <div class="admin-anime-group">
+        <div class="admin-anime-head">
+          <b>${escapeHtml(a.animeTitle)}</b> <span class="hint">anilistId ${a.anilistId} · ${a.songs.length} musique(s)</span>
+          <button type="button" class="btn-secondary admin-reset-anime-btn" data-anilist="${a.anilistId}">Réinitialiser</button>
+        </div>
+        <ul class="admin-anime-songs">
+          ${a.songs.map((s) => `<li>${escapeHtml(s.type)}${s.number} — ${escapeHtml(s.title)}${s.artist ? ' — ' + escapeHtml(s.artist) : ''}
+            ${s.videoUrl ? `<a href="${escapeHtml(s.videoUrl)}" target="_blank" rel="noopener" class="btn-link">vidéo</a>` : ''}</li>`).join('')}
+        </ul>
+      </div>`).join('');
+    box.querySelectorAll('.admin-reset-anime-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Supprimer toutes les musiques de cet anime (anilistId ' + btn.dataset.anilist + ') ? Il sera re-cherché depuis zéro au prochain import.')) return;
+        btn.disabled = true;
+        try {
+          const res = await api('/api/admin/reset-anime', { method: 'POST', body: JSON.stringify({ anilistId: parseInt(btn.dataset.anilist) }) });
+          btn.closest('.admin-anime-group').outerHTML = `<p class="hint">✅ ${res.deletedSongs} musique(s) supprimée(s) pour anilistId ${btn.dataset.anilist}.</p>`;
+        } catch (e) {
+          alert(e.message);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (e) {
+    box.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
 async function runBackfillSeries() {
   const btn = document.getElementById('admin-backfill-btn');
   const status = document.getElementById('admin-backfill-status');

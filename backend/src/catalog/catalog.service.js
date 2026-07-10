@@ -169,9 +169,11 @@ async function throttle() {
 }
 
 // Une requête de recherche sur animethemes (avec gestion 429). Renvoie les candidats.
+// include=resources : permet de vérifier un candidat par ID AniList (cf.
+// fetchThemesFromAnimeThemes) plutôt que de se fier uniquement au texte.
 async function searchAnimeThemes(query) {
   await throttle();
-  const url = `${ANIMETHEMES_API}/anime?include=animethemes.song.artists,animethemes.animethemeentries.videos&q=${encodeURIComponent(query)}`;
+  const url = `${ANIMETHEMES_API}/anime?include=animethemes.song.artists,animethemes.animethemeentries.videos,resources&q=${encodeURIComponent(query)}`;
   let res = await fetch(url, { headers: ANIMETHEMES_HEADERS });
   if (res.status === 429) {
     const wait = (parseInt(res.headers.get('retry-after')) || 60) * 1000;
@@ -249,6 +251,15 @@ async function fetchThemesFromAnimeThemes(animeTitle, synonyms = [], anilistId =
       const candidates = await searchAnimeThemes(q);
       for (const anime of candidates) {
         if (anime.id != null) { if (seen.has(anime.id)) continue; seen.add(anime.id); }
+        // Vérification par ID AniList quand animethemes la connaît : un titre
+        // très proche mais textuellement différent (« One Piece » vs « THE ONE
+        // PIECE », le remake CGI 2024 — similarité ~0.82, largement au-dessus
+        // du seuil texte) reste une œuvre DIFFÉRENTE. Rejet ferme dès qu'on a
+        // la preuve — la similarité textuelle seule avait collé les openings
+        // classiques sur la fiche du remake. Un candidat sans référence AniList
+        // connue d'animethemes retombe sur l'heuristique texte (cas majoritaire).
+        const anilistRes = (anime.resources || []).find((r) => r.site === 'AniList');
+        if (anilistId && anilistRes && Number(anilistRes.external_id) !== Number(anilistId)) continue;
         const score = scoreOf(anime.name);
         if (score > bestScore) { bestScore = score; best = anime; }
       }
