@@ -127,10 +127,13 @@ function scoreAnimeEntry(entry, needle, qTokens) {
 }
 
 // Filtre + trie les entrées pour une saisie brute. Ordre : palier, mots dans
-// l'ordre du titre, position du match, saison (S1 avant S2… — AVANT la longueur
-// de la variante matchée, sinon « Yu-Gi-Oh! GX » passe devant « Yu-Gi-Oh! Duel
+// l'ordre du titre, ORDRE DE GRANDEUR de popularité (l'anime « évident » —
+// One Piece pour « one » — doit remonter entre franchises différentes, alors
+// que les tie-breaks textuels ci-dessous départagent surtout des titres
+// proches), position du match, saison (S1 avant S2… — AVANT la longueur de la
+// variante matchée, sinon « Yu-Gi-Oh! GX » passe devant « Yu-Gi-Oh! Duel
 // Monsters » juste parce que son titre est plus court), longueur de la variante
-// matchée, popularité, titre le plus court, alphabétique.
+// matchée, popularité exacte, titre le plus court, alphabétique.
 // Renvoie des objets { entry, matchedTitle, matchedAcronym } — l'appelant
 // affiche entry.* et peut expliquer le match via matchedTitle/matchedAcronym.
 function filterAnimeEntries(entries, rawQuery, limit = 20) {
@@ -147,9 +150,15 @@ function filterAnimeEntries(entries, rawQuery, limit = 20) {
   // ce garde-fou, un OAV (0) doublait la vraie saison 1 (1) puisque 0 < 1 en
   // tri ascendant (« dr stone » faisait ressortir Ryusui avant Dr. Stone S1).
   const seasonRank = (n) => (n > 0 ? n : Infinity);
+  // Popularité par ordre de grandeur (log10) et non brute : au sein d'une même
+  // franchise les saisons/OAV restent dans la même tranche, donc l'ordre
+  // S1→S2→spin-offs (seasonRank, ci-dessus) continue de primer ; entre
+  // franchises éloignées d'une tranche ou plus, la plus connue passe devant.
+  const popBucket = (entry) => Math.floor(Math.log10((entry.popularity || 0) + 1));
   scored.sort((a, b) =>
     a.tier - b.tier ||
     (b.inOrder - a.inOrder) ||
+    popBucket(b.entry) - popBucket(a.entry) ||
     a.matchIndex - b.matchIndex ||
     seasonRank(a.entry.seasonNumber) - seasonRank(b.entry.seasonNumber) ||
     a.matchLen - b.matchLen ||

@@ -83,6 +83,25 @@ test('seasonNumber 0 (OAV/spécial hors chaîne) ne double pas la vraie saison 1
   );
 });
 
+test('à palier égal, la popularité prime entre franchises différentes', () => {
+  // « one » matche « One Room » (S1 d'une chaîne) et « One Piece » (hors
+  // chaîne) au même palier : avant le fix, le tie-break saison (1 < ∞) et la
+  // position du match faisaient passer les petits titres devant l'évidence.
+  const ones = [
+    entry('One Room', null, 20000, 1),
+    entry('One Outs', null, 60000, 0),
+    entry('One Piece', null, 900000, 0),
+  ];
+  assert.equal(filterAnimeEntries(ones, 'one')[0].entry.title, 'One Piece');
+  // « hero » : un titre obscur qui COMMENCE par « Hero » ne doit pas battre
+  // My Hero Academia juste parce que son match est en position 0.
+  const heroes = [
+    entry('Hero Tales', null, 8000, 0),
+    entry('Boku no Hero Academia', 'My Hero Academia', 500000, 1),
+  ];
+  assert.equal(filterAnimeEntries(heroes, 'hero')[0].entry.title, 'Boku no Hero Academia');
+});
+
 test('substring reste un filet de sécurité (saisie collée sans espaces)', () => {
   assert.ok(titles('okakyo').length === 0 || true); // pas de crash sur du bruit
   assert.equal(titles('shingekinokyojin')[0], 'Shingeki no Kyojin');
