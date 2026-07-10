@@ -35,6 +35,16 @@ function setupProfileUI() {
     const card = e.target.closest('.gcard[data-cid]');
     if (card) openCharacter(card.dataset.cid);
   });
+  document.getElementById('player-collection-close').addEventListener('click', () =>
+    document.getElementById('player-collection-modal').classList.add('hidden')
+  );
+  document.getElementById('player-collection-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.gcard[data-cid]');
+    if (card) openCharacter(card.dataset.cid);
+  });
+  document.getElementById('player-collection-search').addEventListener('input', (e) =>
+    renderPlayerCollectionGrid(e.target.value)
+  );
 }
 
 function setProfileError(msg) { document.getElementById('profile-error').textContent = msg || ''; }
@@ -193,6 +203,12 @@ function renderProfile(d, isSelf = true) {
     show.innerHTML = '';
     document.getElementById('profile-best-label').textContent = 'Aucune carte pour l\'instant.';
   }
+  const seeCollBtn = document.getElementById('profile-see-collection');
+  if (seeCollBtn) {
+    seeCollBtn.classList.toggle('hidden', !d.cardsCount);
+    seeCollBtn.innerHTML = `Voir toute la collection (${d.cardsCount}) <i class="fas fa-arrow-right"></i>`;
+    seeCollBtn.onclick = () => openPlayerCollection(d.user.id, d.user.displayName);
+  }
 
   loadProfileWishlist(d.user.id, isSelf);
   renderProgression(d.progression || []);
@@ -200,6 +216,40 @@ function renderProfile(d, isSelf = true) {
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
   renderProfileBadges(d);
+}
+
+// Collection complète d'un joueur (lecture seule) — la vitrine du profil ne
+// montre que 6 cartes max, ce bouton ouvre tout le reste dans une modale.
+let playerCollectionCards = [];
+async function openPlayerCollection(userId, displayName) {
+  const modal = document.getElementById('player-collection-modal');
+  const grid = document.getElementById('player-collection-grid');
+  const search = document.getElementById('player-collection-search');
+  document.getElementById('player-collection-title').innerHTML =
+    `<i class="fas fa-images"></i> Collection de ${escapeHtml(displayName)}`;
+  search.value = '';
+  grid.innerHTML = '<p class="muted">Chargement…</p>';
+  document.getElementById('player-collection-breakdown').innerHTML = '';
+  modal.classList.remove('hidden');
+  try {
+    const { cards, poolByRarity, ownedByRarity } = await api(`/api/gacha/collection?userId=${encodeURIComponent(userId)}`);
+    playerCollectionCards = cards;
+    document.getElementById('player-collection-breakdown').innerHTML = RARITY_ORDER.map((r) =>
+      `<span class="rb-pill r-${r}">${RARITY_LABELS[r]} <b>${ownedByRarity[r] || 0}</b><i>/${poolByRarity[r] || 0}</i></span>`
+    ).join('');
+    renderPlayerCollectionGrid('');
+  } catch (e) {
+    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderPlayerCollectionGrid(query) {
+  const grid = document.getElementById('player-collection-grid');
+  const q = query.trim().toLowerCase();
+  const list = q ? playerCollectionCards.filter((c) => c.name.toLowerCase().includes(q)) : playerCollectionCards;
+  grid.innerHTML = list.length
+    ? list.map((c) => cardHTML(c)).join('')
+    : `<p class="muted">${playerCollectionCards.length ? 'Aucune carte dans ce filtre.' : 'Aucune carte pour l\'instant.'}</p>`;
 }
 
 // Liste de souhaits affichée sur le profil (la sienne ou celle d'un autre joueur).

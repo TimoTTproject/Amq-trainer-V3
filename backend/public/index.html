@@ -486,6 +486,7 @@
             <p class="hint" id="profile-best-label">Joue au gacha pour débloquer des cartes !</p>
             <div id="profile-showcase" class="profile-showcase"></div>
             <div id="profile-best-card" class="hidden"></div>
+            <button type="button" class="btn-link" id="profile-see-collection">Voir toute la collection <i class="fas fa-arrow-right"></i></button>
           </div>
 
           <div class="profile-section" id="profile-wishlist-section">
@@ -1040,6 +1041,18 @@
         <h3><i class="fas fa-wand-magic-sparkles"></i> Résultat de la fusion</h3>
         <div id="fuse-reveal-card" class="pull-result"></div>
         <p id="fuse-reveal-caption" class="gacha-sub"></p>
+      </div>
+    </div>
+
+    <!-- Collection complète d'un joueur (lecture seule), ouverte depuis sa
+         fiche profil — la vitrine n'affiche que 6 cartes au max. -->
+    <div id="player-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Collection du joueur">
+      <div class="modal-card wide">
+        <button class="modal-close" id="player-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3 id="player-collection-title"><i class="fas fa-images"></i> Collection</h3>
+        <div id="player-collection-breakdown" class="rarity-breakdown"></div>
+        <input type="search" id="player-collection-search" class="trade-search" placeholder="Rechercher un personnage…" autocomplete="off" />
+        <div id="player-collection-grid" class="card-grid"></div>
       </div>
     </div>
 

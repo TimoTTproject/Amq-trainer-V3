@@ -920,10 +920,16 @@ router.get('/character/:id', requireAuth, async (req, res) => {
   });
 });
 
-// Collection de l'utilisateur
+// Collection de l'utilisateur — ou d'un AUTRE joueur en lecture seule via
+// ?userId= (fiche profil publique : « Voir toute la collection »). Le profil
+// d'un joueur est déjà public (showcase, stats), donc sa collection complète
+// l'est aussi ; aucune action (fusion, vente, wishlist…) n'est exposée ici,
+// juste la liste — les routes qui modifient quelque chose restent toutes
+// scopées à req.user.id ailleurs dans ce fichier.
 router.get('/collection', requireAuth, async (req, res) => {
+  const targetUserId = (req.query.userId && String(req.query.userId)) || req.user.id;
   const cards = await prisma.userCard.findMany({
-    where: { userId: req.user.id },
+    where: { userId: targetUserId },
     include: { character: true },
   });
   cards.sort(
