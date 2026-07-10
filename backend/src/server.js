@@ -141,7 +141,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 // Open Graph/Twitter du profil (carte riche sur Discord/Twitter). Doit passer
 // AVANT le statique. Sinon, repli sur l'index par défaut.
 const { prisma } = require('./db');
-const { indexHtml, injectMeta } = require('./share/og');
+const { indexHtml, injectMeta, versionize } = require('./share/og');
 const { tierFromMmr } = require('./mp/rank');
 app.get('/', async (req, res, next) => {
   const uid = req.query.u;
@@ -160,10 +160,20 @@ app.get('/', async (req, res, next) => {
     const title = `${user.displayName} · Anime Music Quiz`;
     const description = `Profil de ${user.displayName} — ${bits.join(' · ')}. Affronte-le sur Anime Music Quiz !`;
     res.set('Cache-Control', 'public, max-age=300');
-    res.type('html').send(injectMeta(indexHtml(), { title, description, url: `https://amqtrainer.fr/?u=${encodeURIComponent(String(uid))}` }));
+    res.type('html').send(versionize(injectMeta(indexHtml(), { title, description, url: `https://amqtrainer.fr/?u=${encodeURIComponent(String(uid))}` })));
   } catch {
     next();
   }
+});
+
+// Page d'accueil normale (pas de partage de profil) et /index.html direct :
+// même HTML que express.static servirait, mais avec les scripts/styles
+// locaux versionnés (?v=<commit>) pour qu'un déploiement soit visible
+// immédiatement — cf. versionize() dans og.js pour le pourquoi. Doit passer
+// AVANT express.static (sinon celui-ci sert le fichier brut, non versionné).
+app.get(['/', '/index.html'], (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.type('html').send(versionize(indexHtml()));
 });
 
 // Frontend statique (dans backend/public pour être inclus au déploiement)

@@ -12,6 +12,27 @@ function indexHtml() {
   return cachedHtml;
 }
 
+// Identifiant de ce déploiement : le SHA du commit sur Railway (variable
+// standard des plateformes Nixpacks/Railway), sinon l'heure de démarrage du
+// process en local/repli. Sert à « casser le cache » des scripts statiques
+// (cf. versionize) — sans lui, un navigateur (ou un cache intermédiaire type
+// Cloudflare) peut continuer à servir un ancien main.js/gacha.js après un
+// déploiement malgré les en-têtes Cache-Control de l'origine, ce qui a déjà
+// fait croire à des fixes "qui ne marchent pas" alors qu'ils étaient corrects
+// côté code mais pas encore vus par le navigateur.
+const BUILD_ID = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || String(Date.now());
+
+// Ajoute ?v=BUILD_ID aux scripts/styles LOCAUX (chemin relatif sans domaine :
+// styles.css, main.js…) référencés dans le HTML — jamais aux URLs absolues
+// (fonts Google, cdnjs) ni à sw.js (enregistré par JS via une URL stable,
+// pas par une balise <script> — le versionner casserait sa mise à jour).
+function versionize(html) {
+  return html
+    .replace(/(src|href)="([\w.-]+\.js)"/g, `$1="$2?v=${BUILD_ID}"`)
+    .replace(/(src|href)="([\w.-]+\.css)"/g, `$1="$2?v=${BUILD_ID}"`)
+    .replace(/window\.BUILD_ID\s*=\s*"[^"]*"/, `window.BUILD_ID = "${BUILD_ID}"`);
+}
+
 // Échappe pour une valeur d'attribut HTML / le contenu de <title>.
 function esc(s) {
   return String(s == null ? '' : s)
@@ -44,4 +65,4 @@ function injectMeta(html, { title, description, url } = {}) {
   return out;
 }
 
-module.exports = { indexHtml, injectMeta, esc };
+module.exports = { indexHtml, injectMeta, esc, versionize, BUILD_ID };

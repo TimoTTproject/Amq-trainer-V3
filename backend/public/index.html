@@ -32,6 +32,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- Remplacé côté serveur par le SHA du déploiement (cf. versionize() dans
+       src/share/og.js) : permet à loadScript() (main.js) de versionner aussi
+       les scripts chargés à la volée (gacha.js, admin.js…), pas juste ceux
+       de cette page — sinon un déploiement pouvait rester invisible tant
+       qu'un cache intermédiaire gardait l'ancienne version de ces fichiers. -->
+  <script>window.BUILD_ID = "";</script>
 </head>
 <body class="session-pending">
   <div id="session-loader" class="session-loader" role="status" aria-live="polite">

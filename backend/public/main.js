@@ -49,7 +49,13 @@ function loadScript(src) {
       return;
     }
     const script = document.createElement('script');
-    script.src = src;
+    // Versionne nos propres fichiers plats (gacha.js, admin.js…) avec le SHA
+    // du déploiement en cours (window.BUILD_ID, injecté côté serveur) — pas
+    // les chemins absolus (/socket.io/socket.io.js, servi dynamiquement).
+    // Sans ça, seuls les scripts de la 1ère page (index.html) profitaient du
+    // cache-busting ; tout ce qui charge à la volée (la majorité de l'app)
+    // pouvait rester bloqué sur une ancienne version après un déploiement.
+    script.src = (!src.startsWith('/') && window.BUILD_ID) ? `${src}?v=${window.BUILD_ID}` : src;
     script.dataset.lazySrc = src;
     script.addEventListener('load', () => { script.dataset.loaded = 'true'; resolve(); }, { once: true });
     script.addEventListener('error', () => reject(new Error(`Impossible de charger ${src}`)), { once: true });
