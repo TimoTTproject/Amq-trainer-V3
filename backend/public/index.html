@@ -1775,6 +1775,19 @@
           <div id="mp-rooms-list" class="mp-rooms-list"></div>
         </section>
 
+        <!-- Chat global : un fil unique pour tous les joueurs connectés
+             (comptes uniquement — les invités n'ont pas de temps réel). -->
+        <section class="mp-rooms mp-global-chat" aria-label="Chat global">
+          <div class="mp-rooms-head">
+            <span><i class="fas fa-comments"></i> Chat général <span id="mp-gchat-online" class="hint"></span></span>
+          </div>
+          <div id="mp-gchat" class="mp-chat"></div>
+          <div class="mp-chat-input">
+            <input type="text" id="mp-gchat-text" placeholder="Message à tous les joueurs connectés…" maxlength="200" />
+            <button class="btn-secondary" id="mp-gchat-send" aria-label="Envoyer"><i class="fas fa-paper-plane"></i></button>
+          </div>
+        </section>
+
         <details class="mp-help">
           <summary><i class="fas fa-circle-info"></i> Comment fonctionne le classé&nbsp;?</summary>
           <div class="mp-help-body">
@@ -1815,6 +1828,7 @@
         <div class="mp-room-head">
           <span id="mp-room-code" class="mp-room-code"></span>
           <button class="btn-secondary hidden" id="mp-invite-friends"><i class="fas fa-user-plus"></i> Inviter des amis</button>
+          <button class="btn-secondary hidden" id="mp-copy-link" title="Copier le lien d'invitation — il ouvre le jeu directement dans cette salle"><i class="fas fa-link"></i> Copier le lien</button>
           <button class="btn-link" id="mp-leave">Quitter</button>
         </div>
         <div id="mp-invite-list" class="mp-invite-list hidden"></div>
@@ -1949,6 +1963,7 @@
         <h3>🏆 Classement final</h3>
         <ol id="mp-ranking" class="lb-list"></ol>
         <button class="btn-primary" id="mp-again"><i class="fas fa-rotate-right"></i> Continuer</button>
+        <button class="btn-secondary" id="mp-share"><i class="fas fa-share-nodes"></i> Partager le résultat</button>
         <!-- Récap des manches de la partie (rempli client-side depuis les
              round:result reçus) : « c'était quoi le son 4 ? » + like direct. -->
         <details class="session-history" id="mp-history">

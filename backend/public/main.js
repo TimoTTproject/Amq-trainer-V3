@@ -296,6 +296,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Retour d'OAuth AniList
   const params = new URLSearchParams(location.search);
+  // Lien d'invitation multi (amqtrainer.fr/?join=CODE) : mémorisé ici et
+  // consommé à l'entrée dans l'app (showApp) — y compris si l'utilisateur doit
+  // d'abord se connecter/créer un compte.
+  if (params.get('join')) {
+    window.pendingJoinCode = params.get('join');
+    history.replaceState({}, '', location.pathname);
+  }
   if (params.get('reset')) {
     showAuth();
     showAuthPanel('reset');
@@ -849,6 +856,18 @@ function showApp(user) {
     const restoredUrl = new URL(location.href);
     restoredUrl.hash = requested;
     history.replaceState({ view: requested }, '', restoredUrl);
+  }
+  // Lien d'invitation multi (?join=CODE, capturé au chargement) : rejoint la
+  // salle dès l'entrée dans l'app — y compris après un login/inscription frais.
+  // Les invités n'ont pas de temps réel : on leur explique quoi faire.
+  if (window.pendingJoinCode) {
+    const code = window.pendingJoinCode;
+    window.pendingJoinCode = null;
+    if (guest) {
+      alert('Crée un compte (gratuit) pour rejoindre une salle multijoueur, puis redemande le lien !');
+    } else if (typeof mpJoinFromLink === 'function') {
+      setTimeout(() => mpJoinFromLink(code), 300);
+    }
   }
 }
 

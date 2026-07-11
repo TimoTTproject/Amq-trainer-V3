@@ -140,6 +140,61 @@ async function toggleMpInviteList() {
   }
 }
 
+// ── Rejoindre une salle via un lien partagé (amqtrainer.fr/?join=CODE) ──
+// Appelé après l'entrée dans l'app (main.js) quand l'URL porte ?join=.
+function mpJoinFromLink(code) {
+  code = String(code || '').trim().toUpperCase().slice(0, 8);
+  if (!code || (typeof currentUser === 'object' && currentUser?.isGuest)) return;
+  mpLeft = false; mpEngaged = true;
+  showView('mp');
+  mpShow('menu');
+  const msg = document.getElementById('mp-menu-msg');
+  if (msg) msg.textContent = `Connexion à la salle ${code}…`;
+  const sock = connectMp();
+  if (!sock) return;
+  const join = () => sock.emit('mp:join', code);
+  if (sock.connected) join(); else sock.once('connect', join);
+}
+
+// Copie le lien d'invitation de la salle privée courante (ouvre le jeu
+// directement dans la salle — partageable sur Discord, etc.).
+async function copyMpRoomLink() {
+  const code = mpRoom?.code;
+  if (!code) return;
+  const url = `${location.origin}/?join=${code}`;
+  const btn = document.getElementById('mp-copy-link');
+  try {
+    if (navigator.share) { await navigator.share({ title: 'AMQTrainer — rejoins ma salle', url }); return; }
+    await navigator.clipboard.writeText(url);
+    if (btn) { const old = btn.innerHTML; btn.innerHTML = '<i class="fas fa-check"></i> Copié !'; setTimeout(() => (btn.innerHTML = old), 1800); }
+  } catch { /* partage annulé */ }
+}
+
+// ── Partage du résultat (grille façon Wordle, comme le défi du jour) ──
+let mpLastOver = null; // { coop, floor } ou { placement, players, ranked }
+async function shareMpResult() {
+  const total = mpRoundHistory.length;
+  const grid = mpRoundHistory.map((h) => (h.correct === true ? '🟩' : h.correct === false ? '🟥' : '⬜')).join('');
+  const correct = mpRoundHistory.filter((h) => h.correct === true).length;
+  const head = mpLastOver?.coop
+    ? `Tour en équipe · étage ${mpLastOver.floor}`
+    : mpLastOver?.placement
+      ? `${mpLastOver.placement}ᵉ/${mpLastOver.players}${mpLastOver.ranked ? ' (classé)' : ''}`
+      : 'Partie multijoueur';
+  const text = total
+    ? `AMQTrainer multi — ${head}
+${grid} ${correct}/${total}
+Viens me défier !`
+    : `AMQTrainer multi — ${head} · viens me défier !`;
+  const url = location.origin;
+  const btn = document.getElementById('mp-share');
+  try {
+    if (navigator.share) { await navigator.share({ title: 'AMQTrainer', text, url }); return; }
+    await navigator.clipboard.writeText(`${text} ${url}`);
+    if (btn) { const old = btn.innerHTML; btn.innerHTML = '<i class="fas fa-check"></i> Copié !'; setTimeout(() => (btn.innerHTML = old), 1800); }
+  } catch { /* annulé */ }
+}
+
 // ── Défier un joueur depuis son profil : crée une salle privée puis lui
 // envoie l'invitation dès que le salon existe (snapshot mp:room reçu). ──
 let mpPendingInvite = null;
@@ -197,7 +252,7 @@ function openMultiplayer() {
   mpSpectating = false;
   showView('mp');
   connectMp();
-  if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; loadMpRooms(); }
+  if (!mpRoom) { mpShow('menu'); document.getElementById('mp-menu-msg').textContent = ''; loadMpRooms(); refreshGlobalChat(); }
   // Affiche mon rang classé dans le menu
   api(`/api/profile/${currentUser.id}`).then((d) => {
     const el = document.getElementById('mp-myrank');
@@ -361,6 +416,7 @@ function connectMp() {
     if (typeof loadMpRooms === 'function') loadMpRooms();
   });
   mpSocket.on('mp:invited', (d) => {
+    if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct(); // signal sonore : facile à rater sinon
     mpToast(`🎮 <b>${escapeHtml(d.from)}</b> t'invite à jouer !`, 'Rejoindre', () => {
       openMultiplayer();
       mpSocket.emit('mp:join', d.code);
@@ -381,6 +437,7 @@ function connectMp() {
   });
 
   mpSocket.on('mp:chat', (m) => appendChat(m));
+  mpSocket.on('mp:gchat', (m) => appendGchat(m));
 
   mpSocket.on('mp:emote', (d) => floatEmote(d));
 
@@ -602,6 +659,7 @@ function connectMp() {
         }).join('');
       const mine = (d.ranking || []).find((p) => p.name === currentUser.displayName);
       if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') syncTokenBalance();
+      mpLastOver = { coop: true, floor: d.floor || 0 };
       renderMpHistory();
       return;
     }
@@ -646,6 +704,8 @@ function connectMp() {
     if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') {
       syncTokenBalance();
     }
+    const myIndex = d.ranking.findIndex((p) => (p.userId ? p.userId === currentUser.id : p.name === currentUser.displayName));
+    mpLastOver = { placement: myIndex >= 0 ? myIndex + 1 : null, players: d.ranking.length, ranked: !!d.ranked };
     renderMpHistory();
   });
 
@@ -702,11 +762,13 @@ function joinMatchmaking(event, searchingText, payload) {
 // ── Salon (lobby) ──
 function renderRoom(d) {
   const isHost = mpIsHost();
-  document.getElementById('mp-room-code').innerHTML = d.code
+  const together = d.gamesPlayed ? ` · ${d.gamesPlayed} partie${d.gamesPlayed > 1 ? 's' : ''} jouée${d.gamesPlayed > 1 ? 's' : ''} ensemble` : '';
+  document.getElementById('mp-room-code').innerHTML = (d.code
     ? `Salle privée · <b>${d.code}</b>`
-    : '⚡ Partie rapide';
-  // Inviter des amis : seulement en salle privée (le serveur exige un code).
+    : '⚡ Partie rapide') + `<span class="hint">${together}</span>`;
+  // Inviter des amis + lien partageable : seulement en salle privée.
   document.getElementById('mp-invite-friends')?.classList.toggle('hidden', !d.code);
+  document.getElementById('mp-copy-link')?.classList.toggle('hidden', !d.code);
   if (!d.code) document.getElementById('mp-invite-list')?.classList.add('hidden');
   document.getElementById('mp-pcount').textContent = d.players.length;
   document.getElementById('mp-room-players').innerHTML = d.players
@@ -818,6 +880,35 @@ function appendChat(m) {
   const box = document.getElementById('mp-chat');
   box.insertAdjacentHTML('beforeend', chatLine(m));
   box.scrollTop = box.scrollHeight;
+}
+
+// ── Chat global (menu multi) ──
+function appendGchat(m) {
+  const box = document.getElementById('mp-gchat');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', chatLine(m));
+  box.scrollTop = box.scrollHeight;
+}
+// Recharge l'historique (50 derniers) + le compteur de connectés.
+function refreshGlobalChat() {
+  const sock = connectMp();
+  if (!sock) return;
+  const load = () => sock.timeout(5000).emit('mp:gchat:history', (err, d) => {
+    if (err || !d) return;
+    const box = document.getElementById('mp-gchat');
+    if (box) { box.innerHTML = (d.messages || []).map(chatLine).join(''); box.scrollTop = box.scrollHeight; }
+    const online = document.getElementById('mp-gchat-online');
+    if (online) online.textContent = d.online ? `· ${d.online} en ligne` : '';
+  });
+  if (sock.connected) load(); else sock.once('connect', load);
+}
+function sendGlobalChat() {
+  const input = document.getElementById('mp-gchat-text');
+  const t = (input?.value || '').trim();
+  if (!t || !mpSocket) return;
+  mpSocket.emit('mp:gchat', t);
+  input.value = '';
+  input.focus();
 }
 
 // ── Emotes ──
@@ -1118,6 +1209,12 @@ function initMpUI() {
   document.getElementById('mp-set-difficulty')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-min')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-max')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  // Chat global du menu
+  document.getElementById('mp-gchat-send')?.addEventListener('click', sendGlobalChat);
+  document.getElementById('mp-gchat-text')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGlobalChat(); });
+  // Lien d'invitation + partage du résultat
+  document.getElementById('mp-copy-link')?.addEventListener('click', copyMpRoomLink);
+  document.getElementById('mp-share')?.addEventListener('click', shareMpResult);
   // Inviter des amis (salle privée) + envoi d'une invitation
   document.getElementById('mp-invite-friends')?.addEventListener('click', toggleMpInviteList);
   document.getElementById('mp-invite-list')?.addEventListener('click', (e) => {

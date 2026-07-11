@@ -157,6 +157,7 @@ function roomSnapshot(room) {
     isPublic: room.isPublic, ranked: room.ranked, status: room.status,
     hostId: room.hostId, settings: room.settings,
     countdownEndsAt: room.countdownEndsAt || null, chat: room.chat.slice(-30),
+    gamesPlayed: room.gamesPlayed || 0,
     players: [...room.players.values()].map((p) => ({
       userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, frame: publicCosmetic(byId(p.avatarFrame)),
       isHost: p.userId === room.hostId, connected: p.connected,
@@ -928,6 +929,7 @@ async function endCoopGame(room) {
 }
 
 async function endGame(room) {
+  room.gamesPlayed = (room.gamesPlayed || 0) + 1; // « X parties jouées ensemble » (lobby)
   room.status = 'over';
   clearTimeout(room.timer);
   if (room.mode === 'coop') return endCoopGame(room);
@@ -1108,20 +1110,47 @@ function reattach(socket) {
   return true;
 }
 
+// Sourdine (modération) : lue en base à chaque message — un mute posé par
+// l'admin prend effet immédiatement, sans attendre une reconnexion. Prévient
+// l'expéditeur. En cas de base indisponible, on laisse passer (ne pas casser le chat).
+async function isMutedNow(socket) {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: socket.data.user.id }, select: { mutedUntil: true } });
+    if (u?.mutedUntil && new Date(u.mutedUntil) > new Date()) {
+      const until = new Date(u.mutedUntil).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      socket.emit('mp:info', { msg: `Tu es en sourdine jusqu'à ${until}.` });
+      return true;
+    }
+  } catch { /* base indisponible */ }
+  return false;
+}
+
+// ── Chat global (menu multi) : un fil unique pour tous les connectés. ──
+// En mémoire (50 derniers), comptes connectés uniquement (les invités n'ont
+// pas de socket), sourdine de modération appliquée, petit débit anti-spam.
+const globalChat = [];
+const GCHAT_MIN_INTERVAL_MS = 2000;
+async function globalChatSend(socket, text) {
+  const t = String(text || '').trim().slice(0, 200);
+  if (!t) return;
+  const now = Date.now();
+  if (now - (socket.data.lastGchatAt || 0) < GCHAT_MIN_INTERVAL_MS) {
+    return socket.emit('mp:info', { msg: 'Doucement — un message toutes les 2 secondes.' });
+  }
+  if (await isMutedNow(socket)) return;
+  socket.data.lastGchatAt = now;
+  const m = { name: socket.data.user.displayName, text: t, ts: now };
+  globalChat.push(m);
+  if (globalChat.length > 80) globalChat.splice(0, globalChat.length - 50);
+  io.emit('mp:gchat', m);
+}
+
 async function chat(socket, text) {
   const room = rooms.get(socket.data.roomId);
   if (!room) return;
   const t = String(text || '').trim().slice(0, 200);
   if (!t) return;
-  // Sourdine (modération) : lue en base à chaque message — un mute posé par
-  // l'admin prend effet immédiatement, sans attendre une reconnexion.
-  try {
-    const u = await prisma.user.findUnique({ where: { id: socket.data.user.id }, select: { mutedUntil: true } });
-    if (u?.mutedUntil && new Date(u.mutedUntil) > new Date()) {
-      const until = new Date(u.mutedUntil).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      return socket.emit('mp:info', { msg: `Tu es en sourdine jusqu'à ${until}.` });
-    }
-  } catch { /* base indisponible : on laisse passer plutôt que de casser le chat */ }
+  if (await isMutedNow(socket)) return;
   const m = { name: socket.data.user.displayName, text: t };
   room.chat.push(m);
   if (room.chat.length > 60) room.chat = room.chat.slice(-40);
@@ -1274,6 +1303,8 @@ function initMp(server) {
     socket.on('mp:start', () => hostStart(socket));
     socket.on('mp:leave', () => leaveRoom(socket));
     socket.on('mp:chat', (t) => chat(socket, t));
+    socket.on('mp:gchat', (t) => globalChatSend(socket, t));
+    socket.on('mp:gchat:history', (ack) => { if (typeof ack === 'function') ack({ messages: globalChat.slice(-50), online: online.size }); });
     socket.on('mp:emote', (e) => {
       emote(socket, e).catch((err) => console.error('mp emote error:', err && err.message));
     });

@@ -1169,6 +1169,11 @@ select.album-form-control {
 .gcard .badge.locked-badge { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard-series { font-size: .68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
+/* ── Chat global du menu multi ── */
+.mp-global-chat .mp-chat { max-height: 220px; min-height: 90px; overflow-y: auto; }
+.mp-global-chat .mp-chat-input { margin-top: 8px; }
+#mp-gchat-online { font-weight: 400; }
+
 /* ── Chat multi : hôtes (le bloc #mp-chat-section est déplacé entre écrans) ── */
 .mp-chat-host { margin-top: 14px; }
 #mp-game-chat-host .mp-chat-section { max-width: 640px; margin: 0 auto; }
