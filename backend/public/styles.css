@@ -1169,6 +1169,16 @@ select.album-form-control {
 .gcard .badge.locked-badge { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard-series { font-size: .68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
+/* ── Chat multi : hôtes (le bloc #mp-chat-section est déplacé entre écrans) ── */
+.mp-chat-host { margin-top: 14px; }
+#mp-game-chat-host .mp-chat-section { max-width: 640px; margin: 0 auto; }
+#mp-game-chat-host .mp-chat { max-height: 160px; }
+#mp-over-chat-host .mp-chat-section { text-align: left; max-width: 560px; margin: 14px auto 0; }
+/* Invitations d'amis depuis le lobby */
+.mp-invite-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.mp-invite-row { display: inline-flex; align-items: center; gap: 8px; }
+#mp-over .session-history { text-align: left; max-width: 560px; margin: 16px auto 0; }
+
 /* ── Chips de genres (options quiz solo + salon multi) ── */
 .opt-genres { display: flex; flex-direction: column; gap: 6px; }
 .opt-genres .coll-filters, .mp-field-genres .coll-filters { gap: 6px; }

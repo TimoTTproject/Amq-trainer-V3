@@ -259,6 +259,7 @@ function spectate(socket, roomId) {
   if (socket.data.roomId) leaveRoom(socket); // on ne spectate pas en jouant
   if (socket.data.spectating && socket.data.spectating !== roomId) stopSpectating(socket);
   socket.join(room.id);
+  socket.join(room.id + ':spec'); // sous-salle : livraison immédiate du chat pendant les manches
   socket.data.spectating = room.id;
   room.spectators.add(socket.data.user.id);
   // État courant envoyé au seul spectateur (les autres l'ont déjà reçu).
@@ -288,7 +289,7 @@ function stopSpectating(socket) {
   if (!roomId) return;
   socket.data.spectating = null;
   const room = rooms.get(roomId);
-  if (room) { room.spectators.delete(socket.data.user.id); socket.leave(roomId); }
+  if (room) { room.spectators.delete(socket.data.user.id); socket.leave(roomId); socket.leave(roomId + ':spec'); }
 }
 
 function applySettings(room, s) {
@@ -564,6 +565,11 @@ function onGuess(socket, text) {
   const timeLeft = correct ? Math.max(0, cur.endsAt - Date.now()) : 0;
   const points = correct ? 300 + Math.round((timeLeft / roundDurationMs(room)) * 700) : 0;
   cur.answers.set(uid, { correct, points, guess: text });
+  // Résolu → il peut maintenant recevoir les messages retenus (anti-spoil)
+  if (cur.chatPending?.has(uid)) {
+    for (const m of cur.chatPending.get(uid)) socket.emit('mp:chat', m);
+    cur.chatPending.delete(uid);
+  }
   recordGlobalGuess(cur.song.id, correct); // stats globales de difficulté, fire-and-forget
   if (correct) {
     player.score += points;
@@ -585,6 +591,10 @@ function onSkip(socket) {
   const cur = room.current;
   if (cur.answers.has(uid) || cur.passed.has(uid) || Date.now() > cur.endsAt) return;
   cur.passed.add(uid);
+  if (cur.chatPending?.has(uid)) {
+    for (const m of cur.chatPending.get(uid)) socket.emit('mp:chat', m);
+    cur.chatPending.delete(uid);
+  }
   recordGlobalGuess(cur.song.id, false); // passer = ne sait pas (signal de difficulté)
   socket.emit('mp:skip:ack', {});
   emitProgress(room);
@@ -647,6 +657,7 @@ function endRound(room) {
   const cur = room.current;
   room.current = null;
   const s = cur.song;
+  flushRoundChat(room, cur); // messages retenus pendant la manche (anti-spoil)
 
   // Élimination : qui rate (ou n'a pas répondu) perd une vie ; 0 vie → éliminé.
   // Sauf si la manche a été écourtée par vote (son cassé/détesté) : personne
@@ -1097,14 +1108,51 @@ function reattach(socket) {
   return true;
 }
 
-function chat(socket, text) {
+async function chat(socket, text) {
   const room = rooms.get(socket.data.roomId);
   if (!room) return;
   const t = String(text || '').trim().slice(0, 200);
   if (!t) return;
-  room.chat.push({ name: socket.data.user.displayName, text: t });
+  // Sourdine (modération) : lue en base à chaque message — un mute posé par
+  // l'admin prend effet immédiatement, sans attendre une reconnexion.
+  try {
+    const u = await prisma.user.findUnique({ where: { id: socket.data.user.id }, select: { mutedUntil: true } });
+    if (u?.mutedUntil && new Date(u.mutedUntil) > new Date()) {
+      const until = new Date(u.mutedUntil).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return socket.emit('mp:info', { msg: `Tu es en sourdine jusqu'à ${until}.` });
+    }
+  } catch { /* base indisponible : on laisse passer plutôt que de casser le chat */ }
+  const m = { name: socket.data.user.displayName, text: t };
+  room.chat.push(m);
   if (room.chat.length > 60) room.chat = room.chat.slice(-40);
-  io.to(room.id).emit('mp:chat', { name: socket.data.user.displayName, text: t });
+  // Anti-spoil : pendant la phase de devinette d'une manche, le message part
+  // tout de suite chez l'expéditeur et les joueurs déjà RÉSOLUS (répondu,
+  // passé, éliminés) ; les autres le reçoivent à la révélation (file vidée par
+  // endRound) — personne ne peut se faire souffler la réponse par le chat.
+  const cur = room.status === 'playing' ? room.current : null;
+  if (!cur) return io.to(room.id).emit('mp:chat', m);
+  // Spectateurs : livraison immédiate (ils ne jouent pas, pas de spoil possible).
+  io.to(room.id + ':spec').emit('mp:chat', m);
+  const uidFrom = socket.data.user.id;
+  for (const p of room.players.values()) {
+    if (!p.connected || !p.socketId) continue;
+    const resolved = p.userId === uidFrom || p.eliminated || cur.answers.has(p.userId) || cur.passed.has(p.userId);
+    if (resolved) io.sockets.sockets.get(p.socketId)?.emit('mp:chat', m);
+    else (cur.chatPending ||= new Map()).set(p.userId, (cur.chatPending.get(p.userId) || []).concat(m));
+  }
+}
+
+// Livre à chaque joueur les messages mis en attente pendant la manche (ceux
+// envoyés alors qu'il n'avait pas encore répondu). Appelé à la révélation.
+function flushRoundChat(room, cur) {
+  if (!cur?.chatPending) return;
+  for (const [uid, msgs] of cur.chatPending) {
+    const p = room.players.get(uid);
+    if (!p?.connected || !p.socketId) continue;
+    const sock = io.sockets.sockets.get(p.socketId);
+    for (const m of msgs) sock?.emit('mp:chat', m);
+  }
+  cur.chatPending = null;
 }
 function unlockedEmoteSymbols(ownedIds) {
   const owned = new Set(ownedIds || []);
@@ -1174,9 +1222,9 @@ function initMp(server) {
       const payload = verifyToken(cookies[COOKIE_NAME]);
       if (!payload?.sub) return next(new Error('auth'));
       const user = await prisma.user.findUnique({
-        where: { id: payload.sub }, select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true },
+        where: { id: payload.sub }, select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, bannedAt: true },
       });
-      if (!user) return next(new Error('auth'));
+      if (!user || user.bannedAt) return next(new Error('auth')); // banni = pas de temps réel non plus
       socket.data.user = user;
       next();
     } catch { next(new Error('auth')); }

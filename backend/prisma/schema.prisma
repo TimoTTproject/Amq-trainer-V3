@@ -17,6 +17,10 @@ datasource db {
 
 model User {
   id              String  @id @default(cuid())
+  // Modération : compte suspendu (connexion refusée, HTTP + socket) et
+  // sourdine du chat multi (jusqu'à cette date). Posés par l'admin.
+  bannedAt        DateTime?
+  mutedUntil      DateTime?
   // Auth email/mot de passe (optionnels si compte créé via AniList OAuth)
   email           String? @unique
   passwordHash    String?

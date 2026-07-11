@@ -623,6 +623,32 @@ router.post('/reset-me', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Modération : bannit/débannit un compte. Banni = toutes les requêtes
+// authentifiées refusées (403) et socket multi rejeté — le compte et ses
+// données restent intacts (réversible, contrairement à la suppression).
+router.post('/user/:id/ban', requireAuth, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (id === req.user.id) return res.status(400).json({ error: 'Impossible de se bannir soi-même.' });
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, bannedAt: true, displayName: true } });
+  if (!target) return res.status(404).json({ error: 'Compte introuvable' });
+  const banned = req.body?.banned !== false;
+  await prisma.user.update({ where: { id }, data: { bannedAt: banned ? new Date() : null } });
+  res.json({ ok: true, banned, displayName: target.displayName });
+});
+
+// Modération : sourdine du chat multi pour N minutes (0 = lever la sourdine).
+// Effet immédiat (vérifiée en base à chaque message, cf. mp.js chat()).
+router.post('/user/:id/mute', requireAuth, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  if (id === req.user.id) return res.status(400).json({ error: 'Impossible de se mettre soi-même en sourdine.' });
+  const minutes = Math.max(0, Math.min(7 * 24 * 60, parseInt(req.body?.minutes) || 0));
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, displayName: true } });
+  if (!target) return res.status(404).json({ error: 'Compte introuvable' });
+  const mutedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60000) : null;
+  await prisma.user.update({ where: { id }, data: { mutedUntil } });
+  res.json({ ok: true, minutes, mutedUntil, displayName: target.displayName });
+});
+
 // Supprime un compte (ex. comptes de test/diagnostic créés en prod pendant le
 // développement) : n'apparaît plus dans l'annuaire des joueurs, le classement,
 // les échanges, etc. Cascade totale via les relations Prisma (onDelete: Cascade

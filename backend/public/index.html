@@ -481,6 +481,7 @@
           <button class="btn-primary level-claim hidden" id="profile-claim"><i class="fas fa-gift"></i> Réclamer</button>
           <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
           <button class="btn-primary hidden" id="profile-trade-btn"><i class="fas fa-right-left"></i> Proposer un échange</button>
+          <button class="btn-secondary hidden" id="profile-challenge-btn"><i class="fas fa-khanda"></i> Défier en duel</button>
           <button class="btn-secondary hidden" id="profile-friend-btn"><i class="fas fa-user-plus"></i> Ajouter en ami</button>
         </div>
       </div>
@@ -1813,8 +1814,10 @@
       <div id="mp-room" class="mp-room hidden">
         <div class="mp-room-head">
           <span id="mp-room-code" class="mp-room-code"></span>
+          <button class="btn-secondary hidden" id="mp-invite-friends"><i class="fas fa-user-plus"></i> Inviter des amis</button>
           <button class="btn-link" id="mp-leave">Quitter</button>
         </div>
+        <div id="mp-invite-list" class="mp-invite-list hidden"></div>
         <div class="mp-players-bar">
           <h3><i class="fas fa-users"></i> Joueurs (<span id="mp-pcount">0</span>)</h3>
           <div id="mp-room-players" class="mp-players"></div>
@@ -1889,13 +1892,15 @@
             <p id="mp-room-status" class="hint"></p>
             <button class="btn-primary hidden" id="mp-start"><i class="fas fa-play"></i> Lancer la partie</button>
           </div>
-          <div class="profile-section mp-chat-section">
+          <div id="mp-room-chat-host" class="mp-chat-host">
+          <div class="profile-section mp-chat-section" id="mp-chat-section">
             <h3><i class="fas fa-comments"></i> Chat</h3>
             <div id="mp-chat" class="mp-chat"></div>
             <div class="mp-chat-input">
               <input type="text" id="mp-chat-text" placeholder="Message…" maxlength="200" />
               <button class="btn-secondary" id="mp-chat-send"><i class="fas fa-paper-plane"></i></button>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -1934,6 +1939,9 @@
         <p id="mp-feedback" class="gacha-msg"></p>
         <div id="mp-result" class="mp-result hidden"></div>
         <div id="mp-scores" class="mp-scores"></div>
+        <!-- Le chat de salle (#mp-chat-section) est déplacé ici pendant la
+             partie (cf. relocateMpChat) : mêmes messages du lobby à la fin. -->
+        <div id="mp-game-chat-host" class="mp-chat-host"></div>
       </div>
 
       <!-- 4. Fin -->
@@ -1941,6 +1949,13 @@
         <h3>🏆 Classement final</h3>
         <ol id="mp-ranking" class="lb-list"></ol>
         <button class="btn-primary" id="mp-again"><i class="fas fa-rotate-right"></i> Continuer</button>
+        <!-- Récap des manches de la partie (rempli client-side depuis les
+             round:result reçus) : « c'était quoi le son 4 ? » + like direct. -->
+        <details class="session-history" id="mp-history">
+          <summary><i class="fas fa-clock-rotate-left"></i> <span data-i18n="Les musiques de la partie">Les musiques de la partie</span> (<span id="mp-history-count">0</span>)</summary>
+          <ol id="mp-history-list" class="session-history-list"></ol>
+        </details>
+        <div id="mp-over-chat-host" class="mp-chat-host"></div>
       </div>
     </div>
 

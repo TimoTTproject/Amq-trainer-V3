@@ -22,16 +22,28 @@ async function attachUser(req, res, next) {
   next();
 }
 
+// Compte suspendu par la modération : refus explicite (HTTP 403), quel que
+// soit le niveau d'accès demandé — le socket multi refuse aussi (cf. mp.js).
+function rejectBanned(req, res) {
+  if (req.user?.bannedAt) {
+    res.status(403).json({ error: 'Compte suspendu. Contacte un administrateur.' });
+    return true;
+  }
+  return false;
+}
+
 // Exige un utilisateur connecté
 function requireAuth(req, res, next) {
   if (!req.user || req.user.isGuest) {
     return res.status(401).json({ error: 'Authentification requise' });
   }
+  if (rejectBanned(req, res)) return;
   next();
 }
 
 function requirePlayer(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Session requise' });
+  if (rejectBanned(req, res)) return;
   next();
 }
 

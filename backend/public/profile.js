@@ -147,9 +147,17 @@ function renderProfile(d, isSelf = true) {
     const fb = document.getElementById('profile-friend-btn');
     fb.classList.remove('hidden');
     renderFriendButton(fb, d.friendStatus, d.user.id);
+    // « Défier en duel » : crée une salle privée et envoie l'invitation à ce
+    // joueur (s'il est hors ligne, le serveur répond par un message clair).
+    const cb = document.getElementById('profile-challenge-btn');
+    if (cb) {
+      cb.classList.remove('hidden');
+      cb.onclick = () => { if (typeof mpChallenge === 'function') mpChallenge(d.user.id); };
+    }
   } else {
     document.getElementById('profile-trade-btn').classList.add('hidden');
     document.getElementById('profile-friend-btn').classList.add('hidden');
+    document.getElementById('profile-challenge-btn')?.classList.add('hidden');
   }
   applyBackgroundCosmetic(
     document.querySelector('#view-profile .profile-banner'),

@@ -1296,6 +1296,10 @@ function setupAppUI() {
   document.getElementById('players-prev').addEventListener('click', () => loadPlayers(playersPage - 1));
   document.getElementById('players-next').addEventListener('click', () => loadPlayers(playersPage + 1));
   document.getElementById('players-list').addEventListener('click', (e) => {
+    const mute = e.target.closest('[data-mute-userid]');
+    if (mute) { e.stopPropagation(); return mutePlayer(mute.dataset.muteUserid, mute.dataset.modName); }
+    const ban = e.target.closest('[data-ban-userid]');
+    if (ban) { e.stopPropagation(); return banPlayer(ban.dataset.banUserid, ban.dataset.modName); }
     const del = e.target.closest('[data-del-userid]');
     if (del) { e.stopPropagation(); return deletePlayerAccount(del.dataset.delUserid, del.dataset.delName); }
     const row = e.target.closest('[data-userid]');

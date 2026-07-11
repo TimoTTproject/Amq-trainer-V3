@@ -211,9 +211,11 @@ async function loadPlayers(page) {
         const status = p.online
           ? '<span class="pl-status online"><span class="pl-dot"></span> En ligne</span>'
           : (p.lastSeenAt ? `<span class="pl-status"><i class="far fa-clock"></i> vu ${timeAgo(p.lastSeenAt)}</span>` : '<span class="pl-status muted">Jamais connecté</span>');
-        // Suppression de compte (admin only, ex. comptes de test/diagnostic) — jamais sur soi.
+        // Modération + suppression (admin only) — jamais sur soi.
         const del = isAdmin && !p.isMe
-          ? `<button type="button" class="pl-delete" data-del-userid="${p.userId}" data-del-name="${escapeHtml(p.displayName)}" title="Supprimer ce compte"><i class="fas fa-trash"></i></button>`
+          ? `<button type="button" class="pl-delete pl-mod" data-mute-userid="${p.userId}" data-mod-name="${escapeHtml(p.displayName)}" title="Sourdine du chat (durée au choix, 0 = lever)"><i class="fas fa-comment-slash"></i></button>
+             <button type="button" class="pl-delete pl-mod" data-ban-userid="${p.userId}" data-mod-name="${escapeHtml(p.displayName)}" title="Bannir / débannir ce compte"><i class="fas fa-gavel"></i></button>
+             <button type="button" class="pl-delete" data-del-userid="${p.userId}" data-del-name="${escapeHtml(p.displayName)}" title="Supprimer ce compte"><i class="fas fa-trash"></i></button>`
           : '';
         return `<div class="pl-row${p.isMe ? ' me' : ''}${p.online ? ' online' : ''}" data-userid="${p.userId}">
           <span class="pl-av-wrap">${otherAvatar(p, 'avatar-md')}${p.online ? '<span class="pl-online-dot"></span>' : ''}</span>
@@ -244,6 +246,25 @@ async function deletePlayerAccount(userId, name) {
   } catch (e) {
     alert(e.message);
   }
+}
+
+// Modération (admin) : sourdine du chat / bannissement — réversibles,
+// contrairement à la suppression de compte.
+async function mutePlayer(userId, name) {
+  const raw = prompt(`Sourdine du chat pour « ${name} » — durée en minutes (0 pour lever la sourdine) :`, '60');
+  if (raw === null) return;
+  const minutes = Math.max(0, parseInt(raw) || 0);
+  try {
+    const r = await api(`/api/admin/user/${userId}/mute`, { method: 'POST', body: JSON.stringify({ minutes }) });
+    alert(r.minutes > 0 ? `« ${name} » est en sourdine pour ${r.minutes} min.` : `Sourdine levée pour « ${name} ».`);
+  } catch (e) { alert(e.message); }
+}
+async function banPlayer(userId, name) {
+  const ban = confirm(`Bannir « ${name} » ?\n\nConnexion refusée (site + multi) tant que le ban est actif. Compte et données conservés — re-cliquer permet de débannir.\n\nOK = bannir · Annuler = débannir (si déjà banni, sinon rien)`);
+  try {
+    const r = await api(`/api/admin/user/${userId}/ban`, { method: 'POST', body: JSON.stringify({ banned: ban }) });
+    alert(r.banned ? `« ${name} » est banni.` : `« ${name} » est débanni.`);
+  } catch (e) { alert(e.message); }
 }
 
 // ── ÉCHANGE : builder ──

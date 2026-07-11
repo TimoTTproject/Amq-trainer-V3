@@ -20,6 +20,7 @@ let mpVotedSkip = false; // ai-je voté pour passer l'extrait en cours ?
 let mpVoteSkipVotes = 0;
 let mpVoteSkipNeeded = 1;
 let mpCoopFreeSkip = true; // coop : passe encore gratuit (1 par partie)
+let mpRoundHistory = []; // manches révélées de la partie en cours (récap de fin)
 let mpClockOffset = 0; // serverNow - clientNow (voir mpSyncClock)
 
 // Le serveur envoie des timestamps ABSOLUS (startAt, countdownEndsAt) pour que
@@ -114,6 +115,81 @@ function mpShow(panel) {
   ['menu', 'coopmenu', 'room', 'game', 'over'].forEach((p) =>
     document.getElementById('mp-' + p).classList.toggle('hidden', p !== panel)
   );
+  relocateMpChat(panel);
+}
+
+// ── Inviter des amis depuis le lobby (salle privée) ──
+// Liste les amis EN LIGNE avec un bouton d'invitation direct — avant, il
+// fallait quitter le salon, aller dans Amis, inviter, puis revenir.
+async function toggleMpInviteList() {
+  const box = document.getElementById('mp-invite-list');
+  if (!box) return;
+  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const r = await api('/api/friends');
+    const online = (r.friends || []).filter((f) => f.online);
+    box.innerHTML = online.length
+      ? online.map((f) => `<button type="button" class="btn-secondary mp-invite-row" data-invite-userid="${f.id}">
+          ${otherAvatar(f, 'avatar-xs')} <span>${escapeHtml(f.displayName)}</span> <i class="fas fa-paper-plane"></i>
+        </button>`).join('')
+      : `<p class="muted">Aucun ami en ligne pour l'instant.${(r.friends || []).length ? '' : ' Ajoute des amis depuis Communauté → Amis.'}</p>`;
+  } catch (e) {
+    box.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ── Défier un joueur depuis son profil : crée une salle privée puis lui
+// envoie l'invitation dès que le salon existe (snapshot mp:room reçu). ──
+let mpPendingInvite = null;
+function mpChallenge(userId) {
+  mpLeft = false; mpEngaged = true;
+  mpPendingInvite = userId;
+  showView('mp');
+  const sock = connectMp();
+  if (!sock) return;
+  const create = () => sock.emit('mp:create', mpSettingsPayload());
+  if (sock.connected) create(); else sock.once('connect', create);
+}
+
+// Récap des manches sur l'écran de fin (mêmes lignes que l'historique de
+// session solo — icône ✓/✗/⏭, titre au format habituel, like direct).
+function renderMpHistory() {
+  const box = document.getElementById('mp-history');
+  const list = document.getElementById('mp-history-list');
+  if (!box || !list) return;
+  box.classList.toggle('hidden', !mpRoundHistory.length);
+  const count = document.getElementById('mp-history-count');
+  if (count) count.textContent = String(mpRoundHistory.length);
+  list.innerHTML = mpRoundHistory.map((h, i) => {
+    const mark = h.correct === true
+      ? '<i class="fas fa-circle-check sh-ok" title="Trouvé"></i>'
+      : h.correct === false
+      ? '<i class="fas fa-circle-xmark sh-ko" title="Raté"></i>'
+      : '<i class="fas fa-forward sh-reveal" title="Passé au vote / non joué"></i>';
+    const like = h.songId && currentUser && !currentUser.isGuest
+      ? `<button class="like-reveal sh-like" data-mp-like="${i}" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`
+      : '';
+    return `<li class="session-history-item">
+      ${mark}
+      <span class="sh-body"><b>${escapeHtml(h.label)}</b><small>${escapeHtml(h.theme)}${h.theme ? ' · ' : ''}${escapeHtml(h.song)}${h.artist ? ' — ' + escapeHtml(h.artist) : ''}</small></span>
+      ${like}
+    </li>`;
+  }).join('');
+  box.open = mpRoundHistory.length <= 12; // déplié d'office sur une partie courte
+}
+
+// Le chat de salle suit le joueur du lobby à la partie puis à l'écran de fin :
+// on déplace le MÊME nœud DOM (#mp-chat-section) — l'historique et le champ de
+// saisie sont conservés tels quels. Côté serveur, les messages envoyés pendant
+// une manche sont retenus pour ceux qui n'ont pas encore répondu (anti-spoil).
+function relocateMpChat(panel) {
+  const section = document.getElementById('mp-chat-section');
+  if (!section) return;
+  const hostId = panel === 'game' ? 'mp-game-chat-host' : panel === 'over' ? 'mp-over-chat-host' : 'mp-room-chat-host';
+  const host = document.getElementById(hostId);
+  if (host && section.parentElement !== host) host.appendChild(section);
 }
 
 function openMultiplayer() {
@@ -296,6 +372,12 @@ function connectMp() {
     mpRoom = d;
     mpEngaged = true;
     if (d.status === 'lobby') { showView('mp'); mpShow('room'); renderRoom(d); }
+    // Défi lancé depuis un profil : la salle privée vient d'être créée →
+    // envoyer l'invitation au joueur défié (une seule fois).
+    if (mpPendingInvite && d.code && d.status === 'lobby') {
+      mpSocket.emit('mp:invite', mpPendingInvite);
+      mpPendingInvite = null;
+    }
   });
 
   mpSocket.on('mp:chat', (m) => appendChat(m));
@@ -315,6 +397,7 @@ function connectMp() {
   mpSocket.on('mp:game:start', (d) => {
     if (mpLeft) return;
     mpEngaged = true;
+    if (!d.spectator) mpRoundHistory = []; // nouveau récap (reattach en cours de partie : repart des manches restantes)
     clearInterval(mpLobbyCountdown);
     mpLobbyCountdown = null;
     showView('mp');
@@ -468,6 +551,17 @@ function connectMp() {
         `<div class="mp-teams">${d.teams.map((t, i) => `<span class="mp-team t${i}">${escapeHtml(mpTeamNames[i])} : <b>${t}</b></span>`).join('')}</div>`);
     }
     const me = d.results.find((p) => p.name === currentUser.displayName);
+    // Récap de fin de partie : mêmes données que la révélation, rien à redemander.
+    mpRoundHistory.push({
+      songId: d.answer.songId || null,
+      label: typeof formatAnimeLabel === 'function'
+        ? formatAnimeLabel({ title: d.answer.animeTitle, englishTitle: d.answer.englishTitle, seasonNumber: d.answer.seasonNumber || 0 })
+        : d.answer.animeTitle,
+      song: d.answer.title || '',
+      artist: d.answer.artist || '',
+      theme: `${d.answer.type || ''}${d.answer.number || ''}`,
+      correct: d.skipped ? null : (me ? !!me.correct : null),
+    });
     if (me && !d.coop) { // en coop, le son est joué par la bannière d'étage
       mpEliminated = !!me.eliminated;
       me.correct ? sfx.correct() : sfx.wrong();
@@ -508,6 +602,7 @@ function connectMp() {
         }).join('');
       const mine = (d.ranking || []).find((p) => p.name === currentUser.displayName);
       if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') syncTokenBalance();
+      renderMpHistory();
       return;
     }
 
@@ -551,6 +646,7 @@ function connectMp() {
     if (mine && mine.tokenReward && typeof syncTokenBalance === 'function') {
       syncTokenBalance();
     }
+    renderMpHistory();
   });
 
   // Le classement est déjà visible ; la BDD complète ensuite les gains et le MMR.
@@ -609,6 +705,9 @@ function renderRoom(d) {
   document.getElementById('mp-room-code').innerHTML = d.code
     ? `Salle privée · <b>${d.code}</b>`
     : '⚡ Partie rapide';
+  // Inviter des amis : seulement en salle privée (le serveur exige un code).
+  document.getElementById('mp-invite-friends')?.classList.toggle('hidden', !d.code);
+  if (!d.code) document.getElementById('mp-invite-list')?.classList.add('hidden');
   document.getElementById('mp-pcount').textContent = d.players.length;
   document.getElementById('mp-room-players').innerHTML = d.players
     .map((p) => {
@@ -1019,6 +1118,22 @@ function initMpUI() {
   document.getElementById('mp-set-difficulty')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-min')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-max')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  // Inviter des amis (salle privée) + envoi d'une invitation
+  document.getElementById('mp-invite-friends')?.addEventListener('click', toggleMpInviteList);
+  document.getElementById('mp-invite-list')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-invite-userid]');
+    if (!b || !mpSocket) return;
+    mpSocket.emit('mp:invite', b.dataset.inviteUserid);
+    b.disabled = true;
+    b.querySelector('i').className = 'fas fa-check';
+  });
+  // Récap de fin de partie : like direct depuis une ligne
+  document.getElementById('mp-history-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-mp-like]');
+    if (!btn) return;
+    const h = mpRoundHistory[+btn.dataset.mpLike];
+    if (h?.songId && typeof quickLike === 'function') quickLike(btn, h.songId);
+  });
   // Chips de genres : clic = bascule (hôte seulement, chips désactivées sinon)
   document.getElementById('mp-set-genres')?.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-genre]');
