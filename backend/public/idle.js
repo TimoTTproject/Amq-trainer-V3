@@ -243,7 +243,11 @@ function idleSlotHTML(slot) {
     </button>`;
   }
   const c = slot.character;
-  return `<div class="idle-slot idle-slot-filled">
+  // data-action="pick" sur le conteneur : cliquer la carte propose de la
+  // remplacer (un seul geste, au lieu de retirer puis réassigner). Les
+  // boutons ×/niveau matchent leur propre data-action en premier dans la
+  // délégation d'événements (cf. initIdleUI), donc pas de conflit.
+  return `<div class="idle-slot idle-slot-filled" data-slot="${slot.index}" data-action="pick" title="Cliquer pour remplacer">
     ${cardHTML(c, { noBorder: false })}
     <span class="idle-slot-lvl">Nv. ${idleFormatNumber(c.level)}</span>
     <div class="idle-slot-rate">+${idleFormatNumber(c.rate)}/s</div>

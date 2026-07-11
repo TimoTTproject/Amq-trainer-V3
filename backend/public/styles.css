@@ -5626,7 +5626,8 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-slot-empty i { font-size: 1.4rem; }
 .idle-slot-locked { flex-direction: column; gap: 8px; background: rgba(0,0,0,.3); border: 2px solid rgba(255,255,255,.1); color: var(--text-2); }
 .idle-slot-locked i { font-size: 1.2rem; }
-.idle-slot-filled { display: block; }
+.idle-slot-filled { display: block; cursor: pointer; }
+.idle-slot-filled:hover .gcard { filter: brightness(1.08); }
 .idle-slot-filled .gcard { width: 100%; height: 100%; }
 .idle-slot-lvl {
   position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 8px;
