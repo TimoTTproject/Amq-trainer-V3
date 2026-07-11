@@ -9,6 +9,7 @@ let currentLiked = false; // la musique en cours est-elle dans la playlist
 let isTraining = false; // session du centre d'entraînement
 let trainingSource = null; // review | missed | liked | due | series | mine | global
 let trainingSeries = null; // série choisie quand trainingSource === 'series'
+let trainingPlaylistId = null; // playlist jouée quand trainingSource === 'playlist'
 let currentLevel = 'cash'; // cash | carre | duo (Duo/Carré/Cash)
 let roundReward = null; // { max, timed, grace, floorAt, floor } pour la jauge « tokens en jeu »
 let rewardCap = null; // { used, max, resetAt } plafond anti-farm (fenêtre 6h)
@@ -192,8 +193,43 @@ const settings = {
   autoNextDelay: parseInt(localStorage.getItem('amq_autonextDelay') ?? '4'), // délai avant la manche suivante auto (s)
   // Statuts AniList cochés (mode « Ma liste ») ; null = tous.
   listStatuses: (() => { try { return JSON.parse(localStorage.getItem('amq_listStatuses')) || null; } catch { return null; } })(),
+  // Genres cochés (au moins un requis parmi eux) ; [] = pas de filtre.
+  genres: (() => { try { return JSON.parse(localStorage.getItem('amq_genres')) || []; } catch { return []; } })(),
   noDuplicate: localStorage.getItem('amq_noDuplicate') === 'true', // ne repropose pas un anime déjà sorti cette session
 };
+
+// ── Genres AniList (filtre du quiz) — liste FERMÉE, partagée solo + multi.
+// Les valeurs envoyées au serveur sont les libellés AniList (anglais) ;
+// l'affichage passe par les libellés français.
+const QUIZ_GENRES = [
+  'Action', 'Adventure', 'Comedy', 'Drama', 'Ecchi', 'Fantasy', 'Horror',
+  'Mahou Shoujo', 'Mecha', 'Music', 'Mystery', 'Psychological', 'Romance',
+  'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller',
+];
+const GENRE_LABELS_FR = {
+  Action: 'Action', Adventure: 'Aventure', Comedy: 'Comédie', Drama: 'Drame',
+  Ecchi: 'Ecchi', Fantasy: 'Fantasy', Horror: 'Horreur', 'Mahou Shoujo': 'Mahou shoujo',
+  Mecha: 'Mecha', Music: 'Musique', Mystery: 'Mystère', Psychological: 'Psychologique',
+  Romance: 'Romance', 'Sci-Fi': 'SF', 'Slice of Life': 'Tranche de vie',
+  Sports: 'Sport', Supernatural: 'Surnaturel', Thriller: 'Thriller',
+};
+function genreLabel(g) {
+  return (typeof currentLang === 'function' && currentLang() === 'en') ? g : (GENRE_LABELS_FR[g] || g);
+}
+// Rend les chips de genres dans `containerId` avec `selected` actives.
+// `disabled` : lecture seule (non-hôte d'un salon multi).
+function renderGenreChips(containerId, selected = [], { disabled = false } = {}) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  const sel = new Set(selected);
+  box.innerHTML = QUIZ_GENRES.map((g) =>
+    `<button type="button" class="coll-chip genre-chip${sel.has(g) ? ' active' : ''}" data-genre="${g}"${disabled ? ' disabled' : ''}>${escapeHtml(genreLabel(g))}</button>`
+  ).join('');
+}
+// Lit les genres actifs d'un conteneur de chips.
+function readGenreChips(containerId) {
+  return [...document.querySelectorAll(`#${containerId} [data-genre].active`)].map((b) => b.dataset.genre);
+}
 
 // Remplit un <select> d'années : « — » (0 = pas de borne) puis années
 // décroissantes de l'année courante à 1965. Partagé solo + salon multi.
@@ -1681,6 +1717,19 @@ function setupAppUI() {
     optYearMin.addEventListener('change', onYearChange);
     optYearMax.addEventListener('change', onYearChange);
   }
+  // Genres (chips multi-sélection, persistées)
+  const genreChipsBox = document.getElementById('opt-genres-chips');
+  if (genreChipsBox) {
+    renderGenreChips('opt-genres-chips', settings.genres);
+    genreChipsBox.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-genre]');
+      if (!chip) return;
+      chip.classList.toggle('active');
+      settings.genres = readGenreChips('opt-genres-chips');
+      if (settings.genres.length) localStorage.setItem('amq_genres', JSON.stringify(settings.genres));
+      else localStorage.removeItem('amq_genres');
+    });
+  }
   const optAnswerTime = document.getElementById('opt-answer-time');
   if (optAnswerTime) {
     optAnswerTime.value = String(settings.answerSeconds);
@@ -2104,11 +2153,12 @@ function syncTypeFilter() {
 // bien pour le tirage normal que pour le préchargement en arrière-plan (cf.
 // prefetchNextRound), afin que les deux soient toujours strictement identiques.
 function buildRandomQuery() {
-  const SOURCES = ['review', 'missed', 'liked', 'due', 'series'];
+  const SOURCES = ['review', 'missed', 'liked', 'due', 'series', 'playlist'];
   let qs;
   if (trainingSource && SOURCES.includes(trainingSource)) {
     qs = `source=${trainingSource}&ranked=false`;
     if (trainingSource === 'series') qs += `&series=${encodeURIComponent(trainingSeries || '')}`;
+    if (trainingSource === 'playlist') qs += `&playlistId=${trainingPlaylistId || 0}`;
   } else if (trainingSource) {
     qs = `mode=${trainingSource}&ranked=false`; // 'mine' | 'global'
   } else {
@@ -2120,13 +2170,16 @@ function buildRandomQuery() {
   if (settings.difficulty && settings.difficulty !== 'all') qs += `&difficulty=${settings.difficulty}`;
   if (settings.yearMin) qs += `&yearMin=${settings.yearMin}`;
   if (settings.yearMax) qs += `&yearMax=${settings.yearMax}`;
+  if (Array.isArray(settings.genres) && settings.genres.length) {
+    qs += `&genres=${encodeURIComponent(settings.genres.join(','))}`;
+  }
   // Statuts AniList cochés (le serveur ne l'applique qu'au mode « Ma liste »).
   if (Array.isArray(settings.listStatuses) && settings.listStatuses.length) {
     qs += `&statuses=${settings.listStatuses.join(',')}`;
   }
   // Anti-doublon : anilistId déjà sortis cette session (accumulés à la
   // révélation). Pas en entraînement ciblé, comme les autres filtres.
-  if (settings.noDuplicate && !(trainingSource === 'series') && sessionSeenAnilistIds.size) {
+  if (settings.noDuplicate && trainingSource !== 'series' && trainingSource !== 'playlist' && sessionSeenAnilistIds.size) {
     qs += `&excludeAnilist=${[...sessionSeenAnilistIds].join(',')}`;
   }
   return qs;

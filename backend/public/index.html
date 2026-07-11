@@ -539,6 +539,11 @@
             <ul id="profile-top-series" class="top-series-list"><li class="muted">Joue des musiques pour remplir ce classement.</li></ul>
           </div>
 
+          <div class="profile-section">
+            <h3><i class="fas fa-masks-theater"></i> Réussite par genre</h3>
+            <div id="profile-genres" class="profile-genres"><p class="muted">Joue des musiques pour voir tes points forts par genre.</p></div>
+          </div>
+
           <div class="profile-section token-history">
             <h3><i class="fas fa-coins"></i> Historique des tokens</h3>
             <ul id="token-history-list"><li class="muted">Aucune transaction pour l'instant.</li></ul>
@@ -677,6 +682,10 @@
             →
             <select id="opt-year-max" title="Année maximum"></select>
           </label>
+          <div class="opt-genres" id="opt-genres" title="Au moins un des genres cochés (genres AniList). Rien de coché = tous.">
+            <span class="opt-status-label">Genres :</span>
+            <div class="coll-filters" id="opt-genres-chips"></div>
+          </div>
           <div class="opt-status" id="opt-list-status" title="Statut AniList des animes (mode « Ma liste » uniquement)">
             <span class="opt-status-label">Statut (Ma liste) :</span>
             <label><input type="checkbox" value="COMPLETED" checked /> Terminés</label>
@@ -1670,6 +1679,9 @@
       </div>
       <p class="hint" id="pld-creator"></p>
       <p class="hint hidden" id="pld-desc"></p>
+      <div class="pld-actions">
+        <button class="btn-primary" id="pld-play-quiz-btn"><i class="fas fa-play"></i> Jouer cette liste en quiz</button>
+      </div>
       <div class="pld-actions" id="pld-owner-actions">
         <button class="btn-secondary" id="pld-edit-btn"><i class="fas fa-pen"></i> Modifier</button>
         <button class="btn-secondary" id="pld-delete-btn"><i class="fas fa-trash"></i> Supprimer</button>
@@ -1868,6 +1880,10 @@
                   <select id="mp-set-year-max" title="Année maximum"></select>
                 </span>
               </label>
+              <div class="mp-field-genres" id="mp-field-genres" title="Au moins un des genres cochés. Rien de coché = tous.">
+                <span class="opt-status-label">Genres</span>
+                <div class="coll-filters" id="mp-set-genres"></div>
+              </div>
             </div>
             <div id="mp-coop-info" class="mp-coop-info hidden"></div>
             <p id="mp-room-status" class="hint"></p>

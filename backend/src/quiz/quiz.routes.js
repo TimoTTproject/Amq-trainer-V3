@@ -11,7 +11,7 @@ const { progressQuests, todayStr } = require('../quests/quests');
 const { rankRecommendations, artistTokens, isSideContent } = require('./recommendations');
 const { preferMainContent, isMainFormat } = require('../catalog/format');
 const { preferredMediaUrl } = require('../storage/r2');
-const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeListStatuses, sanitizeExcludeAnilist } = require('./filters');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeGenres, genreWhere, sanitizeListStatuses, sanitizeExcludeAnilist } = require('./filters');
 const { recordGlobalGuess } = require('./song-stats');
 
 // Stats communautaires d'une musique pour la révélation : % de joueurs qui la
@@ -97,13 +97,29 @@ async function buildChoices(song, count, titlePool = null) {
 // déjà sous la main sans requête supplémentaire (cas 'mine'/'series', les plus
 // courants) : /choices les réutilise directement au lieu de re-scanner les
 // mêmes ids une seconde fois pour construire les distracteurs Carré/Duo.
-async function resolveSourceSongIds({ userId, source, series, typeFilter, extraWhere, listStatuses }) {
+async function resolveSourceSongIds({ userId, source, series, playlistId, typeFilter, extraWhere, listStatuses }) {
   // Filtres additionnels (difficulté par popularité, période) : fragment de
   // `where` Prisma déjà construit par l'appelant, vide en son absence.
   const extra = extraWhere && Object.keys(extraWhere).length ? extraWhere : null;
   let songIds;
   let titleRows = null;
-  if (source === 'review') {
+  if (source === 'playlist') {
+    // Jouer une playlist en quiz : la sienne, ou n'importe quelle playlist
+    // PUBLIQUE (celles des autres joueurs sont du contenu partagé).
+    const playlist = await prisma.playlist.findUnique({
+      where: { id: playlistId || 0 },
+      select: { userId: true, isPublic: true },
+    });
+    if (!playlist || (!playlist.isPublic && playlist.userId !== userId)) {
+      return { ids: [], titleRows: null };
+    }
+    const items = await prisma.playlistSong.findMany({
+      where: { playlistId, song: { videoUrl: { not: null } } },
+      select: { song: { select: { id: true, animeTitle: true, altTitles: true, seasonNumber: true } } },
+    });
+    songIds = items.map((i) => i.song.id);
+    titleRows = items.map((i) => i.song);
+  } else if (source === 'review') {
     songIds = await getReviewSongIds(userId);
   } else if (source === 'due') {
     const stats = await prisma.userSongStat.findMany({
@@ -136,10 +152,11 @@ async function resolveSourceSongIds({ userId, source, series, typeFilter, extraW
     });
     songIds = entries.map((e) => e.songId);
   }
-  // Filtres OP/ED + difficulté/période sur les ids retenus (sauf 'series', déjà
-  // traité) : invalide titleRows (les lignes déjà en main ne correspondent plus
-  // au sous-ensemble filtré).
-  if ((typeFilter || extra) && source !== 'series' && songIds.length) {
+  // Filtres OP/ED + difficulté/période sur les ids retenus (sauf 'series' et
+  // 'playlist' : cibles choisies délibérément, les vider serait absurde) :
+  // invalide titleRows (les lignes déjà en main ne correspondent plus au
+  // sous-ensemble filtré).
+  if ((typeFilter || extra) && source !== 'series' && source !== 'playlist' && songIds.length) {
     const f = await prisma.song.findMany({
       where: { id: { in: songIds }, ...(typeFilter ? { type: typeFilter } : {}), ...(extra || {}) },
       select: { id: true },
@@ -244,22 +261,24 @@ router.get('/random', requirePlayer, rateLimit({ max: 40, name: 'quiz-random' })
   const mode = guest || req.query.mode === 'global' ? 'global' : 'mine';
   const ranked = !guest && req.query.ranked !== 'false'; // les invités jouent sans gains
   // Sources d'entraînement (toujours hors classé)
-  const source = !guest && ['review', 'missed', 'liked', 'due', 'series'].includes(req.query.source) ? req.query.source : null;
+  const source = !guest && ['review', 'missed', 'liked', 'due', 'series', 'playlist'].includes(req.query.source) ? req.query.source : null;
   // Filtre type de thème : 'OP' | 'ED' | (rien = les deux)
   const typeFilter = ['OP', 'ED'].includes(req.query.type) ? req.query.type : null;
 
   const series = source === 'series' ? (req.query.series || '').trim() : undefined;
-  // Filtres de sélection : difficulté (popularité) et période de diffusion.
+  const playlistId = source === 'playlist' ? parseInt(req.query.playlistId) || 0 : undefined;
+  // Filtres de sélection : difficulté (popularité), période de diffusion, genres.
   const difficulty = DIFFICULTIES.includes(req.query.difficulty) ? req.query.difficulty : 'all';
   const yearMin = sanitizeYear(req.query.yearMin);
   const yearMax = sanitizeYear(req.query.yearMax);
+  const genres = sanitizeGenres(req.query.genres);
   // Anti-doublon : le client accumule les anilistId déjà sortis cette session
   // (à partir des réponses révélées) et les renvoie ici à exclure. Ignoré en
   // entraînement ciblé (source) : cibler délibérément un petit ensemble puis
   // l'exclure au fur et à mesure viderait vite le pool pour rien.
   const excludeAnilist = sanitizeExcludeAnilist(req.query.excludeAnilist);
   const extraWhere = {
-    ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax),
+    ...difficultyWhere(difficulty), ...yearWhere(yearMin, yearMax), ...genreWhere(genres),
     ...(excludeAnilist.length ? { anilistId: { notIn: excludeAnilist } } : {}),
   };
   // Statuts AniList (mode « Ma liste » uniquement — le catalogue global n'a pas
@@ -279,7 +298,7 @@ router.get('/random', requirePlayer, rateLimit({ max: 40, name: 'quiz-random' })
     if (!total) { where = baseFilter; total = await prisma.song.count({ where }); }
     if (!total) {
       return res.status(404).json({
-        error: filtersActive ? 'Aucune musique ne correspond à ces filtres (difficulté/période/anti-doublon)' : 'Aucune musique disponible',
+        error: filtersActive ? 'Aucune musique ne correspond à ces filtres (difficulté/période/genres/anti-doublon)' : 'Aucune musique disponible',
         // Signal dédié (plutôt que de parser le message) : le client sait déjà
         // s'il a demandé l'anti-doublon et peut afficher « tu as fait le tour ! »
         // au lieu d'un message d'erreur générique.
@@ -289,12 +308,12 @@ router.get('/random', requirePlayer, rateLimit({ max: 40, name: 'quiz-random' })
     song = await prisma.song.findFirst({ where, skip: Math.floor(Math.random() * total), select: { id: true, videoUrl: true, audioUrl: true, popularity: true } });
   } else {
     const { ids: songIds } = await resolveSourceSongIds({
-      userId: req.user.id, source, series, typeFilter, extraWhere,
+      userId: req.user.id, source, series, playlistId, typeFilter, extraWhere,
       listStatuses: source ? null : listStatuses,
     });
     if (!songIds.length) {
       const noMatch = filtersActive && !source
-        ? 'Aucune musique ne correspond à ces filtres (difficulté/période/statut/anti-doublon) — les entrées importées avant l\'ajout des statuts nécessitent un ré-import de la liste'
+        ? 'Aucune musique ne correspond à ces filtres (difficulté/période/genres/statut/anti-doublon) — les entrées importées avant l\'ajout des statuts nécessitent un ré-import de la liste'
         : (source ? 'Aucune musique dans cette catégorie pour l\'instant' : 'Aucune musique disponible pour ce mode');
       return res.status(404).json({ error: noMatch, exhaustedByExclude: !source && excludeAnilist.length > 0 });
     }
@@ -305,7 +324,7 @@ router.get('/random', requirePlayer, rateLimit({ max: 40, name: 'quiz-random' })
   // Jeton lié à cette manche (niveau « cash » par défaut = texte libre, gain plein).
   // mode/source/series sont mémorisés pour piocher les distracteurs Carré/Duo dans
   // le même périmètre que la question (cf. /choices).
-  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash', mode, source, series });
+  const roundToken = issueRoundToken({ userId: req.user.id, songId: song.id, ranked, level: 'cash', mode, source, series, playlistId });
   const stat = guest
     ? null
     : await prisma.userSongStat.findUnique({
@@ -360,7 +379,7 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   // ce qui trahit la bonne réponse par élimination.
   let titlePool = null;
   if (round.mode === 'mine' || round.source) {
-    const { ids, titleRows } = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, typeFilter: null });
+    const { ids, titleRows } = await resolveSourceSongIds({ userId: req.user.id, source: round.source || null, series: round.series, playlistId: round.plid, typeFilter: null });
     // titleRows est déjà rempli pour les cas les plus courants (mode 'mine',
     // source 'series') par resolveSourceSongIds — sinon (sources basées sur
     // UserSongStat, qui n'a pas ces colonnes) on va les chercher ici.
@@ -380,7 +399,7 @@ router.post('/choices', requirePlayer, rateLimit({ max: 120, name: 'choices' }),
   // second appel (Duo → Carré n'existe pas actuellement mais reste cohérent).
   const roundToken = issueRoundToken({
     userId: req.user.id, songId: round.sid, ranked: round.ranked, level, startedAt: round.sat,
-    mode: round.mode, source: round.source, series: round.series,
+    mode: round.mode, source: round.source, series: round.series, playlistId: round.plid,
   });
   let reward;
   if (round.ranked) {

@@ -363,6 +363,11 @@ model Song {
   id         Int      @id @default(autoincrement())
   anilistId  Int // id AniList de l'anime source
   animeTitle String
+  // Genres AniList (Action, Romance…) — filtre par genre du quiz.
+  // `genresFetched` distingue « pas encore récupérés » (backfill au démarrage)
+  // de « récupérés mais vides » (rare, mais possible côté AniList).
+  genres        String[] @default([])
+  genresFetched Boolean  @default(false)
   type       String // "OP" | "ED"
   number     Int // séquence (OP1, OP2…)
   title      String

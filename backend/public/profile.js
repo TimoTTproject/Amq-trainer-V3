@@ -215,6 +215,7 @@ function renderProfile(d, isSelf = true) {
   renderProfileRanked(d.ranked, d.mpRecent || [], d.solo);
   renderTowerHistory(d.towerHistory || []);
   renderTopSeries(d.topSeries || []);
+  renderGenreStats(d.genreStats || []);
   renderProfileBadges(d);
 }
 
@@ -338,6 +339,30 @@ function renderTopSeries(series) {
       <span class="ts-bar"><span class="ts-fill" style="width:${Math.round((s.plays / max) * 100)}%"></span></span>
       <span class="ts-plays">${s.plays}</span>
     </li>`).join('');
+}
+
+// Réussite par genre (« fort en shonen, faible en romance ») : barre = taux de
+// réussite, triée par volume joué. Seuil de manches côté serveur (≥ 10) pour
+// éviter les 0 %/100 % calculés sur deux extraits.
+function renderGenreStats(stats) {
+  const el = document.getElementById('profile-genres');
+  if (!el) return;
+  if (!stats.length) {
+    el.innerHTML = '<p class="muted">Joue des musiques pour voir tes points forts par genre.</p>';
+    return;
+  }
+  const best = Math.max(...stats.map((g) => g.rate));
+  const worst = Math.min(...stats.map((g) => g.rate));
+  el.innerHTML = stats.map((g) => {
+    const label = (typeof genreLabel === 'function') ? genreLabel(g.genre) : g.genre;
+    const tag = stats.length >= 3 && g.rate === best ? ' 💪' : stats.length >= 3 && g.rate === worst ? ' 🎯' : '';
+    return `<li class="ts-row" title="${g.plays} manche(s) jouée(s)">
+      <span class="ts-name">${escapeHtml(label)}${tag}</span>
+      <span class="ts-bar"><span class="ts-fill" style="width:${g.rate}%"></span></span>
+      <span class="ts-plays">${g.rate}%</span>
+    </li>`;
+  }).join('');
+  el.innerHTML = `<ul class="top-series-list">${el.innerHTML}</ul><p class="hint" style="margin-top:6px">💪 point fort · 🎯 à travailler — barre = taux de réussite, tri par volume joué.</p>`;
 }
 
 // Réclame les récompenses de niveau

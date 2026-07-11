@@ -2,7 +2,7 @@
 // fragments de `where` Prisma partagés solo + multijoueur.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeExcludeAnilist } = require('../src/quiz/filters');
+const { DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear, sanitizeExcludeAnilist, GENRES, sanitizeGenres, genreWhere } = require('../src/quiz/filters');
 
 test('difficulté : taux de réussite réel d\'abord, popularité en repli, paliers contigus', () => {
   assert.deepEqual(difficultyWhere('popular'), {
@@ -27,6 +27,17 @@ test('période : bornes ouvertes, années inconnues (0/null) exclues si filtre a
   assert.deepEqual(yearWhere(0, 1999), { seasonYear: { gte: 1, lte: 1999 } });
   // Bornes inversées : réordonnées (jamais d'intervalle vide silencieux).
   assert.deepEqual(yearWhere(2020, 2010), { seasonYear: { gte: 2010, lte: 2020 } });
+});
+
+test('genres : whitelist stricte, casse AniList restituée, hasSome', () => {
+  assert.deepEqual(sanitizeGenres('action,romance'), ['Action', 'Romance']);
+  assert.deepEqual(sanitizeGenres('sci-fi, SLICE OF LIFE'), ['Sci-Fi', 'Slice of Life']);
+  // Inconnus/injections ignorés, doublons dédupliqués.
+  assert.deepEqual(sanitizeGenres('Hentai,Action,action,{"$ne":1}'), ['Action']);
+  assert.deepEqual(sanitizeGenres(''), []);
+  assert.deepEqual(genreWhere([]), {});
+  assert.deepEqual(genreWhere(['Action', 'Mecha']), { genres: { hasSome: ['Action', 'Mecha'] } });
+  assert.ok(GENRES.includes('Mahou Shoujo'));
 });
 
 test('sanitizeYear : bornes plausibles uniquement', () => {

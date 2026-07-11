@@ -43,6 +43,32 @@ function sanitizeYear(value) {
   return year >= 1950 && year <= 2100 ? year : 0;
 }
 
+// Genres AniList filtrables (liste FERMÉE côté AniList — les 18 genres
+// officiels). Whitelist stricte : tout le reste est ignoré.
+const GENRES = [
+  'Action', 'Adventure', 'Comedy', 'Drama', 'Ecchi', 'Fantasy', 'Horror',
+  'Mahou Shoujo', 'Mecha', 'Music', 'Mystery', 'Psychological', 'Romance',
+  'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller',
+];
+const GENRE_SET = new Set(GENRES.map((g) => g.toLowerCase()));
+// Parse une liste de genres venue du client (CSV) : whitelist, casse d'AniList
+// restituée. Renvoie [] si vide (= pas de filtre).
+function sanitizeGenres(raw) {
+  const wanted = String(raw || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => GENRE_SET.has(s));
+  const byLower = new Map(GENRES.map((g) => [g.toLowerCase(), g]));
+  return [...new Set(wanted)].map((g) => byLower.get(g));
+}
+// Fragment where : au moins UN des genres demandés (hasSome). Les musiques pas
+// encore backfillées (genres vides) sont exclues quand le filtre est actif —
+// même politique que la période : mieux vaut rater que servir hors filtre.
+function genreWhere(genres) {
+  if (!genres || !genres.length) return {};
+  return { genres: { hasSome: genres } };
+}
+
 // Statuts AniList filtrables (mode « Ma liste » et pool multi « listes »).
 // REPEATING (re-visionnage) est assimilé à COMPLETED côté client : cocher
 // « Terminés » couvre les deux.
@@ -76,6 +102,7 @@ function sanitizeExcludeAnilist(raw) {
 
 module.exports = {
   DIFFICULTIES, difficultyWhere, yearWhere, sanitizeYear,
+  GENRES, sanitizeGenres, genreWhere,
   LIST_STATUSES, sanitizeListStatuses,
   sanitizeExcludeAnilist,
 };

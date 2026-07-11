@@ -1169,6 +1169,13 @@ select.album-form-control {
 .gcard .badge.locked-badge { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard-series { font-size: .68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
+/* ── Chips de genres (options quiz solo + salon multi) ── */
+.opt-genres { display: flex; flex-direction: column; gap: 6px; }
+.opt-genres .coll-filters, .mp-field-genres .coll-filters { gap: 6px; }
+.genre-chip { font-size: .74rem; padding: 5px 10px; }
+.genre-chip:disabled { opacity: .55; cursor: default; }
+.mp-field-genres { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
 /* ── Admin : sections + lignes outil (nom + description + action à droite) ── */
 .admin-section-title {
   display: flex; align-items: center; gap: 8px;

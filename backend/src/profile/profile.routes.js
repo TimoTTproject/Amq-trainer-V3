@@ -191,21 +191,34 @@ router.get('/:userId', requireAuth, async (req, res) => {
   });
   if (!user) return res.status(404).json({ error: 'Joueur introuvable' });
 
-  // Stats quiz + top séries jouées
+  // Stats quiz + top séries jouées + forces/faiblesses par genre
   const songStats = await prisma.userSongStat.findMany({
     where: { userId: user.id },
-    select: { playCount: true, correctCount: true, song: { select: { animeTitle: true } } },
+    select: { playCount: true, correctCount: true, song: { select: { animeTitle: true, genres: true } } },
   });
   const played = songStats.reduce((s, x) => s + x.playCount, 0);
   const correct = songStats.reduce((s, x) => s + x.correctCount, 0);
   const seriesMap = {};
+  const genreMap = {};
   for (const s of songStats) {
     if (!s.playCount) continue;
     const t = s.song?.animeTitle || '—';
     (seriesMap[t] ||= { title: t, plays: 0, correct: 0 }).plays += s.playCount;
     seriesMap[t].correct += s.correctCount;
+    for (const g of s.song?.genres || []) {
+      (genreMap[g] ||= { genre: g, plays: 0, correct: 0 }).plays += s.playCount;
+      genreMap[g].correct += s.correctCount;
+    }
   }
   const topSeries = Object.values(seriesMap).sort((a, b) => b.plays - a.plays).slice(0, 6);
+  // Genres : taux de réussite par genre joué, avec un seuil de manches minimum
+  // pour ne pas afficher un 0 %/100 % calculé sur deux extraits.
+  const GENRE_MIN_PLAYS = 10;
+  const genreStats = Object.values(genreMap)
+    .filter((g) => g.plays >= GENRE_MIN_PLAYS)
+    .map((g) => ({ genre: g.genre, plays: g.plays, rate: Math.round((g.correct / g.plays) * 100) }))
+    .sort((a, b) => b.plays - a.plays)
+    .slice(0, 10);
 
   // Collection : cartes triées, répartition par rareté
   const cards = await prisma.userCard.findMany({ where: { userId: user.id }, include: { character: true } });
@@ -300,6 +313,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
     bestCard: showcase[0] || null,
     showcase,
     topSeries,
+    genreStats,
     towerHistory,
     progression,
   });

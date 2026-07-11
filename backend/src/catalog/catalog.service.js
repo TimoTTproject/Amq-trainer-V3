@@ -1,7 +1,7 @@
 // Construction du catalogue de musiques depuis animethemes.moe + AniList
 const stringSimilarity = require('string-similarity');
 const { prisma } = require('../db');
-const { getCompletedAnime, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeYearsByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
+const { getCompletedAnime, getAnimeFormatsByIds, getAnimeRelationsByIds, getAnimeCoversByIds, getAnimeYearsByIds, getAnimeGenresByIds, getAnimeTitlesByIds } = require('../anilist/anilist.service');
 const { norm } = require('../quiz/matching');
 
 const ANIMETHEMES_API = 'https://api.animethemes.moe';
@@ -807,6 +807,38 @@ async function backfillYearsBatch(limit = 50) {
   return { processed: ids.length, updated, remaining };
 }
 
+// Backfill des genres AniList (`genres`) — filtre par genre du quiz et stats
+// par genre du profil. Même mécanique que les années : lot d'anilistId
+// distincts pas encore récupérés (genresFetched=false), marqués fetched même
+// vides/introuvables pour ne pas reboucler.
+async function backfillGenresBatch(limit = 50) {
+  const rows = await prisma.song.findMany({
+    where: { genresFetched: false },
+    distinct: ['anilistId'],
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) return { processed: 0, updated: 0, remaining: 0 };
+
+  const ids = rows.map((r) => r.anilistId);
+  let updated = 0;
+  try {
+    const media = await getAnimeGenresByIds(ids);
+    const genresById = new Map(media.map((m) => [m.id, (m.genres || []).filter(Boolean)]));
+    for (const anilistId of ids) {
+      const res = await prisma.song.updateMany({
+        where: { anilistId, genresFetched: false },
+        data: { genres: genresById.get(anilistId) || [], genresFetched: true },
+      });
+      updated += res.count;
+    }
+  } catch (err) {
+    console.warn('backfill genres error:', err.message);
+  }
+  const remaining = await prisma.song.count({ where: { genresFetched: false } });
+  return { processed: ids.length, updated, remaining };
+}
+
 // Répare les `animeTitle` corrompus (fragments de saison « 2nd Season », titres
 // vides « Anime inconnu »…) : re-récupère le vrai titre sur AniList par anilistId
 // et recalcule animeTitle + altTitles (+ format). À appeler en boucle jusqu'à
@@ -857,6 +889,7 @@ module.exports = {
   computeSeasonNumbers,
   backfillCoversBatch,
   backfillYearsBatch,
+  backfillGenresBatch,
   repairBrokenTitlesBatch,
   fetchThemesFromAnimeThemes,
   computeAmbiguousTitleKeys,

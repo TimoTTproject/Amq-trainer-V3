@@ -16,7 +16,7 @@ const ROUND_TTL = '30m'; // une manche doit être validée dans les 30 min
 // `mode`/`source`/`series` mémorisent le périmètre (catalogue perso, entraînement…)
 // dans lequel la musique a été tirée, pour piocher les distracteurs Carré/Duo dans
 // ce même périmètre (sinon la bonne réponse est la seule que le joueur connaît).
-function issueRoundToken({ userId, songId, ranked, level = 'cash', startedAt, mode, source, series }) {
+function issueRoundToken({ userId, songId, ranked, level = 'cash', startedAt, mode, source, series, playlistId }) {
   return jwt.sign(
     {
       rt: true, uid: userId, sid: songId, ranked: !!ranked, level,
@@ -24,6 +24,7 @@ function issueRoundToken({ userId, songId, ranked, level = 'cash', startedAt, mo
       ...(mode ? { mode } : {}),
       ...(source ? { source } : {}),
       ...(series ? { series } : {}),
+      ...(playlistId ? { plid: playlistId } : {}), // source 'playlist' : périmètre des distracteurs
       jti: crypto.randomUUID(),
     },
     JWT_SECRET,

@@ -307,6 +307,14 @@ async function addSongToPlaylistDetail(songId) {
 }
 
 function initPlaylistsUI() {
+  // Jouer la playlist ouverte en quiz (entraînement ciblé — même mécanique que
+  // « réviser une série » : tirage limité aux musiques de la liste).
+  document.getElementById('pld-play-quiz-btn')?.addEventListener('click', () => {
+    if (!pldCurrent) return;
+    if (!pldCurrent.songs.some((s) => s.videoUrl)) return alert('Aucune musique jouable dans cette liste.');
+    trainingPlaylistId = pldCurrent.id;
+    startTraining('playlist', `Playlist : ${pldCurrent.name}`);
+  });
   document.getElementById('pls-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-pltab]');
     if (b) switchPlsTab(b.dataset.pltab);

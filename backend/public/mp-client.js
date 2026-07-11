@@ -644,6 +644,10 @@ function renderRoom(d) {
     // Les selects d'années sont remplis à l'init (fillYearSelect, cf. main.js).
     document.getElementById('mp-set-year-min').value = String(d.settings.yearMin || 0);
     document.getElementById('mp-set-year-max').value = String(d.settings.yearMax || 0);
+    // Chips de genres : état venu du serveur, cliquables seulement pour l'hôte.
+    if (typeof renderGenreChips === 'function') {
+      renderGenreChips('mp-set-genres', d.settings.genres || [], { disabled: !isHost });
+    }
     document.getElementById('mp-set-mode').disabled = !isHost;
     document.getElementById('mp-set-theme').disabled = !isHost;
     document.getElementById('mp-set-source').disabled = !isHost;
@@ -660,6 +664,7 @@ function renderRoom(d) {
     document.getElementById('mp-field-source').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-difficulty').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-years').classList.toggle('hidden', isCoop);
+    document.getElementById('mp-field-genres')?.classList.toggle('hidden', isCoop);
   }
   // Encart explicatif du mode Coop (Tour en équipe)
   const coopInfo = document.getElementById('mp-coop-info');
@@ -931,6 +936,7 @@ function mpSettingsPayload() {
     difficulty: document.getElementById('mp-set-difficulty').value,
     yearMin: parseInt(document.getElementById('mp-set-year-min').value) || 0,
     yearMax: parseInt(document.getElementById('mp-set-year-max').value) || 0,
+    genres: typeof readGenreChips === 'function' ? readGenreChips('mp-set-genres') : [],
   };
 }
 
@@ -1013,6 +1019,13 @@ function initMpUI() {
   document.getElementById('mp-set-difficulty')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-min')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-max')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  // Chips de genres : clic = bascule (hôte seulement, chips désactivées sinon)
+  document.getElementById('mp-set-genres')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-genre]');
+    if (!chip || chip.disabled) return;
+    chip.classList.toggle('active');
+    mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload());
+  });
   document.getElementById('mp-chat-send').addEventListener('click', mpSendChat);
   document.getElementById('mp-chat-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') mpSendChat(); });
   document.getElementById('mp-emotes').addEventListener('click', (e) => {

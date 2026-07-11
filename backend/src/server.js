@@ -275,7 +275,7 @@ setInterval(checkCoopWeeklyPayout, 60 * 60 * 1000);
 // Réparation unique des titres d'anime corrompus (bug crochets « [Oshi no Ko] »
 // → « 2nd Season »). Re-récupère les vrais noms sur AniList, par lots throttlés.
 // Idempotent : une fois corrigés, ces titres ne matchent plus le filtre.
-const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch, backfillCoversBatch, backfillYearsBatch } = require('./catalog/catalog.service');
+const { repairBrokenTitlesBatch, dedupeAmbiguousAltTitles, backfillFormatsBatch, backfillCoversBatch, backfillYearsBatch, backfillGenresBatch } = require('./catalog/catalog.service');
 
 // Backfill AUTOMATIQUE des formats (TV/Film/OAV…) : tant que des musiques ont
 // `format: null`, elles passent le filtre « série principale » et polluent les
@@ -321,6 +321,19 @@ async function autoBackfillFormats() {
     }
     if (years) console.log(`  → Backfill années terminé : ${years} musique(s).`);
   } catch (e) { console.error('backfill années:', e && e.message); }
+  // Puis les genres AniList (filtre par genre du quiz), même passe.
+  try {
+    let genres = 0;
+    for (let guard = 0; guard < 120; guard++) {
+      const r = await backfillGenresBatch(50);
+      if (!r.processed) break;
+      genres += r.updated;
+      if (r.remaining) console.log(`  → Genres : ${r.updated} tagués (${r.remaining} restants)`);
+      if (!r.remaining) break;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    if (genres) console.log(`  → Backfill genres terminé : ${genres} musique(s).`);
+  } catch (e) { console.error('backfill genres:', e && e.message); }
 }
 setTimeout(() => {
   // Verrou court partagé : évite deux passes simultanées (multi-instance/redémarrages rapprochés).
