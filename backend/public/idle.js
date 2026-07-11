@@ -6,6 +6,8 @@ let idleState = null; // dernier état reçu du serveur
 let idleFetchedAt = 0; // Date.now() de ce dernier état (base du ticker en direct)
 let idleTicker = null;
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
+let idleParticleTheme = null; // dernier thème pour lequel les particules ambiantes ont été générées
+let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
 
 function idleFormatNumber(n) {
   n = Math.floor(n || 0);
@@ -23,8 +25,26 @@ async function openIdle() {
   showView('idle');
   document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
   idleStopTicker();
+  idleWelcomeChecked = false;
   idleTicker = setInterval(idleTick, 400);
   await refreshIdleState();
+  maybeShowIdleWelcome();
+}
+
+// « Pendant ton absence » : ne s'affiche qu'à l'ouverture (pas à chaque
+// rafraîchissement suivant un clic/achat) et seulement si ça vaut le coup —
+// on n'embête pas le joueur pour 3 essence après 10 secondes d'absence.
+const IDLE_WELCOME_MIN_AWAY_MS = 3 * 60 * 1000;
+function maybeShowIdleWelcome() {
+  if (idleWelcomeChecked || !idleState) return;
+  idleWelcomeChecked = true;
+  const awayMs = Date.now() - new Date(idleState.lastCollectAt).getTime();
+  if (idleState.pendingEssence <= 0 || awayMs < IDLE_WELCOME_MIN_AWAY_MS) return;
+  const mins = Math.round(awayMs / 60000);
+  const away = mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`;
+  document.getElementById('idle-welcome-msg').textContent =
+    `Tes personnages ont continué à s'entraîner sans toi pendant ${away} : ${idleFormatNumber(idleState.pendingEssence)} essence t'attendent.`;
+  document.getElementById('idle-welcome').classList.remove('hidden');
 }
 
 function closeIdle() {
@@ -59,24 +79,39 @@ async function refreshIdleState() {
 }
 
 function renderIdleState(state) {
+  const prev = idleState;
   idleState = state;
   idleFetchedAt = Date.now();
-  document.getElementById('idle-essence-val').textContent = idleFormatNumber(state.essence + state.pendingEssence);
+  const essenceEl = document.getElementById('idle-essence-val');
+  essenceEl.textContent = idleFormatNumber(state.essence + state.pendingEssence);
+  if (prev && state.essence > prev.essence) idleBump(essenceEl);
   document.getElementById('idle-rate-val').textContent = idleFormatNumber(state.totalRate);
   document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `(+${idleFormatNumber(state.pendingEssence)})` : '';
   document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
-  renderIdleDecor(state.dojo);
+  renderIdleDecor(state.dojo, prev?.dojo);
+  renderIdleMilestone(state.dojo);
+  renderIdlePrestige(state.dojo);
 }
 
-function renderIdleDecor(dojo) {
+function idleBump(el) {
+  el.classList.remove('token-bump');
+  void el.offsetWidth;
+  el.classList.add('token-bump');
+}
+
+function renderIdleDecor(dojo, prevDojo) {
   const view = document.getElementById('view-idle');
-  if (view) view.dataset.decor = dojo.decor.theme;
+  if (view && view.dataset.decor !== dojo.decor.theme) {
+    view.dataset.decor = dojo.decor.theme;
+    idleSpawnParticles(dojo.decor.theme);
+  }
   const ico = document.getElementById('idle-decor-ico');
   if (ico) ico.innerHTML = `<i class="fas ${IDLE_DECOR_ICONS[dojo.decor.theme] || 'fa-fire'}"></i>`;
   document.getElementById('idle-decor-name').textContent = dojo.decor.name;
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)} · ×${dojo.multiplier.toFixed(2)}`;
+  document.getElementById('idle-decor-flavor').textContent = dojo.decor.flavor || '';
   const pct = Math.round((dojo.progress || 0) * 100);
   const fill = document.getElementById('idle-xp-fill');
   if (fill) fill.style.width = `${pct}%`;
@@ -85,6 +120,57 @@ function renderIdleDecor(dojo) {
     next.textContent = dojo.nextDecor
       ? `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP`;
+  }
+  // Le niveau du Dojo a grimpé depuis le dernier rendu : petite célébration
+  // (pas au tout premier rendu de la session, sinon ça se déclenche à chaque ouverture).
+  if (prevDojo && dojo.level > prevDojo.level) idleCelebrate();
+}
+
+function idleCelebrate() {
+  if (typeof burstConfetti === 'function') burstConfetti(36);
+  if (typeof sfx !== 'undefined' && sfx.levelup) sfx.levelup();
+}
+
+// Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique
+// pur en CSS, régénérées seulement quand le décor change (pas à chaque poll).
+const IDLE_PARTICLE_GLYPH = { wood: '🍃', garden: '🌸', temple: '🏮', gold: '✨', celestial: '⭐' };
+function idleSpawnParticles(theme) {
+  if (idleParticleTheme === theme) return;
+  idleParticleTheme = theme;
+  const box = document.getElementById('idle-particles');
+  if (!box) return;
+  const glyph = IDLE_PARTICLE_GLYPH[theme] || '✨';
+  const count = 14;
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const left = Math.round(Math.random() * 100);
+    const delay = (Math.random() * 12).toFixed(2);
+    const duration = (14 + Math.random() * 10).toFixed(2);
+    const size = (0.7 + Math.random() * 0.9).toFixed(2);
+    html += `<span class="idle-particle" style="left:${left}%;animation-delay:${delay}s;animation-duration:${duration}s;font-size:${size}rem">${glyph}</span>`;
+  }
+  box.innerHTML = html;
+}
+
+function renderIdleMilestone(dojo) {
+  const btn = document.getElementById('idle-milestone-btn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !dojo.milestone.available);
+  if (dojo.milestone.available) {
+    document.getElementById('idle-milestone-reward').textContent = `+${idleFormatNumber(dojo.milestone.reward)}`;
+  }
+}
+
+function renderIdlePrestige(dojo) {
+  document.getElementById('idle-prestige-lvl').textContent = `Nv. ${dojo.prestige.level}`;
+  document.getElementById('idle-prestige-mult').textContent = dojo.prestige.multiplier.toFixed(2);
+  const btn = document.getElementById('idle-prestige-btn');
+  const hint = document.getElementById('idle-prestige-hint');
+  if (btn) btn.disabled = !dojo.prestige.eligible;
+  if (hint) {
+    hint.textContent = dojo.prestige.eligible
+      ? ''
+      : `Débloqué au niveau ${dojo.prestige.minLevel} du Dojo (actuellement ${dojo.level}).`;
   }
 }
 
@@ -170,6 +256,16 @@ function idleClickFeedback(gained) {
   fx.textContent = `+${gained}`;
   btn.appendChild(fx);
   setTimeout(() => fx.remove(), 700);
+  // Deux petites pièces qui s'envolent, angles légèrement aléatoires — pur sucre visuel.
+  for (let i = 0; i < 2; i++) {
+    const coin = document.createElement('span');
+    coin.className = 'idle-click-coin';
+    coin.textContent = '🪙';
+    coin.style.setProperty('--dx', `${Math.round((Math.random() - 0.5) * 60)}px`);
+    btn.appendChild(coin);
+    setTimeout(() => coin.remove(), 650);
+  }
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
 }
 
 async function levelUpIdleSlot(slotIndex) {
@@ -240,6 +336,35 @@ async function pickIdleCharacter(characterId) {
   refreshIdleState();
 }
 
+async function claimIdleMilestone() {
+  try {
+    await api('/api/idle/claim-milestone', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  if (typeof burstConfetti === 'function') burstConfetti(40);
+  if (typeof sfx !== 'undefined' && sfx.win) sfx.win();
+  refreshIdleState();
+}
+
+async function prestigeIdle() {
+  if (!idleState || !idleState.dojo.prestige.eligible) return;
+  const ok = confirm(
+    "Prestiger remet à zéro l'essence, les emplacements et les améliorations de cette run (le niveau du Dojo et les coffres réclamés sont conservés) contre un bonus de production permanent. Confirmer ?"
+  );
+  if (!ok) return;
+  try {
+    await api('/api/idle/prestige', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  if (typeof burstConfetti === 'function') burstConfetti(50);
+  if (typeof sfx !== 'undefined' && sfx.win) sfx.win();
+  refreshIdleState();
+}
+
 function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
@@ -262,5 +387,12 @@ function initIdleUI() {
   document.getElementById('idle-picker-list')?.addEventListener('click', (e) => {
     const card = e.target.closest('[data-cid]');
     if (card) pickIdleCharacter(Number(card.dataset.cid));
+  });
+  document.getElementById('idle-milestone-btn')?.addEventListener('click', claimIdleMilestone);
+  document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
+  document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));
+  document.getElementById('idle-welcome-collect')?.addEventListener('click', () => {
+    document.getElementById('idle-welcome').classList.add('hidden');
+    collectIdle();
   });
 }

@@ -7,6 +7,7 @@ const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
+  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_DOJO_LEVEL,
   START_SLOTS, MAX_SLOTS,
 } = require('../src/idle/idle');
 
@@ -15,7 +16,7 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, ...over,
+    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleMilestoneClaimed: 0, prestigeLevel: 0, ...over,
   };
 }
 
@@ -243,4 +244,62 @@ test('click : ajoute le gain instantané, indépendant des emplacements', async 
   assert.equal(res.status, 200);
   assert.equal(res.json.gained, gainApplied);
   assert.ok(res.json.gained > 0);
+});
+
+test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {
+  const noneYet = dbUser({ essenceEarnedTotal: 0 }); // niveau 1, aucun palier atteint
+  prisma.user.findUnique = async () => noneYet;
+  prisma.user.update = async () => noneYet;
+  const refusedRes = await app.request('/api/idle/claim-milestone', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(refusedRes.status, 400);
+  assert.match(refusedRes.json.error, /coffre/);
+
+  const dojoLevel5 = dojoXpForLevel(5); // MILESTONE_INTERVAL = 5 → 1er palier atteint pile au niveau 5
+  const tier = milestoneTierForLevel(5);
+  const eligible = dbUser({ essenceEarnedTotal: dojoLevel5 });
+  prisma.user.findUnique = async () => eligible;
+  let updateData = null;
+  prisma.user.update = async (args) => { updateData = args.data; return eligible; };
+  const okRes = await app.request('/api/idle/claim-milestone', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(okRes.status, 200);
+  assert.equal(updateData.essence.increment, milestoneReward(tier));
+  assert.equal(updateData.idleMilestoneClaimed, tier);
+});
+
+test('claim-milestone : un palier déjà réclamé ne peut pas l\'être une seconde fois', async () => {
+  const dojoLevel5 = dojoXpForLevel(5);
+  const tier = milestoneTierForLevel(5);
+  const already = dbUser({ essenceEarnedTotal: dojoLevel5, idleMilestoneClaimed: tier });
+  prisma.user.findUnique = async () => already;
+  prisma.user.update = async () => already;
+  const res = await app.request('/api/idle/claim-milestone', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 400);
+});
+
+test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/emplacements/améliorations) et incrémente prestigeLevel', async () => {
+  const tooLow = dbUser({ essenceEarnedTotal: 0 });
+  prisma.user.findUnique = async () => tooLow;
+  const lowRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(lowRes.status, 400);
+
+  const xpAtMin = dojoXpForLevel(PRESTIGE_MIN_DOJO_LEVEL);
+  const eligible = dbUser({
+    essenceEarnedTotal: xpAtMin, essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
+  });
+  prisma.user.findUnique = async () => eligible;
+  let slotsReset = null;
+  let userUpdate = null;
+  prisma.idleSlot.updateMany = async (args) => { slotsReset = args; return { count: 3 }; };
+  prisma.user.update = async (args) => { userUpdate = args.data; return eligible; };
+  const okRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(okRes.status, 200);
+  assert.equal(slotsReset.where.userId, 'u1');
+  assert.equal(slotsReset.data.characterId, null);
+  assert.equal(slotsReset.data.level, 1);
+  assert.equal(userUpdate.essence, 0);
+  assert.equal(userUpdate.idleSlotsUnlocked, START_SLOTS);
+  assert.equal(userUpdate.idleProdLevel, 0);
+  assert.equal(userUpdate.idleClickLevel, 0);
+  assert.equal(userUpdate.prestigeLevel.increment, 1);
+  assert.equal(userUpdate.essenceEarnedTotal, undefined); // le niveau du Dojo (le lieu) n'est jamais reset
 });

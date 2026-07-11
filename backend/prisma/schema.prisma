@@ -107,6 +107,15 @@ model User {
   // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
   // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
   essenceEarnedTotal Int @default(0)
+  // Plus haut palier de jalon (tous les MILESTONE_INTERVAL niveaux de Dojo)
+  // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
+  // du Dojo qui les débloque est lui aussi permanent).
+  idleMilestoneClaimed Int @default(0)
+  // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
+  // (essence, niveaux des emplacements, améliorations) contre un bonus de
+  // production PERMANENT — le niveau du Dojo (donc le décor) n'est PAS remis
+  // à zéro, voir POST /api/idle/prestige.
+  prestigeLevel Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -20,6 +20,11 @@ const {
   dojoLevelMultiplier,
   decorForLevel,
   DOJO_DECOR,
+  MILESTONE_INTERVAL,
+  milestoneTierForLevel,
+  milestoneReward,
+  PRESTIGE_MIN_DOJO_LEVEL,
+  prestigeMultiplier,
 } = require('../src/idle/idle');
 
 test('slotRate : croît avec la rareté, le niveau ★ et le niveau d\'entraînement', () => {
@@ -97,4 +102,20 @@ test('pendingEssence : 0 sans taux ni horodatage, sinon linéaire et plafonné �
 
   const wayBefore = new Date(now.getTime() - OFFLINE_CAP_MS - 3600000);
   assert.equal(pendingEssence(wayBefore, 2, now), (OFFLINE_CAP_MS / 1000) * 2); // plafonné à 12h
+});
+
+test('milestoneTierForLevel/milestoneReward : un palier tous les MILESTONE_INTERVAL niveaux, récompense croissante', () => {
+  assert.equal(milestoneTierForLevel(1), 0); // rien avant le premier palier
+  assert.equal(milestoneTierForLevel(MILESTONE_INTERVAL), 1);
+  assert.equal(milestoneTierForLevel(MILESTONE_INTERVAL * 2), 2);
+  assert.equal(milestoneTierForLevel(MILESTONE_INTERVAL * 2 - 1), 1); // pas encore atteint le 2e palier
+  assert.equal(milestoneReward(0), 0);
+  assert.ok(milestoneReward(2) > milestoneReward(1));
+});
+
+test('prestigeMultiplier : +10%/niveau, permanent et illimité ; seuil minimum exposé', () => {
+  assert.equal(prestigeMultiplier(0), 1);
+  assert.ok(prestigeMultiplier(1) > 1);
+  assert.ok(prestigeMultiplier(10) > prestigeMultiplier(1));
+  assert.ok(PRESTIGE_MIN_DOJO_LEVEL > 1); // pas prestigeable dès le niveau 1 (rien à gagner)
 });
