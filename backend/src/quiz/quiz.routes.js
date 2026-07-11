@@ -229,7 +229,12 @@ function quizCapState(user) {
 // Tire une musique au hasard. La réponse n'est PAS renvoyée (anti-triche).
 // ?mode=mine (catalogue perso, défaut) | global (catalogue partagé)
 // ?ranked=true|false : fige le mode classé côté serveur (jeton de manche).
-router.get('/random', requirePlayer, async (req, res) => {
+// Rate limit : borne la vitesse de création de manches (l'XP compte chaque
+// manche jouée, une fois par jeton — cf. /guess ; sans borne ici, un script
+// pouvait enchaîner tirage+réponse bien au-delà d'un rythme humain). 40/min
+// laisse une marge confortable au jeu réel (~15/min avec préchargement +
+// enchaînement auto au plus court).
+router.get('/random', requirePlayer, rateLimit({ max: 40, name: 'quiz-random' }), async (req, res) => {
   const guest = !!req.user.isGuest;
   const mode = guest || req.query.mode === 'global' ? 'global' : 'mine';
   const ranked = !guest && req.query.ranked !== 'false'; // les invités jouent sans gains
@@ -671,13 +676,17 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   const round = verifyRoundToken(req.body?.roundToken, { userId, songId });
   if (!round) return res.status(400).json({ error: 'Manche invalide ou expirée' });
   const correct = isCorrectGuess(guess, song);
-  // Rejoué (jeton déjà consommé) → la manche est simplement déclassée : aucun
-  // token, mais la réponse reste consultable (idempotent pour un client qui
-  // resoumet après une erreur réseau).
-  const ranked = !!(round.ranked && (await consumeRound(round)));
+  // Chaque jeton de manche ne COMPTE qu'une fois — classé comme entraînement.
+  // Sans ça, rejouer le même jeton en boucle gonflait playCount/quêtes… et
+  // surtout l'XP des niveaux (récompense cumulée ≈ 0,15 token/XP, sans plafond
+  // contrairement aux gains de quiz). Un rejeu (resoumission après erreur
+  // réseau) renvoie quand même le verdict et la réponse, mais n'enregistre
+  // rien : idempotent côté client, stérile côté farm.
+  const consumed = await consumeRound(round);
+  const ranked = !!(round.ranked && consumed);
 
   if (req.user.isGuest) {
-    if (!(await consumeRound(round))) {
+    if (!consumed) {
       return res.status(409).json({ error: 'Manche invalide ou déjà jouée' });
     }
     // Les invités jouent toujours en mode normal (pas d'entraînement) : leurs
@@ -691,6 +700,26 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
         // anilistId : sûr à exposer ICI (réponse déjà révélée en clair juste
         // au-dessus) — sert au client à bâtir la liste anti-doublon de la
         // session. Jamais renvoyé par /random (avant révélation).
+        anilistId: song.anilistId,
+        animeTitle: song.animeTitle,
+        englishTitle: englishTitleFor(song),
+        seasonNumber: song.seasonNumber || 0,
+        title: song.title,
+        artist: song.artist,
+        type: song.type,
+        number: song.number,
+      },
+    });
+  }
+
+  // Jeton déjà consommé (resoumission) : verdict + réponse, mais AUCUN
+  // enregistrement (stats/XP/quêtes/SRS) ni token — la manche a déjà compté.
+  if (!consumed) {
+    return res.json({
+      correct,
+      reward: 0,
+      community: communityStats(song),
+      answer: {
         anilistId: song.anilistId,
         animeTitle: song.animeTitle,
         englishTitle: englishTitleFor(song),
