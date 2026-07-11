@@ -82,7 +82,7 @@ test('verifyThemesBatch : fix=true remplace le thème croisé (audioUrl invalid�
   assert.deepEqual(deletes, [{ id: 13 }]);
 });
 
-test('verifyThemesBatch : fiche introuvable ou vide = invérifiable, aucune action', async (t) => {
+test('verifyThemesBatch : fiche introuvable ou vide = invérifiable, aucune action, anime listé', async (t) => {
   global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ resources: [] }) });
   t.after(() => { delete global.fetch; });
   stubDb();
@@ -93,6 +93,38 @@ test('verifyThemesBatch : fiche introuvable ou vide = invérifiable, aucune acti
   assert.equal(r.unverifiable, 1);
   assert.equal(r.mismatches.length, 0);
   assert.equal(r.fixed + r.deleted, 0);
+  // L'anime est remonté à l'admin pour inspection manuelle.
+  assert.deepEqual(r.unverifiableList, [{ anilistId: 100, anime: 'Boku No Hero Academia 6' }]);
+});
+
+test('verifyThemesBatch : anime PAS ENCORE DIFFUSÉ sans fiche = corruption, purge + verrou levé', async (t) => {
+  // Cas « THE ONE PIECE » (prévu 2027) : les openings du vrai One Piece ont été
+  // collés dessus par l'ancienne recherche floue. Pas de fiche animethemes →
+  // mais un anime futur ne peut avoir AUCUN thème : tout est supprimé et le
+  // verrou d'exploration levé (ré-import propre à sa sortie).
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ resources: [] }) });
+  t.after(() => { delete global.fetch; });
+  const future = new Date().getFullYear() + 1;
+  prisma.song.findMany = async (args) => {
+    if (args?.distinct) return [{ anilistId: 171630 }];
+    return [
+      { id: 31, anilistId: 171630, animeTitle: 'THE ONE PIECE', type: 'OP', number: 1, title: 'We Are!', artist: 'Hiroshi Kitadani', videoUrl: 'https://v/weare.webm', audioUrl: null, seasonYear: future },
+      { id: 32, anilistId: 171630, animeTitle: 'THE ONE PIECE', type: 'OP', number: 2, title: 'Believe', artist: 'Folder5', videoUrl: 'https://v/believe.webm', audioUrl: null, seasonYear: future },
+    ];
+  };
+  const deletes = [];
+  let scannedCleared = false;
+  prisma.song.delete = async ({ where }) => { deletes.push(where.id); return {}; };
+  prisma.scannedAnime = prisma.scannedAnime || {};
+  prisma.scannedAnime.deleteMany = async ({ where }) => { scannedCleared = where.anilistId === 171630; return { count: 1 }; };
+
+  const r = await verifyThemesBatch({ cursor: 0, limit: 10, fix: true });
+  assert.equal(r.deleted, 2);
+  assert.deepEqual(deletes, [31, 32]);
+  assert.equal(scannedCleared, true, "verrou d'exploration levé");
+  assert.equal(r.unverifiable, 0); // classé corruption, pas invérifiable
+  assert.equal(r.mismatches.length, 2);
+  assert.match(r.mismatches[0].real, /2027|prévue/);
 });
 
 test('verifyThemesBatch : un titre présent sous un autre numéro n\'est pas touché (dérive de numérotation)', async (t) => {

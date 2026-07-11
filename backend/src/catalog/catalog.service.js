@@ -647,13 +647,14 @@ async function verifyThemesBatch({ cursor = 0, limit = 10, fix = false } = {}) {
     take: limit,
   });
   if (!rows.length) {
-    return { processed: 0, mismatches: [], fixed: 0, deleted: 0, unverifiable: 0, nextCursor: null, done: true };
+    return { processed: 0, mismatches: [], fixed: 0, deleted: 0, unverifiable: 0, unverifiableList: [], nextCursor: null, done: true };
   }
 
   const mismatches = [];
   let fixed = 0;
   let deleted = 0;
   let unverifiable = 0;
+  const unverifiableList = [];
   for (const { anilistId } of rows) {
     let anime = null;
     try {
@@ -664,7 +665,33 @@ async function verifyThemesBatch({ cursor = 0, limit = 10, fix = false } = {}) {
     const songs = await prisma.song.findMany({ where: { anilistId } });
     if (!songs.length) continue;
     const themes = anime ? extractThemes(anime, songs[0].animeTitle) : [];
-    if (!themes.length) { unverifiable++; continue; }
+    if (!themes.length) {
+      // Pas de fiche exploitable. Cas particulier NET : un anime PAS ENCORE
+      // DIFFUSÉ (année de saison future, ex. « THE ONE PIECE » prévu 2027) ne
+      // peut avoir AUCUN thème — ses musiques viennent forcément d'un autre
+      // anime via l'ancienne recherche floue. On supprime tout et on lève le
+      // verrou d'exploration : à sa sortie, un import le re-cherchera proprement.
+      const seasonYear = songs.find((s) => s.seasonYear > 0)?.seasonYear || 0;
+      if (seasonYear > new Date().getFullYear()) {
+        for (const s of songs) {
+          mismatches.push({
+            anilistId, songId: s.id, anime: s.animeTitle,
+            stored: `${s.type}${s.number} · ${s.title}`,
+            real: `— (diffusion prévue en ${seasonYear})`,
+            action: 'delete',
+          });
+          if (fix) { await prisma.song.delete({ where: { id: s.id } }); deleted++; }
+        }
+        if (fix) await prisma.scannedAnime.deleteMany({ where: { anilistId } });
+        continue;
+      }
+      // Sinon : invérifiable (fiche absente ou vide côté animethemes) — aucune
+      // action automatique, mais on remonte l'anime à l'admin pour inspection
+      // manuelle (outil « Anime précis » : recherche + réinitialisation).
+      unverifiable++;
+      unverifiableList.push({ anilistId, anime: songs[0].animeTitle });
+      continue;
+    }
 
     const key = (t) => `${t.type}${t.number}`;
     const byKey = new Map(themes.map((t) => [key(t), t]));
@@ -709,6 +736,7 @@ async function verifyThemesBatch({ cursor = 0, limit = 10, fix = false } = {}) {
     fixed,
     deleted,
     unverifiable,
+    unverifiableList,
     nextCursor: rows[rows.length - 1].anilistId,
     done: rows.length < limit,
   };

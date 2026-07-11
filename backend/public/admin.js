@@ -602,7 +602,16 @@ async function runThemeCheck(fix) {
   fixBtn.disabled = true;
   let cursor = 0, total = 0, fixed = 0, deleted = 0, unverifiable = 0, fails = 0;
   const mismatches = [];
+  const unverifiables = [];
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Animes sans fiche animethemes exploitable : rien d'automatique possible —
+  // liste remontée à l'admin pour inspection via « Anime précis » (recherche
+  // + réinitialisation de l'anilistId).
+  const renderUnverifiables = () => unverifiables.length
+    ? `<p class="muted" style="margin-top:6px">Invérifiables (pas de fiche animethemes — à inspecter via « Anime précis ») : ${
+      unverifiables.slice(0, 25).map((u) => `${escapeHtml(u.anime)} <span class="muted">#${u.anilistId}</span>`).join(' · ')
+    }${unverifiables.length > 25 ? ` · … et ${unverifiables.length - 25} autre(s)` : ''}</p>`
+    : '';
   const renderMismatches = () => mismatches.length
     ? `<table class="catalog-table"><thead><tr><th>Anime</th><th>Stocké</th><th>Fiche animethemes</th><th>Action</th></tr></thead><tbody>${
       mismatches.slice(0, 60).map((m) =>
@@ -625,6 +634,7 @@ async function runThemeCheck(fix) {
       fixed += r.fixed;
       deleted += r.deleted;
       unverifiable += r.unverifiable;
+      unverifiables.push(...(r.unverifiableList || []));
       mismatches.push(...r.mismatches);
       status.innerHTML = `${total} animes vérifiés · ${mismatches.length} anomalie(s)` +
         `${fix ? ` · ${fixed} remplacée(s), ${deleted} supprimée(s)` : ''}` +
@@ -634,9 +644,9 @@ async function runThemeCheck(fix) {
     }
     status.innerHTML = mismatches.length
       ? `${fix ? '✅ Réparé' : '⚠️ Vérification terminée'} : ${mismatches.length} anomalie(s) sur ${total} animes` +
-        `${fix ? ` (${fixed} remplacées, ${deleted} supprimées)` : ' — clique « Réparer les thèmes croisés » pour appliquer'}` +
-        `${unverifiable ? ` · ${unverifiable} anime(s) sans fiche exploitable (non touchés)` : ''}.${renderMismatches()}`
-      : `✅ Vérification terminée : ${total} animes, aucune anomalie${unverifiable ? ` (${unverifiable} invérifiables)` : ''}.`;
+        `${fix ? ` (${fixed} remplacées, ${deleted} supprimées)` : ' — clique « Réparer » pour appliquer'}` +
+        `${unverifiable ? ` · ${unverifiable} invérifiable(s)` : ''}.${renderMismatches()}${renderUnverifiables()}`
+      : `✅ Vérification terminée : ${total} animes, aucune anomalie${unverifiable ? ` (${unverifiable} invérifiables)` : ''}.${renderUnverifiables()}`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
