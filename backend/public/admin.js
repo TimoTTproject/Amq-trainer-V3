@@ -10,6 +10,11 @@ function openAdmin() {
   document.getElementById('admin-search').value = '';
   adminSearch = ''; adminRarity = 'all';
   document.getElementById('admin-backfill-status').textContent = '';
+  // Repart sur l'onglet Catalogue (les panneaux gardent sinon le dernier état).
+  document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.adminTab === 'catalog'));
+  ['catalog', 'gacha', 'danger'].forEach((p) =>
+    document.getElementById('admin-panel-' + p)?.classList.toggle('hidden', p !== 'catalog')
+  );
   loadAdminStats();
   loadR2Status();
   loadAdminChars(1, '');

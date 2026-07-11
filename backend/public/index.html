@@ -1369,91 +1369,121 @@
       <div class="gacha-top">
         <h2><i class="fas fa-screwdriver-wrench"></i> Admin</h2>
       </div>
-      <div id="admin-rarity-summary" class="admin-rarity-summary"></div>
+      <!-- 3 onglets : Catalogue (musiques), Gacha (personnages), Zone danger.
+           Les IDs des boutons/statuts sont inchangés — seule l'organisation
+           visuelle bouge (admin.js ne connaît que les IDs). -->
+      <div class="shop-tabs" id="admin-tabs">
+        <button class="shop-tab admin-tab active" data-admin-tab="catalog"><i class="fas fa-music"></i> Catalogue</button>
+        <button class="shop-tab admin-tab" data-admin-tab="gacha"><i class="fas fa-layer-group"></i> Gacha</button>
+        <button class="shop-tab admin-tab" data-admin-tab="danger"><i class="fas fa-triangle-exclamation"></i> Zone danger</button>
+      </div>
+
+      <!-- ══ Onglet Catalogue (musiques) ══ -->
+      <div id="admin-panel-catalog" class="gacha-panel">
       <div id="admin-stats" class="admin-stats"></div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-backfill-btn"><i class="fas fa-download"></i> Remplir les séries manquantes</button>
-        <span id="admin-backfill-status" class="hint"></span>
+
+      <h3 class="admin-section-title"><i class="fas fa-download"></i> Imports &amp; remplissage</h3>
+      <p class="admin-section-sub">Chaque outil ne traite que ce qui manque — relançable sans risque, à refaire après un gros import de listes.</p>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Séries manquantes</b><small>Cherche les openings des animes importés mais pas encore explorés sur animethemes.</small></div>
+        <button class="btn-secondary" id="admin-backfill-btn"><i class="fas fa-download"></i> Lancer</button>
+        <div id="admin-backfill-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-import-btn"><i class="fas fa-user-plus"></i> Importer plus de personnages</button>
-        <span id="admin-import-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Endings (ED)</b><small>Récupère les endings des animes déjà scannés pour leurs openings.</small></div>
+        <button class="btn-secondary" id="admin-endings-btn"><i class="fas fa-music"></i> Lancer</button>
+        <div id="admin-endings-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-import-anime-btn"><i class="fas fa-clapperboard"></i> Importer via les animes (dépasser 5000)</button>
-        <span id="admin-import-anime-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Formats TV / Film / OAV</b><small>Remplit le format AniList des musiques qui ne l'ont pas (sert au filtre « série principale »).</small></div>
+        <button class="btn-secondary" id="admin-format-btn"><i class="fas fa-tv"></i> Lancer</button>
+        <div id="admin-format-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-endings-btn"><i class="fas fa-music"></i> Importer les Endings (ED)</button>
-        <span id="admin-endings-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Numéros de saison</b><small>Calcule les S1/S2… manquants via le graphe des relations AniList.</small></div>
+        <button class="btn-secondary" id="admin-seasons-btn"><i class="fas fa-layer-group"></i> Lancer</button>
+        <div id="admin-seasons-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-format-btn"><i class="fas fa-tv"></i> Remplir les formats (TV/Film/OAV)</button>
-        <span id="admin-format-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Migration R2 (CDN)</b><small>Copie l'audio des extraits sur le stockage R2 pour soulager animethemes.</small></div>
+        <button class="btn-secondary" id="admin-r2-btn"><i class="fas fa-cloud-arrow-up"></i> Lancer la migration R2</button>
+        <div id="admin-r2-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-seasons-btn"><i class="fas fa-layer-group"></i> Calculer les numéros de saison</button>
-        <span id="admin-seasons-status" class="hint"></span>
+
+      <h3 class="admin-section-title"><i class="fas fa-list-check"></i> Vérifications &amp; réparations</h3>
+      <p class="admin-section-sub">D'abord « Vérifier » (lecture seule, affiche les écarts), puis le bouton de correction si le résultat te convient.</p>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Numéros de saison</b><small>Recalcule les S1/S2… déjà posés (une chaîne complétée après coup peut les périmer).</small></div>
+        <button class="btn-secondary" id="admin-season-check-btn"><i class="fas fa-list-check"></i> Vérifier</button>
+        <button class="btn-secondary" id="admin-season-fix-btn"><i class="fas fa-wrench"></i> Corriger</button>
+        <div id="admin-season-check-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-season-check-btn"><i class="fas fa-list-check"></i> Vérifier les numéros de saison</button>
-        <button class="btn-secondary" id="admin-season-fix-btn"><i class="fas fa-wrench"></i> Corriger les écarts</button>
-        <div id="admin-season-check-status" class="hint"></div>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Thèmes croisés entre saisons</b><small>Musiques importées sous le mauvais anime par l'ancienne recherche floue (ex. OP de MHA S1 affiché « saison 6 »). Réparer remplace par le vrai thème ou supprime les intrus.</small></div>
+        <button class="btn-secondary" id="admin-theme-check-btn"><i class="fas fa-list-check"></i> Vérifier</button>
+        <button class="btn-secondary" id="admin-theme-fix-btn"><i class="fas fa-wrench"></i> Réparer</button>
+        <div id="admin-theme-check-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-theme-check-btn"><i class="fas fa-music"></i> Vérifier les thèmes (fiche animethemes par anilistId)</button>
-        <button class="btn-secondary" id="admin-theme-fix-btn"><i class="fas fa-wrench"></i> Réparer les thèmes croisés</button>
-        <div id="admin-theme-check-status" class="hint"></div>
-        <p class="hint" style="margin-top:4px">Détecte les musiques importées sous le MAUVAIS anime par l'ancienne recherche floue (ex. les OP de MHA S1 catalogués sous la saison 6). Réparer remplace le thème par le vrai (même position) ou supprime les rows étrangères à la fiche.</p>
-      </div>
-      <div class="admin-backfill">
-        <label for="admin-songs-search"><i class="fas fa-magnifying-glass"></i> Chercher un anime (titre ou synonyme) — mauvais rattachement, surnom manquant sur une saison…</label>
+
+      <h3 class="admin-section-title"><i class="fas fa-magnifying-glass"></i> Anime précis</h3>
+      <p class="admin-section-sub">Mauvais rattachement, surnom manquant sur une saison… Réinitialiser purge les musiques de l'anilistId + son verrou d'exploration : le prochain import le re-cherche depuis zéro.</p>
+      <div class="admin-tool admin-tool-search">
         <div class="panel-row">
           <input type="text" id="admin-songs-search" placeholder="Ex. one piece, tensura" />
           <button class="btn-secondary" id="admin-songs-search-btn">Chercher</button>
         </div>
-        <p class="hint">Réinitialiser purge les musiques de cet anilistId + son verrou d'exploration : le prochain import qui le touche le re-cherche depuis zéro sur animethemes.moe.</p>
         <div id="admin-songs-search-results"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-r2-btn"><i class="fas fa-cloud-arrow-up"></i> Lancer la migration R2</button>
-        <span id="admin-r2-status" class="hint"></span>
+      </div><!-- /admin-panel-catalog -->
+
+      <!-- ══ Onglet Gacha (personnages) ══ -->
+      <div id="admin-panel-gacha" class="gacha-panel hidden">
+      <div id="admin-rarity-summary" class="admin-rarity-summary"></div>
+
+      <h3 class="admin-section-title"><i class="fas fa-user-plus"></i> Imports de personnages</h3>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Personnages populaires</b><small>Importe les prochains personnages du classement AniList.</small></div>
+        <button class="btn-secondary" id="admin-import-btn"><i class="fas fa-user-plus"></i> Importer</button>
+        <div id="admin-import-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-recompute-btn"><i class="fas fa-scale-balanced"></i> Recalculer les raretés (équilibrage)</button>
-        <span id="admin-recompute-status" class="hint"></span>
-        <p class="hint" style="margin-top:4px">⚠️ Écrase TES raretés modifiées à la main par la répartition automatique par rang. Ne clique ceci que si tu veux repartir de zéro.</p>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Via les animes</b><small>Importe les persos principaux des animes du catalogue — permet de dépasser la limite des 5000 du classement.</small></div>
+        <button class="btn-secondary" id="admin-import-anime-btn"><i class="fas fa-clapperboard"></i> Importer</button>
+        <div id="admin-import-anime-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-rarity-check-btn"><i class="fas fa-magnifying-glass-chart"></i> Vérifier les raretés (probabilités + modifs manuelles)</button>
-        <button class="btn-secondary" id="admin-fix-supply-btn"><i class="fas fa-wrench"></i> Corriger les stocks (maxSupply selon rareté)</button>
-        <div id="admin-rarity-check-status" class="hint"></div>
-        <span id="admin-fix-supply-status" class="hint"></span>
+
+      <h3 class="admin-section-title"><i class="fas fa-scale-balanced"></i> Raretés &amp; stocks</h3>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Vérifier les raretés</b><small>Probabilités de tirage par palier + liste des modifs manuelles. « Corriger les stocks » réaligne maxSupply sur la rareté.</small></div>
+        <button class="btn-secondary" id="admin-rarity-check-btn"><i class="fas fa-magnifying-glass-chart"></i> Vérifier</button>
+        <button class="btn-secondary" id="admin-fix-supply-btn"><i class="fas fa-wrench"></i> Corriger les stocks</button>
+        <div id="admin-rarity-check-status" class="admin-tool-status hint"></div>
+        <div id="admin-fix-supply-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-refresh-featured-btn"><i class="fas fa-star"></i> Relancer la vedette de la semaine selon les votes</button>
-        <span id="admin-refresh-featured-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Recalculer toutes les raretés</b><small>⚠️ Écrase les raretés modifiées à la main par la répartition automatique par rang. Seulement pour repartir de zéro.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-recompute-btn"><i class="fas fa-scale-balanced"></i> Recalculer</button>
+        <div id="admin-recompute-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary" id="admin-suppress-banner-btn"><i class="fas fa-ban"></i> Supprimer la bannière en cours (jusqu'au reset de lundi)</button>
-        <span id="admin-suppress-banner-status" class="hint"></span>
+
+      <h3 class="admin-section-title"><i class="fas fa-star"></i> Vedette de la semaine</h3>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Relancer la vedette</b><small>Recalcule la vedette en cours selon les votes (après un changement de raretés par ex.).</small></div>
+        <button class="btn-secondary" id="admin-refresh-featured-btn"><i class="fas fa-star"></i> Relancer</button>
+        <div id="admin-refresh-featured-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary admin-danger" id="admin-reset-weekly-votes-btn"><i class="fas fa-rotate-right"></i> Réinitialiser les votes vedette (après changement de raretés)</button>
-        <span id="admin-reset-weekly-votes-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Supprimer la bannière en cours</b><small>Retire la bannière vedette jusqu'au reset du lundi.</small></div>
+        <button class="btn-secondary" id="admin-suppress-banner-btn"><i class="fas fa-ban"></i> Supprimer</button>
+        <div id="admin-suppress-banner-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary admin-danger" id="admin-reset-btn"><i class="fas fa-triangle-exclamation"></i> Réinitialiser MON compte (stats + gacha + tokens)</button>
-        <span id="admin-reset-status" class="hint"></span>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Réinitialiser les votes</b><small>Vide les votes vedette de la semaine (après un changement de raretés qui les rend caducs).</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-weekly-votes-btn"><i class="fas fa-rotate-right"></i> Réinitialiser</button>
+        <div id="admin-reset-weekly-votes-status" class="admin-tool-status hint"></div>
       </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary admin-danger" id="admin-reset-all-btn"><i class="fas fa-skull-crossbones"></i> Reset GLOBAL (tous les comptes)</button>
-        <span id="admin-reset-all-status" class="hint"></span>
-      </div>
-      <div class="admin-backfill">
-        <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Reset GACHA uniquement (collection + stock, SANS remboursement, garde les autres stats)</button>
-        <span id="admin-reset-gacha-status" class="hint"></span>
-      </div>
+
+      <h3 class="admin-section-title"><i class="fas fa-users"></i> Personnages (rareté à la main, vedette)</h3>
       <div class="coll-filters" id="admin-filters"></div>
       <div class="catalog-search">
         <input type="text" id="admin-search" placeholder="Rechercher un personnage ou une série…" />
@@ -1471,6 +1501,27 @@
         <span id="admin-pageinfo">—</span>
         <button class="btn-secondary" id="admin-next"><i class="fas fa-chevron-right"></i></button>
       </div>
+      </div><!-- /admin-panel-gacha -->
+
+      <!-- ══ Onglet Zone danger ══ -->
+      <div id="admin-panel-danger" class="gacha-panel hidden">
+      <p class="admin-danger-warning"><i class="fas fa-triangle-exclamation"></i> Actions destructives et irréversibles — chacune redemande confirmation.</p>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Réinitialiser MON compte</b><small>Stats de quiz, collection gacha et tokens de ton propre compte uniquement.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-btn"><i class="fas fa-triangle-exclamation"></i> Réinitialiser</button>
+        <div id="admin-reset-status" class="admin-tool-status hint"></div>
+      </div>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Reset GACHA (tous les joueurs)</b><small>Collections et stocks remis à zéro, SANS remboursement des tokens dépensés. Les stats de quiz/MMR sont conservées.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Reset gacha</button>
+        <div id="admin-reset-gacha-status" class="admin-tool-status hint"></div>
+      </div>
+      <div class="admin-tool">
+        <div class="admin-tool-info"><b>Reset GLOBAL (tous les comptes)</b><small>Toutes les stats, collections et tokens de tous les joueurs. Le bouton nucléaire.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-all-btn"><i class="fas fa-skull-crossbones"></i> Reset global</button>
+        <div id="admin-reset-all-status" class="admin-tool-status hint"></div>
+      </div>
+      </div><!-- /admin-panel-danger -->
     </div>
 
     <!-- VUE CENTRE D'ENTRAÎNEMENT -->

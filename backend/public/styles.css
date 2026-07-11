@@ -1169,10 +1169,33 @@ select.album-form-control {
 .gcard .badge.locked-badge { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard-series { font-size: .68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
-/* ── Admin personnages ── */
-.admin-backfill { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-.admin-backfill label[for="admin-songs-search"] { flex-basis: 100%; font-weight: 600; }
-.admin-backfill #admin-songs-search-results { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; }
+/* ── Admin : sections + lignes outil (nom + description + action à droite) ── */
+.admin-section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 1rem; margin: 26px 0 4px;
+}
+.admin-section-title i { color: var(--accent); width: 18px; text-align: center; }
+.admin-section-sub { color: var(--text-2); font-size: .82rem; margin: 0 0 12px; }
+.admin-tool {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 10px;
+}
+.admin-tool-info { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.admin-tool-info b { font-size: .92rem; }
+.admin-tool-info small { color: var(--text-2); font-size: .78rem; line-height: 1.35; }
+.admin-tool > .btn-secondary { flex: none; }
+.admin-tool-status { flex-basis: 100%; }
+.admin-tool-status:empty { display: none; }
+.admin-tool-search { display: block; }
+.admin-tool-search .panel-row { margin-bottom: 8px; }
+.admin-tool-search #admin-songs-search-results { display: flex; flex-direction: column; gap: 10px; }
+.admin-danger-warning {
+  display: flex; align-items: center; gap: 10px; color: var(--red); font-weight: 600;
+  background: rgba(255, 107, 107, .08); border: 1px solid var(--red); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px; font-size: .88rem;
+}
+#admin-panel-danger .admin-tool { border-color: rgba(255, 107, 107, .35); }
 .admin-anime-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
 .admin-anime-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .admin-anime-songs { margin: 8px 0 0; padding-left: 18px; font-size: .85rem; color: var(--text-2); }

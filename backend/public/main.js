@@ -1443,6 +1443,15 @@ function setupAppUI() {
   document.getElementById('admin-season-fix-btn').addEventListener('click', () => runSeasonCheck(true));
   document.getElementById('admin-theme-check-btn').addEventListener('click', () => runThemeCheck(false));
   document.getElementById('admin-theme-fix-btn').addEventListener('click', () => runThemeCheck(true));
+  // Onglets du panneau admin (Catalogue / Gacha / Zone danger)
+  document.getElementById('admin-tabs')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('.admin-tab');
+    if (!tab) return;
+    document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    ['catalog', 'gacha', 'danger'].forEach((p) =>
+      document.getElementById('admin-panel-' + p).classList.toggle('hidden', p !== tab.dataset.adminTab)
+    );
+  });
   document.getElementById('admin-songs-search-btn').addEventListener('click', runSongsSearch);
   document.getElementById('admin-songs-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSongsSearch(); });
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);
