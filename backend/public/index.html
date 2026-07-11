@@ -190,6 +190,7 @@
       <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span data-i18n="Communauté">Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
       <div class="navbar-sep hidden" id="navbar-pinned-sep"></div>
       <div id="navbar-pinned" class="navbar-pinned"></div>
+      <button class="nav-item hidden" id="nav-idle" data-nav="idle"><i class="fas fa-fire"></i><span data-i18n="Dojo">Dojo</span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span data-i18n="Admin">Admin</span></button>
     </nav>
 
@@ -1564,6 +1565,41 @@
         <div id="admin-reset-all-status" class="admin-tool-status hint"></div>
       </div>
       </div><!-- /admin-panel-danger -->
+    </div>
+
+    <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
+    <div id="view-idle" class="hidden">
+      <button class="btn-back" id="back-home-idle"><i class="fas fa-arrow-left"></i> Accueil</button>
+      <div class="gacha-top">
+        <h2><i class="fas fa-fire"></i> Dojo <span class="hub-badge">BÊTA ADMIN</span></h2>
+      </div>
+      <p class="gacha-sub">Assigne tes personnages aux emplacements d'entraînement : ils génèrent de l'essence en continu, même hors-ligne.</p>
+
+      <div class="idle-top">
+        <div class="idle-essence">
+          <i class="fas fa-mortar-pestle"></i>
+          <div><b id="idle-essence-val">0</b><small>Essence</small></div>
+        </div>
+        <div class="idle-rate"><span id="idle-rate-val">0</span> /s</div>
+        <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
+        <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
+      </div>
+
+      <h3 class="idle-section-title">Emplacements d'entraînement</h3>
+      <div id="idle-slots" class="idle-slots"></div>
+
+      <h3 class="idle-section-title">Améliorations</h3>
+      <div id="idle-upgrades" class="idle-upgrades"></div>
+    </div>
+
+    <!-- Sélecteur de personnage pour un emplacement du Dojo -->
+    <div id="idle-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Choisir un personnage">
+      <div class="modal-card wide">
+        <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
+        <p class="hint" id="idle-picker-hint"></p>
+        <div id="idle-picker-list" class="card-grid"></div>
+      </div>
     </div>
 
     <!-- VUE CENTRE D'ENTRAÎNEMENT -->
