@@ -350,11 +350,13 @@ router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, 
 // production permanent (+PRESTIGE_BONUS_PER_LEVEL par niveau, cumulable à
 // l'infini). Le niveau du Dojo (essenceEarnedTotal) et les jalons réclamés
 // sont volontairement CONSERVÉS — seule la puissance personnelle repart à zéro.
+// Passe par withSettle (comme toutes les autres actions) pour que la
+// production en attente soit soldée AVANT le reset : sinon elle disparaissait
+// sans même compter dans l'XP du Dojo, ce qui contredit l'idée que le lieu
+// garde tout — le joueur part avec le crédit de sa dernière session.
 router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   try {
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: req.user.id } });
-      if (!user) throw new IdleError(404, 'Compte introuvable');
+    await withSettle(req.user.id, async (tx, user) => {
       const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
       if (dojoLevel < PRESTIGE_MIN_DOJO_LEVEL) {
         throw new IdleError(400, `Le Dojo doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
@@ -367,7 +369,6 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
           idleSlotsUnlocked: START_SLOTS,
           idleProdLevel: 0,
           idleClickLevel: 0,
-          idleLastCollectAt: new Date(),
           prestigeLevel: { increment: 1 },
         },
       });
