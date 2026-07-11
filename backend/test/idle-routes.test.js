@@ -66,6 +66,41 @@ test('GET /state : la production hors-ligne est plafonnée et reflétée dans pe
   assert.equal(res.json.slots[0].character.rarity, 'mythic');
 });
 
+test("GET /state : un personnage échangé/vendu/fusionné pendant qu'il était assigné ne produit plus rien et s'affiche vide", async () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+  const user = dbUser({ idleLastCollectAt: twoHoursAgo });
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findMany = async () => [
+    { id: 1, userId: 'u1', slotIndex: 0, characterId: 42, level: 3, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
+  ];
+  // Le personnage n'a plus de ligne UserCard (dernier exemplaire perdu) : la
+  // ligne IdleSlot le référence encore, mais starsMap ne le contient plus.
+  prisma.userCard.findMany = async () => [];
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.totalRate, 0);
+  assert.equal(res.json.pendingEssence, 0);
+  assert.equal(res.json.slots[0].character, null);
+});
+
+test('collect : nettoie automatiquement en base un emplacement dont le personnage n\'est plus possédé', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findMany = async () => [
+    { id: 1, userId: 'u1', slotIndex: 0, characterId: 42, level: 3, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
+  ];
+  prisma.userCard.findMany = async () => [];
+  prisma.user.update = async () => user;
+  let cleared = null;
+  prisma.idleSlot.updateMany = async (args) => { cleared = args; return { count: 1 }; };
+  const res = await app.request('/api/idle/collect', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.ok(cleared);
+  assert.deepEqual(cleared.where.slotIndex.in, [0]);
+  assert.equal(cleared.data.characterId, null);
+  assert.equal(cleared.data.level, 1);
+});
+
 test('GET /state : le niveau du Dojo dérive de essenceEarnedTotal, décor + XP cohérents', async () => {
   const user = dbUser({ essenceEarnedTotal: dojoXpForLevel(10) });
   prisma.user.findUnique = async () => user;

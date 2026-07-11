@@ -54,12 +54,24 @@ async function loadRateInputs(tx, userId) {
   return { slots, starsMap };
 }
 
+// N'accepte que les emplacements dont le personnage est encore RÉELLEMENT
+// possédé (présent dans starsMap, dérivé de UserCard) — pas seulement encore
+// présent dans le catalogue (`s.character`). Un perso échangé/vendu/fusionné
+// pendant qu'il était assigné disparaît de UserCard (la ligne est supprimée à
+// 0 exemplaire, cf. trade/market/fuse) sans que l'IdleSlot soit prévenu ; sans
+// ce garde-fou, `?? 1` ferait tourner l'emplacement comme si de rien n'était.
 function computeTotalRate(slots, starsMap, prodLevel, dojoLevel, prestigeLevel) {
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId) || 1, s.level) : sum),
+    (sum, s) => (s.characterId && s.character && starsMap.has(s.characterId) ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId), s.level) : sum),
     0
   );
   return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel) * prestigeMultiplier(prestigeLevel);
+}
+
+// Emplacements dont le personnage assigné n'est plus possédé (cf. commentaire
+// de computeTotalRate) — à vider.
+function orphanedSlotIndexes(slots, starsMap) {
+  return slots.filter((s) => s.characterId && !starsMap.has(s.characterId)).map((s) => s.slotIndex);
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
@@ -81,6 +93,17 @@ async function withSettle(userId, mutate) {
       where: { id: userId },
       data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
     });
+    // Vide les emplacements dont le personnage a été échangé/vendu/fusionné
+    // entre-temps (cf. computeTotalRate) — la production n'en tenait déjà plus
+    // compte, ceci nettoie juste l'IdleSlot pour que l'emplacement redevienne
+    // assignable normalement au lieu de rester "occupé" par un fantôme.
+    const orphans = orphanedSlotIndexes(slots, starsMap);
+    if (orphans.length) {
+      await tx.idleSlot.updateMany({
+        where: { userId, slotIndex: { in: orphans } },
+        data: { characterId: null, assignedAt: null, level: 1 },
+      });
+    }
     if (mutate) await mutate(tx, settledUser);
     return settledUser;
   });
@@ -108,8 +131,11 @@ async function buildState(userId) {
     const row = bySlot.get(i);
     const locked = i >= user.idleSlotsUnlocked;
     let character = null;
-    if (row && row.characterId && row.character) {
-      const stars = starsMap.get(row.characterId) || 1;
+    // starsMap.has(...) : n'affiche que si le personnage est encore RÉELLEMENT
+    // possédé (cf. computeTotalRate) — un slot orphelin s'affiche vide, prêt à
+    // être auto-nettoyé en base à la prochaine action (voir withSettle).
+    if (row && row.characterId && row.character && starsMap.has(row.characterId)) {
+      const stars = starsMap.get(row.characterId);
       const level = row.level || 1;
       character = {
         id: row.character.id,
