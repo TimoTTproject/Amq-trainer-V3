@@ -29,9 +29,11 @@ function renderMarketFilterChips() {
 function setMarketTab(tab) {
   marketTab = tab;
   document.querySelectorAll('.market-tab').forEach((t) => t.classList.toggle('active', t.dataset.marketTab === tab));
-  document.getElementById('market-browse').classList.toggle('hidden', tab !== 'browse');
-  document.getElementById('market-mine').classList.toggle('hidden', tab !== 'mine');
+  ['browse', 'sell', 'mine'].forEach((p) =>
+    document.getElementById('market-' + p).classList.toggle('hidden', p !== tab)
+  );
   if (tab === 'mine') loadMarketMine();
+  if (tab === 'sell') loadMarketSell();
 }
 
 function marketListingHTML(l) {
@@ -102,6 +104,82 @@ async function loadMarketMine() {
     }
   } catch (e) {
     activeBox.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ── Onglet Vendre : mes exemplaires vendables (non gelés), mise en vente
+// directe. Source : /api/trade/instances/:userId (déjà groupé par personnage,
+// exclut les exemplaires déjà en vente) — même périmètre que le builder d'échange.
+let marketSellCharacters = [];
+let marketSellSearch = '';
+
+function marketSellCardHTML(c, idx) {
+  const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
+  const picker = c.serials.length > 1
+    ? `<select class="market-sell-serial" aria-label="Choisir l'exemplaire">${c.serials.map((s) => `<option value="${s.id}">#${s.serial}</option>`).join('')}</select>`
+    : `<input type="hidden" class="market-sell-serial" value="${c.serials[0].id}" />`;
+  return `<div class="gcard r-${c.rarity} market-card market-sell-card" data-sell-idx="${idx}">
+    <div class="gcard-img" ${img}></div>
+    <div class="gcard-info">
+      <div class="gcard-name">${escapeHtml(c.name)}</div>
+      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity} · ${c.serials.length > 1 ? `${c.serials.length} ex. · #${c.serials.map((s) => s.serial).join(', #')}` : `#${c.serials[0].serial}`}</div>
+    </div>
+    <div class="market-sell-form">
+      ${picker}
+      <input type="number" class="market-sell-price" min="1" max="999999" inputmode="numeric" placeholder="Prix 🪙" aria-label="Prix en tokens" />
+      <button type="button" class="btn-primary market-sell-submit">Vendre</button>
+    </div>
+  </div>`;
+}
+
+function renderMarketSell() {
+  const grid = document.getElementById('market-sell-list');
+  if (!grid) return;
+  const q = marketSellSearch.toLowerCase();
+  const filtered = marketSellCharacters.filter((c) => !q || c.name.toLowerCase().includes(q));
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty-state"><p class="muted">${marketSellCharacters.length
+      ? 'Aucun personnage ne correspond à la recherche.'
+      : 'Aucun exemplaire vendable — toutes tes cartes sont déjà en vente, ou ta collection est vide.'}</p></div>`;
+    return;
+  }
+  // Raretés hautes d'abord (ce qu'on vend le plus souvent), puis alphabétique.
+  filtered.sort((a, b) =>
+    RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity) || a.name.localeCompare(b.name));
+  grid.innerHTML = filtered.map((c) => marketSellCardHTML(c, marketSellCharacters.indexOf(c))).join('');
+}
+
+async function loadMarketSell() {
+  const grid = document.getElementById('market-sell-list');
+  grid.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const r = await api(`/api/trade/instances/${currentUser.id}`);
+    marketSellCharacters = r.characters || [];
+    renderMarketSell();
+  } catch (e) {
+    grid.innerHTML = `<p class="muted">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function submitMarketSell(cardEl) {
+  const c = marketSellCharacters[parseInt(cardEl.dataset.sellIdx)];
+  const priceEl = cardEl.querySelector('.market-sell-price');
+  const cardInstanceId = parseInt(cardEl.querySelector('.market-sell-serial').value);
+  const price = parseInt(priceEl.value);
+  if (!c || !cardInstanceId) return;
+  if (!(price > 0)) { priceEl.focus(); priceEl.reportValidity?.(); return; }
+  const btn = cardEl.querySelector('.market-sell-submit');
+  btn.disabled = true;
+  try {
+    await api('/api/market/list', { method: 'POST', body: JSON.stringify({ cardInstanceId, price }) });
+    if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
+    // Retire l'exemplaire vendu du stock local (plus vendable tant que l'annonce est active).
+    c.serials = c.serials.filter((s) => s.id !== cardInstanceId);
+    if (!c.serials.length) marketSellCharacters = marketSellCharacters.filter((x) => x !== c);
+    renderMarketSell();
+  } catch (e) {
+    btn.disabled = false;
+    alert(e.message);
   }
 }
 

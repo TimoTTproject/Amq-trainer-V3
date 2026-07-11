@@ -2365,6 +2365,21 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
   position: absolute; left: 8px; right: 8px; bottom: 8px; justify-content: center; font-size: .78rem; padding: 8px;
 }
 
+/* Onglet Vendre : formulaire (exemplaire + prix + bouton) en bas de carte */
+.market-sell-card { padding-bottom: 8px; }
+.market-sell-form { display: flex; gap: 6px; align-items: center; margin: 8px; }
+.market-sell-form select.market-sell-serial {
+  flex: 0 0 auto; max-width: 74px; background: var(--bg-deep); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 4px; font-size: .78rem;
+}
+.market-sell-form .market-sell-price {
+  flex: 1; min-width: 0; background: var(--bg-deep); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 8px; font-size: .8rem;
+}
+.market-sell-form .market-sell-price:focus { outline: none; border-color: var(--accent); }
+/* Le bouton fait partie du flux du formulaire, pas ancré en bas de carte */
+.market-sell-card .btn-primary { position: static; left: auto; right: auto; bottom: auto; flex: 0 0 auto; }
+
 /* Édition de carte + vote « Édition 2 » */
 .char-edition {
   display: inline-block; margin-left: 8px; font-size: .68rem; font-weight: 700;

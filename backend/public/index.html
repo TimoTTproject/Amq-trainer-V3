@@ -402,6 +402,7 @@
       <p class="gacha-sub">Achète et vends des exemplaires précis contre des tokens.</p>
       <div class="mode-switch">
         <button class="mode-btn market-tab active" data-market-tab="browse">Parcourir</button>
+        <button class="mode-btn market-tab" data-market-tab="sell">Vendre</button>
         <button class="mode-btn market-tab" data-market-tab="mine">Mes annonces</button>
       </div>
       <div id="market-browse">
@@ -423,6 +424,15 @@
           <span id="market-pageinfo">—</span>
           <button class="btn-secondary" id="market-next"><i class="fas fa-chevron-right"></i></button>
         </div>
+      </div>
+      <!-- Onglet Vendre : ma collection (exemplaires non gelés), prix + mise en
+           vente directe, sans passer par la fiche personnage du gacha. -->
+      <div id="market-sell" class="hidden">
+        <div class="collection-toolbar">
+          <input type="search" class="trade-search" id="market-sell-search" placeholder="Rechercher dans ma collection…" autocomplete="off" />
+        </div>
+        <p class="hint">Choisis l'exemplaire et le prix (1 à 999 999 🪙). Une carte en vente est gelée — ni fusion, ni ascension, ni échange — jusqu'à la vente ou l'annulation de l'annonce.</p>
+        <div id="market-sell-list" class="card-grid"></div>
       </div>
       <div id="market-mine" class="hidden">
         <h3 class="trades-hist-title"><i class="fas fa-tags"></i> En vente</h3>

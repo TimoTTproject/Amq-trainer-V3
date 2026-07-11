@@ -1316,6 +1316,23 @@ function setupAppUI() {
     // était juste du texte, aucun moyen de voir qui vend quoi).
     const seller = e.target.closest('[data-userid]'); if (seller) { e.stopPropagation(); return openPlayer(seller.dataset.userid); }
   });
+  // Onglet Vendre : recherche + mise en vente directe depuis la grille
+  let marketSellTimer;
+  document.getElementById('market-sell-search')?.addEventListener('input', (e) => {
+    clearTimeout(marketSellTimer);
+    marketSellTimer = setTimeout(() => { marketSellSearch = e.target.value.trim(); renderMarketSell(); }, 200);
+  });
+  document.getElementById('market-sell-list')?.addEventListener('click', (e) => {
+    const submit = e.target.closest('.market-sell-submit');
+    if (submit) submitMarketSell(submit.closest('.market-sell-card'));
+  });
+  // Entrée dans le champ prix = vendre (sans chercher le bouton)
+  document.getElementById('market-sell-list')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.classList?.contains('market-sell-price')) {
+      e.preventDefault();
+      submitMarketSell(e.target.closest('.market-sell-card'));
+    }
+  });
   document.getElementById('market-mine-active').addEventListener('click', (e) => {
     const cancel = e.target.closest('.market-cancel-btn'); if (cancel) { e.stopPropagation(); return cancelMarketListing(parseInt(cancel.dataset.id)); }
   });
