@@ -166,6 +166,7 @@ test('assign : succès → déplace le personnage hors de son ancien emplacement
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 7, copies: 1, stars: 2 });
+  prisma.idleSlot.findUnique = async () => null; // emplacement vide avant l'assignation
   const writes = [];
   prisma.idleSlot.updateMany = async (args) => { writes.push(['updateMany', args]); return { count: 1 }; };
   prisma.idleSlot.upsert = async (args) => { writes.push(['upsert', args]); return {}; };
@@ -180,6 +181,40 @@ test('assign : succès → déplace le personnage hors de son ancien emplacement
   assert.equal(writes[1][0], 'upsert');
   assert.equal(writes[1][1].create.characterId, 7);
   assert.equal(writes[1][1].create.slotIndex, 1);
+});
+
+test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé remet le niveau à 1 (sinon héritage gratuit de puissance)", async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 9, copies: 1, stars: 1 });
+  prisma.idleSlot.findUnique = async () => ({ id: 5, userId: 'u1', slotIndex: 0, characterId: 3, level: 50 }); // occupant précédent, niveau 50
+  prisma.idleSlot.updateMany = async () => ({ count: 0 });
+  let upsertArgs = null;
+  prisma.idleSlot.upsert = async (args) => { upsertArgs = args; return {}; };
+
+  const res = await app.request('/api/idle/assign', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0, characterId: 9 },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(upsertArgs.update.level, 1);
+});
+
+test('assign : réassigner le MÊME personnage déjà en place (clic redondant) ne touche pas son niveau', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 3, copies: 1, stars: 1 });
+  prisma.idleSlot.findUnique = async () => ({ id: 5, userId: 'u1', slotIndex: 0, characterId: 3, level: 50 });
+  prisma.idleSlot.updateMany = async () => ({ count: 0 });
+  let upsertArgs = null;
+  prisma.idleSlot.upsert = async (args) => { upsertArgs = args; return {}; };
+
+  const res = await app.request('/api/idle/assign', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0, characterId: 3 },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(upsertArgs.update.level, undefined);
 });
 
 test('unassign : vide un emplacement', async () => {

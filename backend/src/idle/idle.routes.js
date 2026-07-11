@@ -234,6 +234,13 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
       if (slotIndex >= user.idleSlotsUnlocked) throw new IdleError(400, 'Cet emplacement est verrouillé');
       const owned = await tx.userCard.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
       if (!owned) throw new IdleError(400, 'Tu ne possèdes pas ce personnage');
+      // Le niveau d'entraînement appartient à L'EMPLACEMENT, pas au personnage
+      // (cf. IdleSlot.level) : il doit repartir à 1 dès qu'un AUTRE personnage
+      // y prend place — sinon un perso tout juste assigné hériterait gratuitement
+      // du niveau (donc de la production) laissé par l'occupant précédent.
+      // No-op si c'est déjà le même personnage (évite de punir un clic redondant).
+      const currentSlot = await tx.idleSlot.findUnique({ where: { userId_slotIndex: { userId: user.id, slotIndex } } });
+      const sameCharacter = currentSlot && currentSlot.characterId === characterId;
       // Déplace le personnage s'il était déjà assigné ailleurs (1 seul emplacement à la fois).
       await tx.idleSlot.updateMany({
         where: { userId: user.id, characterId, slotIndex: { not: slotIndex } },
@@ -241,7 +248,7 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
       });
       await tx.idleSlot.upsert({
         where: { userId_slotIndex: { userId: user.id, slotIndex } },
-        update: { characterId, assignedAt: new Date() },
+        update: { characterId, assignedAt: new Date(), ...(sameCharacter ? {} : { level: 1 }) },
         create: { userId: user.id, slotIndex, characterId, assignedAt: new Date() },
       });
     });
