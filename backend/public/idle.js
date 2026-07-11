@@ -103,9 +103,13 @@ function idleBump(el) {
 
 function renderIdleDecor(dojo, prevDojo) {
   const view = document.getElementById('view-idle');
-  if (view && view.dataset.decor !== dojo.decor.theme) {
-    view.dataset.decor = dojo.decor.theme;
+  if (view) view.dataset.decor = dojo.decor.theme; // pilote le thème CSS, sans condition (idempotent)
+  // idleParticleTheme (pas l'attribut DOM, déjà présent par défaut dans le HTML
+  // statique pour "wood") sert de source de vérité pour savoir si les effets
+  // ambiants de CE thème ont déjà été générés une fois.
+  if (idleParticleTheme !== dojo.decor.theme) {
     idleSpawnParticles(dojo.decor.theme);
+    idleSetScenery(dojo.decor.theme);
   }
   const ico = document.getElementById('idle-decor-ico');
   if (ico) ico.innerHTML = `<i class="fas ${IDLE_DECOR_ICONS[dojo.decor.theme] || 'fa-fire'}"></i>`;
@@ -150,6 +154,58 @@ function idleSpawnParticles(theme) {
     html += `<span class="idle-particle" style="left:${left}%;animation-delay:${delay}s;animation-duration:${duration}s;font-size:${size}rem">${glyph}</span>`;
   }
   box.innerHTML = html;
+}
+
+// Scène décorative en SVG inline (silhouettes) par thème — pas d'asset externe
+// à héberger/générer, juste des formes plates dans la couleur du décor.
+// Régénérée seulement au changement de thème (comme les particules).
+const IDLE_SCENERY_SVG = {
+  wood: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
+    <path d="M0,320 L150,220 300,300 480,180 650,280 820,200 1000,300 1200,240 1200,400 0,400 Z" fill="#3a2c1c" opacity=".35"/>
+    <path d="M520,300 L520,180 600,120 680,180 680,300 Z" fill="#2a1c10" opacity=".5"/>
+    <path d="M480,190 L600,90 720,190 Z" fill="#3a2814" opacity=".55"/>
+  </svg>`,
+  garden: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
+    <path d="M0,320 C200,260 350,300 500,260 C700,210 900,290 1200,250 L1200,400 0,400 Z" fill="#1f4a2c" opacity=".35"/>
+    <rect x="300" y="180" width="14" height="130" fill="#2a2015" opacity=".5"/>
+    <circle cx="270" cy="150" r="55" fill="#e97fb0" opacity=".45"/>
+    <circle cx="320" cy="130" r="45" fill="#f2a0c4" opacity=".4"/>
+    <circle cx="330" cy="175" r="42" fill="#e97fb0" opacity=".4"/>
+  </svg>`,
+  temple: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
+    <path d="M0,330 L200,260 400,310 600,240 800,300 1000,250 1200,300 1200,400 0,400 Z" fill="#4a1620" opacity=".35"/>
+    <rect x="560" y="230" width="16" height="90" fill="#2a0e14" opacity=".55"/>
+    <rect x="624" y="230" width="16" height="90" fill="#2a0e14" opacity=".55"/>
+    <path d="M540,230 L660,230 640,200 560,200 Z" fill="#7a2230" opacity=".6"/>
+    <path d="M520,200 L680,200 645,165 555,165 Z" fill="#6a1c28" opacity=".6"/>
+    <path d="M545,165 L655,165 630,135 570,135 Z" fill="#5a1622" opacity=".6"/>
+    <circle cx="470" cy="260" r="7" fill="#ffb648" opacity=".7"/>
+    <circle cx="730" cy="260" r="7" fill="#ffb648" opacity=".7"/>
+  </svg>`,
+  gold: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
+    <circle cx="600" cy="220" r="150" fill="#ffb648" opacity=".18"/>
+    <path d="M0,330 L250,270 500,320 700,260 950,310 1200,270 1200,400 0,400 Z" fill="#3a2a06" opacity=".4"/>
+    <rect x="520" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
+    <rect x="600" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
+    <rect x="680" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
+    <path d="M500,240 L700,240 670,205 530,205 Z" fill="#9a6a1c" opacity=".65"/>
+    <path d="M480,205 L720,205 680,165 520,165 Z" fill="#c68a28" opacity=".65"/>
+    <path d="M510,165 L690,165 655,125 545,125 Z" fill="#e0a838" opacity=".65"/>
+    <circle cx="600" cy="115" r="10" fill="#ffe08c" opacity=".85"/>
+  </svg>`,
+  celestial: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
+    <circle cx="920" cy="110" r="70" fill="#dce4ff" opacity=".28"/>
+    <circle cx="150" cy="90" r="2.5" fill="#fff" opacity=".8"/>
+    <circle cx="260" cy="140" r="2" fill="#fff" opacity=".6"/>
+    <circle cx="380" cy="70" r="2.5" fill="#fff" opacity=".7"/>
+    <circle cx="720" cy="60" r="2" fill="#fff" opacity=".6"/>
+    <circle cx="1020" cy="200" r="2.5" fill="#fff" opacity=".7"/>
+    <path d="M0,330 L200,270 420,320 640,260 860,310 1080,260 1200,290 1200,400 0,400 Z" fill="#1a1240" opacity=".4"/>
+  </svg>`,
+};
+function idleSetScenery(theme) {
+  const box = document.getElementById('idle-scenery');
+  if (box) box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
 }
 
 function renderIdleMilestone(dojo) {
