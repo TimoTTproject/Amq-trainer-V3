@@ -978,12 +978,16 @@ async function chooseInitialMode() {
 // ── APP UI ──
 // Ligne de jauge d'un plafond anti-farm (barre + reset) — partagée entre le
 // popover d'en-tête et la page Économie.
-function rewardCapRow(label, cap) {
+// `softOver` : plafond « doux » (quiz solo) — au-delà, les gains passent au
+// taux réduit (~20 %) au lieu de s'arrêter, le libellé l'explique.
+function rewardCapRow(label, cap, softOver = false) {
   const pct = cap.max ? Math.min(100, Math.round((cap.used / cap.max) * 100)) : 0;
+  const full = cap.max && cap.used >= cap.max;
   const msLeft = Math.max(0, cap.resetAt - Date.now());
   const h = Math.floor(msLeft / 3600000);
   const m = Math.floor((msLeft % 3600000) / 60000);
-  const resetTxt = h > 0 ? `reset dans ${h} h ${String(m).padStart(2, '0')}` : `reset dans ${m} min`;
+  const inTxt = h > 0 ? `dans ${h} h ${String(m).padStart(2, '0')}` : `dans ${m} min`;
+  const resetTxt = full && softOver ? `gains réduits (~20 %) · taux plein ${inTxt}` : `reset ${inTxt}`;
   return `<div class="reward-cap-row">
       <div class="reward-cap-label"><span>${label}</span><span>${cap.used}/${cap.max} 🪙</span></div>
       <div class="reward-cap-bar"><div class="reward-cap-fill${pct >= 100 ? ' full' : ''}" style="width:${pct}%"></div></div>
@@ -1079,7 +1083,7 @@ function setupAppUI() {
     setRewardCapsPopover(true);
     try {
       const data = await api('/api/economy/reward-caps');
-      rewardCapsPopover.innerHTML = `<h4>Plafonds anti-farm</h4>${rewardCapRow('🎯 Quiz solo (6h)', data.quiz)}${rewardCapRow('🎮 Multi / Coop (6h)', data.multiplayer)}<button type="button" class="reward-caps-more" id="reward-caps-goto-economy">Voir toute l'économie →</button>`;
+      rewardCapsPopover.innerHTML = `<h4>Plafonds anti-farm</h4>${rewardCapRow('🎯 Quiz solo (6h)', data.quiz, true)}${rewardCapRow('🎮 Multi / Coop (6h)', data.multiplayer)}<button type="button" class="reward-caps-more" id="reward-caps-goto-economy">Voir toute l'économie →</button>`;
     } catch (e) {
       rewardCapsPopover.innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
     }
@@ -2419,8 +2423,12 @@ function startRewardGauge() {
       stake = Math.max(1, Math.round(roundReward.max * m));
       atFloor = m <= roundReward.floor + 0.001;
     }
-    el.innerHTML = `<i class="fas fa-bolt"></i> ${stake} 🪙 en jeu`;
-    el.classList.toggle('low', atFloor);
+    // Plafond de la fenêtre atteint : régime réduit (~20 %, cf. serveur) — la
+    // jauge montre la vraie valeur pour ne pas promettre un gain plein.
+    const overCap = rewardCap && rewardCap.max && rewardCap.used >= rewardCap.max;
+    if (overCap) stake = Math.max(1, Math.round(stake * 0.2));
+    el.innerHTML = `<i class="fas fa-bolt"></i> ${stake} 🪙 en jeu${overCap ? ' <small>(taux réduit)</small>' : ''}`;
+    el.classList.toggle('low', atFloor || !!overCap);
   };
   tick();
   if (roundReward.timed) gaugeTimer = setInterval(tick, 250);
@@ -2441,7 +2449,7 @@ function renderRewardCap(cap) {
   el.classList.remove('hidden');
   el.classList.toggle('full', full);
   el.innerHTML = full
-    ? `🚫 Plafond atteint : ${cap.max} 🪙 / 6 h · reset ${capResetText(cap.resetAt)}`
+    ? `⚡ Plafond ${cap.max} 🪙/6 h atteint — gains réduits (~20 %) · taux plein ${capResetText(cap.resetAt)}`
     : `<i class="fas fa-shield-halved"></i> Plafond proche : <b>${cap.used}</b>/${cap.max} 🪙 <small>(6 h)</small>`;
 }
 function capResetText(ts) {
@@ -2583,7 +2591,7 @@ async function guessAnswer(forcedGuess) {
   const detail = document.getElementById('reward-detail');
   if (detail) {
     detail.textContent = r.rewardCap && r.rewardCap.capped
-      ? '🚫 Plafond anti-farm atteint (300 🪙 / 6 h)'
+      ? `⚡ Plafond 6 h atteint — gain au taux réduit (~20 %) · taux plein ${capResetText(r.rewardCap.resetAt)}`
       : (r.reward ? rewardDetailText(r.breakdown) : '');
   }
 

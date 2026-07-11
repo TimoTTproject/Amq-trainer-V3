@@ -214,9 +214,14 @@ function maxRewardFor(song, firstCorrect, level) {
   return Math.max(1, Math.round(computeReward(song, firstCorrect) * (LEVEL_MULT[level] ?? 1)));
 }
 
-// Plafond anti-farm du quiz solo : au plus QUIZ_CAP tokens par fenêtre glissante.
+// Plafond anti-farm du quiz solo : au plus QUIZ_CAP tokens à taux plein par
+// fenêtre. Au-delà, les gains ne tombent PAS à zéro mais passent en régime
+// réduit (OVERCAP_RATE) : l'anti-farm tient (le plafond effectif reste du même
+// ordre) sans que la session devienne « morte » en plein milieu — le pire
+// moment pour couper un joueur motivé.
 const QUIZ_CAP = 300;
 const QUIZ_WINDOW_MS = 6 * 3600 * 1000; // 6 heures
+const OVERCAP_RATE = 0.2; // ~20 % du gain normal au-delà du plafond (min 1)
 // État de la fenêtre courante d'un utilisateur (depuis req.user).
 function quizCapState(user) {
   const now = Date.now();
@@ -745,10 +750,13 @@ router.post('/guess', requirePlayer, rateLimit({ max: 120, name: 'guess' }), asy
   const speedMult = firstCorrect ? speedMultiplier(elapsedSec) : 1; // pas de bonus vitesse au rejeu
   const base = computeReward(song, firstCorrect);
   const reward = correct && ranked ? Math.max(1, Math.round(base * levelMult * speedMult)) : 0;
-  // Plafond anti-farm : limite le gain à ce qu'il reste dans la fenêtre de 6h.
+  // Plafond anti-farm : taux plein jusqu'à ce qu'il reste dans la fenêtre de
+  // 6 h, puis régime réduit (OVERCAP_RATE) sur le dépassement — jamais 0.
   const cap = quizCapState(req.user);
-  const grant = Math.min(reward, cap.left);
-  const capped = reward > grant; // une partie (ou tout) a été coupée par le plafond
+  const within = Math.min(reward, cap.left);
+  const overflow = reward - within;
+  const grant = within + (overflow > 0 ? Math.max(1, Math.round(overflow * OVERCAP_RATE)) : 0);
+  const capped = overflow > 0; // une partie (ou tout) du gain est passée au taux réduit
   const srs = nextSrs(prev?.srsStreak, correct); // planification répétition espacée
 
   const result = await prisma.$transaction(async (tx) => {
