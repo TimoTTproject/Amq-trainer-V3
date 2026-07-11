@@ -69,7 +69,7 @@ function ensureAppReady() {
   appReadyPromise = (async () => {
     await Promise.all([
       'tower.js', 'admin.js', 'playlist.js', 'playlists.js', 'albums.js', 'daily.js', 'gacha.js',
-      'catalog.js', 'community.js', 'market.js', 'profile.js', 'anime-search-core.js', 'anime-autocomplete.js', 'tutorial.js',
+      'catalog.js', 'community.js', 'market.js', 'profile.js', 'anime-search-core.js', 'anime-autocomplete.js', 'tutorial.js', 'idle.js',
     ].map(loadScript));
     await loadScript('/socket.io/socket.io.js');
     await loadScript('mp-client.js');
@@ -79,6 +79,7 @@ function ensureAppReady() {
     if (typeof initDailyUI === 'function') initDailyUI();
     if (typeof initAnimeAutocompleteUI === 'function') initAnimeAutocompleteUI();
     if (typeof initMpUI === 'function') initMpUI();
+    if (typeof initIdleUI === 'function') initIdleUI();
     if (!appUiReady) {
       setupAppUI();
       appUiReady = true;
@@ -740,6 +741,7 @@ function showView(name, options = {}) {
   document.getElementById('view-characters').classList.toggle('hidden', name !== 'characters');
   document.getElementById('view-craft').classList.toggle('hidden', name !== 'craft');
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
+  document.getElementById('view-idle').classList.toggle('hidden', name !== 'idle');
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
@@ -815,6 +817,7 @@ function navTo(name) {
   if (name === 'daily') return openDaily();
   if (name === 'leaderboard') return openLeaderboard();
   if (name === 'admin') return openAdmin();
+  if (name === 'idle') return openIdle();
   if (name === 'profile') return openProfile();
   if (name === 'mp') return openMultiplayer();
   if (name === 'coop') return startCoop();
@@ -981,6 +984,7 @@ function renderHeaderUser() {
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
+  document.getElementById('nav-idle').classList.toggle('hidden', !currentUser.isAdmin);
   const rk = document.getElementById('header-rank');
   if (rk) {
     if (currentUser.rankTier) { rk.innerHTML = tierBadge(currentUser.rankTier); rk.classList.remove('hidden'); }
@@ -1489,6 +1493,10 @@ function setupAppUI() {
   document.getElementById('fuse-reveal-close')?.addEventListener('click', () => document.getElementById('fuse-reveal-modal')?.classList.add('hidden'));
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
+  document.getElementById('back-home-idle')?.addEventListener('click', () => {
+    if (typeof closeIdle === 'function') closeIdle();
+    else showView('play');
+  });
   let adminSearchTimer;
   document.getElementById('admin-search').addEventListener('input', (e) => {
     clearTimeout(adminSearchTimer);

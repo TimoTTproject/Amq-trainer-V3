@@ -26,7 +26,7 @@ const BROWSER_BUNDLE = [
   'public/i18n.js', 'public/sfx.js', 'public/main.js',
   'public/tower.js', 'public/admin.js', 'public/playlist.js', 'public/playlists.js', 'public/daily.js',
   'public/gacha.js', 'public/catalog.js', 'public/community.js', 'public/profile.js',
-  'public/anime-autocomplete.js', 'public/mp-client.js',
+  'public/anime-autocomplete.js', 'public/mp-client.js', 'public/idle.js',
 ];
 
 function walk(dir, out) {

@@ -96,6 +96,18 @@ model User {
   // cours quand il tire (la bannière elle-même change chaque lundi, imposée).
   bannerBoostEnabled Boolean @default(true)
 
+  // Dojo (idle/clicker) — monnaie « essence » entièrement séparée des tokens,
+  // ne sert qu'aux améliorations du Dojo (voir src/idle/idle.js).
+  essence           Int      @default(0)
+  idleLastCollectAt DateTime @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
+  idleSlotsUnlocked Int      @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
+  idleProdLevel     Int      @default(0) // amélioration « Discipline » : multiplicateur de production globale
+  idleClickLevel    Int      @default(0) // amélioration « Concentration » : puissance du clic manuel
+  // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
+  // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
+  // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
+  essenceEarnedTotal Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   lastSeenAt DateTime? // dernière connexion socket (présence) — pour l'annuaire des joueurs
@@ -127,6 +139,7 @@ model User {
   playlists       Playlist[]
   cardAlbums      CardAlbum[]
   songsAdded      Song[]
+  idleSlots       IdleSlot[]
 }
 
 model PasswordResetToken {
@@ -554,6 +567,7 @@ model Character {
   albumEntries   CardAlbumItem[]
   promotionVotes PromotionVote[]
   marketListings MarketListing[]
+  idleSlots      IdleSlot[]
 
   @@index([rarity])
   @@index([series])
@@ -714,4 +728,31 @@ model TowerRun {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
+}
+
+// ─────────────────────────────────────────────
+// DOJO (idle/clicker)
+// ─────────────────────────────────────────────
+
+// Un emplacement d'entraînement du Dojo. Un personnage possédé (UserCard) qui y
+// est assigné génère de l'essence en continu, hors-ligne compris (plafonné, voir
+// src/idle/idle.js). `slotIndex` va de 0 à IDLE_MAX_SLOTS-1 ; seuls les index
+// < User.idleSlotsUnlocked sont utilisables. `characterId` null = emplacement vide.
+model IdleSlot {
+  id          Int       @id @default(autoincrement())
+  userId      String
+  slotIndex   Int
+  characterId Int?
+  assignedAt  DateTime?
+  // Niveau d'entraînement de LA CARTE assignée ici (pas du compte) : illimité,
+  // remis à 1 quand on change de personnage sur cet emplacement. Distinct des
+  // ★ d'ascension du gacha (cosmétiques là-bas) — ici chaque niveau augmente
+  // la production, coût croissant payé en essence (voir idle.js).
+  level       Int       @default(1)
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, slotIndex])
+  @@index([userId])
 }
