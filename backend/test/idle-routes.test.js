@@ -66,6 +66,41 @@ test('GET /state : la production hors-ligne est plafonnée et reflétée dans pe
   assert.equal(res.json.slots[0].character.rarity, 'mythic');
 });
 
+test("GET /state : un personnage échangé/vendu/fusionné pendant qu'il était assigné ne produit plus rien et s'affiche vide", async () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+  const user = dbUser({ idleLastCollectAt: twoHoursAgo });
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findMany = async () => [
+    { id: 1, userId: 'u1', slotIndex: 0, characterId: 42, level: 3, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
+  ];
+  // Le personnage n'a plus de ligne UserCard (dernier exemplaire perdu) : la
+  // ligne IdleSlot le référence encore, mais starsMap ne le contient plus.
+  prisma.userCard.findMany = async () => [];
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.totalRate, 0);
+  assert.equal(res.json.pendingEssence, 0);
+  assert.equal(res.json.slots[0].character, null);
+});
+
+test('collect : nettoie automatiquement en base un emplacement dont le personnage n\'est plus possédé', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findMany = async () => [
+    { id: 1, userId: 'u1', slotIndex: 0, characterId: 42, level: 3, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
+  ];
+  prisma.userCard.findMany = async () => [];
+  prisma.user.update = async () => user;
+  let cleared = null;
+  prisma.idleSlot.updateMany = async (args) => { cleared = args; return { count: 1 }; };
+  const res = await app.request('/api/idle/collect', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.ok(cleared);
+  assert.deepEqual(cleared.where.slotIndex.in, [0]);
+  assert.equal(cleared.data.characterId, null);
+  assert.equal(cleared.data.level, 1);
+});
+
 test('GET /state : le niveau du Dojo dérive de essenceEarnedTotal, décor + XP cohérents', async () => {
   const user = dbUser({ essenceEarnedTotal: dojoXpForLevel(10) });
   prisma.user.findUnique = async () => user;
@@ -131,6 +166,7 @@ test('assign : succès → déplace le personnage hors de son ancien emplacement
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 7, copies: 1, stars: 2 });
+  prisma.idleSlot.findUnique = async () => null; // emplacement vide avant l'assignation
   const writes = [];
   prisma.idleSlot.updateMany = async (args) => { writes.push(['updateMany', args]); return { count: 1 }; };
   prisma.idleSlot.upsert = async (args) => { writes.push(['upsert', args]); return {}; };
@@ -145,6 +181,40 @@ test('assign : succès → déplace le personnage hors de son ancien emplacement
   assert.equal(writes[1][0], 'upsert');
   assert.equal(writes[1][1].create.characterId, 7);
   assert.equal(writes[1][1].create.slotIndex, 1);
+});
+
+test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé remet le niveau à 1 (sinon héritage gratuit de puissance)", async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 9, copies: 1, stars: 1 });
+  prisma.idleSlot.findUnique = async () => ({ id: 5, userId: 'u1', slotIndex: 0, characterId: 3, level: 50 }); // occupant précédent, niveau 50
+  prisma.idleSlot.updateMany = async () => ({ count: 0 });
+  let upsertArgs = null;
+  prisma.idleSlot.upsert = async (args) => { upsertArgs = args; return {}; };
+
+  const res = await app.request('/api/idle/assign', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0, characterId: 9 },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(upsertArgs.update.level, 1);
+});
+
+test('assign : réassigner le MÊME personnage déjà en place (clic redondant) ne touche pas son niveau', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.userCard.findUnique = async () => ({ userId: 'u1', characterId: 3, copies: 1, stars: 1 });
+  prisma.idleSlot.findUnique = async () => ({ id: 5, userId: 'u1', slotIndex: 0, characterId: 3, level: 50 });
+  prisma.idleSlot.updateMany = async () => ({ count: 0 });
+  let upsertArgs = null;
+  prisma.idleSlot.upsert = async (args) => { upsertArgs = args; return {}; };
+
+  const res = await app.request('/api/idle/assign', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0, characterId: 3 },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(upsertArgs.update.level, undefined);
 });
 
 test('unassign : vide un emplacement', async () => {
@@ -279,6 +349,7 @@ test('claim-milestone : un palier déjà réclamé ne peut pas l\'être une seco
 test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/emplacements/améliorations) et incrémente prestigeLevel', async () => {
   const tooLow = dbUser({ essenceEarnedTotal: 0 });
   prisma.user.findUnique = async () => tooLow;
+  prisma.user.update = async () => tooLow;
   const lowRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(lowRes.status, 400);
 
@@ -302,4 +373,25 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(userUpdate.idleClickLevel, 0);
   assert.equal(userUpdate.prestigeLevel.increment, 1);
   assert.equal(userUpdate.essenceEarnedTotal, undefined); // le niveau du Dojo (le lieu) n'est jamais reset
+});
+
+test("prestige : solde la production en attente AVANT le reset — elle compte dans l'XP du Dojo au lieu d'être perdue", async () => {
+  const anHourAgo = new Date(Date.now() - 3600 * 1000);
+  const xpAtMin = dojoXpForLevel(PRESTIGE_MIN_DOJO_LEVEL);
+  const eligible = dbUser({ essenceEarnedTotal: xpAtMin, idleLastCollectAt: anHourAgo });
+  prisma.user.findUnique = async () => eligible;
+  prisma.idleSlot.findMany = async () => [
+    { id: 1, userId: 'u1', slotIndex: 0, characterId: 42, level: 1, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
+  ];
+  prisma.userCard.findMany = async () => [{ characterId: 42, stars: 1 }];
+  prisma.idleSlot.updateMany = async () => ({ count: 1 });
+  const updateCalls = [];
+  prisma.user.update = async (args) => { updateCalls.push(args.data); return eligible; };
+  const res = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  // 1er appel = solde de la production en attente (avant le reset) : doit créditer essenceEarnedTotal.
+  assert.ok(updateCalls[0].essenceEarnedTotal.increment > 0);
+  // 2e appel = le reset lui-même : ne touche jamais essenceEarnedTotal.
+  assert.equal(updateCalls[1].essenceEarnedTotal, undefined);
+  assert.equal(updateCalls[1].essence, 0);
 });

@@ -54,12 +54,24 @@ async function loadRateInputs(tx, userId) {
   return { slots, starsMap };
 }
 
+// N'accepte que les emplacements dont le personnage est encore RÉELLEMENT
+// possédé (présent dans starsMap, dérivé de UserCard) — pas seulement encore
+// présent dans le catalogue (`s.character`). Un perso échangé/vendu/fusionné
+// pendant qu'il était assigné disparaît de UserCard (la ligne est supprimée à
+// 0 exemplaire, cf. trade/market/fuse) sans que l'IdleSlot soit prévenu ; sans
+// ce garde-fou, `?? 1` ferait tourner l'emplacement comme si de rien n'était.
 function computeTotalRate(slots, starsMap, prodLevel, dojoLevel, prestigeLevel) {
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId) || 1, s.level) : sum),
+    (sum, s) => (s.characterId && s.character && starsMap.has(s.characterId) ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId), s.level) : sum),
     0
   );
   return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel) * prestigeMultiplier(prestigeLevel);
+}
+
+// Emplacements dont le personnage assigné n'est plus possédé (cf. commentaire
+// de computeTotalRate) — à vider.
+function orphanedSlotIndexes(slots, starsMap) {
+  return slots.filter((s) => s.characterId && !starsMap.has(s.characterId)).map((s) => s.slotIndex);
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
@@ -81,6 +93,17 @@ async function withSettle(userId, mutate) {
       where: { id: userId },
       data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
     });
+    // Vide les emplacements dont le personnage a été échangé/vendu/fusionné
+    // entre-temps (cf. computeTotalRate) — la production n'en tenait déjà plus
+    // compte, ceci nettoie juste l'IdleSlot pour que l'emplacement redevienne
+    // assignable normalement au lieu de rester "occupé" par un fantôme.
+    const orphans = orphanedSlotIndexes(slots, starsMap);
+    if (orphans.length) {
+      await tx.idleSlot.updateMany({
+        where: { userId, slotIndex: { in: orphans } },
+        data: { characterId: null, assignedAt: null, level: 1 },
+      });
+    }
     if (mutate) await mutate(tx, settledUser);
     return settledUser;
   });
@@ -108,8 +131,11 @@ async function buildState(userId) {
     const row = bySlot.get(i);
     const locked = i >= user.idleSlotsUnlocked;
     let character = null;
-    if (row && row.characterId && row.character) {
-      const stars = starsMap.get(row.characterId) || 1;
+    // starsMap.has(...) : n'affiche que si le personnage est encore RÉELLEMENT
+    // possédé (cf. computeTotalRate) — un slot orphelin s'affiche vide, prêt à
+    // être auto-nettoyé en base à la prochaine action (voir withSettle).
+    if (row && row.characterId && row.character && starsMap.has(row.characterId)) {
+      const stars = starsMap.get(row.characterId);
       const level = row.level || 1;
       character = {
         id: row.character.id,
@@ -208,6 +234,13 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
       if (slotIndex >= user.idleSlotsUnlocked) throw new IdleError(400, 'Cet emplacement est verrouillé');
       const owned = await tx.userCard.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
       if (!owned) throw new IdleError(400, 'Tu ne possèdes pas ce personnage');
+      // Le niveau d'entraînement appartient à L'EMPLACEMENT, pas au personnage
+      // (cf. IdleSlot.level) : il doit repartir à 1 dès qu'un AUTRE personnage
+      // y prend place — sinon un perso tout juste assigné hériterait gratuitement
+      // du niveau (donc de la production) laissé par l'occupant précédent.
+      // No-op si c'est déjà le même personnage (évite de punir un clic redondant).
+      const currentSlot = await tx.idleSlot.findUnique({ where: { userId_slotIndex: { userId: user.id, slotIndex } } });
+      const sameCharacter = currentSlot && currentSlot.characterId === characterId;
       // Déplace le personnage s'il était déjà assigné ailleurs (1 seul emplacement à la fois).
       await tx.idleSlot.updateMany({
         where: { userId: user.id, characterId, slotIndex: { not: slotIndex } },
@@ -215,7 +248,7 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
       });
       await tx.idleSlot.upsert({
         where: { userId_slotIndex: { userId: user.id, slotIndex } },
-        update: { characterId, assignedAt: new Date() },
+        update: { characterId, assignedAt: new Date(), ...(sameCharacter ? {} : { level: 1 }) },
         create: { userId: user.id, slotIndex, characterId, assignedAt: new Date() },
       });
     });
@@ -324,11 +357,13 @@ router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, 
 // production permanent (+PRESTIGE_BONUS_PER_LEVEL par niveau, cumulable à
 // l'infini). Le niveau du Dojo (essenceEarnedTotal) et les jalons réclamés
 // sont volontairement CONSERVÉS — seule la puissance personnelle repart à zéro.
+// Passe par withSettle (comme toutes les autres actions) pour que la
+// production en attente soit soldée AVANT le reset : sinon elle disparaissait
+// sans même compter dans l'XP du Dojo, ce qui contredit l'idée que le lieu
+// garde tout — le joueur part avec le crédit de sa dernière session.
 router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   try {
-    await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: req.user.id } });
-      if (!user) throw new IdleError(404, 'Compte introuvable');
+    await withSettle(req.user.id, async (tx, user) => {
       const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
       if (dojoLevel < PRESTIGE_MIN_DOJO_LEVEL) {
         throw new IdleError(400, `Le Dojo doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
@@ -341,7 +376,6 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
           idleSlotsUnlocked: START_SLOTS,
           idleProdLevel: 0,
           idleClickLevel: 0,
-          idleLastCollectAt: new Date(),
           prestigeLevel: { increment: 1 },
         },
       });
