@@ -10,6 +10,10 @@ let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle d
 function setupProfileUI() {
   document.getElementById('profile-btn').addEventListener('click', openProfile);
   document.getElementById('profile-share').addEventListener('click', shareProfile);
+  // Section Compte (email / mot de passe / suppression)
+  document.getElementById('account-email-btn')?.addEventListener('click', accountChangeEmail);
+  document.getElementById('account-pass-btn')?.addEventListener('click', accountChangePassword);
+  document.getElementById('account-delete-btn')?.addEventListener('click', accountDelete);
   document.getElementById('profile-back').addEventListener('click', () => navTo('community'));
   document.getElementById('profile-claim').addEventListener('click', claimLevels);
   document.getElementById('avatar-upload-btn').addEventListener('click', () =>
@@ -225,6 +229,62 @@ function renderProfile(d, isSelf = true) {
   renderTopSeries(d.topSeries || []);
   renderGenreStats(d.genreStats || []);
   renderProfileBadges(d);
+  renderAccountSection(isSelf);
+}
+
+// Section « Compte » (son propre profil uniquement) : email, mot de passe,
+// suppression. Les routes exigent le mot de passe quand le compte en a un.
+function renderAccountSection(isSelf) {
+  const box = document.getElementById('profile-account');
+  if (!box) return;
+  const show = isSelf && currentUser && !currentUser.isGuest;
+  box.classList.toggle('hidden', !show);
+  if (!show) return;
+  document.getElementById('account-email-current').textContent = currentUser.email || '— (compte OAuth sans email)';
+  document.getElementById('account-msg').textContent = '';
+}
+function accountMsg(text, ok) {
+  const el = document.getElementById('account-msg');
+  if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--red)'; }
+}
+async function accountChangeEmail() {
+  const email = document.getElementById('account-email-new').value.trim();
+  const password = document.getElementById('account-email-pass').value;
+  if (!email) return accountMsg('Renseigne la nouvelle adresse.', false);
+  try {
+    const r = await api('/api/auth/change-email', { method: 'POST', body: JSON.stringify({ email, password }) });
+    currentUser.email = r.email;
+    document.getElementById('account-email-current').textContent = r.email;
+    document.getElementById('account-email-new').value = '';
+    document.getElementById('account-email-pass').value = '';
+    accountMsg('Adresse email mise à jour ✓', true);
+  } catch (e) { accountMsg(e.message, false); }
+}
+async function accountChangePassword() {
+  const currentPassword = document.getElementById('account-pass-current').value;
+  const newPassword = document.getElementById('account-pass-new').value;
+  if (!newPassword) return accountMsg('Renseigne le nouveau mot de passe.', false);
+  try {
+    await api('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    document.getElementById('account-pass-current').value = '';
+    document.getElementById('account-pass-new').value = '';
+    accountMsg('Mot de passe mis à jour ✓', true);
+  } catch (e) { accountMsg(e.message, false); }
+}
+async function accountDelete() {
+  if (!confirm('Supprimer DÉFINITIVEMENT ton compte ?\n\nStats, collection, tokens, échanges : tout est effacé, sans récupération possible.')) return;
+  // Le serveur exige le mot de passe si le compte en a un, sinon « SUPPRIMER ».
+  const hasPassword = !!currentUser.email; // heuristique d'affichage ; le serveur tranche
+  const raw = prompt(hasPassword
+    ? 'Confirme avec ton mot de passe (comptes OAuth sans mot de passe : tape SUPPRIMER) :'
+    : 'Tape SUPPRIMER pour confirmer :');
+  if (raw === null) return;
+  const body = raw === 'SUPPRIMER' ? { confirm: 'SUPPRIMER' } : { password: raw, confirm: raw === 'SUPPRIMER' ? raw : '' };
+  try {
+    await api('/api/auth/account', { method: 'DELETE', body: JSON.stringify(body) });
+    alert('Compte supprimé. À bientôt peut-être !');
+    location.href = '/';
+  } catch (e) { accountMsg(e.message, false); }
 }
 
 // Collection complète d'un joueur (lecture seule) — la vitrine du profil ne

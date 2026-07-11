@@ -74,6 +74,7 @@
           <span class="af"><b>04</b> <span data-i18n="Classement">Classement</span></span>
         </div>
         <button class="btn-link about-link" data-about><span data-i18n="Règles & crédits">Règles & crédits</span> <i class="fas fa-arrow-right"></i></button>
+        <button class="btn-link about-link" data-legal><span data-i18n="Mentions légales & confidentialité">Mentions légales & confidentialité</span></button>
       </section>
 
       <section class="auth-access">
@@ -174,6 +175,7 @@
           <button id="mute-btn" class="btn-secondary" title="Activer ou couper les effets sonores" aria-label="Activer ou couper les effets sonores"><i class="fas fa-volume-high"></i></button>
           <button id="lang-toggle" class="btn-secondary lang-toggle" title="Langue / Language" aria-label="Changer de langue">EN</button>
           <button id="theme-toggle" class="btn-secondary" title="Thème clair ou sombre" aria-label="Changer de thème"><i class="fas fa-sun"></i><span>Thème clair</span></button>
+          <button class="btn-secondary" data-legal title="Mentions légales & politique de confidentialité"><i class="fas fa-scale-balanced"></i><span>Mentions légales</span></button>
           <button id="logout-btn" class="btn-secondary" aria-label="Se déconnecter"><i class="fas fa-sign-out-alt"></i><span>Déconnexion</span></button>
         </div>
       </div>
@@ -548,6 +550,36 @@
           <div class="profile-section token-history">
             <h3><i class="fas fa-coins"></i> Historique des tokens</h3>
             <ul id="token-history-list"><li class="muted">Aucune transaction pour l'instant.</li></ul>
+          </div>
+
+          <!-- Compte (visible sur SON profil uniquement) : email, mot de passe,
+               suppression — thème/langue/volume restent dans le menu ⋮ du header. -->
+          <div class="profile-section hidden" id="profile-account">
+            <h3><i class="fas fa-user-gear"></i> Compte</h3>
+            <div class="account-block">
+              <b>Adresse email</b>
+              <p class="hint">Actuelle : <span id="account-email-current">—</span></p>
+              <div class="account-form">
+                <input type="email" id="account-email-new" placeholder="Nouvelle adresse" autocomplete="email" />
+                <input type="password" id="account-email-pass" placeholder="Mot de passe" autocomplete="current-password" />
+                <button class="btn-secondary" id="account-email-btn">Changer</button>
+              </div>
+            </div>
+            <div class="account-block">
+              <b>Mot de passe</b>
+              <p class="hint">Compte créé via AniList/Google sans mot de passe : laisse « actuel » vide pour en définir un.</p>
+              <div class="account-form">
+                <input type="password" id="account-pass-current" placeholder="Actuel" autocomplete="current-password" />
+                <input type="password" id="account-pass-new" placeholder="Nouveau (min. 8)" autocomplete="new-password" />
+                <button class="btn-secondary" id="account-pass-btn">Changer</button>
+              </div>
+            </div>
+            <div class="account-block">
+              <b>Supprimer mon compte</b>
+              <p class="hint">Suppression définitive et immédiate : stats, collection, tokens, échanges, annonces. Aucune récupération possible (droit à l'effacement).</p>
+              <button class="btn-secondary admin-danger" id="account-delete-btn"><i class="fas fa-triangle-exclamation"></i> Supprimer définitivement</button>
+            </div>
+            <p class="hint" id="account-msg"></p>
           </div>
         </div>
       </div>
@@ -1985,6 +2017,34 @@
   </div>
 
   <!-- Modale À propos / Règles (accessible connecté ou non) -->
+  <!-- Mentions légales & politique de confidentialité (LCEN / RGPD) -->
+  <div id="legal-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="legal-title">
+    <div class="modal-card about-card">
+      <button class="modal-close" id="legal-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+      <h2 class="about-title" id="legal-title"><i class="fas fa-scale-balanced"></i> Mentions légales &amp; confidentialité</h2>
+      <div class="about-body legal-body">
+        <h3>Éditeur</h3>
+        <p>AMQTrainer est un projet indépendant et gratuit, sans publicité ni vente de données.
+           Contact : via le <a href="https://discord.gg/qsbn3bQh5K" target="_blank" rel="noopener">serveur Discord</a>.</p>
+        <h3>Hébergement</h3>
+        <p>Application hébergée par <b>Railway Corp.</b> (railway.com) ; diffusion et protection via <b>Cloudflare, Inc.</b> (cloudflare.com).</p>
+        <h3>Données collectées</h3>
+        <ul>
+          <li><b>Compte</b> : email (connexion et récupération de mot de passe), pseudo, avatar et bio choisis par toi. Mot de passe stocké haché (bcrypt), jamais en clair.</li>
+          <li><b>Jeu</b> : statistiques de quiz (manches jouées/réussies), collection de cartes, transactions de la monnaie virtuelle, historique multijoueur et messages de chat (temporaires, en mémoire).</li>
+          <li><b>Connexion externe (optionnelle)</b> : via AniList ou Google, seuls l'identifiant, le pseudo et l'avatar publics sont récupérés. Ta liste AniList n'est lue que pour construire ton catalogue de quiz.</li>
+          <li><b>Mesure d'audience</b> : un identifiant de visite anonyme (aléatoire, stocké dans ton navigateur) pour compter les visiteurs uniques. Aucun service tiers de tracking.</li>
+        </ul>
+        <h3>Cookies</h3>
+        <p>Un unique cookie de session, strictement nécessaire à la connexion. Pas de cookie publicitaire ni de traceur tiers — aucune bannière requise.</p>
+        <h3>Services tiers</h3>
+        <p>Médias musicaux fournis par animethemes.moe · métadonnées d'anime par AniList · envoi des emails de récupération par Resend. Les notifications push, si tu les actives, passent par ton navigateur.</p>
+        <h3>Tes droits (RGPD)</h3>
+        <p>Tu peux rectifier tes données (pseudo/bio/avatar/email/mot de passe) depuis ton profil, et <b>supprimer définitivement ton compte</b> (Profil → Compte → Supprimer) : l'effacement est immédiat et irréversible. Pour toute autre demande, contacte-nous sur Discord.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="about-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div class="modal-card about-card">
       <button class="modal-close" id="about-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>

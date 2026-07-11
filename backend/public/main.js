@@ -549,6 +549,18 @@ function setupGlobalAccessibility() {
       event.preventDefault();
       openAbout(event.target.closest('[data-about]'));
     }
+    // Mentions légales & confidentialité (même mécanique que la modale À propos ;
+    // Échap/focus-trap déjà gérés génériquement pour toute .modal-overlay).
+    if (event.target.closest('[data-legal]')) {
+      event.preventDefault();
+      document.getElementById('legal-modal')?.classList.remove('hidden');
+      document.getElementById('legal-close')?.focus();
+    }
+  });
+  document.getElementById('legal-close')?.addEventListener('click', () =>
+    document.getElementById('legal-modal').classList.add('hidden'));
+  document.getElementById('legal-modal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'legal-modal') event.target.classList.add('hidden');
   });
   document.getElementById('about-close').addEventListener('click', closeAbout);
   aboutModal.addEventListener('click', (event) => {

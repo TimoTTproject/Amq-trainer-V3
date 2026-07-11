@@ -18,4 +18,23 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { isAdmin, requireAdmin };
+// Suppression d'un compte, PARTAGÉE entre la route admin et l'auto-suppression
+// (RGPD). Cascade totale via les relations Prisma (onDelete: Cascade) — mais on
+// rend d'abord au stock les exemplaires de cartes possédés (CardInstance), pour
+// ne pas fausser les compteurs de rareté dynamique (minted/soldOut).
+async function deleteUserCascade(prisma, userId) {
+  const instances = await prisma.cardInstance.groupBy({
+    by: ['characterId'], where: { userId }, _count: { _all: true },
+  });
+  await prisma.$transaction([
+    ...instances.map((row) =>
+      prisma.character.update({
+        where: { id: row.characterId },
+        data: { minted: { decrement: row._count._all }, soldOut: false },
+      })
+    ),
+    prisma.user.delete({ where: { id: userId } }),
+  ]);
+}
+
+module.exports = { isAdmin, requireAdmin, deleteUserCascade };

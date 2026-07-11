@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { requireAdmin } = require('./admin');
+const { requireAdmin, deleteUserCascade } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY, RARITY_RATES, RARITY_LABELS } = require('../gacha/rarity');
 const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
@@ -661,18 +661,7 @@ router.delete('/user/:id', requireAuth, requireAdmin, async (req, res) => {
   const target = await prisma.user.findUnique({ where: { id }, select: { id: true, displayName: true, email: true } });
   if (!target) return res.status(404).json({ error: 'Compte introuvable' });
 
-  const instances = await prisma.cardInstance.groupBy({
-    by: ['characterId'], where: { userId: id }, _count: { _all: true },
-  });
-  await prisma.$transaction([
-    ...instances.map((row) =>
-      prisma.character.update({
-        where: { id: row.characterId },
-        data: { minted: { decrement: row._count._all }, soldOut: false },
-      })
-    ),
-    prisma.user.delete({ where: { id } }),
-  ]);
+  await deleteUserCascade(prisma, id); // cascade partagée avec l'auto-suppression (auth.routes)
   res.json({ ok: true, deleted: { id: target.id, displayName: target.displayName, email: target.email } });
 });
 

@@ -4,8 +4,8 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { prisma } = require('../db');
 const { setAuthCookie, setGuestCookie, clearAuthCookie } = require('./jwt');
-const { requirePlayer } = require('./auth.middleware');
-const { isAdmin } = require('../admin/admin');
+const { requirePlayer, requireAuth } = require('./auth.middleware');
+const { isAdmin, deleteUserCascade } = require('../admin/admin');
 const { tierFromMmr } = require('../mp/rank');
 const { resolveEquipped } = require('../shop/cosmetics');
 const { rateLimit } = require('../util/ratelimit');
@@ -127,6 +127,78 @@ router.post('/logout', (req, res) => {
   clearAuthCookie(res);
   res.json({ success: true });
 });
+
+// Change (ou définit) le mot de passe du compte connecté. Un compte créé via
+// OAuth (AniList/Google) n'a pas encore de mot de passe : il peut en définir
+// un sans « mot de passe actuel » — la session prouve la possession du compte.
+router.post(
+  '/change-password',
+  requireAuth,
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: 'change-password' }),
+  async (req, res) => {
+    const current = String(req.body?.currentPassword || '');
+    const next = String(req.body?.newPassword || '');
+    const err = passwordError(next);
+    if (err) return res.status(400).json({ error: err });
+    if (req.user.passwordHash) {
+      const ok = current && (await bcrypt.compare(current, req.user.passwordHash));
+      if (!ok) return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    }
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { passwordHash: await bcrypt.hash(next, 10) },
+    });
+    res.json({ ok: true });
+  }
+);
+
+// Change l'adresse email du compte connecté. Sensible (l'email sert au reset de
+// mot de passe et au statut admin) : mot de passe exigé quand le compte en a un.
+router.post(
+  '/change-email',
+  requireAuth,
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: 'change-email' }),
+  async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!EMAIL_RE.test(email) || email.length > 254) {
+      return res.status(400).json({ error: 'Adresse email invalide' });
+    }
+    if (req.user.passwordHash) {
+      const ok = password && (await bcrypt.compare(password, req.user.passwordHash));
+      if (!ok) return res.status(401).json({ error: 'Mot de passe incorrect' });
+    }
+    try {
+      await prisma.user.update({ where: { id: req.user.id }, data: { email } });
+    } catch (e) {
+      if (e.code === 'P2002') return res.status(400).json({ error: 'Cette adresse est déjà utilisée' });
+      throw e;
+    }
+    res.json({ ok: true, email });
+  }
+);
+
+// Auto-suppression du compte (droit à l'effacement RGPD) : mot de passe exigé
+// quand le compte en a un, sinon confirmation textuelle. Même cascade que la
+// suppression admin (exemplaires de cartes rendus au stock, relations en cascade).
+router.delete(
+  '/account',
+  requireAuth,
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 5, name: 'delete-account' }),
+  async (req, res) => {
+    const password = String(req.body?.password || '');
+    const confirm = String(req.body?.confirm || '');
+    if (req.user.passwordHash) {
+      const ok = password && (await bcrypt.compare(password, req.user.passwordHash));
+      if (!ok) return res.status(401).json({ error: 'Mot de passe incorrect' });
+    } else if (confirm !== 'SUPPRIMER') {
+      return res.status(400).json({ error: 'Tape SUPPRIMER pour confirmer' });
+    }
+    await deleteUserCascade(prisma, req.user.id);
+    clearAuthCookie(res);
+    res.json({ ok: true });
+  }
+);
 
 router.post('/guest', rateLimit({ windowMs: 60000, max: 10, name: 'guest-session' }), (req, res) => {
   const guestId = `guest:${crypto.randomUUID()}`;

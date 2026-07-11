@@ -1169,6 +1169,34 @@ select.album-form-control {
 .gcard .badge.locked-badge { right: 6px; background: rgba(0,0,0,.6); color: #fff; }
 .gcard-series { font-size: .68rem; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
+/* ── Accessibilité : préférence système « réduire les animations » ──
+   Neutralise transitions/animations décoratives (le confetti est coupé côté
+   JS). Les barres de temps du quiz restent : ce sont des indicateurs de jeu,
+   pas des décorations — les figer fausserait l'information. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.quiz-timefill):not(.tower-timefill):not(#daily-timefill),
+  *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Profil : section Compte ── */
+.account-block { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.account-block:last-of-type { border-bottom: none; }
+.account-block > b { display: block; margin-bottom: 4px; }
+.account-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.account-form input {
+  flex: 1 1 150px; min-width: 0; background: var(--bg-deep); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 9px 10px;
+}
+.account-form input:focus { outline: none; border-color: var(--accent); }
+.legal-body h3 { margin: 14px 0 6px; font-size: .95rem; }
+.legal-body ul { padding-left: 18px; }
+.legal-body li { margin-bottom: 6px; }
+
 /* ── Chat global du menu multi ── */
 .mp-global-chat .mp-chat { max-height: 220px; min-height: 90px; overflow-y: auto; }
 .mp-global-chat .mp-chat-input { margin-top: 8px; }

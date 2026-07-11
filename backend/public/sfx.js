@@ -65,6 +65,8 @@ const sfx = (function () {
 
 // ── Confettis ──
 function burstConfetti(count = 28) {
+  // Préférence système « réduire les animations » : pas de pluie de confettis.
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
   let layer = document.getElementById('confetti-layer');
   if (!layer) {
     layer = document.createElement('div');
