@@ -120,11 +120,11 @@ function dojoLevelMultiplier(level) {
 // joueur reste dans le décor le plus prestigieux — pas de plafond de contenu
 // pour autant, le niveau continue de grimper).
 const DOJO_DECOR = [
-  { level: 1, name: 'Dojo de bois', theme: 'wood' },
-  { level: 10, name: 'Jardin zen', theme: 'garden' },
-  { level: 25, name: 'Temple écarlate', theme: 'temple' },
-  { level: 50, name: 'Sanctuaire doré', theme: 'gold' },
-  { level: 100, name: 'Royaume céleste', theme: 'celestial' },
+  { level: 1, name: 'Dojo de bois', theme: 'wood', flavor: "Un simple dojo de planches. Le maître observe en silence : tout grand parcours commence humblement." },
+  { level: 10, name: 'Jardin zen', theme: 'garden', flavor: "Les premiers cerisiers ont fleuri. La discipline porte ses fruits — au sens propre." },
+  { level: 25, name: 'Temple écarlate', theme: 'temple', flavor: "Le Dojo attire des disciples de toute la région. Les lanternes ne s'éteignent plus." },
+  { level: 50, name: 'Sanctuaire doré', theme: 'gold', flavor: "L'or orne les colonnes. On raconte votre entraînement jusque dans les capitales voisines." },
+  { level: 100, name: 'Royaume céleste', theme: 'celestial', flavor: "Le Dojo a dépassé la légende. Les étoiles elles-mêmes semblent s'entraîner avec vous." },
 ];
 function decorForLevel(level) {
   let current = DOJO_DECOR[0];
@@ -134,6 +134,31 @@ function decorForLevel(level) {
     else { next = tier; break; }
   }
   return { current, next };
+}
+
+// ── Jalons (coffres) : tous les MILESTONE_INTERVAL niveaux de Dojo, un coffre
+// d'essence est réclamable une fois. Permanents (jamais reperdus, y compris
+// après une Prestige) puisqu'ils dépendent du niveau du Dojo, lui aussi permanent.
+const MILESTONE_INTERVAL = 5;
+const MILESTONE_BASE_REWARD = 50;
+const MILESTONE_GROWTH = 1.5;
+function milestoneTierForLevel(level) {
+  return Math.floor((level || 1) / MILESTONE_INTERVAL);
+}
+function milestoneReward(tier) {
+  if (tier <= 0) return 0;
+  return Math.round(MILESTONE_BASE_REWARD * Math.pow(MILESTONE_GROWTH, tier - 1));
+}
+
+// ── Prestige (« Retraite du Maître ») : remet à zéro la RUN (essence,
+// emplacements, niveaux de personnage, Discipline/Concentration) contre un
+// bonus de production PERMANENT, cumulable indéfiniment. Le niveau du Dojo
+// (donc son décor) et les jalons déjà réclamés sont conservés — seule la
+// puissance personnelle du joueur repart de zéro, pas le lieu lui-même.
+const PRESTIGE_MIN_DOJO_LEVEL = 10; // en dessous, rien à gagner à prestiger (on perdrait plus qu'on ne gagne)
+const PRESTIGE_BONUS_PER_LEVEL = 0.1; // +10% de production permanente par Prestige
+function prestigeMultiplier(level) {
+  return 1 + Math.max(0, level || 0) * PRESTIGE_BONUS_PER_LEVEL;
 }
 
 module.exports = {
@@ -169,4 +194,12 @@ module.exports = {
   dojoLevelMultiplier,
   DOJO_DECOR,
   decorForLevel,
+  MILESTONE_INTERVAL,
+  MILESTONE_BASE_REWARD,
+  MILESTONE_GROWTH,
+  milestoneTierForLevel,
+  milestoneReward,
+  PRESTIGE_MIN_DOJO_LEVEL,
+  PRESTIGE_BONUS_PER_LEVEL,
+  prestigeMultiplier,
 };

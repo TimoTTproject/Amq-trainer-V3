@@ -5666,10 +5666,64 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-upgrade-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-upgrade-maxed { flex: none; font-size: .72rem; font-weight: 700; color: var(--green); }
 
+/* Texte d'ambiance + coffre de jalon */
+.idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin-top: 8px; }
+.idle-milestone-btn {
+  margin-left: auto; flex: none; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, #ffb648, #ff5d8f); color: #2a1400; font-weight: 700; font-size: .78rem;
+  padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px;
+  animation: idleMilestonePulse 1.6s ease-in-out infinite;
+}
+@keyframes idleMilestonePulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,182,72,0); }
+  50% { transform: scale(1.05); box-shadow: 0 0 14px rgba(255,182,72,.55); }
+}
+
+/* Prestige */
+.idle-prestige-card {
+  display: flex; align-items: center; gap: 14px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px; padding: 14px 16px; flex-wrap: wrap;
+}
+.idle-prestige-info { flex: 1; min-width: 220px; }
+.idle-prestige-info p { font-size: .78rem; color: var(--text-2); margin-top: 4px; }
+.idle-prestige-info .hint { margin-top: 6px; }
+.idle-prestige-card .btn-secondary { flex: none; }
+.idle-prestige-card .btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Particules ambiantes du décor (feuilles/braises/étoiles), purement cosmétique */
+.idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.idle-particle {
+  position: absolute; top: -10%; opacity: 0; pointer-events: none;
+  animation-name: idleParticleFall; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+@keyframes idleParticleFall {
+  0% { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+  8% { opacity: .8; }
+  92% { opacity: .6; }
+  100% { transform: translateY(110vh) translateX(40px) rotate(200deg); opacity: 0; }
+}
+.idle-space-header, .idle-decor-banner, .idle-content { position: relative; z-index: 1; }
+
+/* Pièces qui s'envolent au clic manuel */
+.idle-click-coin {
+  position: absolute; top: 30%; left: 50%; pointer-events: none; font-size: 1rem;
+  animation: idleCoinFly .6s ease-out forwards;
+}
+@keyframes idleCoinFly {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(.8); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.1); }
+}
+
+/* Modale « pendant ton absence » */
+.idle-welcome-msg { color: var(--text-2); line-height: 1.5; }
+
 @media (max-width: 700px) {
   .idle-top { flex-direction: column; align-items: stretch; }
   .idle-rate { margin-right: 0; }
   .idle-content { padding: 14px 12px 50px; }
   .idle-decor-banner { margin: 10px 12px 0; }
   .idle-space-header { padding: 14px 12px 4px; }
+  .idle-decor-row { flex-wrap: wrap; }
+  .idle-milestone-btn { margin-left: 0; }
+  .idle-prestige-card { flex-direction: column; align-items: stretch; }
 }

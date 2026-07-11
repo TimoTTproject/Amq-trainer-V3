@@ -1569,6 +1569,7 @@
 
     <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
     <div id="view-idle" class="hidden idle-space" data-decor="wood">
+      <div id="idle-particles" class="idle-particles" aria-hidden="true"></div>
       <div class="idle-space-header">
         <button class="idle-back" id="back-home-idle" title="Accueil" aria-label="Accueil"><i class="fas fa-arrow-left"></i></button>
         <div class="idle-space-title">
@@ -1584,9 +1585,11 @@
             <b id="idle-decor-name">—</b>
             <span class="idle-decor-lvl" id="idle-dojo-level">Niveau 1</span>
           </div>
+          <button class="idle-milestone-btn hidden" id="idle-milestone-btn"><i class="fas fa-gift"></i> Coffre <span id="idle-milestone-reward"></span></button>
         </div>
         <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
         <div class="idle-decor-next" id="idle-decor-next"></div>
+        <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
       </div>
 
       <div class="idle-content">
@@ -1605,6 +1608,28 @@
 
         <h3 class="idle-section-title">Améliorations</h3>
         <div id="idle-upgrades" class="idle-upgrades"></div>
+
+        <h3 class="idle-section-title">Prestige</h3>
+        <div class="idle-prestige-card">
+          <div class="idle-prestige-info">
+            <b>Retraite du Maître <span id="idle-prestige-lvl" class="idle-upgrade-lvl">Nv. 0</span></b>
+            <p>Repars de zéro (essence, emplacements, améliorations) contre un bonus de production <b>permanent</b> (×<span id="idle-prestige-mult">1.00</span> actuellement). Le niveau du Dojo et les coffres réclamés sont conservés.</p>
+            <p class="hint" id="idle-prestige-hint"></p>
+          </div>
+          <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- « Pendant ton absence » : résumé de la production accumulée hors-ligne -->
+    <div id="idle-welcome" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Pendant ton absence">
+      <div class="modal-card">
+        <button class="modal-close" id="idle-welcome-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-moon"></i> Pendant ton absence…</h3>
+        <p id="idle-welcome-msg" class="idle-welcome-msg"></p>
+        <div class="modal-actions">
+          <button class="btn-primary" id="idle-welcome-collect"><i class="fas fa-hand-holding"></i> Récolter</button>
+        </div>
       </div>
     </div>
 

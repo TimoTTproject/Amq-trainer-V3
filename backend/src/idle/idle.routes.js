@@ -25,6 +25,10 @@ const {
   dojoXpForLevel,
   dojoLevelMultiplier,
   decorForLevel,
+  milestoneTierForLevel,
+  milestoneReward,
+  PRESTIGE_MIN_DOJO_LEVEL,
+  prestigeMultiplier,
 } = require('./idle');
 
 const router = express.Router();
@@ -50,12 +54,12 @@ async function loadRateInputs(tx, userId) {
   return { slots, starsMap };
 }
 
-function computeTotalRate(slots, starsMap, prodLevel, dojoLevel) {
+function computeTotalRate(slots, starsMap, prodLevel, dojoLevel, prestigeLevel) {
   const base = slots.reduce(
     (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId) || 1, s.level) : sum),
     0
   );
-  return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel);
+  return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel) * prestigeMultiplier(prestigeLevel);
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
@@ -71,7 +75,7 @@ async function withSettle(userId, mutate) {
     if (!user) throw new IdleError(404, 'Compte introuvable');
     const { slots, starsMap } = await loadRateInputs(tx, userId);
     const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-    const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel);
+    const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel, user.prestigeLevel);
     const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
     const settledUser = await tx.user.update({
       where: { id: userId },
@@ -89,13 +93,13 @@ async function buildState(userId) {
     where: { id: userId },
     select: {
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
-      essenceEarnedTotal: true,
+      essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true,
     },
   });
   if (!user) return null;
   const { slots, starsMap } = await loadRateInputs(prisma, userId);
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-  const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel);
+  const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel, user.prestigeLevel);
   const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
@@ -124,6 +128,7 @@ async function buildState(userId) {
   const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
   const xpIntoLevel = user.essenceEarnedTotal - dojoXpForLevel(dojoLevel);
   const xpForNextLevel = dojoXpForLevel(dojoLevel + 1) - dojoXpForLevel(dojoLevel);
+  const milestoneTier = milestoneTierForLevel(dojoLevel);
 
   return {
     essence: user.essence,
@@ -156,6 +161,18 @@ async function buildState(userId) {
       multiplier: dojoLevelMultiplier(dojoLevel),
       decor,
       nextDecor: nextDecor ? { ...nextDecor, levelsRemaining: nextDecor.level - dojoLevel } : null,
+      milestone: {
+        tier: milestoneTier,
+        claimed: user.idleMilestoneClaimed,
+        available: milestoneTier > user.idleMilestoneClaimed,
+        reward: milestoneTier > user.idleMilestoneClaimed ? milestoneReward(milestoneTier) : null,
+      },
+      prestige: {
+        level: user.prestigeLevel,
+        multiplier: prestigeMultiplier(user.prestigeLevel),
+        minLevel: PRESTIGE_MIN_DOJO_LEVEL,
+        eligible: dojoLevel >= PRESTIGE_MIN_DOJO_LEVEL,
+      },
     },
   };
 }
@@ -274,6 +291,60 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 30, name:
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
       await tx.idleSlot.update({ where: { id: slot.id }, data: { level: { increment: 1 } } });
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  res.json(await buildState(req.user.id));
+});
+
+// Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
+// Dojo). Permanent : n'est jamais remis à zéro, y compris après une Prestige.
+router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+  try {
+    await withSettle(req.user.id, async (tx, user) => {
+      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
+      const tier = milestoneTierForLevel(dojoLevel);
+      if (tier <= user.idleMilestoneClaimed) throw new IdleError(400, 'Aucun coffre à réclamer pour l’instant');
+      const reward = milestoneReward(tier);
+      await tx.user.update({
+        where: { id: user.id },
+        data: { essence: { increment: reward }, idleMilestoneClaimed: tier },
+      });
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  res.json(await buildState(req.user.id));
+});
+
+// Prestige (« Retraite du Maître ») : reset la RUN contre un bonus de
+// production permanent (+PRESTIGE_BONUS_PER_LEVEL par niveau, cumulable à
+// l'infini). Le niveau du Dojo (essenceEarnedTotal) et les jalons réclamés
+// sont volontairement CONSERVÉS — seule la puissance personnelle repart à zéro.
+router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id } });
+      if (!user) throw new IdleError(404, 'Compte introuvable');
+      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
+      if (dojoLevel < PRESTIGE_MIN_DOJO_LEVEL) {
+        throw new IdleError(400, `Le Dojo doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
+      }
+      await tx.idleSlot.updateMany({ where: { userId: user.id }, data: { characterId: null, assignedAt: null, level: 1 } });
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          essence: 0,
+          idleSlotsUnlocked: START_SLOTS,
+          idleProdLevel: 0,
+          idleClickLevel: 0,
+          idleLastCollectAt: new Date(),
+          prestigeLevel: { increment: 1 },
+        },
+      });
     });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
