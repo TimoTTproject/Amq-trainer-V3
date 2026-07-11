@@ -19,6 +19,7 @@ let mpSpectating = false; // je regarde une partie (lecture seule, pas joueur)
 let mpVotedSkip = false; // ai-je voté pour passer l'extrait en cours ?
 let mpVoteSkipVotes = 0;
 let mpVoteSkipNeeded = 1;
+let mpCoopFreeSkip = true; // coop : passe encore gratuit (1 par partie)
 let mpClockOffset = 0; // serverNow - clientNow (voir mpSyncClock)
 
 // Le serveur envoie des timestamps ABSOLUS (startAt, countdownEndsAt) pour que
@@ -361,6 +362,7 @@ function connectMp() {
     mpVotedSkip = !!d.alreadyVotedSkip; // false sur une manche neuve, restauré si reconnexion
     mpVoteSkipVotes = d.voteSkip?.votes ?? 0;
     mpVoteSkipNeeded = d.voteSkip?.needed ?? 1;
+    mpCoopFreeSkip = d.coopFreeSkip !== false; // coop : le passe est-il encore gratuit ?
     renderMpVoteSkip();
     mpStartClip(d.clipUrl, d.startAt, d.duration);
   });
@@ -905,7 +907,12 @@ function renderMpVoteSkip() {
   btn.disabled = mpEliminated || mpSpectating;
   btn.classList.toggle('active', mpVotedSkip);
   const label = document.getElementById('mp-voteskip-label');
-  if (label) label.textContent = `Voter pour passer (${mpVoteSkipVotes}/${mpVoteSkipNeeded})`;
+  if (label) {
+    // Coop : un seul passe gratuit par partie, les suivants coûtent une vie
+    // commune (cf. endRound serveur) — le bouton annonce la couleur.
+    const coopCost = mpMode === 'coop' ? (mpCoopFreeSkip ? ' · gratuit ×1' : ' · −1 vie') : '';
+    label.textContent = `Voter pour passer (${mpVoteSkipVotes}/${mpVoteSkipNeeded})${coopCost}`;
+  }
 }
 function mpVoteSkip() {
   if (!mpSocket || mpEliminated || mpSpectating) return;

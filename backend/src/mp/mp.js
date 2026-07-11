@@ -331,6 +331,12 @@ function maybeCountdown(room) {
 function hostStart(socket) {
   const room = rooms.get(socket.data.roomId);
   if (!room || room.hostId !== socket.data.user.id || room.status !== 'lobby') return;
+  // Coop = coopératif : à deux minimum (seul, c'est un mode solo déguisé qui
+  // alimente le classement hebdo sans la contrainte d'équipe).
+  if (room.settings.mode === 'coop' && room.players.size < 2) {
+    io.to(room.id).emit('mp:info', { msg: 'Le mode coop se joue à 2 minimum — invite un ami avec le code du salon.' });
+    return;
+  }
   if (room.players.size < (room.isPublic ? PUBLIC_MIN : 1)) return;
   room.poolUnavailable = false;
   startGame(room).catch((e) => console.error('mp start error:', e && e.message));
@@ -391,9 +397,11 @@ async function startGame(room) {
   const arr = [...room.players.values()];
   arr.forEach((p) => { p.score = 0; p.correct = 0; p.team = null; p.lives = ELIM_LIVES; p.eliminated = false; });
   if (room.mode === 'teams') shuffle(arr).forEach((p, i) => { p.team = i % 2; });
-  // Coop : pool de vies commun + compteur d'étages franchis.
+  // Coop : pool de vies commun + compteur d'étages franchis + UN passe (vote
+  // skip) gratuit pour toute la partie — les suivants coûtent une vie.
   room.teamLives = room.mode === 'coop' ? COOP_START_LIVES : 0;
   room.coopCleared = 0;
+  room.coopFreeSkipUsed = false;
 
   io.to(room.id).emit('mp:game:start', {
     totalRounds: room.mode === 'coop' ? null : room.settings.rounds, ranked: room.ranked, mode: room.mode,
@@ -499,6 +507,7 @@ async function startRound(room) {
     coop: room.mode === 'coop', teamLives: room.teamLives,
     clipUrl: `/api/mp/clip/${room.id}?r=${room.round}`, startAt, duration: durationMs,
     voteSkip: { votes: 0, needed: skipVotesNeeded(room) },
+    ...(room.mode === 'coop' ? { coopFreeSkip: !room.coopFreeSkipUsed } : {}),
   });
   room.timer = setTimeout(() => endRound(room), prepMs + durationMs);
 }
@@ -650,13 +659,25 @@ function endRound(room) {
     }
   }
 
-  // Coop : l'étage est franchi si AU MOINS un joueur a trouvé ; sinon −1 vie commune.
-  // Un étage écourté par vote n'est ni franchi ni raté : il est simplement annulé.
+  // Coop : l'étage est franchi si AU MOINS un joueur a trouvé ; sinon −1 vie
+  // commune. Un étage écourté par vote n'est ni franchi ni raté — mais le passe
+  // n'est gratuit qu'UNE fois par partie : au-delà, il coûte une vie (sinon
+  // l'équipe peut sauter tous les étages difficiles sans risque).
   let floorCleared = false;
-  if (room.mode === 'coop' && !cur.votedSkip) {
-    floorCleared = [...cur.answers.values()].some((a) => a.correct);
-    if (floorCleared) room.coopCleared = (room.coopCleared || 0) + 1;
-    else room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
+  if (room.mode === 'coop') {
+    if (cur.votedSkip) {
+      if (!room.coopFreeSkipUsed) {
+        room.coopFreeSkipUsed = true;
+        io.to(room.id).emit('mp:info', { msg: 'Étage passé gratuitement — le prochain passe coûtera une vie.' });
+      } else {
+        room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
+        io.to(room.id).emit('mp:info', { msg: 'Passe gratuit déjà utilisé : étage passé pour −1 vie.' });
+      }
+    } else {
+      floorCleared = [...cur.answers.values()].some((a) => a.correct);
+      if (floorCleared) room.coopCleared = (room.coopCleared || 0) + 1;
+      else room.teamLives = Math.max(0, (room.teamLives || 0) - 1);
+    }
   }
 
   // Émission du résultat protégée : une erreur ici ne doit pas empêcher la
@@ -1067,6 +1088,7 @@ function reattach(socket) {
         alreadyPassed: room.current.passed.has(uid),
         voteSkip: { votes: skipVoteCount(room), needed: skipVotesNeeded(room) },
         alreadyVotedSkip: room.current.skipVotes.has(uid),
+        ...(room.mode === 'coop' ? { coopFreeSkip: !room.coopFreeSkipUsed } : {}),
       });
     }
   }
