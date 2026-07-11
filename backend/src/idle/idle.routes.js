@@ -20,6 +20,11 @@ const {
   slotUpgradeCost,
   OFFLINE_CAP_MS,
   pendingEssence,
+  charLevelUpCost,
+  dojoLevelForXp,
+  dojoXpForLevel,
+  dojoLevelMultiplier,
+  decorForLevel,
 } = require('./idle');
 
 const router = express.Router();
@@ -45,43 +50,52 @@ async function loadRateInputs(tx, userId) {
   return { slots, starsMap };
 }
 
-function computeTotalRate(slots, starsMap, prodLevel) {
+function computeTotalRate(slots, starsMap, prodLevel, dojoLevel) {
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId) || 1) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId) || 1, s.level) : sum),
     0
   );
-  return base * prodMultiplier(prodLevel);
+  return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel);
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
 // plafonnée) puis laisse `mutate` appliquer son effet — le tout dans UNE
 // transaction, pour que le taux utilisé au calcul soit celui d'avant la
 // mutation (ex. avant de changer un emplacement) et que rien ne se perde.
+// `essenceEarnedTotal` (jamais décrémentée) suit aussi ce gain : c'est elle qui
+// fait progresser le niveau du Dojo (décor + bonus), indépendamment de ce que
+// le joueur dépense ensuite en améliorations.
 async function withSettle(userId, mutate) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) throw new IdleError(404, 'Compte introuvable');
     const { slots, starsMap } = await loadRateInputs(tx, userId);
-    const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel);
+    const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
+    const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel);
     const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
     const settledUser = await tx.user.update({
       where: { id: userId },
-      data: { essence: { increment: collected }, idleLastCollectAt: new Date() },
+      data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
     });
     if (mutate) await mutate(tx, settledUser);
     return settledUser;
   });
 }
 
-// État complet pour l'affichage (essence, emplacements 0..MAX_SLOTS-1, coûts).
+// État complet pour l'affichage (essence, emplacements 0..MAX_SLOTS-1, coûts,
+// niveau/décor du Dojo).
 async function buildState(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true },
+    select: {
+      essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
+      essenceEarnedTotal: true,
+    },
   });
   if (!user) return null;
   const { slots, starsMap } = await loadRateInputs(prisma, userId);
-  const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel);
+  const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
+  const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel);
   const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
@@ -92,17 +106,24 @@ async function buildState(userId) {
     let character = null;
     if (row && row.characterId && row.character) {
       const stars = starsMap.get(row.characterId) || 1;
+      const level = row.level || 1;
       character = {
         id: row.character.id,
         name: row.character.name,
         imageUrl: row.character.imageUrl,
         rarity: row.character.rarity,
         stars,
-        rate: slotRate(row.character.rarity, stars),
+        level,
+        rate: slotRate(row.character.rarity, stars, level),
+        levelUpCost: charLevelUpCost(row.character.rarity, level),
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
   }
+
+  const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
+  const xpIntoLevel = user.essenceEarnedTotal - dojoXpForLevel(dojoLevel);
+  const xpForNextLevel = dojoXpForLevel(dojoLevel + 1) - dojoXpForLevel(dojoLevel);
 
   return {
     essence: user.essence,
@@ -125,6 +146,16 @@ async function buildState(userId) {
       yield: clickYield(user.idleClickLevel),
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
+    },
+    dojo: {
+      level: dojoLevel,
+      xpTotal: user.essenceEarnedTotal,
+      xpIntoLevel,
+      xpForNextLevel,
+      progress: xpForNextLevel > 0 ? Math.min(1, xpIntoLevel / xpForNextLevel) : 1,
+      multiplier: dojoLevelMultiplier(dojoLevel),
+      decor,
+      nextDecor: nextDecor ? { ...nextDecor, levelsRemaining: nextDecor.level - dojoLevel } : null,
     },
   };
 }
@@ -224,12 +255,44 @@ router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
   res.json(await buildState(req.user.id));
 });
 
+// Monte le niveau d'entraînement (illimité) du personnage assigné à un
+// emplacement — distinct des ★ d'ascension gacha, remis à 1 si on change de
+// personnage sur cet emplacement (cf. commentaire IdleSlot.level).
+router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+  const slotIndex = Number(req.body?.slotIndex);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
+    return res.status(400).json({ error: 'Emplacement invalide' });
+  }
+  try {
+    await withSettle(req.user.id, async (tx, user) => {
+      const slot = await tx.idleSlot.findUnique({
+        where: { userId_slotIndex: { userId: user.id, slotIndex } },
+        include: { character: { select: { rarity: true } } },
+      });
+      if (!slot || !slot.characterId || !slot.character) throw new IdleError(400, 'Cet emplacement est vide');
+      const cost = charLevelUpCost(slot.character.rarity, slot.level || 1);
+      if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
+      await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
+      await tx.idleSlot.update({ where: { id: slot.id }, data: { level: { increment: 1 } } });
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  res.json(await buildState(req.user.id));
+});
+
 // Clic manuel : gain instantané indépendant de la production passive (pas de
 // solde de `pending` ici, juste un ajout — évite de perdre de l'essence à
-// l'arrondi si le clic est spammé, cf. commentaire de withSettle).
+// l'arrondi si le clic est spammé, cf. commentaire de withSettle). Compte
+// aussi pour l'XP du Dojo (essenceEarnedTotal).
 router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COOLDOWN_MS, max: 1, name: 'idle-click' }), async (req, res) => {
   const gained = clickYield(req.user.idleClickLevel || 0);
-  const user = await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained } }, select: { essence: true } });
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } },
+    select: { essence: true },
+  });
   res.json({ essence: user.essence, gained });
 });
 

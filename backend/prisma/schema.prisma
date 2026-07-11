@@ -103,6 +103,10 @@ model User {
   idleSlotsUnlocked Int      @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
   idleProdLevel     Int      @default(0) // amélioration « Discipline » : multiplicateur de production globale
   idleClickLevel    Int      @default(0) // amélioration « Concentration » : puissance du clic manuel
+  // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
+  // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
+  // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
+  essenceEarnedTotal Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -740,6 +744,11 @@ model IdleSlot {
   slotIndex   Int
   characterId Int?
   assignedAt  DateTime?
+  // Niveau d'entraînement de LA CARTE assignée ici (pas du compte) : illimité,
+  // remis à 1 quand on change de personnage sur cet emplacement. Distinct des
+  // ★ d'ascension du gacha (cosmétiques là-bas) — ici chaque niveau augmente
+  // la production, coût croissant payé en essence (voir idle.js).
+  level       Int       @default(1)
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)

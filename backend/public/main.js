@@ -1493,7 +1493,10 @@ function setupAppUI() {
   document.getElementById('fuse-reveal-close')?.addEventListener('click', () => document.getElementById('fuse-reveal-modal')?.classList.add('hidden'));
   // Admin personnages
   document.getElementById('back-home-admin').addEventListener('click', () => showView('play'));
-  document.getElementById('back-home-idle')?.addEventListener('click', () => { if (typeof idleStopTicker === 'function') idleStopTicker(); showView('play'); });
+  document.getElementById('back-home-idle')?.addEventListener('click', () => {
+    if (typeof closeIdle === 'function') closeIdle();
+    else showView('play');
+  });
   let adminSearchTimer;
   document.getElementById('admin-search').addEventListener('input', (e) => {
     clearTimeout(adminSearchTimer);

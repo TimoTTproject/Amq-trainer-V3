@@ -13,15 +13,59 @@ const {
   slotUpgradeCost,
   OFFLINE_CAP_MS,
   pendingEssence,
+  charLevelMultiplier,
+  charLevelUpCost,
+  dojoXpForLevel,
+  dojoLevelForXp,
+  dojoLevelMultiplier,
+  decorForLevel,
+  DOJO_DECOR,
 } = require('../src/idle/idle');
 
-test('slotRate : croît avec la rareté et le niveau ★', () => {
+test('slotRate : croît avec la rareté, le niveau ★ et le niveau d\'entraînement', () => {
   const order = ['common', 'rare', 'epic', 'legendary', 'mythic'];
   for (let i = 1; i < order.length; i++) {
     assert.ok(slotRate(order[i], 1) > slotRate(order[i - 1], 1), `${order[i]} > ${order[i - 1]}`);
   }
   assert.ok(slotRate('mythic', 5) > slotRate('mythic', 1));
   assert.equal(slotRate('unknown-rarity', 1), 0);
+  assert.ok(slotRate('rare', 1, 10) > slotRate('rare', 1, 1));
+  assert.equal(slotRate('rare', 1), slotRate('rare', 1, 1)); // niveau absent = niveau 1 (pas de bonus)
+});
+
+test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {
+  assert.equal(charLevelMultiplier(1), 1);
+  assert.ok(charLevelMultiplier(50) > charLevelMultiplier(10));
+  assert.ok(charLevelMultiplier(1000) > charLevelMultiplier(100)); // pas de MAX, contrairement à Discipline/Concentration
+  // Rareté plus élevée = plus cher à faire progresser, à niveau égal.
+  assert.ok(charLevelUpCost('mythic', 5) > charLevelUpCost('common', 5));
+  assert.ok(charLevelUpCost('rare', 10) > charLevelUpCost('rare', 1));
+});
+
+test('dojoXpForLevel/dojoLevelForXp : formule fermée, cohérente aux paliers', () => {
+  assert.equal(dojoXpForLevel(1), 0);
+  assert.equal(dojoLevelForXp(0), 1);
+  for (const lvl of [2, 3, 10, 50, 80]) {
+    const xp = dojoXpForLevel(lvl);
+    assert.equal(dojoLevelForXp(xp), lvl, `pile au seuil du niveau ${lvl}`);
+    assert.equal(dojoLevelForXp(xp - 1), lvl - 1, `juste avant le seuil du niveau ${lvl}`);
+  }
+});
+
+test('dojoLevelMultiplier : +1%/niveau, illimité', () => {
+  assert.equal(dojoLevelMultiplier(1), 1);
+  assert.ok(dojoLevelMultiplier(101) > dojoLevelMultiplier(1));
+});
+
+test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DECOR', () => {
+  const first = decorForLevel(1);
+  assert.equal(first.current.theme, DOJO_DECOR[0].theme);
+  assert.equal(first.next.theme, DOJO_DECOR[1].theme);
+
+  const lastTier = DOJO_DECOR[DOJO_DECOR.length - 1];
+  const atLast = decorForLevel(lastTier.level + 500);
+  assert.equal(atLast.current.theme, lastTier.theme);
+  assert.equal(atLast.next, null); // plus de palier au-delà, mais le niveau continue de grimper
 });
 
 test('prodMultiplier/prodUpgradeCost : croissants, plafonnés à PROD_LEVEL_MAX', () => {

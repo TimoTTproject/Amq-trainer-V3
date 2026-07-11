@@ -5,14 +5,17 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, START_SLOTS, MAX_SLOTS } = require('../src/idle/idle');
+const {
+  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
+  START_SLOTS, MAX_SLOTS,
+} = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
 // (voir requireAdmin dans idle.routes.js) — email admin par défaut.
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, ...over,
+    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, ...over,
   };
 }
 
@@ -60,6 +63,43 @@ test('GET /state : la production hors-ligne est plafonnée et reflétée dans pe
   assert.ok(res.json.totalRate > 0);
   assert.ok(res.json.pendingEssence > 0);
   assert.equal(res.json.slots[0].character.rarity, 'mythic');
+});
+
+test('GET /state : le niveau du Dojo dérive de essenceEarnedTotal, décor + XP cohérents', async () => {
+  const user = dbUser({ essenceEarnedTotal: dojoXpForLevel(10) });
+  prisma.user.findUnique = async () => user;
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.level, 10);
+  assert.equal(res.json.dojo.xpIntoLevel, 0);
+  assert.ok(res.json.dojo.decor && res.json.dojo.decor.theme);
+  assert.ok(res.json.dojo.multiplier > 1);
+});
+
+test('slot-level : refuse un emplacement vide, sinon débite selon charLevelUpCost et incrémente le niveau', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.idleSlot.findUnique = async () => null;
+  const emptyRes = await app.request('/api/idle/slot-level', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0 },
+  });
+  assert.equal(emptyRes.status, 400);
+  assert.match(emptyRes.json.error, /vide/);
+
+  const cost = charLevelUpCost('rare', 1);
+  const rich = dbUser({ essence: cost });
+  prisma.user.findUnique = async () => rich;
+  prisma.user.update = async () => rich;
+  prisma.idleSlot.findUnique = async () => ({ id: 9, userId: 'u1', slotIndex: 0, characterId: 7, level: 1, character: { rarity: 'rare' } });
+  const writes = [];
+  prisma.idleSlot.update = async (args) => { writes.push(args); return {}; };
+  const okRes = await app.request('/api/idle/slot-level', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0 },
+  });
+  assert.equal(okRes.status, 200);
+  assert.equal(writes[0].where.id, 9);
+  assert.equal(writes[0].data.level.increment, 1);
 });
 
 test('assign : refuse un emplacement verrouillé', async () => {

@@ -5542,11 +5542,57 @@ textarea::placeholder {
   }
 }
 
-/* ── Dojo (idle/clicker) ── */
+/* ── Dojo (idle/clicker) : espace dédié plein écran, décor évolutif ── */
+body.idle-fullscreen #app-header,
+body.idle-fullscreen #navbar,
+body.idle-fullscreen #navbar-pinned-sep,
+body.idle-fullscreen #navbar-pinned { display: none !important; }
+body.idle-fullscreen #app { padding-top: 0; }
+
+.idle-space {
+  position: fixed; inset: 0; z-index: 30; overflow-y: auto;
+  background: radial-gradient(1200px 600px at 20% -10%, #2a2115, transparent), linear-gradient(160deg, #14100c, #1c1712 60%, #221a12);
+  color: var(--text);
+  transition: background .6s ease;
+}
+/* Paliers de décor — palette qui se réchauffe/s'illumine avec le niveau. */
+.idle-space[data-decor="garden"] { background: radial-gradient(1200px 600px at 20% -10%, #17301f, transparent), linear-gradient(160deg, #0d1911, #142819 60%, #16321d); }
+.idle-space[data-decor="temple"] { background: radial-gradient(1200px 600px at 20% -10%, #3a1418, transparent), linear-gradient(160deg, #1a0c0e, #2a1013 60%, #34141a); }
+.idle-space[data-decor="gold"] { background: radial-gradient(1200px 600px at 20% -10%, #3f2c05, transparent), linear-gradient(160deg, #1c1404, #2e2107 60%, #3a2a08); }
+.idle-space[data-decor="celestial"] { background: radial-gradient(1200px 600px at 20% -10%, #1a1240, transparent), linear-gradient(160deg, #0a081c, #140f33 60%, #1a1348); }
+
+.idle-space-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px 6px; }
+.idle-back {
+  width: 38px; height: 38px; border-radius: 50%; flex: none; border: 1px solid var(--border);
+  background: rgba(0,0,0,.3); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.idle-back:hover { background: rgba(0,0,0,.5); }
+.idle-space-title h2 { font-size: 1.3rem; display: flex; align-items: center; gap: 8px; }
+.idle-space-title h2 i { color: var(--orange); }
+.idle-space-title p { color: var(--text-2); font-size: .85rem; margin-top: 2px; }
+
+.idle-decor-banner {
+  margin: 10px 20px 0; padding: 12px 16px; border-radius: 14px;
+  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(2px);
+}
+.idle-decor-row { display: flex; align-items: center; gap: 10px; }
+.idle-decor-ico {
+  width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.08);
+  display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--orange); flex: none;
+}
+.idle-decor-info { display: flex; flex-direction: column; line-height: 1.2; }
+.idle-decor-info b { font-size: 1rem; }
+.idle-decor-lvl { font-size: .74rem; color: var(--text-2); }
+.idle-xp-bar { height: 7px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 10px; }
+.idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
+.idle-decor-next { font-size: .72rem; color: var(--text-2); margin-top: 6px; }
+
+.idle-content { max-width: 1100px; margin: 0 auto; padding: 18px 20px 60px; }
+
 .idle-top {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px;
-  padding: 14px 16px; margin: 14px 0 22px;
+  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
+  padding: 14px 16px; margin: 0 0 22px;
 }
 .idle-essence { display: flex; align-items: center; gap: 10px; }
 .idle-essence i { font-size: 1.4rem; color: var(--orange); }
@@ -5567,24 +5613,28 @@ textarea::placeholder {
 
 .idle-section-title { font-size: 1rem; color: var(--text-2); margin: 22px 0 10px; }
 
-.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }
 .idle-slot {
-  position: relative; border-radius: 10px; min-height: 168px;
+  position: relative; border-radius: 10px; min-height: 190px;
   display: flex; align-items: center; justify-content: center;
 }
 .idle-slot-empty {
-  flex-direction: column; gap: 8px; background: var(--bg-2); border: 2px dashed var(--border);
+  flex-direction: column; gap: 8px; background: rgba(0,0,0,.22); border: 2px dashed rgba(255,255,255,.18);
   color: var(--text-2); cursor: pointer; font-size: .8rem;
 }
 .idle-slot-empty:hover { border-color: var(--accent); color: var(--text); }
 .idle-slot-empty i { font-size: 1.4rem; }
-.idle-slot-locked { flex-direction: column; gap: 8px; background: var(--bg-3); border: 2px solid var(--border); color: var(--text-2); }
+.idle-slot-locked { flex-direction: column; gap: 8px; background: rgba(0,0,0,.3); border: 2px solid rgba(255,255,255,.1); color: var(--text-2); }
 .idle-slot-locked i { font-size: 1.2rem; }
 .idle-slot-filled { display: block; }
 .idle-slot-filled .gcard { width: 100%; height: 100%; }
+.idle-slot-lvl {
+  position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 8px;
+  background: rgba(0,0,0,.6); color: #ffd54a; font-size: .62rem; font-weight: 700;
+}
 .idle-slot-rate {
-  position: absolute; left: 0; right: 0; bottom: 0; text-align: center; padding: 3px 4px;
-  background: rgba(0,0,0,.65); color: #ffd54a; font-size: .68rem; font-weight: 700; border-radius: 0 0 10px 10px;
+  position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; padding: 3px 4px;
+  background: rgba(0,0,0,.65); color: #ffd54a; font-size: .68rem; font-weight: 700;
 }
 .idle-slot-remove {
   position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
@@ -5592,14 +5642,20 @@ textarea::placeholder {
   display: flex; align-items: center; justify-content: center;
 }
 .idle-slot-remove:hover { background: var(--red); }
+.idle-slot-levelup {
+  position: absolute; left: 0; right: 0; bottom: 0; border: none; border-radius: 0 0 10px 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: .68rem; font-weight: 700;
+  padding: 5px 4px; cursor: pointer;
+}
+.idle-slot-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
 
 .idle-upgrades { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .idle-upgrade-card {
-  display: flex; align-items: center; gap: 12px; background: var(--bg-2); border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px; padding: 12px 14px;
 }
 .idle-upgrade-ico {
-  width: 40px; height: 40px; border-radius: 10px; background: var(--bg-3); color: var(--accent);
+  width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.08); color: var(--accent);
   display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: none;
 }
 .idle-upgrade-info { flex: 1; min-width: 0; }
@@ -5613,4 +5669,7 @@ textarea::placeholder {
 @media (max-width: 700px) {
   .idle-top { flex-direction: column; align-items: stretch; }
   .idle-rate { margin-right: 0; }
+  .idle-content { padding: 14px 12px 50px; }
+  .idle-decor-banner { margin: 10px 12px 0; }
+  .idle-space-header { padding: 14px 12px 4px; }
 }

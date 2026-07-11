@@ -148,7 +148,7 @@
 
   <!-- APPLICATION (connecté) -->
   <div id="app" class="container hidden">
-    <header>
+    <header id="app-header">
       <a class="brand-home" href="/" aria-label="AMQTrainer — Accueil">
         <img src="/assets/brand/logo-horizontal-on-dark.png" alt="AMQTrainer" />
       </a>
@@ -1568,28 +1568,44 @@
     </div>
 
     <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
-    <div id="view-idle" class="hidden">
-      <button class="btn-back" id="back-home-idle"><i class="fas fa-arrow-left"></i> Accueil</button>
-      <div class="gacha-top">
-        <h2><i class="fas fa-fire"></i> Dojo <span class="hub-badge">BÊTA ADMIN</span></h2>
-      </div>
-      <p class="gacha-sub">Assigne tes personnages aux emplacements d'entraînement : ils génèrent de l'essence en continu, même hors-ligne.</p>
-
-      <div class="idle-top">
-        <div class="idle-essence">
-          <i class="fas fa-mortar-pestle"></i>
-          <div><b id="idle-essence-val">0</b><small>Essence</small></div>
+    <div id="view-idle" class="hidden idle-space" data-decor="wood">
+      <div class="idle-space-header">
+        <button class="idle-back" id="back-home-idle" title="Accueil" aria-label="Accueil"><i class="fas fa-arrow-left"></i></button>
+        <div class="idle-space-title">
+          <h2><i class="fas fa-fire"></i> Dojo <span class="hub-badge">BÊTA ADMIN</span></h2>
+          <p>Assigne tes personnages aux emplacements d'entraînement : ils génèrent de l'essence en continu, même hors-ligne.</p>
         </div>
-        <div class="idle-rate"><span id="idle-rate-val">0</span> /s</div>
-        <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
-        <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
       </div>
 
-      <h3 class="idle-section-title">Emplacements d'entraînement</h3>
-      <div id="idle-slots" class="idle-slots"></div>
+      <div class="idle-decor-banner">
+        <div class="idle-decor-row">
+          <span class="idle-decor-ico" id="idle-decor-ico"><i class="fas fa-tree"></i></span>
+          <div class="idle-decor-info">
+            <b id="idle-decor-name">—</b>
+            <span class="idle-decor-lvl" id="idle-dojo-level">Niveau 1</span>
+          </div>
+        </div>
+        <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
+        <div class="idle-decor-next" id="idle-decor-next"></div>
+      </div>
 
-      <h3 class="idle-section-title">Améliorations</h3>
-      <div id="idle-upgrades" class="idle-upgrades"></div>
+      <div class="idle-content">
+        <div class="idle-top">
+          <div class="idle-essence">
+            <i class="fas fa-mortar-pestle"></i>
+            <div><b id="idle-essence-val">0</b><small>Essence</small></div>
+          </div>
+          <div class="idle-rate"><span id="idle-rate-val">0</span> /s</div>
+          <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
+          <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
+        </div>
+
+        <h3 class="idle-section-title">Emplacements d'entraînement</h3>
+        <div id="idle-slots" class="idle-slots"></div>
+
+        <h3 class="idle-section-title">Améliorations</h3>
+        <div id="idle-upgrades" class="idle-upgrades"></div>
+      </div>
     </div>
 
     <!-- Sélecteur de personnage pour un emplacement du Dojo -->

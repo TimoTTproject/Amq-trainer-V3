@@ -17,11 +17,20 @@ function idleFormatNumber(n) {
   return sign + (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
 }
 
+const IDLE_DECOR_ICONS = { wood: 'fa-tree', garden: 'fa-leaf', temple: 'fa-landmark', gold: 'fa-crown', celestial: 'fa-star' };
+
 async function openIdle() {
   showView('idle');
+  document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
   idleStopTicker();
   idleTicker = setInterval(idleTick, 400);
   await refreshIdleState();
+}
+
+function closeIdle() {
+  idleStopTicker();
+  document.body.classList.remove('idle-fullscreen');
+  showView('play');
 }
 
 function idleStopTicker() {
@@ -58,6 +67,25 @@ function renderIdleState(state) {
   document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
+  renderIdleDecor(state.dojo);
+}
+
+function renderIdleDecor(dojo) {
+  const view = document.getElementById('view-idle');
+  if (view) view.dataset.decor = dojo.decor.theme;
+  const ico = document.getElementById('idle-decor-ico');
+  if (ico) ico.innerHTML = `<i class="fas ${IDLE_DECOR_ICONS[dojo.decor.theme] || 'fa-fire'}"></i>`;
+  document.getElementById('idle-decor-name').textContent = dojo.decor.name;
+  document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)} · ×${dojo.multiplier.toFixed(2)}`;
+  const pct = Math.round((dojo.progress || 0) * 100);
+  const fill = document.getElementById('idle-xp-fill');
+  if (fill) fill.style.width = `${pct}%`;
+  const next = document.getElementById('idle-decor-next');
+  if (next) {
+    next.textContent = dojo.nextDecor
+      ? `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
+      : `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP`;
+  }
 }
 
 function idleSlotHTML(slot) {
@@ -75,8 +103,12 @@ function idleSlotHTML(slot) {
   const c = slot.character;
   return `<div class="idle-slot idle-slot-filled">
     ${cardHTML(c, { noBorder: false })}
+    <span class="idle-slot-lvl">Nv. ${idleFormatNumber(c.level)}</span>
     <div class="idle-slot-rate">+${idleFormatNumber(c.rate)}/s</div>
     <button class="idle-slot-remove" data-slot="${slot.index}" data-action="unassign" title="Retirer"><i class="fas fa-xmark"></i></button>
+    <button class="idle-slot-levelup" data-slot="${slot.index}" data-action="levelup"${idleState && idleState.essence < c.levelUpCost ? ' disabled' : ''}>
+      <i class="fas fa-arrow-up"></i> ${idleFormatNumber(c.levelUpCost)}
+    </button>
   </div>`;
 }
 
@@ -138,6 +170,16 @@ function idleClickFeedback(gained) {
   fx.textContent = `+${gained}`;
   btn.appendChild(fx);
   setTimeout(() => fx.remove(), 700);
+}
+
+async function levelUpIdleSlot(slotIndex) {
+  try {
+    await api('/api/idle/slot-level', { method: 'POST', body: JSON.stringify({ slotIndex }) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  refreshIdleState();
 }
 
 async function buyIdleUpgrade(type) {
@@ -206,6 +248,8 @@ function initIdleUI() {
   document.getElementById('idle-slots')?.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('[data-action="unassign"]');
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));
+    const levelBtn = e.target.closest('[data-action="levelup"]');
+    if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot));
     const unlockBtn = e.target.closest('.idle-unlock-btn');
     if (unlockBtn) return buyIdleUpgrade('slot');
     const pickBtn = e.target.closest('[data-action="pick"]');
