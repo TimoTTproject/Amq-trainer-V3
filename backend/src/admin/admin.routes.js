@@ -7,7 +7,7 @@ const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacte
 const { rarityForRank, MAX_SUPPLY, RARITY_RATES, RARITY_LABELS } = require('../gacha/rarity');
 const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
 const { broadcastAll } = require('../mp/mp');
-const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, verifySeasonsBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
+const { scanEndingsBatch, backfillFormatsBatch, backfillSeasonsBatch, verifySeasonsBatch, verifyThemesBatch, repairBrokenTitlesBatch, dedupeAmbiguousAltTitles } = require('../catalog/catalog.service');
 const {
   migrateOneSongToR2,
   r2Status,
@@ -239,6 +239,24 @@ router.post('/season-check', requireAuth, requireAdmin, async (req, res) => {
     const r = await verifySeasonsBatch({
       cursor: parseInt(req.body?.cursor) || 0,
       limit: 30,
+      fix: !!req.body?.fix,
+    });
+    res.json(r);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Vérifie que les thèmes stockés correspondent à la fiche animethemes de leur
+// anilistId (les imports par recherche floue d'avant la résolution par id ont
+// pu croiser les saisons — ex. OP de MHA S1 catalogués sous la S6). Parcours
+// par curseur (boucler jusqu'à done === true), fix=true répare le lot. Réseau
+// animethemes throttlé → petits lots.
+router.post('/theme-check', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const r = await verifyThemesBatch({
+      cursor: parseInt(req.body?.cursor) || 0,
+      limit: 10,
       fix: !!req.body?.fix,
     });
     res.json(r);

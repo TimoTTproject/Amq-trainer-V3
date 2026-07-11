@@ -1401,6 +1401,12 @@
         <div id="admin-season-check-status" class="hint"></div>
       </div>
       <div class="admin-backfill">
+        <button class="btn-secondary" id="admin-theme-check-btn"><i class="fas fa-music"></i> Vérifier les thèmes (fiche animethemes par anilistId)</button>
+        <button class="btn-secondary" id="admin-theme-fix-btn"><i class="fas fa-wrench"></i> Réparer les thèmes croisés</button>
+        <div id="admin-theme-check-status" class="hint"></div>
+        <p class="hint" style="margin-top:4px">Détecte les musiques importées sous le MAUVAIS anime par l'ancienne recherche floue (ex. les OP de MHA S1 catalogués sous la saison 6). Réparer remplace le thème par le vrai (même position) ou supprime les rows étrangères à la fiche.</p>
+      </div>
+      <div class="admin-backfill">
         <label for="admin-songs-search"><i class="fas fa-magnifying-glass"></i> Chercher un anime (titre ou synonyme) — mauvais rattachement, surnom manquant sur une saison…</label>
         <div class="panel-row">
           <input type="text" id="admin-songs-search" placeholder="Ex. one piece, tensura" />

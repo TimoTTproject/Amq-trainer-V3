@@ -1441,6 +1441,8 @@ function setupAppUI() {
   document.getElementById('admin-seasons-btn').addEventListener('click', runBackfillSeasons);
   document.getElementById('admin-season-check-btn').addEventListener('click', () => runSeasonCheck(false));
   document.getElementById('admin-season-fix-btn').addEventListener('click', () => runSeasonCheck(true));
+  document.getElementById('admin-theme-check-btn').addEventListener('click', () => runThemeCheck(false));
+  document.getElementById('admin-theme-fix-btn').addEventListener('click', () => runThemeCheck(true));
   document.getElementById('admin-songs-search-btn').addEventListener('click', runSongsSearch);
   document.getElementById('admin-songs-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSongsSearch(); });
   document.getElementById('admin-r2-btn').addEventListener('click', runR2Migration);

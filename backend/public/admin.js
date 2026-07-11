@@ -585,6 +585,61 @@ async function runSeasonCheck(fix) {
   }
 }
 
+// Vérifie/répare les thèmes croisés entre animes (musique importée sous le
+// mauvais anilistId par l'ancienne recherche floue — ex. OP de MHA S1 sous la
+// saison 6). Boucle par curseur sur /api/admin/theme-check ; le réseau
+// animethemes est throttlé côté serveur → lots courts, patience affichée.
+async function runThemeCheck(fix) {
+  const checkBtn = document.getElementById('admin-theme-check-btn');
+  const fixBtn = document.getElementById('admin-theme-fix-btn');
+  const status = document.getElementById('admin-theme-check-status');
+  checkBtn.disabled = true;
+  fixBtn.disabled = true;
+  let cursor = 0, total = 0, fixed = 0, deleted = 0, unverifiable = 0, fails = 0;
+  const mismatches = [];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const renderMismatches = () => mismatches.length
+    ? `<table class="catalog-table"><thead><tr><th>Anime</th><th>Stocké</th><th>Fiche animethemes</th><th>Action</th></tr></thead><tbody>${
+      mismatches.slice(0, 60).map((m) =>
+        `<tr><td>${escapeHtml(m.anime)} <span class="muted">#${m.anilistId}</span></td><td>${escapeHtml(m.stored)}</td><td>${m.real ? escapeHtml(m.real) : '—'}</td><td>${m.action === 'update' ? 'remplacer' : 'supprimer'}</td></tr>`
+      ).join('')}</tbody></table>${mismatches.length > 60 ? `<p class="muted">… et ${mismatches.length - 60} autre(s).</p>` : ''}`
+    : '';
+  try {
+    while (true) {
+      let r;
+      try {
+        r = await api('/api/admin/theme-check', { method: 'POST', body: JSON.stringify({ cursor, fix: !!fix }) });
+      } catch (e) {
+        if (++fails > 5) throw e;
+        status.textContent = `Pause (animethemes saturé)… réessai ${fails}/5`;
+        await sleep(8000);
+        continue;
+      }
+      fails = 0;
+      total += r.processed;
+      fixed += r.fixed;
+      deleted += r.deleted;
+      unverifiable += r.unverifiable;
+      mismatches.push(...r.mismatches);
+      status.innerHTML = `${total} animes vérifiés · ${mismatches.length} anomalie(s)` +
+        `${fix ? ` · ${fixed} remplacée(s), ${deleted} supprimée(s)` : ''}` +
+        `${unverifiable ? ` · ${unverifiable} invérifiable(s)` : ''}…${renderMismatches()}`;
+      if (r.done || !r.nextCursor) break;
+      cursor = r.nextCursor;
+    }
+    status.innerHTML = mismatches.length
+      ? `${fix ? '✅ Réparé' : '⚠️ Vérification terminée'} : ${mismatches.length} anomalie(s) sur ${total} animes` +
+        `${fix ? ` (${fixed} remplacées, ${deleted} supprimées)` : ' — clique « Réparer les thèmes croisés » pour appliquer'}` +
+        `${unverifiable ? ` · ${unverifiable} anime(s) sans fiche exploitable (non touchés)` : ''}.${renderMismatches()}`
+      : `✅ Vérification terminée : ${total} animes, aucune anomalie${unverifiable ? ` (${unverifiable} invérifiables)` : ''}.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    checkBtn.disabled = false;
+    fixBtn.disabled = false;
+  }
+}
+
 // Recherche d'un anime mal rattaché (mauvais opening/ending) ou d'un surnom de
 // franchise manquant sur certaines saisons (cherche aussi dans les synonymes,
 // ex. « Tensura » présent sur une seule saison de Tensei Slime). Affiche

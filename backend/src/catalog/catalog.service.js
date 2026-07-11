@@ -622,6 +622,98 @@ async function verifySeasonsBatch({ cursor = 0, limit = 30, fix = false } = {}) 
   };
 }
 
+// Vérifie que les thèmes stockés d'un anime correspondent bien à SA fiche
+// animethemes, résolue de façon UNIVOQUE par id AniList. Les animes importés
+// avant l'existence de cette résolution (ou sans ressource AniList à l'époque)
+// ont pu recevoir les thèmes d'une AUTRE saison via la recherche floue par
+// titre — ex. les OP de MHA saison 1 catalogués sous l'anilistId de la
+// saison 6 : l'OP1 de la série se révélait « saison 6 » à chaque partie.
+// Parcours par curseur anilistId (appeler en boucle jusqu'à done === true).
+// Lecture seule par défaut ; fix=true répare le lot :
+//  - même type+numéro mais titre d'un autre anime → row mise à jour avec le
+//    vrai thème (titre/artiste/vidéo, audioUrl invalidé) — conserve les
+//    stats/likes attachés au songId ;
+//  - thème absent de la fiche (et titre inconnu de la fiche) → row supprimée
+//    (les liens UserSongStat/UserCatalogEntry/playlists suivent en cascade).
+// Garde-fous : fiche introuvable ou sans thème exploitable = invérifiable
+// (aucune action) ; un titre présent sur la fiche sous un AUTRE numéro n'est
+// pas touché (dérive de numérotation ≠ corruption).
+async function verifyThemesBatch({ cursor = 0, limit = 10, fix = false } = {}) {
+  const rows = await prisma.song.findMany({
+    where: { anilistId: { gt: cursor } },
+    distinct: ['anilistId'],
+    orderBy: { anilistId: 'asc' },
+    select: { anilistId: true },
+    take: limit,
+  });
+  if (!rows.length) {
+    return { processed: 0, mismatches: [], fixed: 0, deleted: 0, unverifiable: 0, nextCursor: null, done: true };
+  }
+
+  const mismatches = [];
+  let fixed = 0;
+  let deleted = 0;
+  let unverifiable = 0;
+  for (const { anilistId } of rows) {
+    let anime = null;
+    try {
+      anime = await fetchAnimeByAnilistId(anilistId); // throttlé (750 ms/req)
+    } catch (err) {
+      console.warn('verify themes — animethemes indispo:', err.message);
+    }
+    const songs = await prisma.song.findMany({ where: { anilistId } });
+    if (!songs.length) continue;
+    const themes = anime ? extractThemes(anime, songs[0].animeTitle) : [];
+    if (!themes.length) { unverifiable++; continue; }
+
+    const key = (t) => `${t.type}${t.number}`;
+    const byKey = new Map(themes.map((t) => [key(t), t]));
+    const ficheTitles = new Set(themes.map((t) => norm(t.title)));
+    const storedTitles = new Set(songs.map((s) => `${key(s)}|${norm(s.title)}`));
+    for (const s of songs) {
+      const real = byKey.get(key(s));
+      if (real && norm(real.title) === norm(s.title)) continue; // conforme
+      // Le titre existe sur la fiche sous un autre numéro : simple dérive de
+      // numérotation entre imports, pas une corruption — on ne touche pas.
+      if (ficheTitles.has(norm(s.title))) continue;
+      const action = real && !storedTitles.has(`${key(real)}|${norm(real.title)}`) ? 'update' : 'delete';
+      mismatches.push({
+        anilistId,
+        songId: s.id,
+        anime: s.animeTitle,
+        stored: `${s.type}${s.number} · ${s.title}`,
+        real: real ? `${real.type}${real.number} · ${real.title}` : null,
+        action,
+      });
+      if (!fix) continue;
+      if (action === 'update') {
+        // Même position (OP1/ED2…) mais mauvais contenu → on remplace par le
+        // vrai thème. audioUrl (miroir R2 de l'ancienne vidéo) invalidé.
+        await prisma.song.update({
+          where: { id: s.id },
+          data: { title: real.title, artist: real.artist, videoUrl: real.videoUrl, audioUrl: null },
+        });
+        storedTitles.add(`${key(real)}|${norm(real.title)}`);
+        fixed++;
+      } else {
+        // Thème étranger à la fiche (ou le vrai thème existe déjà en base) :
+        // suppression — c'est un import croisé depuis un autre anime.
+        await prisma.song.delete({ where: { id: s.id } });
+        deleted++;
+      }
+    }
+  }
+  return {
+    processed: rows.length,
+    mismatches,
+    fixed,
+    deleted,
+    unverifiable,
+    nextCursor: rows[rows.length - 1].anilistId,
+    done: rows.length < limit,
+  };
+}
+
 // Backfill des jaquettes AniList (`coverUrl`) — identité visuelle par licence
 // (playlist, recherche…). Même mécanique que les formats : lot d'anilistId
 // distincts encore sans jaquette, sentinelle '' pour les introuvables.
@@ -733,6 +825,7 @@ module.exports = {
   backfillFormatsBatch,
   backfillSeasonsBatch,
   verifySeasonsBatch,
+  verifyThemesBatch,
   computeSeasonNumbers,
   backfillCoversBatch,
   backfillYearsBatch,
