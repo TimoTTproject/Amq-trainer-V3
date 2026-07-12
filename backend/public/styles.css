@@ -6084,6 +6084,18 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-level-buys .idle-hero-levelup{border:1px solid var(--border);border-radius:6px;background:var(--bg-3)}#view-idle .idle-level-buys .idle-hero-levelup:not(:disabled):hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--bg-3))}
 #view-idle .idle-tabs{left:50%;right:auto;bottom:12px;transform:translateX(-50%);width:min(520px,calc(100% - 24px));padding:5px;border:1px solid var(--border);border-radius:15px;background:color-mix(in srgb,var(--bg-2) 94%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(12px)}#view-idle .idle-tab{flex:1;flex-direction:row;justify-content:center;padding:10px 12px;font-size:11px}#view-idle .idle-tab.active{color:#fff;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#000))}#view-idle .idle-tab.active i{filter:none}
 
+/* Maîtrises : lecture confortable à distance normale, sans lignes géantes
+   presque vides sur desktop. */
+#view-idle .idle-masteries{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#view-idle .idle-mastery{grid-template-columns:42px minmax(0,1fr) auto;gap:7px 12px;min-height:92px;padding:14px 16px;border-radius:12px}
+#view-idle .idle-mastery>i{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:color-mix(in srgb,#fbbf24 13%,transparent);font-size:20px}
+#view-idle .idle-mastery b{font-size:14px;line-height:1.25}
+#view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:11px;line-height:1.35}
+#view-idle .idle-mastery strong{font-size:16px}
+#view-idle .idle-mastery em{height:6px;margin-top:7px;border-radius:6px}
+#view-idle .idle-mastery>small{grid-column:2/-1;color:var(--text-2)}
+@media(max-width:760px){#view-idle .idle-masteries{grid-template-columns:1fr}#view-idle .idle-mastery{min-height:86px;padding:13px}#view-idle .idle-mastery b{font-size:13px}#view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:10px}}
+
 @media (max-width: 700px) {
   .idle-content { padding: 10px 10px 30px; }
   .idle-scene { min-height: 215px; border-radius: 14px; }
