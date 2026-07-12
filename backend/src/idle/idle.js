@@ -13,12 +13,16 @@ const MAX_SLOTS = 10; // emplacements max, débloqués un par un contre de l'ess
 
 // Production d'essence par seconde, par carte assignée, à ★1 et avant
 // multiplicateur global (amélioration « Discipline »).
+// ×6 par rapport au calibrage d'origine (0.05/0.2/0.8/3/12) : à l'ancien taux,
+// juste passer du niveau 1 au niveau 2 du Dojo (100 XP) avec 3 communs de
+// départ prenait ~11 min AVANT même le premier achat — le début de partie se
+// sentait à l'arrêt. Voir aussi CHAR_LEVEL_BONUS plus bas, relevé de concert.
 const RARITY_RATE = {
-  common: 0.05,
-  rare: 0.2,
-  epic: 0.8,
-  legendary: 3,
-  mythic: 12,
+  common: 0.3,
+  rare: 1.3,
+  epic: 5,
+  legendary: 18,
+  mythic: 65,
 };
 
 // Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité, remis
@@ -26,7 +30,11 @@ const RARITY_RATE = {
 // C'est le principal puits d'essence à long terme — ★ et Discipline plafonnent,
 // pas ça : le coût croît plus vite que le gain, donc la progression ralentit
 // sans jamais s'arrêter (courbe idle classique).
-const CHAR_LEVEL_BONUS = 0.05; // +5% de production par niveau
+// +12% (au lieu de +5%) : à l'ancien taux, niveauter un perso commun changeait
+// à peine son rendement (0.05/s de base) — des dizaines de niveaux pour un
+// effet perceptible. Le coût (CHAR_LEVEL_GROWTH) ne change pas : la courbe
+// ralentit toujours autant à long terme, seul le gain immédiat est plus net.
+const CHAR_LEVEL_BONUS = 0.12;
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
@@ -112,7 +120,10 @@ function pendingEssence(lastCollectAt, totalRate, now = new Date()) {
 // Dérivé de l'essence gagnée à VIE (User.essenceEarnedTotal, jamais décrémentée)
 // via une suite géométrique — formule fermée, donc O(1) même à très haut niveau
 // (pas de boucle : la progression est volontairement quasi infinie).
-const DOJO_XP_BASE = 100; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
+// 70 (au lieu de 100) : réduit UNIFORMÉMENT tous les paliers (la formule est
+// linéaire en DOJO_XP_BASE), pour une première poussée de niveaux plus rapide
+// sans changer la forme de la courbe (toujours +35%/niveau au-delà).
+const DOJO_XP_BASE = 70; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
 const DOJO_XP_GROWTH = 1.35; // +35% de coût par niveau
 function dojoXpForLevel(level) {
   if (level <= 1) return 0;
@@ -166,7 +177,11 @@ function decorForLevel(level) {
 // d'essence est réclamable une fois. Permanents (jamais reperdus, y compris
 // après une Prestige) puisqu'ils dépendent du niveau du Dojo, lui aussi permanent.
 const MILESTONE_INTERVAL = 5;
-const MILESTONE_BASE_REWARD = 50;
+// ×6, en phase avec RARITY_RATE : les coûts (recrutement, améliorations,
+// niveaux de perso) n'ont pas bougé, donc l'essence en circulation est
+// désormais ~6x plus abondante — une récompense de 50 serait devenue
+// négligeable face à ces montants.
+const MILESTONE_BASE_REWARD = 300;
 const MILESTONE_GROWTH = 1.5;
 function milestoneTierForLevel(level) {
   return Math.floor((level || 1) / MILESTONE_INTERVAL);

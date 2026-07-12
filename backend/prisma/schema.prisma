@@ -98,7 +98,9 @@ model User {
 
   // Dojo (idle/clicker) — monnaie « essence » entièrement séparée des tokens,
   // ne sert qu'aux améliorations du Dojo (voir src/idle/idle.js).
-  essence           Int      @default(0)
+  // 20 de départ (au lieu de 0) : évite ~10 clics à vide avant le premier
+  // recrutement pour un joueur qui vient d'ouvrir le Dojo pour la première fois.
+  essence           Int      @default(20)
   idleLastCollectAt DateTime @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
   idleSlotsUnlocked Int      @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
   idleProdLevel     Int      @default(0) // amélioration « Discipline » : multiplicateur de production globale

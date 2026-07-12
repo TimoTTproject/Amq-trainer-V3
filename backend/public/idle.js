@@ -22,6 +22,22 @@ function idleFormatNumber(n) {
   return sign + (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
 }
 
+// Temps restant avant le prochain niveau de Dojo, lisible (« 1m 30s », « 2h 5m »).
+// null si le taux de production est nul (rien à estimer, plutôt que « ∞ »).
+function idleFormatDuration(seconds) {
+  if (!isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const totalMin = Math.floor(seconds / 60);
+  if (totalMin < 60) {
+    const s = Math.ceil(seconds - totalMin * 60);
+    return s > 0 && totalMin < 10 ? `${totalMin}m ${s}s` : `${totalMin}m`;
+  }
+  const totalH = Math.floor(totalMin / 60);
+  const m = totalMin - totalH * 60;
+  if (totalH < 24) return `${totalH}h ${m}m`;
+  return `${Math.floor(totalH / 24)}j+`;
+}
+
 async function openIdle() {
   showView('idle');
   document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
@@ -149,6 +165,15 @@ function renderIdleMainHero(state) {
   if (power) power.textContent = `${idleFormatNumber(state.click.yield)} puissance active`;
 }
 
+// Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
+// chaîne vide si rien ne produit (aucun coéquipier assigné) — pas de fausse
+// promesse d'un niveau qui n'arrivera jamais.
+function idleEtaSuffix(remainingXp) {
+  const rate = idleState?.totalRate || 0;
+  const label = rate > 0 ? idleFormatDuration(remainingXp / rate) : null;
+  return label ? ` · ${label}` : '';
+}
+
 // La boucle de combat réutilise la progression serveur du Dojo : chaque niveau
 // est un ennemi, chaque dixième niveau un boss, et les « PV » sont exactement
 // l'XP restant avant le niveau suivant. Aucun état parallèle ni récompense
@@ -170,7 +195,7 @@ function renderIdleBattle(dojo) {
   if (zoneEl) zoneEl.textContent = `ZONE ${zone} · ${boss ? 'BOSS' : `VAGUE ${wave}/10`}`;
   if (tagEl) { tagEl.textContent = boss ? 'BOSS' : 'GARDIEN'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
-  if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV`;
+  if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
   if (fill) fill.style.width = `${hpPct}%`;
 }
 
@@ -213,9 +238,11 @@ function renderIdleDecor(dojo, prevDojo) {
   if (fill) fill.style.width = `${pct}%`;
   const next = document.getElementById('idle-decor-next');
   if (next) {
+    const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
+    const base = `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
     next.textContent = dojo.nextDecor
-      ? `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
-      : `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP`;
+      ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
+      : base;
   }
   // Le niveau du Dojo a grimpé depuis le dernier rendu : petite célébration
   // (pas au tout premier rendu de la session, sinon ça se déclenche à chaque ouverture).
