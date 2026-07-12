@@ -819,7 +819,7 @@ function idleSlotHTML(slot) {
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
     <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
-    <div class="idle-equipment">${c.equipments.map((e) => `<span class="${e.empty ? 'empty' : `r-${e.rarity}`}" title="${e.empty ? 'Emplacement vide' : `+${Math.round(e.bonus * 100)}% production`}"><i class="fas ${e.kind === 'weapon' ? 'fa-khanda' : e.kind === 'relic' ? 'fa-gem' : 'fa-ring'}"></i><small>${e.empty ? 'Vide' : `+${Math.round(e.bonus * 100)}%`}</small></span>`).join('')}</div>
+    <div class="idle-equipment">${c.equipments.map((e) => e.empty?`<span class="empty" title="Emplacement vide"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><small>Vide</small></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><span><b>+${Math.round(e.bonus*100)}%</b><small>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</small></span></button>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
     ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau 500 · prochain multiplicateur ×${c.ascensionMultiplier * 2}</span>`}
   </div>`;
@@ -955,6 +955,7 @@ async function ascendIdleSlot(slotIndex) {
   catch (e) { alert(e.message); }
 }
 async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');if(typeof sfx!=='undefined'&&sfx.win)sfx.win();renderIdleState(state);}catch(e){alert(e.message);}finally{if(btn)btn.disabled=false;}}
+async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){alert(e.message);}}
 
 async function buyIdleUpgrade(type, cardEl) {
   try {
@@ -1154,6 +1155,7 @@ function initIdleUI() {
     if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-hero'), Number(levelBtn.dataset.amount || 1));
     const ascendBtn = e.target.closest('[data-action="ascend"]');
     if (ascendBtn) return ascendIdleSlot(Number(ascendBtn.dataset.slot));
+    const equipmentBtn=e.target.closest('[data-action="enhance-equipment"]');if(equipmentBtn)return enhanceIdleEquipment(Number(equipmentBtn.dataset.slot),equipmentBtn.dataset.kind);
     const unlockBtn = e.target.closest('.idle-unlock-btn');
     if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-hero'));
     const pickBtn = e.target.closest('[data-action="pick"]');

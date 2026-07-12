@@ -347,7 +347,7 @@ async function buildState(userId) {
         ascensionMultiplier: Math.pow(2, row.ascension || 0),
         canAscend: level >= 500 && (row.ascension || 0) < 5,
         ascensionCost: Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[row.character.rarity] || 25000) * Math.pow(3, row.ascension || 0)),
-        equipments: ['weapon', 'relic', 'accessory'].map((kind) => (row.equipments || []).find((e) => e.kind === kind) || { kind, empty: true }),
+        equipments: ['weapon', 'relic', 'accessory'].map((kind) => { const e=(row.equipments||[]).find((x)=>x.kind===kind); return e?{...e,enhanceCost:Math.max(100,Math.round(250*Math.pow(1+e.bonus,6))),powerLevel:Math.max(1,Math.round(e.bonus*100))}:{kind,empty:true}; }),
         talent: characterTalent(row.character.id),
       };
     }
@@ -696,6 +696,11 @@ router.post('/battle-speed', requireAuth, requireAdmin, rateLimit({ max: 20, nam
   const speed=Number(req.body?.speed);const required={1:1,2:30,4:75}[speed];if(!required)return res.status(400).json({error:'Vitesse invalide'});
   const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<required)return res.status(403).json({error:`Débloqué au niveau ${required}`});
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleSpeed:speed}});});res.json(await buildState(req.user.id));
+});
+
+router.post('/equipment/enhance', requireAuth, requireAdmin, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
+  const slotIndex=Number(req.body?.slotIndex);const kind=String(req.body?.kind||'');if(!Number.isInteger(slotIndex)||!['weapon','relic','accessory'].includes(kind))return res.status(400).json({error:'Équipement invalide'});
+  try{await withSettle(req.user.id,async(tx,user)=>{const slot=await tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}});if(!slot)throw new IdleError(404,'Héros introuvable');const item=await tx.idleEquipment.findUnique({where:{idleSlotId_kind:{idleSlotId:slot.id,kind}}});if(!item)throw new IdleError(400,'Emplacement vide');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleEquipment.update({where:{id:item.id},data:{bonus,rarity}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
