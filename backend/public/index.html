@@ -1603,6 +1603,7 @@
           </div>
           <div class="idle-rate"><span id="idle-rate-val">0</span> /s</div>
           <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
+          <button class="btn-secondary" id="idle-top-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
           <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
         </div>
 
@@ -1641,6 +1642,8 @@
       <div class="modal-card wide">
         <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
+        <p class="hint">Ton roster du Dojo — indépendant de ta collection gacha. Recrute de nouveaux personnages contre de l'essence.</p>
+        <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-recruit-cost"></span></button>
         <p class="hint" id="idle-picker-hint"></p>
         <div id="idle-picker-list" class="card-grid"></div>
       </div>

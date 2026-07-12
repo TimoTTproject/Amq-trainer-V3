@@ -5743,6 +5743,10 @@ body.idle-fullscreen #app { padding-top: 0; }
 /* Modale « pendant ton absence » */
 .idle-welcome-msg { color: var(--text-2); line-height: 1.5; }
 
+/* Recrutement (roster propre au Dojo) */
+.idle-recruit-btn { margin: 4px 0 10px; width: 100%; justify-content: center; }
+.idle-recruit-btn:disabled, #idle-top-recruit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 @media (max-width: 700px) {
   .idle-top { flex-direction: column; align-items: stretch; }
   .idle-rate { margin-right: 0; }

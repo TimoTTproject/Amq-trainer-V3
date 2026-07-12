@@ -149,6 +149,7 @@ model User {
   cardAlbums      CardAlbum[]
   songsAdded      Song[]
   idleSlots       IdleSlot[]
+  dojoRecruits    DojoRecruit[]
 }
 
 model PasswordResetToken {
@@ -577,6 +578,7 @@ model Character {
   promotionVotes PromotionVote[]
   marketListings MarketListing[]
   idleSlots      IdleSlot[]
+  dojoRecruits   DojoRecruit[]
 
   @@index([rarity])
   @@index([series])
@@ -763,5 +765,25 @@ model IdleSlot {
   character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
 
   @@unique([userId, slotIndex])
+  @@index([userId])
+}
+
+// Roster du Dojo : personnages RECRUTÉS via l'essence (voir POST
+// /api/idle/recruit), entièrement indépendant de la collection gacha
+// (UserCard/CardInstance/tokens ne sont ni lus ni écrits par le Dojo — même
+// table Character réutilisée pour le nom/le portrait/la rareté, mais aucun
+// lien de possession avec le gacha). Permanent : pas de mécanisme d'échange,
+// de vente ou de fusion pour un DojoRecruit, donc pas de perte possible une
+// fois recruté (contrairement aux CardInstance du gacha).
+model DojoRecruit {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  characterId Int
+  recruitedAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, characterId])
   @@index([userId])
 }
