@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "idleAutoSkills" BOOLEAN NOT NULL DEFAULT false;

@@ -227,6 +227,7 @@ function renderIdleState(state) {
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleBattleSpeed(state.battle?.speed);
   renderIdleBattleMode(state.battle?.mode);
+  renderIdleAutoSkills(state.battle?.autoSkills);
   renderIdleBossChest(state.battle?.bossChest);
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
@@ -395,6 +396,8 @@ function renderIdleBossChest(chest) {
 }
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
 function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>b.classList.toggle('active',b.dataset.battleMode===mode));}
+function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto-skills');const label=document.getElementById('idle-auto-skills-label');if(!btn||!auto)return;btn.disabled=!auto.unlocked;btn.classList.toggle('active',auto.enabled);btn.dataset.enabled=auto.enabled?'1':'0';btn.querySelector(':scope > i:last-child').className=`fas ${auto.enabled?'fa-toggle-on':'fa-toggle-off'}`;label.textContent=!auto.unlocked?`Débloquées au niveau ${auto.level}`:auto.enabled?`Actives · +${Math.round(auto.bonus*100)}% production`:'Désactivées · cliquer pour activer';}
+async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){alert(e.message);}}
 async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){alert(e.message);}}
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){alert(e.message);}}
 
@@ -1144,6 +1147,7 @@ function initIdleUI() {
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
   document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
+  document.getElementById('idle-auto-skills')?.addEventListener('click',toggleIdleAutoSkills);
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.

@@ -223,7 +223,7 @@ function currentIdleEvent(now = new Date()) {
   return { ...event, endsAt: end.toISOString() };
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1) {
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
@@ -236,7 +236,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if (!s.character || (s.level || 1) < 10) return mult;
     return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
   }, 1);
-  return base * Math.max(1,Math.min(4,battleSpeed||1)) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+  return base * (autoSkills?1.15:1) * Math.max(1,Math.min(4,battleSpeed||1)) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
 }
 
 function roleForCharacter(character) {
@@ -274,7 +274,7 @@ async function withSettle(userId, mutate) {
     const slots = await loadSlots(tx, userId);
     const ancientLevelsByKey = await loadAncientLevels(tx, userId);
     const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed);
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
     const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
     const settledUser = await tx.user.update({
@@ -299,7 +299,7 @@ async function buildState(userId) {
       essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,
     },
   });
   if (!user) return null;
@@ -315,7 +315,7 @@ async function buildState(userId) {
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
   const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed);
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
   const strategy = synergyForSlots(slots);
   const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
 
@@ -416,6 +416,7 @@ async function buildState(userId) {
       mechanic: bossMechanicForStage(stage),
       speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
       mode: user.idleBattleMode||'progress',
+      autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=50,level:50,bonus:.15},
     },
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
@@ -699,6 +700,7 @@ router.post('/battle-speed', requireAuth, requireAdmin, rateLimit({ max: 20, nam
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleSpeed:speed}});});res.json(await buildState(req.user.id));
 });
 router.post('/battle-mode', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-mode' }), async(req,res)=>{const mode=String(req.body?.mode||'');if(!['progress','farm'].includes(mode))return res.status(400).json({error:'Mode invalide'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleMode:mode}});});res.json(await buildState(req.user.id));});
+router.post('/auto-skills', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<50)return res.status(403).json({error:'Compétences automatiques débloquées au niveau 50'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
 
 router.post('/equipment/enhance', requireAuth, requireAdmin, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const slotIndex=Number(req.body?.slotIndex);const kind=String(req.body?.kind||'');if(!Number.isInteger(slotIndex)||!['weapon','relic','accessory'].includes(kind))return res.status(400).json({error:'Équipement invalide'});
@@ -792,7 +794,7 @@ router.post('/skill/team', requireAuth, requireAdmin, rateLimit({ windowMs: 6000
   const [user, slots, levels] = await Promise.all([prisma.user.findUnique({ where: { id: req.user.id } }), loadSlots(prisma, req.user.id), loadAncientLevels(prisma, req.user.id)]);
   const roles = slots.filter((s) => s.character).map((s) => roleForCharacter(s.character));
   if (roles.length < 2) return res.status(400).json({ error: 'Équipe insuffisante' });
-  const rate = computeTotalRate(slots, user.idleProdLevel, dojoLevelForXp(user.essenceEarnedTotal), ancientBonus(levels, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed);
+  const rate = computeTotalRate(slots, user.idleProdLevel, dojoLevelForXp(user.essenceEarnedTotal), ancientBonus(levels, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
   const uniqueRoles = new Set(roles).size;
   const gained = Math.max(1, Math.floor(rate * (20 + uniqueRoles * 5) * heroClass(user.idleHeroClass).team * (heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)));
   await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
