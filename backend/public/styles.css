@@ -5715,6 +5715,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-main-hero>button { position: absolute; top: -3px; right: -8px; width: 28px; height: 28px; border: 1px solid #fff6; border-radius: 50%; background: #14263ddd; color: #fff; cursor: pointer; }
 .idle-main-hero>button:hover { background: #2879b9; transform: scale(1.08); }
 @keyframes idleHeroReady { 50% { transform: translateY(-5px) rotate(-1deg); } }
+.idle-main-hero.idle-hero-attacking { animation: idleHeroAttack .38s cubic-bezier(.2,.8,.3,1); }
+@keyframes idleHeroAttack {
+  0%,100% { transform: translate(-50%,-44%); }
+  45% { transform: translate(calc(-50% + 58px),calc(-44% - 4px)) scale(1.06); filter: brightness(1.35); }
+}
 
 .idle-scene-boss {
   position: absolute; left: 65%; top: 50%; width: 30%; z-index: 1; pointer-events: none; transform: translate(-50%,-47%);
@@ -5743,6 +5748,21 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-fighter-sprite { width: auto; height: 190px; max-width: 205px; object-fit: contain; object-position: center bottom; filter: drop-shadow(0 13px 8px rgba(0,0,0,.78)); animation: idleFighterStance 2.5s ease-in-out infinite; }
 .idle-scene-fighter .idle-boss-name { position: relative; z-index: 2; margin-top: -18px; }
 @keyframes idleFighterStance { 0%,100% { transform: translateY(0) rotate(.35deg); } 50% { transform: translateY(-5px) rotate(-.35deg); } }
+.idle-scene-boss.idle-fighter-hit { animation: idleFighterHit .38s ease; }
+.idle-scene-boss.idle-fighter-team-hit { animation: idleFighterTeamHit .42s ease; }
+@keyframes idleFighterHit {
+  0%,100% { transform: translate(-50%,-47%); filter: none; }
+  35% { transform: translate(calc(-50% + 13px),-47%) rotate(3deg); filter: brightness(2) saturate(.35); }
+}
+@keyframes idleFighterTeamHit {
+  0%,100% { transform: translate(-50%,-47%); filter: none; }
+  25% { transform: translate(calc(-50% - 7px),calc(-47% - 3px)); filter: drop-shadow(0 0 12px #4db8ff) brightness(1.5); }
+  55% { transform: translate(calc(-50% + 6px),-47%); }
+}
+.idle-combat-impact { position: absolute; z-index: 4; left: 58%; top: 42%; pointer-events: none; color: #fff5a5; font-size: 2.3rem; text-shadow: 0 0 12px #ff7a25,0 0 24px #ff3b1f; animation: idleImpact .5s ease-out forwards; }
+.idle-combat-impact.team { color: #8feaff; text-shadow: 0 0 12px #22b8ff,0 0 26px #725cff; animation-name: idleTeamImpact; }
+@keyframes idleImpact { 0% { opacity:0; transform:scale(.25) rotate(-25deg) } 35% { opacity:1; transform:scale(1.2) rotate(8deg) } 100% { opacity:0; transform:scale(1.7) rotate(18deg) } }
+@keyframes idleTeamImpact { 0% { opacity:0; transform:translate(-45px,-15px) scale(.4) } 35% { opacity:1; transform:translate(0,0) scale(1.15) } 100% { opacity:0; transform:translate(25px,10px) scale(1.5) } }
 
 /* Gains flottants (+X essence) dans la scène */
 .idle-floats { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
