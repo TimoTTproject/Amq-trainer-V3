@@ -122,6 +122,7 @@ model User {
   idleHeroOutfit       String @default("dojo")
   idleHeroColor        String @default("red")
   idleHeroSpec         String @default("none")
+  idleBattleSpeed      Int @default(1)
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
