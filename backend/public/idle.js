@@ -223,6 +223,7 @@ function renderIdleState(state) {
   if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
+  renderIdleBossChest(state.battle?.bossChest);
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
   renderIdleTeamStrategy(state);
@@ -367,6 +368,18 @@ async function idleUseTeamSkill(event) {
   try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO ${r.uniqueRoles} RÔLES +${idleFormatNumber(r.gained)}`, 'crit'); idleCombatMotion('team'); await refreshIdleState(); }
   catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
   idleRenderSkillCooldown();
+}
+
+function renderIdleBossChest(chest) {
+  const btn = document.getElementById('idle-boss-chest'); if (!btn) return;
+  btn.classList.toggle('hidden', !chest?.available);
+  const label = document.getElementById('idle-boss-chest-label');
+  if (label && chest) label.textContent = `Boss ${chest.tier} · +${idleFormatNumber(chest.reward)} Essence`;
+}
+
+async function claimIdleBossChest() {
+  try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); if (typeof burstConfetti === 'function') burstConfetti(35); await refreshIdleState(); }
+  catch (e) { alert(e.message); }
 }
 
 function renderIdleRecruit(recruit, essence) {
@@ -1050,6 +1063,7 @@ function initIdleUI() {
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
   document.getElementById('idle-skill-team')?.addEventListener('click', idleUseTeamSkill);
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
+  document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('pointerdown', clickIdle);
