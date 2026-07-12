@@ -5788,6 +5788,25 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-team-intro>i { color: #4db8ff; font-size: 1.4rem; }
 .idle-team-intro b,.idle-team-intro span { display: block; }.idle-team-intro b{font-size:.86rem}.idle-team-intro span{margin-top:3px;color:var(--text-2);font-size:.7rem;line-height:1.4}
 
+/* Révélation de recrutement : impossible de rater le personnage obtenu. */
+.idle-recruit-reveal-card { max-width: 410px; overflow: hidden; text-align: center; background: radial-gradient(circle at 50% 28%, #25345a, var(--bg-2) 58%); }
+.idle-recruit-kicker { color: #ffd54a; font-size: .62rem; font-weight: 800; letter-spacing: 2px; }
+.idle-recruit-reveal-card h3 { margin: 4px 0 14px; font-size: 1.25rem; }
+.idle-recruit-reveal-art { position: relative; width: 190px; height: 238px; margin: 0 auto 12px; border: 3px solid #8b96ad; border-radius: 16px; overflow: hidden; box-shadow: 0 16px 38px #000a; }
+.idle-recruit-reveal-art.r-rare { border-color: #4db8ff; box-shadow: 0 0 28px #4db8ff66,0 16px 38px #000a; }
+.idle-recruit-reveal-art.r-epic { border-color: #b06cff; box-shadow: 0 0 32px #b06cff88,0 16px 38px #000a; }
+.idle-recruit-reveal-art.r-legendary { border-color: #ffb648; box-shadow: 0 0 38px #ffb64899,0 16px 38px #000a; }
+.idle-recruit-reveal-art.r-mythic { border-color: #ff5d8f; box-shadow: 0 0 44px #ff5d8faa,0 16px 38px #000a; animation: idleRecruitMythic 1.8s ease-in-out infinite; }
+.idle-recruit-reveal-img { position: absolute; inset: 0; z-index: 1; background: #111 center top/cover no-repeat; }
+.idle-recruit-reveal-glow { position: absolute; z-index: 2; inset: 0; pointer-events: none; background: linear-gradient(145deg,rgba(255,255,255,.3),transparent 28%,transparent 72%,rgba(255,213,74,.18)); }
+.idle-recruit-reveal-name { display: block; font-size: 1.3rem; }
+.idle-recruit-reveal-series { display: block; margin: 3px 0 8px; color: var(--text-2); font-size: .76rem; }
+.idle-recruit-reveal-rarity { display: inline-block; padding: 4px 11px; border: 1px solid currentColor; border-radius: 999px; color: #c6cbd5; font-size: .66rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.idle-recruit-reveal-rarity.r-rare{color:#4db8ff}.idle-recruit-reveal-rarity.r-epic{color:#b06cff}.idle-recruit-reveal-rarity.r-legendary{color:#ffb648}.idle-recruit-reveal-rarity.r-mythic{color:#ff5d8f}
+.idle-recruit-reveal-card .modal-actions { display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; margin-top: 18px; }
+.idle-recruit-reveal-card .modal-actions button { justify-content: center; }
+@keyframes idleRecruitMythic { 50% { transform: translateY(-4px) scale(1.015); filter: brightness(1.12); } }
+
 @media (max-width: 560px) {
   .idle-main-hero { left: 22%; transform: translate(-50%,-38%) scale(.82); }
   .idle-scene-boss { left: 69%; width: 38%; transform: translate(-50%,-43%) scale(.86); }

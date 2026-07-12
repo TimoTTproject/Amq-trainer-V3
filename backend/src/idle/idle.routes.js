@@ -279,10 +279,10 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
       const rolled = rollRecruitRarity();
-      let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true } });
+      let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
       if (!pool.length) {
         for (const r of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
-          pool = await tx.character.findMany({ where: { rarity: r, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true } });
+          pool = await tx.character.findMany({ where: { rarity: r, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
           if (pool.length) break;
         }
       }

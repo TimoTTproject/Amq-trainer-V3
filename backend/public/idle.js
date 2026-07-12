@@ -10,6 +10,7 @@ let idleParticleTheme = null; // dernier thème pour lequel les particules ambia
 let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
 let idleActivePanel = 'home'; // onglet courant de la barre du bas (home | team | upgrades)
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
+let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
 
 function idleFormatNumber(n) {
   n = Math.floor(n || 0);
@@ -600,7 +601,44 @@ async function recruitIdle() {
     burstConfetti(r.recruited.rarity === 'mythic' ? 50 : 30);
   }
   renderIdleState(r);
+  showIdleRecruitReveal(r.recruited);
   await refreshIdlePickerList(); // no-op si la modale n'est pas ouverte
+}
+
+function showIdleRecruitReveal(character) {
+  idleLastRecruit = character;
+  const modal = document.getElementById('idle-recruit-reveal');
+  const body = document.getElementById('idle-recruit-reveal-body');
+  if (!modal || !body) return;
+  const rarity = (typeof RARITY_LABELS !== 'undefined' && RARITY_LABELS[character.rarity]) || character.rarity;
+  const img = character.imageUrl ? `style="background-image:url('${escapeHtml(character.imageUrl)}')"` : '';
+  body.innerHTML = `<div class="idle-recruit-reveal-art r-${character.rarity}">
+      <div class="idle-recruit-reveal-img" ${img}></div>
+      <div class="idle-recruit-reveal-glow"></div>
+    </div>
+    <strong class="idle-recruit-reveal-name">${escapeHtml(character.name)}</strong>
+    <span class="idle-recruit-reveal-series">${escapeHtml(character.series || 'Univers inconnu')}</span>
+    <span class="idle-recruit-reveal-rarity r-${character.rarity}">${escapeHtml(rarity)}</span>`;
+  const freeSlot = idleState?.slots?.find((s) => !s.locked && !s.character);
+  const assign = document.getElementById('idle-recruit-assign');
+  if (assign) assign.innerHTML = freeSlot
+    ? '<i class="fas fa-user-plus"></i> Ajouter à l’équipe'
+    : '<i class="fas fa-users"></i> Voir mon équipe';
+  modal.classList.remove('hidden');
+}
+
+function closeIdleRecruitReveal() {
+  document.getElementById('idle-recruit-reveal')?.classList.add('hidden');
+}
+
+async function assignIdleLastRecruit() {
+  if (!idleLastRecruit || !idleState) return;
+  const freeSlot = idleState.slots.find((s) => !s.locked && !s.character);
+  closeIdleRecruitReveal();
+  if (!freeSlot) return idleShowPanel('team');
+  idlePickerSlot = freeSlot.index;
+  await pickIdleCharacter(idleLastRecruit.id);
+  idleShowPanel('team');
 }
 
 function closeIdlePicker() {
@@ -682,6 +720,10 @@ function initIdleUI() {
   });
   document.getElementById('idle-top-recruit-btn')?.addEventListener('click', recruitIdle);
   document.getElementById('idle-recruit-btn')?.addEventListener('click', recruitIdle);
+  document.getElementById('idle-recruit-reveal-close')?.addEventListener('click', closeIdleRecruitReveal);
+  document.getElementById('idle-recruit-reveal')?.addEventListener('click', (e) => { if (e.target.id === 'idle-recruit-reveal') closeIdleRecruitReveal(); });
+  document.getElementById('idle-recruit-again')?.addEventListener('click', () => { closeIdleRecruitReveal(); recruitIdle(); });
+  document.getElementById('idle-recruit-assign')?.addEventListener('click', assignIdleLastRecruit);
   document.getElementById('idle-milestone-btn')?.addEventListener('click', claimIdleMilestone);
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
   document.getElementById('idle-customize-hero')?.addEventListener('click', (e) => {
