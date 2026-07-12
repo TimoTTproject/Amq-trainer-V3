@@ -2372,6 +2372,14 @@ header h1 { font-size: 1.5rem; letter-spacing: .3px; }
 .like-reveal:hover { color: var(--red); border-color: var(--red); transform: scale(1.08); }
 .like-reveal.liked { color: var(--red); border-color: var(--red); background: rgba(244,63,94,.12); }
 .like-reveal.liked i { animation: likePop .35s ease; }
+
+/* Lien « voir sur AniList » (Solo, Multi) — icône discrète à côté du titre révélé */
+.answer-anilist-link, .mp-anilist-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 6px; color: var(--text-2); font-size: .8em; vertical-align: middle;
+  transition: color .15s;
+}
+.answer-anilist-link:hover, .mp-anilist-link:hover { color: var(--accent-2); }
 .tower-reveal-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
 .tower-reveal-row #tower-msg { margin: 0; }
 

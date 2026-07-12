@@ -2753,6 +2753,15 @@ function revealAnswerBox(answer, community) {
   // titre sur AniList avant d'avoir répondu).
   if (answer.anilistId) sessionSeenAnilistIds.add(answer.anilistId);
   document.getElementById('answer-anime').textContent = formatAnimeLabel({ title: answer.animeTitle, englishTitle: answer.englishTitle, seasonNumber: answer.seasonNumber });
+  const anilistLink = document.getElementById('answer-anilist-link');
+  if (anilistLink) {
+    if (answer.anilistId) {
+      anilistLink.href = `https://anilist.co/anime/${answer.anilistId}`;
+      anilistLink.classList.remove('hidden');
+    } else {
+      anilistLink.classList.add('hidden');
+    }
+  }
   document.getElementById('answer-title').textContent = answer.title;
   document.getElementById('answer-artist').textContent = answer.artist || t('Artiste inconnu');
   // Difficulté réelle : % de joueurs qui trouvent cette musique (masqué tant

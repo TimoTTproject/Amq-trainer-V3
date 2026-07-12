@@ -589,6 +589,10 @@ function connectMp() {
       titleNode.innerHTML = `<strong>${escapeHtml(titleDisplay.primary)}</strong>${titleDisplay.secondary ? `<small>${escapeHtml(titleDisplay.secondary)}</small>` : ''}`;
       answerStrong.replaceWith(titleNode);
       answerEl?.querySelector('.mp-answer-english')?.remove();
+      if (d.answer.anilistId) {
+        titleNode.insertAdjacentHTML('beforeend',
+          `<a class="mp-anilist-link" href="https://anilist.co/anime/${d.answer.anilistId}" target="_blank" rel="noopener" title="Voir sur AniList"><i class="fas fa-up-right-from-square"></i></a>`);
+      }
     }
     if (ownersHtml && answerEl) answerEl.insertAdjacentHTML('beforeend', ownersHtml);
     if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('mp-like'), d.answer.songId);
@@ -1250,7 +1254,14 @@ function initMpUI() {
   document.getElementById('mp-again').addEventListener('click', () => {
     // retour au salon (privé) ou au menu (rapide)
     if (mpRoom && !mpRoom.isPublic) { mpShow('room'); renderRoom(mpRoom); }
-    else { mpRoom = null; mpShow('menu'); }
+    else {
+      // Partie publique : quitter aussi côté serveur, sinon la salle terminée
+      // (gardée ~30 s) nous retenait et un nouveau « Partie rapide » figeait.
+      mpEngaged = false;
+      if (mpSocket) mpSocket.emit('mp:leave');
+      mpRoom = null; mpShow('menu');
+      document.getElementById('mp-menu-msg').textContent = '';
+    }
   });
 }
 

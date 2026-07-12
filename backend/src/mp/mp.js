@@ -198,7 +198,23 @@ function addPlayer(room, socket) {
 }
 
 function joinPublic(socket, ranked, opts) {
-  if (socket.data.roomId) return rooms.get(socket.data.roomId) || null;
+  // Déjà rattaché à une salle ? Trois cas :
+  //  - la bonne file publique encore en lobby → on renvoie son état (le client
+  //    a pu manquer le broadcast initial) ;
+  //  - une partie réellement en cours → on ne l'arrache pas en douce ;
+  //  - tout le reste (salle fantôme, partie « over » qui attend sa fermeture,
+  //    ancien salon) → on quitte proprement puis on rejoint la vraie file.
+  // Avant : retour prématuré sans broadcast → le client restait figé sur
+  // « File rejointe… » après un retour au menu en fin de partie rapide.
+  if (socket.data.roomId) {
+    const cur = rooms.get(socket.data.roomId);
+    if (cur && cur.status === 'lobby' && cur.isPublic && !!cur.ranked === !!ranked) {
+      broadcastRoom(cur);
+      return cur;
+    }
+    if (cur && cur.status === 'playing') return cur;
+    leaveRoom(socket);
+  }
   const ptr = ranked ? rankedRoomId : publicRoomId;
   let room = ptr ? rooms.get(ptr) : null;
   if (!room || room.status !== 'lobby' || room.players.size >= MAX_PLAYERS) {
@@ -717,6 +733,7 @@ function endRound(room) {
       skipped: !!cur.votedSkip,
       answer: {
         songId: s.id,
+        anilistId: s.anilistId || null, // lien « Voir sur AniList » au reveal (réponse déjà révélée)
         animeTitle: s.animeTitle, englishTitle: englishTitleFor(s), seasonNumber: s.seasonNumber || 0,
         title: s.title, artist: s.artist, type: s.type, number: s.number,
         community: { rate: s.guessRate ?? null, sample: s.guessCount || 0 },
