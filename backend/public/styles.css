@@ -5888,6 +5888,16 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-upgrade-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-upgrade-maxed { flex: none; font-size: .72rem; font-weight: 700; color: var(--green); }
 
+/* Confirmation d'achat sur une carte (emplacement, amélioration) — un halo +
+   léger scale, pensé pour un rectangle bordé dans une grille (contrairement à
+   token-bump, trop marqué pour ça : son ×1.25 ferait déborder sur les voisines). */
+@keyframes idleCardPulse {
+  0% { box-shadow: 0 0 0 0 rgba(90,214,150,0); transform: scale(1); }
+  35% { box-shadow: 0 0 0 3px rgba(90,214,150,.5); transform: scale(1.015); }
+  100% { box-shadow: 0 0 0 0 rgba(90,214,150,0); transform: scale(1); }
+}
+.idle-card-pulse { animation: idleCardPulse .5s ease; }
+
 /* ── Prestige ── */
 .idle-prestige-card {
   display: flex; align-items: center; gap: 14px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08);

@@ -218,6 +218,17 @@ function idleBump(el) {
   el.classList.add('token-bump');
 }
 
+// Variante douce de idleBump pour les CARTES (emplacement, amélioration) :
+// token-bump grossit de 25%, pensé pour un petit chiffre — sur une carte
+// entière bordée dans une grille, ce zoom débordait sur ses voisines. Un
+// simple halo + très léger scale suffit à confirmer l'achat sans ce défaut.
+function idleCardBump(el) {
+  if (!el) return;
+  el.classList.remove('idle-card-pulse');
+  void el.offsetWidth;
+  el.classList.add('idle-card-pulse');
+}
+
 function renderIdleDecor(dojo, prevDojo) {
   const view = document.getElementById('view-idle');
   if (view) view.dataset.decor = dojo.decor.theme; // pilote le thème CSS, sans condition (idempotent)
@@ -514,12 +525,19 @@ function renderIdleUpgrades(state) {
 }
 
 async function collectIdle() {
+  const pending = idleState?.pendingEssence || 0;
   try {
     await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
   } catch (e) {
     alert(e.message);
     return;
   }
+  // Le nombre affiché inclut déjà le pending (cf. idleTick) : sans ce petit
+  // retour, cliquer « Récolter » ne « faisait » visiblement rien.
+  if (pending > 0) idleSpawnFloat(`+${idleFormatNumber(pending)}`, 'xp');
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  const essenceEl = document.getElementById('idle-essence-val');
+  if (essenceEl) idleBump(essenceEl);
   refreshIdleState();
 }
 
@@ -558,23 +576,29 @@ function idleClickFeedback(gained) {
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
 }
 
-async function levelUpIdleSlot(slotIndex) {
+async function levelUpIdleSlot(slotIndex, slotEl) {
   try {
     await api('/api/idle/slot-level', { method: 'POST', body: JSON.stringify({ slotIndex }) });
   } catch (e) {
     alert(e.message);
     return;
   }
+  // Action la plus répétée du jeu (niveauter son équipe) : sans retour, chaque
+  // achat passait totalement inaperçu — seul le chiffre changeait en silence.
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (slotEl) idleCardBump(slotEl);
   refreshIdleState();
 }
 
-async function buyIdleUpgrade(type) {
+async function buyIdleUpgrade(type, cardEl) {
   try {
     await api('/api/idle/upgrade', { method: 'POST', body: JSON.stringify({ type }) });
   } catch (e) {
     alert(e.message);
     return;
   }
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (cardEl) idleCardBump(cardEl);
   refreshIdleState();
 }
 
@@ -731,15 +755,15 @@ function initIdleUI() {
     const removeBtn = e.target.closest('[data-action="unassign"]');
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));
     const levelBtn = e.target.closest('[data-action="levelup"]');
-    if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot));
+    if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-slot'));
     const unlockBtn = e.target.closest('.idle-unlock-btn');
-    if (unlockBtn) return buyIdleUpgrade('slot');
+    if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-slot'));
     const pickBtn = e.target.closest('[data-action="pick"]');
     if (pickBtn) return openIdlePicker(Number(pickBtn.dataset.slot));
   });
   document.getElementById('idle-upgrades')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.idle-upgrade-btn');
-    if (btn) buyIdleUpgrade(btn.dataset.upgrade);
+    if (btn) buyIdleUpgrade(btn.dataset.upgrade, btn.closest('.idle-upgrade-card'));
   });
   document.getElementById('idle-picker-list')?.addEventListener('click', (e) => {
     const card = e.target.closest('[data-cid]');
