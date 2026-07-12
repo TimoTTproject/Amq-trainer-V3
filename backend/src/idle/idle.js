@@ -35,6 +35,12 @@ const RARITY_RATE = {
 // effet perceptible. Le coût (CHAR_LEVEL_GROWTH) ne change pas : la courbe
 // ralentit toujours autant à long terme, seul le gain immédiat est plus net.
 const CHAR_LEVEL_BONUS = 0.12;
+const RARITY_LEVEL_BONUS = { common: .08, rare: .10, epic: .13, legendary: .17, mythic: .22 };
+const RARITY_PASSIVE = {
+  common: 'Apprenti · progression économique', rare: 'Endurance · +10% de puissance par niveau',
+  epic: 'Aura · +13% de puissance par niveau', legendary: 'Domination · +17% de puissance par niveau',
+  mythic: 'Transcendance · +22% de puissance par niveau',
+};
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
@@ -44,11 +50,17 @@ function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
   return Math.round(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1));
 }
+function charLevelBulkCost(rarity, level, amount) {
+  const count = Math.max(1, Math.min(100, Math.floor(amount || 1)));
+  let total = 0; for (let i = 0; i < count; i++) total += charLevelUpCost(rarity, (level || 1) + i);
+  return total;
+}
 
 // Taux de production d'un emplacement (essence/s), avant multiplicateurs
 // globaux (Discipline + niveau du Dojo).
 function slotRate(rarity, charLevel) {
-  return (RARITY_RATE[rarity] || 0) * charLevelMultiplier(charLevel);
+  const scaling = RARITY_LEVEL_BONUS[rarity] || CHAR_LEVEL_BONUS;
+  return (RARITY_RATE[rarity] || 0) * (1 + Math.max(0, (charLevel || 1) - 1) * scaling);
 }
 
 // ── Recrutement : la SEULE façon d'obtenir un personnage dans le Dojo, contre
@@ -103,8 +115,8 @@ function prodUpgradeCost(level) {
 
 // Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
 // (cf. Ancient « Poigne du Maître ») s'applique par-dessus, multiplicativement.
-const CLICK_BASE = 1;
-const CLICK_LEVEL_BONUS = 1;
+const CLICK_BASE = 5;
+const CLICK_LEVEL_BONUS = 4;
 const CLICK_LEVEL_MAX = 30;
 function clickYield(level, ancientBonus) {
   const base = CLICK_BASE + Math.min(level, CLICK_LEVEL_MAX) * CLICK_LEVEL_BONUS;
@@ -300,6 +312,10 @@ module.exports = {
   CHAR_LEVEL_BASE_COST,
   CHAR_LEVEL_GROWTH,
   charLevelUpCost,
+  charLevelBulkCost,
+  RARITY_RATE,
+  RARITY_LEVEL_BONUS,
+  RARITY_PASSIVE,
   DOJO_XP_BASE,
   DOJO_XP_GROWTH,
   dojoXpForLevel,
