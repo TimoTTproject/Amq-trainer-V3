@@ -556,7 +556,7 @@ function idleRenderBackdrop(url) {
 function idleRenderBoss(boss, theme) {
   const el = document.getElementById('idle-decor-boss');
   if (!el) return;
-  if (!boss && !['wood', 'garden', 'temple', 'gold', 'celestial'].includes(theme)) {
+  if (!boss && !['wood', 'garden', 'temple', 'gold', 'celestial', 'hueco', 'ua', 'shibuya', 'aincrad', 'void'].includes(theme)) {
     el.classList.add('hidden');
     el.innerHTML = '';
     return;
@@ -568,6 +568,11 @@ function idleRenderBoss(boss, theme) {
     temple: { name: 'Monkey D. Luffy', image: '/assets/idle/fighters/luffy.webp' },
     gold: { name: 'Tanjiro Kamado', image: '/assets/idle/fighters/tanjiro.webp' },
     celestial: { name: 'Eren Yeager', image: '/assets/idle/fighters/eren.webp' },
+    hueco: { name: 'Ichigo Kurosaki', image: '/assets/idle/fighters/ichigo.webp' },
+    ua: { name: 'Izuku Midoriya', image: '/assets/idle/fighters/deku.webp' },
+    shibuya: { name: 'Satoru Gojo', image: '/assets/idle/fighters/gojo.webp' },
+    aincrad: { name: 'Kirito', image: '/assets/idle/fighters/kirito.webp' },
+    void: { name: 'Jiren', image: '/assets/idle/fighters/jiren.webp' },
   };
   const fighter = fighters[theme];
   if (fighter) {
