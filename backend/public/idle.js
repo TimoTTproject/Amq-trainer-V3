@@ -287,7 +287,7 @@ function renderIdleMainHero(state) {
   const name = document.getElementById('idle-main-hero-name');
   if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
-  if (power) power.textContent = `${idleFormatNumber(state.click.yield)} puissance active`;
+  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
 }
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
@@ -375,6 +375,16 @@ function renderIdleBossChest(chest) {
   btn.classList.toggle('hidden', !chest?.available);
   const label = document.getElementById('idle-boss-chest-label');
   if (label && chest) label.textContent = `Boss ${chest.tier} · +${idleFormatNumber(chest.reward)} Essence`;
+}
+
+function openIdleClassPicker() {
+  const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
+  box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}"><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : ''}</button>`).join('');
+  document.getElementById('idle-class-picker').classList.remove('hidden');
+}
+async function chooseIdleHeroClass(key) {
+  try { const state = await api('/api/idle/hero-class', { method: 'POST', body: JSON.stringify({ key }) }); document.getElementById('idle-class-picker').classList.add('hidden'); renderIdleState(state); }
+  catch (e) { alert(e.message); }
 }
 
 async function claimIdleBossChest() {
@@ -1112,10 +1122,10 @@ function initIdleUI() {
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
   document.getElementById('idle-customize-hero')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    idleStopTicker();
-    document.body.classList.remove('idle-fullscreen');
-    openProfile();
+    openIdleClassPicker();
   });
+  document.getElementById('idle-class-close')?.addEventListener('click', () => document.getElementById('idle-class-picker').classList.add('hidden'));
+  document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-class-picker') e.currentTarget.classList.add('hidden'); const b = e.target.closest('[data-hero-class]'); if (b) chooseIdleHeroClass(b.dataset.heroClass); });
   document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));
   document.getElementById('idle-welcome-collect')?.addEventListener('click', () => {
     document.getElementById('idle-welcome').classList.add('hidden');
