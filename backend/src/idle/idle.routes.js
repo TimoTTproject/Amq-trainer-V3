@@ -670,6 +670,27 @@ router.post('/slot-ascend', requireAuth, requireAdmin, rateLimit({ max: 20, name
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
+router.post('/optimize-team', requireAuth, requireAdmin, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
+  let bought=0, spent=0;
+  try {
+    await withSettle(req.user.id,async(tx,user)=>{
+      const slots=await tx.idleSlot.findMany({where:{userId:user.id,characterId:{not:null}},include:{character:{select:{rarity:true}}}});
+      if(!slots.length)throw new IdleError(400,'Aucun héros actif');
+      let balance=user.essence;
+      for(let step=0;step<500;step++){
+        let best=null;
+        for(const slot of slots){const cost=charLevelUpCost(slot.character.rarity,slot.level||1);if(!best||cost<best.cost)best={slot,cost};}
+        if(!best||best.cost>balance)break;
+        balance-=best.cost;spent+=best.cost;bought++;best.slot.level=(best.slot.level||1)+1;
+        await tx.idleSlot.update({where:{id:best.slot.id},data:{level:{increment:1}}});
+      }
+      if(!bought)throw new IdleError(400,'Essence insuffisante pour un niveau');
+      await tx.user.update({where:{id:user.id},data:{essence:{decrement:spent}}});
+    });
+    res.json({...(await buildState(req.user.id)),optimization:{bought,spent}});
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+});
+
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
 // Dojo). Permanent : n'est jamais remis à zéro, y compris après une Prestige.
 router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {

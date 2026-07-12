@@ -951,6 +951,7 @@ async function ascendIdleSlot(slotIndex) {
   try { const state = await api('/api/idle/slot-ascend', { method: 'POST', body: JSON.stringify({ slotIndex }) }); if (typeof burstConfetti === 'function') burstConfetti(60); idleSpawnFloat('ASCENSION · PUISSANCE DOUBLÉE', 'crit'); renderIdleState(state); }
   catch (e) { alert(e.message); }
 }
+async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');if(typeof sfx!=='undefined'&&sfx.win)sfx.win();renderIdleState(state);}catch(e){alert(e.message);}finally{if(btn)btn.disabled=false;}}
 
 async function buyIdleUpgrade(type, cardEl) {
   try {
@@ -1131,6 +1132,7 @@ function initIdleUI() {
   document.getElementById('idle-skill-team')?.addEventListener('click', idleUseTeamSkill);
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
+  document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
