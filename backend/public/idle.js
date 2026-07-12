@@ -148,6 +148,7 @@ function idleTick() {
   const passiveGain = idleState.totalRate * 3.2;
   if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
     idleSpawnFloat(`+${idleFormatNumber(passiveGain)}`, 'xp');
+    idleCombatMotion('team');
   }
 }
 
@@ -757,6 +758,32 @@ function idleClickFeedback(gained) {
     setTimeout(() => coin.remove(), 650);
   }
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  idleCombatMotion('hero');
+}
+
+// Donne du poids au combat sans inventer de dégâts côté client : le clic fait
+// avancer le héros, la production passive déclenche une salve de l'équipe, et
+// le gardien accuse chaque impact. Ces animations ne touchent jamais l'état.
+function idleCombatMotion(source) {
+  if (idleActivePanel !== 'home') return;
+  const hero = document.getElementById('idle-main-hero');
+  const boss = document.getElementById('idle-decor-boss');
+  const scene = document.getElementById('idle-scene');
+  const restart = (el, cls) => {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 420);
+  };
+  if (source === 'hero') restart(hero, 'idle-hero-attacking');
+  restart(boss, source === 'hero' ? 'idle-fighter-hit' : 'idle-fighter-team-hit');
+  if (!scene) return;
+  const impact = document.createElement('span');
+  impact.className = `idle-combat-impact ${source}`;
+  impact.innerHTML = source === 'hero' ? '<i class="fas fa-burst"></i>' : '<i class="fas fa-bolt"></i>';
+  scene.appendChild(impact);
+  setTimeout(() => impact.remove(), 520);
 }
 
 async function levelUpIdleSlot(slotIndex, slotEl) {
