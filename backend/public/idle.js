@@ -130,9 +130,47 @@ function renderIdleState(state) {
   const mult = document.getElementById('idle-mult-val');
   if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier * state.dojo.prestige.multiplier).toFixed(2)}`;
   renderIdleDecor(state.dojo, prev?.dojo);
+  renderIdleBattle(state.dojo);
+  renderIdleMainHero(state);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
   renderIdleRecruit(state.recruit, state.essence);
+}
+
+// Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),
+// sa puissance vient de Concentration. Les recrues restent une équipe passive.
+function renderIdleMainHero(state) {
+  const avatar = document.getElementById('idle-main-hero-avatar');
+  if (avatar && currentUser) renderAvatar(avatar, currentUser);
+  const name = document.getElementById('idle-main-hero-name');
+  if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
+  const power = document.getElementById('idle-main-hero-power');
+  if (power) power.textContent = `${idleFormatNumber(state.click.yield)} puissance active`;
+}
+
+// La boucle de combat réutilise la progression serveur du Dojo : chaque niveau
+// est un ennemi, chaque dixième niveau un boss, et les « PV » sont exactement
+// l'XP restant avant le niveau suivant. Aucun état parallèle ni récompense
+// locale : l'habillage Clicker Heroes reste fidèle aux données autoritaires.
+function renderIdleBattle(dojo) {
+  const stage = Math.max(1, dojo.level || 1);
+  const wave = ((stage - 1) % 10) + 1;
+  const zone = Math.floor((stage - 1) / 10) + 1;
+  const boss = wave === 10;
+  const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
+  const total = Math.max(1, dojo.xpForNextLevel || 1);
+  const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
+  const guardianName = dojo.decor?.boss?.name || (boss ? 'Maître du palier' : 'Disciple du Dojo');
+  const zoneEl = document.getElementById('idle-battle-zone');
+  const tagEl = document.getElementById('idle-battle-tag');
+  const titleEl = document.getElementById('idle-enemy-title');
+  const hpEl = document.getElementById('idle-enemy-hp-text');
+  const fill = document.getElementById('idle-xp-fill');
+  if (zoneEl) zoneEl.textContent = `ZONE ${zone} · ${boss ? 'BOSS' : `VAGUE ${wave}/10`}`;
+  if (tagEl) { tagEl.textContent = boss ? 'BOSS' : 'GARDIEN'; tagEl.classList.toggle('boss', boss); }
+  if (titleEl) titleEl.textContent = guardianName;
+  if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV`;
+  if (fill) fill.style.width = `${hpPct}%`;
 }
 
 function renderIdleRecruit(recruit, essence) {
@@ -190,7 +228,7 @@ function idleCelebrate() {
 
 // Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique
 // pur en CSS, régénérées seulement quand le décor change (pas à chaque poll).
-const IDLE_PARTICLE_GLYPH = { wood: '🍃', garden: '🌸', temple: '🏮', gold: '✨', celestial: '⭐' };
+const IDLE_PARTICLE_GLYPH = { wood: '🍃', garden: '✨', temple: '❄️', gold: '🏮', celestial: '🪶', hueco: '🌙', ua: '🎉', shibuya: '⚡', aincrad: '✦', void: '💫' };
 function idleSpawnParticles(theme) {
   if (idleParticleTheme === theme) return;
   idleParticleTheme = theme;
@@ -322,7 +360,23 @@ const IDLE_SCENERY_SVG = {
 };
 function idleSetScenery(theme) {
   const box = document.getElementById('idle-scenery');
-  if (box) box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
+  if (!box) return;
+  // Fonds peints originaux, optimisés en WebP. Le SVG reste derrière comme
+  // repli immédiat si l'asset est indisponible ou encore en cache ancien.
+  const art = {
+    wood: '/assets/idle/dojo-wood.webp',
+    garden: '/assets/idle/dojo-garden.webp',
+    temple: '/assets/idle/dojo-temple.webp',
+    gold: '/assets/idle/dojo-gold.webp',
+    celestial: '/assets/idle/dojo-celestial.webp',
+    hueco: '/assets/idle/dojo-hueco.webp',
+    ua: '/assets/idle/dojo-ua.webp',
+    shibuya: '/assets/idle/dojo-shibuya.webp',
+    aincrad: '/assets/idle/dojo-aincrad.webp',
+    void: '/assets/idle/dojo-void.webp',
+  };
+  box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
+  box.style.backgroundImage = `url('${art[theme] || art.wood}')`;
 }
 
 // Jaquette de l'anime du gardien (AniList, déjà en base) : affichée NETTE dans
@@ -451,6 +505,9 @@ async function clickIdle() {
   if (idleState) idleState.essence = r.essence;
   idleClickFeedback(r.gained);
   idleSpawnFloat(`+${r.gained}`);
+  // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
+  // le passage à la vague/zone suivante après le coup.
+  refreshIdleState();
 }
 
 function idleClickFeedback(gained) {
@@ -627,6 +684,12 @@ function initIdleUI() {
   document.getElementById('idle-recruit-btn')?.addEventListener('click', recruitIdle);
   document.getElementById('idle-milestone-btn')?.addEventListener('click', claimIdleMilestone);
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
+  document.getElementById('idle-customize-hero')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    idleStopTicker();
+    document.body.classList.remove('idle-fullscreen');
+    openProfile();
+  });
   document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));
   document.getElementById('idle-welcome-collect')?.addEventListener('click', () => {
     document.getElementById('idle-welcome').classList.add('hidden');

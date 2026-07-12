@@ -141,11 +141,16 @@ function dojoLevelMultiplier(level) {
 // joueur reste dans le décor le plus prestigieux — pas de plafond de contenu
 // pour autant, le niveau continue de grimper).
 const DOJO_DECOR = [
-  { level: 1, name: 'Dojo de bois', theme: 'wood', flavor: "Un simple dojo de planches. Le maître observe en silence : tout grand parcours commence humblement." },
-  { level: 10, name: 'Jardin zen', theme: 'garden', flavor: "Les premiers cerisiers ont fleuri. La discipline porte ses fruits — au sens propre." },
-  { level: 25, name: 'Temple écarlate', theme: 'temple', flavor: "Le Dojo attire des disciples de toute la région. Les lanternes ne s'éteignent plus." },
-  { level: 50, name: 'Sanctuaire doré', theme: 'gold', flavor: "L'or orne les colonnes. On raconte votre entraînement jusque dans les capitales voisines." },
-  { level: 100, name: 'Royaume céleste', theme: 'celestial', flavor: "Le Dojo a dépassé la légende. Les étoiles elles-mêmes semblent s'entraîner avec vous." },
+  { level: 1, name: 'Konoha · Village caché', theme: 'wood', flavor: "Sous le regard des Hokage, les premiers entraînements commencent au cœur du Village de la Feuille." },
+  { level: 10, name: 'Namek · Plaine des trois soleils', theme: 'garden', flavor: "Un monde extraterrestre aux lacs d'émeraude où chaque combat peut faire trembler une planète." },
+  { level: 25, name: 'Marineford · Baie gelée', theme: 'temple', flavor: "La forteresse de la Marine domine l'horizon. Une bataille capable de changer une ère se prépare." },
+  { level: 50, name: "Château de l'Infini", theme: 'gold', flavor: "Escaliers et salles suspendues défient les lois de l'espace. Aucun chemin ne mène vraiment dehors." },
+  { level: 100, name: 'Shiganshina · Dernier rempart', theme: 'celestial', flavor: "Au pied du Mur, la cité retient son souffle avant l'affrontement qui décidera de son avenir." },
+  { level: 150, name: 'Hueco Mundo · Las Noches', theme: 'hueco', flavor: "Sous une lune éternelle, le palais blanc domine un désert où errent les âmes dévorées." },
+  { level: 250, name: 'U.A. · Festival sportif', theme: 'ua', flavor: "Le plus grand stade des héros attend un combat capable d'inspirer toute une génération." },
+  { level: 400, name: 'Shibuya · Nuit des fléaux', theme: 'shibuya', flavor: "Le voile s'est refermé sur le carrefour. Les néons tremblent sous une énergie maudite incontrôlable." },
+  { level: 650, name: 'Aincrad · Centième palier', theme: 'aincrad', flavor: "Le château flottant révèle enfin son sommet. Une dernière porte sépare les survivants de la liberté." },
+  { level: 1000, name: 'Monde du Néant · Tournoi du Pouvoir', theme: 'void', flavor: "Au-delà des univers, l'arène ultime flotte dans le vide. Il ne peut rester qu'un seul combattant." },
 ];
 function decorForLevel(level) {
   let current = DOJO_DECOR[0];
