@@ -5740,11 +5740,28 @@ body.idle-fullscreen #app { padding-top: 0; }
   text-shadow: 0 2px 6px rgba(0,0,0,.9); animation: idleFloatUp 1.4s ease-out forwards;
 }
 .idle-float.xp { color: #7ec8ff; font-size: .9rem; }
+/* Paliers de taille/couleur — relatifs à la production courante (idleFloatTier),
+   pas à une valeur absolue : un gain "gros" en tout début de partie ne l'est
+   plus du tout quelques minutes plus tard. */
+.idle-float.big { font-size: 1.3rem; }
+.idle-float.huge { font-size: 1.6rem; color: #ffb648; text-shadow: 0 2px 12px rgba(255,182,72,.85), 0 2px 6px rgba(0,0,0,.9); }
+.idle-float.kill { color: #ff8a4d; font-size: 1.15rem; text-shadow: 0 2px 10px rgba(255,90,20,.8), 0 2px 6px rgba(0,0,0,.9); }
 @keyframes idleFloatUp {
   0% { opacity: 0; transform: translateY(10px) scale(.8); }
   15% { opacity: 1; transform: translateY(0) scale(1); }
   100% { opacity: 0; transform: translateY(-70px) scale(1.12); }
 }
+
+/* Impact de kill : flash + micro-secousse sur la scène (cf. idleKillBurst) —
+   léger et rapide, pensé pour se répéter souvent sans fatiguer l'œil. */
+@keyframes idleKillShake {
+  0% { transform: translate(0, 0); filter: brightness(1); }
+  20% { transform: translate(-2px, 1px); filter: brightness(1.3); }
+  45% { transform: translate(2px, -1px); filter: brightness(1.1); }
+  70% { transform: translate(-1px, 0); filter: brightness(1.05); }
+  100% { transform: translate(0, 0); filter: brightness(1); }
+}
+.idle-kill-flash { animation: idleKillShake .3s ease; }
 
 .idle-scene-foot { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 2; }
 .idle-enemy-title { display: flex; align-items: end; justify-content: space-between; gap: 10px; margin-bottom: 4px; color: #fff; text-shadow: 0 2px 5px #000; }

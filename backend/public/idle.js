@@ -72,6 +72,17 @@ function idleSpawnFloat(text, cls) {
   setTimeout(() => f.remove(), 1400);
 }
 
+// Palier de taille/couleur d'un gain flottant, RELATIF à la production
+// actuelle (pas de seuil absolu — un gain de 50 est énorme en tout début de
+// partie, dérisoire bien plus tard). Vide = taille normale.
+function idleFloatTier(amount) {
+  const rate = idleState?.totalRate || 0;
+  if (rate <= 0) return '';
+  if (amount > rate * 30) return 'huge';
+  if (amount > rate * 5) return 'big';
+  return '';
+}
+
 // « Pendant ton absence » : ne s'affiche qu'à l'ouverture (pas à chaque
 // rafraîchissement suivant un clic/achat) et seulement si ça vaut le coup —
 // on n'embête pas le joueur pour 3 essence après 10 secondes d'absence.
@@ -202,8 +213,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if (fill) fill.style.width = `${hpPct}%`;
   // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
-  // vrais niveaux de Dojo — voir idleKillBurst plus bas (chantier 2).
-  if (prevBattle && stage > Math.max(1, prevBattle.stage || 1) && typeof idleKillBurst === 'function') {
+  // vrais niveaux de Dojo.
+  if (prevBattle && stage > Math.max(1, prevBattle.stage || 1)) {
     idleKillBurst(stage - Math.max(1, prevBattle.stage || 1));
   }
 }
@@ -271,6 +282,22 @@ function renderIdleDecor(dojo, prevDojo) {
 function idleCelebrate() {
   if (typeof burstConfetti === 'function') burstConfetti(36);
   if (typeof sfx !== 'undefined' && sfx.levelup) sfx.levelup();
+}
+
+// Impact de kill (stage franchi) : flash + micro-secousse sur la scène, plus
+// léger que idleCelebrate (confettis) — les kills sont désormais fréquents
+// (cf. renderIdleBattle), une célébration à chaque fois serait fatigante.
+// `count` = nombre de stages franchis d'un coup (rattrapage après une pause
+// ou grosse récolte) : un seul impact, pas une rafale qui spammerait l'écran.
+function idleKillBurst(count) {
+  const scene = document.getElementById('idle-scene');
+  if (scene) {
+    scene.classList.remove('idle-kill-flash');
+    void scene.offsetWidth;
+    scene.classList.add('idle-kill-flash');
+  }
+  idleSpawnFloat(count > 1 ? `×${count} vaincus !` : 'Vaincu !', 'kill');
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
 }
 
 // Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique
@@ -542,7 +569,7 @@ async function collectIdle() {
   }
   // Le nombre affiché inclut déjà le pending (cf. idleTick) : sans ce petit
   // retour, cliquer « Récolter » ne « faisait » visiblement rien.
-  if (pending > 0) idleSpawnFloat(`+${idleFormatNumber(pending)}`, 'xp');
+  if (pending > 0) idleSpawnFloat(`+${idleFormatNumber(pending)}`, ['xp', idleFloatTier(pending)].filter(Boolean).join(' '));
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
   const essenceEl = document.getElementById('idle-essence-val');
   if (essenceEl) idleBump(essenceEl);
@@ -558,7 +585,7 @@ async function clickIdle() {
   }
   if (idleState) idleState.essence = r.essence;
   idleClickFeedback(r.gained);
-  idleSpawnFloat(`+${r.gained}`);
+  idleSpawnFloat(`+${r.gained}`, idleFloatTier(r.gained));
   // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
   // le passage à la vague/zone suivante après le coup.
   refreshIdleState();
