@@ -5843,49 +5843,45 @@ body.idle-fullscreen #app { padding-top: 0; }
   .idle-scene-poster { opacity: .55; }
 }
 
-/* ── Emplacements d'entraînement ── */
-.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }
-.idle-slot {
-  position: relative; border-radius: 10px; min-height: 190px;
+/* ── Roster : ligne de héros compacte façon Clicker Heroes (pas de grosse
+   carte gacha — jusqu'à 10 emplacements doivent tenir sans scroll excessif) ── */
+.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.idle-hero {
+  position: relative; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden;
+  background: var(--bg-2); border: 2px solid rgba(255,255,255,.14); cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.idle-hero:hover { transform: translateY(-2px); }
+.idle-hero.r-rare { border-color: #3aa0ff; }
+.idle-hero.r-epic { border-color: #b06cff; }
+.idle-hero.r-legendary { border-color: #ffb648; box-shadow: 0 0 10px #ffb64833; }
+.idle-hero.r-mythic { border-color: #ff5d8f; box-shadow: 0 0 12px #ff5d8f44; }
+.idle-hero-portrait { width: 100%; aspect-ratio: 1 / 1; background-size: cover; background-position: center top; background-color: var(--bg-3); }
+.idle-hero-name { padding: 4px 6px 0; font-size: .68rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idle-hero-meta { display: flex; justify-content: space-between; gap: 4px; padding: 1px 6px 4px; font-size: .6rem; font-weight: 700; }
+.idle-hero-lvl { color: #ffd54a; }
+.idle-hero-rate { color: #7ec8ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idle-hero-remove {
+  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,.6); color: #fff; border: none; font-size: .6rem; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.idle-slot-empty {
-  flex-direction: column; gap: 8px; background: rgba(0,0,0,.22); border: 2px dashed rgba(255,255,255,.18);
-  color: var(--text-2); cursor: pointer; font-size: .8rem;
+.idle-hero-remove:hover { background: var(--red); }
+.idle-hero-levelup {
+  border: none; width: 100%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+  font-size: .62rem; font-weight: 700; padding: 4px 2px; cursor: pointer;
 }
-.idle-slot-empty:hover { border-color: var(--accent); color: var(--text); }
-.idle-slot-empty i { font-size: 1.4rem; }
-.idle-slot-locked { flex-direction: column; gap: 8px; background: rgba(0,0,0,.3); border: 2px solid rgba(255,255,255,.1); color: var(--text-2); }
-.idle-slot-locked i { font-size: 1.2rem; }
-.idle-slot-filled { display: block; cursor: pointer; }
-.idle-slot-filled:hover .gcard { filter: brightness(1.08); }
-.idle-slot-filled .gcard { width: 100%; height: 100%; }
-/* cardHTML() dessine son propre nom/rareté sous l'image (.gcard-info, en flux
-   normal) — nos bandeaux absolus (niveau/taux/boutons) sont calés sur le bas
-   de l'EMPLACEMENT : sur un slot compact le texte du nom finissait dessous et
-   se superposait. Niveau + bordure de rareté suffisent ici ; le nom complet
-   reste dans title et dans le sélecteur. */
-.idle-slot-filled .gcard-info { display: none; }
-.idle-slot-lvl {
-  position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 8px;
-  background: rgba(0,0,0,.6); color: #ffd54a; font-size: .62rem; font-weight: 700;
+.idle-hero-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
+.idle-hero-empty, .idle-hero-locked {
+  align-items: center; justify-content: center; gap: 6px; aspect-ratio: 3 / 4;
+  color: var(--text-2); font-size: .72rem;
 }
-.idle-slot-rate {
-  position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; padding: 3px 4px;
-  background: rgba(0,0,0,.65); color: #ffd54a; font-size: .68rem; font-weight: 700;
+.idle-hero-empty {
+  flex-direction: column; background: rgba(0,0,0,.22); border: 2px dashed rgba(255,255,255,.18);
 }
-.idle-slot-remove {
-  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(0,0,0,.6); color: #fff; border: none; font-size: .7rem; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-.idle-slot-remove:hover { background: var(--red); }
-.idle-slot-levelup {
-  position: absolute; left: 0; right: 0; bottom: 0; border: none; border-radius: 0 0 10px 10px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: .68rem; font-weight: 700;
-  padding: 5px 4px; cursor: pointer;
-}
-.idle-slot-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
+.idle-hero-empty:hover { border-color: var(--accent); color: var(--text); }
+.idle-hero-empty i, .idle-hero-locked i { font-size: 1.2rem; }
+.idle-hero-locked { flex-direction: column; background: rgba(0,0,0,.3); border: 2px solid rgba(255,255,255,.1); cursor: default; }
 
 /* ── Améliorations ── */
 .idle-upgrades { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }

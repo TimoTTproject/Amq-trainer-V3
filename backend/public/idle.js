@@ -1,7 +1,8 @@
 // Dojo (idle/clicker) — extrait autonome (scope global partagé). Réservé aux
 // admins en phase de test (nav caché + 403 serveur pour tout autre compte).
 // Réutilise les globals de main.js (api, showView, currentUser, escapeHtml) et
-// cardHTML() de gacha.js pour l'affichage des cartes assignées/sélectionnables.
+// cardHTML() de gacha.js pour le sélecteur de personnage (modale) — le roster
+// assigné a sa propre ligne de héros compacte, voir idleSlotHTML.
 let idleState = null; // dernier état reçu du serveur
 let idleFetchedAt = 0; // Date.now() de ce dernier état (base du ticker en direct)
 let idleTicker = null;
@@ -502,29 +503,36 @@ function renderIdlePrestige(dojo) {
   }
 }
 
+// Ligne de héros compacte façon Clicker Heroes — volontairement PAS cardHTML()
+// (carte gacha pleine taille) : jusqu'à 10 emplacements doivent tenir sans
+// scroll excessif, ici on n'a besoin que du portrait + niveau + production.
 function idleSlotHTML(slot) {
   if (slot.locked) {
-    return `<div class="idle-slot idle-slot-locked">
+    return `<div class="idle-hero idle-hero-locked">
       <i class="fas fa-lock"></i>
       <button class="btn-secondary idle-unlock-btn" data-slot="${slot.index}">${idleFormatNumber(slot.unlockCost)} <i class="fas fa-mortar-pestle"></i></button>
     </div>`;
   }
   if (!slot.character) {
-    return `<button class="idle-slot idle-slot-empty" data-slot="${slot.index}" data-action="pick">
+    return `<button class="idle-hero idle-hero-empty" data-slot="${slot.index}" data-action="pick">
       <i class="fas fa-plus"></i><span>Assigner</span>
     </button>`;
   }
   const c = slot.character;
+  const img = c.imageUrl ? ` style="background-image:url('${c.imageUrl}')"` : '';
   // data-action="pick" sur le conteneur : cliquer la carte propose de la
   // remplacer (un seul geste, au lieu de retirer puis réassigner). Les
   // boutons ×/niveau matchent leur propre data-action en premier dans la
   // délégation d'événements (cf. initIdleUI), donc pas de conflit.
-  return `<div class="idle-slot idle-slot-filled" data-slot="${slot.index}" data-action="pick" title="${escapeHtml(c.name)} — cliquer pour remplacer">
-    ${cardHTML(c, { noBorder: false })}
-    <span class="idle-slot-lvl">Nv. ${idleFormatNumber(c.level)}</span>
-    <div class="idle-slot-rate">+${idleFormatNumber(c.rate)}/s</div>
-    <button class="idle-slot-remove" data-slot="${slot.index}" data-action="unassign" title="Retirer"><i class="fas fa-xmark"></i></button>
-    <button class="idle-slot-levelup" data-slot="${slot.index}" data-action="levelup"${idleState && idleState.essence < c.levelUpCost ? ' disabled' : ''}>
+  return `<div class="idle-hero r-${c.rarity}" data-slot="${slot.index}" data-action="pick" title="${escapeHtml(c.name)} — cliquer pour remplacer">
+    <div class="idle-hero-portrait"${img}></div>
+    <button class="idle-hero-remove" data-slot="${slot.index}" data-action="unassign" title="Retirer"><i class="fas fa-xmark"></i></button>
+    <div class="idle-hero-name">${escapeHtml(c.name)}</div>
+    <div class="idle-hero-meta">
+      <span class="idle-hero-lvl">Nv. ${idleFormatNumber(c.level)}</span>
+      <span class="idle-hero-rate">+${idleFormatNumber(c.rate)}/s</span>
+    </div>
+    <button class="idle-hero-levelup" data-slot="${slot.index}" data-action="levelup"${idleState && idleState.essence < c.levelUpCost ? ' disabled' : ''}>
       <i class="fas fa-arrow-up"></i> ${idleFormatNumber(c.levelUpCost)}
     </button>
   </div>`;
@@ -790,9 +798,9 @@ function initIdleUI() {
     const removeBtn = e.target.closest('[data-action="unassign"]');
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));
     const levelBtn = e.target.closest('[data-action="levelup"]');
-    if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-slot'));
+    if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-hero'));
     const unlockBtn = e.target.closest('.idle-unlock-btn');
-    if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-slot'));
+    if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-hero'));
     const pickBtn = e.target.closest('[data-action="pick"]');
     if (pickBtn) return openIdlePicker(Number(pickBtn.dataset.slot));
   });
