@@ -309,7 +309,7 @@ async function buildState(userId) {
     loadAncientLevels(prisma, userId),
   ]);
   let recruits = [];
-  try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { series: true, rarity: true } } } }); } catch (e) { if (e?.code) throw e; }
+  try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { name:true, series: true, rarity: true } } }, orderBy:{recruitedAt:'desc'} }); } catch (e) { if (e?.code) throw e; }
   const prodAncientBonus = ancientBonus(ancientLevelsByKey, 'prodMult');
   const clickAncientBonus = ancientBonus(ancientLevelsByKey, 'clickMult');
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
@@ -405,6 +405,7 @@ async function buildState(userId) {
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
     recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus) },
+    recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.characterId) })),
     battle: {
       stage,
       kills: Math.max(0, stage - 1), // les stages commencent à 1 — affichage façon "X ennemis vaincus"
@@ -481,12 +482,12 @@ router.get('/state', requireAuth, requireAdmin, async (req, res) => {
 router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
   const recruits = await prisma.dojoRecruit.findMany({
     where: { userId: req.user.id },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } } },
     orderBy: { recruitedAt: 'desc' },
   });
   res.json({
     recruits: recruits.map((r) => ({
-      id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity,
+      id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt, talent:characterTalent(r.character.id),
     })),
   });
 });
@@ -535,7 +536,7 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
   // (compteur/coût du prochain) déjà renvoyé par buildState() — le spread
   // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
   // même nom.
-  res.json({ ...(await buildState(req.user.id)), recruited: { ...result, talent: characterTalent(result.id) } });
+  res.json({ ...(await buildState(req.user.id)), recruited: { ...result, talent: characterTalent(result.id), baseRate:slotRate(result.rarity,1) } });
 });
 
 router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
