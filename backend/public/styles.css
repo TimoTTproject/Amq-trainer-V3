@@ -6096,6 +6096,23 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-mastery>small{grid-column:2/-1;color:var(--text-2)}
 @media(max-width:760px){#view-idle .idle-masteries{grid-template-columns:1fr}#view-idle .idle-mastery{min-height:86px;padding:13px}#view-idle .idle-mastery b{font-size:13px}#view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:10px}}
 
+/* Équipe : les anciennes cartes fixes de 138 px comprimaient toutes les
+   statistiques. Grille large et respirante, adaptée à chaque écran. */
+#view-idle .idle-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;align-items:start}
+#view-idle .idle-hero,#view-idle .idle-hero-empty,#view-idle .idle-hero-locked{width:100%;min-width:0;max-width:none;flex:none}
+#view-idle .idle-hero{display:grid;grid-template-columns:92px minmax(0,1fr);gap:0 10px;padding:10px;overflow:visible;border-radius:14px}
+#view-idle .idle-hero-portrait{grid-row:1/7;width:92px;height:118px;aspect-ratio:auto;border-radius:10px;background-position:center top;box-shadow:inset 0 -20px 16px -12px rgba(0,0,0,.55)}
+#view-idle .idle-hero-name{padding:2px 28px 3px 0;font-size:14px;line-height:1.25}
+#view-idle .idle-hero-meta{padding:0 0 7px;font-size:12px}
+#view-idle .idle-hero-stats{grid-column:2;gap:7px;margin-bottom:6px}#view-idle .idle-hero-stats span{padding:5px 7px;font-size:10px}
+#view-idle .idle-hero-passive{grid-column:2;font-size:10px;line-height:1.35;margin-bottom:6px}
+#view-idle .idle-hero-milestones{grid-column:2;gap:5px;margin-bottom:7px}#view-idle .idle-hero-milestones span{min-width:29px;height:22px;font-size:9px}
+#view-idle .idle-equipment{grid-column:1/-1;margin-top:10px;gap:7px}#view-idle .idle-equipment span{flex:1;justify-content:center;padding:6px 8px}#view-idle .idle-equipment small{font-size:9px}
+#view-idle .idle-level-buys{grid-column:1/-1;gap:7px;margin-top:8px}#view-idle .idle-level-buys .idle-hero-levelup{min-height:42px;padding:6px;font-size:11px}#view-idle .idle-level-buys .idle-hero-levelup small{font-size:9px}
+#view-idle .idle-ascend-btn,#view-idle .idle-ascend-hint,#view-idle .idle-ascend-max{grid-column:1/-1;margin-top:7px;padding:9px;font-size:10px}
+@media(max-width:1050px){#view-idle .idle-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){#view-idle .idle-slots{grid-template-columns:1fr;gap:12px}#view-idle .idle-hero{grid-template-columns:82px minmax(0,1fr)}#view-idle .idle-hero-portrait{width:82px;height:108px}}
+
 @media (max-width: 700px) {
   .idle-content { padding: 10px 10px 30px; }
   .idle-scene { min-height: 215px; border-radius: 14px; }
