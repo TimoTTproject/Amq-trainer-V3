@@ -5715,6 +5715,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-main-hero>button { position: absolute; top: -3px; right: -8px; width: 28px; height: 28px; border: 1px solid #fff6; border-radius: 50%; background: #14263ddd; color: #fff; cursor: pointer; }
 .idle-main-hero>button:hover { background: #2879b9; transform: scale(1.08); }
 @keyframes idleHeroReady { 50% { transform: translateY(-5px) rotate(-1deg); } }
+.idle-stage-team { position:absolute;z-index:2;left:7%;bottom:55px;display:flex;gap:5px;align-items:end; }
+.idle-stage-ally { position:relative;width:38px;height:52px;border:2px solid #fff8;border-radius:8px;background:#172033 center top/cover no-repeat;box-shadow:0 5px 10px #0009; }
+.idle-stage-ally i { position:absolute;right:-4px;top:-5px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;background:#111;color:var(--role);font-size:8px;border:1px solid var(--role); }
+.idle-synergy-bar {display:flex;align-items:center;gap:11px;margin:0 0 14px;padding:11px 14px;border:1px solid #8a6cff55;border-radius:11px;background:linear-gradient(135deg,#8a6cff18,#4db8ff10)}
+.idle-synergy-bar>i{color:#b997ff;font-size:1.2rem}.idle-synergy-bar b,.idle-synergy-bar span{display:block}.idle-synergy-bar b{font-size:.8rem}.idle-synergy-bar span{color:var(--text-2);font-size:.66rem;margin-top:2px}
 .idle-main-hero.idle-hero-attacking { animation: idleHeroAttack .38s cubic-bezier(.2,.8,.3,1); }
 @keyframes idleHeroAttack {
   0%,100% { transform: translate(-50%,-44%); }

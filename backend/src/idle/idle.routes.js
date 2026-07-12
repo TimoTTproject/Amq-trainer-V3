@@ -129,7 +129,7 @@ async function fetchDecorArt(theme) {
 async function loadSlots(tx, userId) {
   return tx.idleSlot.findMany({
     where: { userId },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } } },
   });
 }
 
@@ -213,6 +213,7 @@ async function buildState(userId) {
         name: row.character.name,
         imageUrl: row.character.imageUrl,
         rarity: row.character.rarity,
+        series: row.character.series,
         level,
         rate: slotRate(row.character.rarity, level),
         levelUpCost: charLevelUpCost(row.character.rarity, level),
