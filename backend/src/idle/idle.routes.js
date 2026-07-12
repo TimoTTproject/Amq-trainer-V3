@@ -390,6 +390,15 @@ async function buildState(userId) {
   let achievementClaims = []; try { achievementClaims = await prisma.idleMissionClaim.findMany({ where: { userId, period: 'lifetime', missionKey: { in: achievementDefs.map((a) => `achievement_${a.key}`) } }, select: { missionKey: true } }); } catch (e) { if (e?.code) throw e; }
   const claimedAchievements = new Set(achievementClaims.map((c) => c.missionKey));
   const achievements = achievementDefs.map((a) => ({ ...a, completed: a.progress >= a.target, claimed: claimedAchievements.has(`achievement_${a.key}`) }));
+  const activeSlots=slots.filter((s)=>s.character);
+  const guide=[
+    {key:'recruit',title:'Recrute ton premier héros',description:'Utilise ton Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
+    {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
+    {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
+    {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
+    {key:'gear',title:'Équipe une pièce',description:'Les coffres donnent Armes, Reliques et Accessoires.',done:slots.some((s)=>(s.equipments||[]).length>0),tab:'team'},
+    {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le niveau requis pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
+  ];
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -422,6 +431,7 @@ async function buildState(userId) {
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
     event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Cumule 100 niveaux dans ton équipe active', progress: Math.min(weeklyLevels, 100), target: 100, reward: 3000, completed: weeklyLevels >= 100, claimed: weeklyClaimed } },
     achievements,
+    guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),

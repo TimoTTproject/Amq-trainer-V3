@@ -205,6 +205,7 @@ function renderIdleState(state) {
   renderIdleMissions(state.missions || []);
   renderIdleEvent(state.event);
   renderIdleAchievements(state.achievements || []);
+  renderIdleGuide(state.guide);
   const hudLevel = document.getElementById('idle-hud-level');
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
@@ -456,6 +457,8 @@ function renderIdleAchievements(items) {
   const box = document.getElementById('idle-achievements'); if (!box) return;
   box.innerHTML = items.map((a) => `<div class="idle-achievement ${a.completed ? 'completed' : ''}"><i class="fas ${a.icon}"></i><div><b>${escapeHtml(a.title)}</b><span>${escapeHtml(a.description)} · ${idleFormatNumber(a.progress)}/${idleFormatNumber(a.target)}</span><em style="--progress:${a.progress/a.target*100}%"></em></div><button class="btn-secondary" data-achievement="${a.key}" ${!a.completed || a.claimed ? 'disabled' : ''}>${a.claimed ? '<i class="fas fa-check"></i>' : `+${idleFormatNumber(a.reward)}`}</button></div>`).join('');
 }
+function renderIdleGuide(guide){if(!guide)return;const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
+function openIdleGuide(){document.getElementById('idle-guide-modal')?.classList.remove('hidden');}
 async function claimIdleAchievement(key) { try { const r = await api('/api/idle/achievement/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`SUCCÈS +${idleFormatNumber(r.reward)}`, 'crit'); if (typeof burstConfetti === 'function') burstConfetti(25); await refreshIdleState(); } catch (e) { alert(e.message); } }
 async function claimIdleEvent() { try { const r = await api('/api/idle/event/claim', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`CONVERGENCE +${idleFormatNumber(r.reward)}`, 'crit'); await refreshIdleState(); } catch (e) { alert(e.message); } }
 
@@ -1148,6 +1151,7 @@ function initIdleUI() {
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
   document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-auto-skills')?.addEventListener('click',toggleIdleAutoSkills);
+  document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
