@@ -1569,7 +1569,6 @@
 
     <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
     <div id="view-idle" class="hidden idle-space" data-decor="wood">
-      <div id="idle-backdrop" class="idle-backdrop" aria-hidden="true"></div>
       <div id="idle-particles" class="idle-particles" aria-hidden="true"></div>
 
       <!-- HUD collant façon jeu mobile : retour · logo · essence · niveau · coffre -->
@@ -1585,8 +1584,8 @@
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel">
           <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
-            <div class="idle-scene-bg" id="idle-scene-bg"></div>
             <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
+            <span class="idle-scene-poster hidden" id="idle-scene-poster" title="Affiche de l'anime du gardien"></span>
             <div class="idle-scene-head">
               <h2 id="idle-decor-name">—</h2>
               <div class="idle-scene-chips">

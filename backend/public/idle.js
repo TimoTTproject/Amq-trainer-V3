@@ -212,48 +212,112 @@ function idleSpawnParticles(theme) {
 // Scène décorative en SVG inline (silhouettes) par thème — pas d'asset externe
 // à héberger/générer, juste des formes plates dans la couleur du décor.
 // Régénérée seulement au changement de thème (comme les particules).
+// Scènes « peintes » en SVG plat, une par palier — le décor visuel principal
+// (la jaquette d'anime, trop petite pour servir de fond, est affichée à part
+// en kakémono net, cf. idleRenderBackdrop). Composition : collines en couches,
+// bâtiment à droite du centre (le gardien occupe le centre), bandeau de sol
+// sombre en bas pour asseoir la barre d'XP. L'essentiel vit dans y∈[180,400] :
+// avec preserveAspectRatio "slice", le haut est rogné sur écran large.
 const IDLE_SCENERY_SVG = {
   wood: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
-    <path d="M0,320 L150,220 300,300 480,180 650,280 820,200 1000,300 1200,240 1200,400 0,400 Z" fill="#3a2c1c" opacity=".35"/>
-    <path d="M520,300 L520,180 600,120 680,180 680,300 Z" fill="#2a1c10" opacity=".5"/>
-    <path d="M480,190 L600,90 720,190 Z" fill="#3a2814" opacity=".55"/>
+    <path d="M0,290 C180,240 360,270 540,245 C760,215 980,265 1200,235 L1200,400 0,400 Z" fill="#52381c" opacity=".4"/>
+    <path d="M0,330 C240,295 480,320 720,300 C900,285 1080,315 1200,300 L1200,400 0,400 Z" fill="#241407" opacity=".8"/>
+    <rect x="690" y="330" width="220" height="14" fill="#170c05"/>
+    <rect x="710" y="270" width="180" height="60" fill="#2e1b0c"/>
+    <rect x="785" y="290" width="30" height="40" fill="#0f0803"/>
+    <rect x="740" y="284" width="18" height="24" fill="#ffb648" opacity=".8"/>
+    <rect x="842" y="284" width="18" height="24" fill="#ffb648" opacity=".8"/>
+    <path d="M680,270 L920,270 888,240 712,240 Z" fill="#1a0e06"/>
+    <path d="M702,240 L898,240 872,214 728,214 Z" fill="#26130a"/>
+    <rect x="654" y="302" width="6" height="30" fill="#0f0803"/>
+    <circle cx="657" cy="296" r="7" fill="#ffb648" opacity=".85"/>
+    <rect x="940" y="302" width="6" height="30" fill="#0f0803"/>
+    <circle cx="943" cy="296" r="7" fill="#ffb648" opacity=".85"/>
+    <ellipse cx="240" cy="352" rx="60" ry="14" fill="#1d1207"/>
+    <ellipse cx="1050" cy="356" rx="80" ry="16" fill="#1d1207"/>
+    <rect x="0" y="346" width="1200" height="54" fill="#120a04" opacity=".95"/>
   </svg>`,
   garden: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
-    <path d="M0,320 C200,260 350,300 500,260 C700,210 900,290 1200,250 L1200,400 0,400 Z" fill="#1f4a2c" opacity=".35"/>
-    <rect x="300" y="180" width="14" height="130" fill="#2a2015" opacity=".5"/>
-    <circle cx="270" cy="150" r="55" fill="#e97fb0" opacity=".45"/>
-    <circle cx="320" cy="130" r="45" fill="#f2a0c4" opacity=".4"/>
-    <circle cx="330" cy="175" r="42" fill="#e97fb0" opacity=".4"/>
+    <path d="M0,285 C220,245 440,275 660,250 C880,225 1060,265 1200,245 L1200,400 0,400 Z" fill="#2c5e38" opacity=".45"/>
+    <path d="M0,330 C260,300 520,325 780,305 C960,292 1100,315 1200,305 L1200,400 0,400 Z" fill="#1b3b25" opacity=".85"/>
+    <ellipse cx="420" cy="356" rx="150" ry="16" fill="#7ec8ff" opacity=".22"/>
+    <path d="M836,346 L846,346 850,300 864,278 855,275 843,296 Z" fill="#3a2415"/>
+    <circle cx="826" cy="250" r="34" fill="#f2a3c6" opacity=".95"/>
+    <circle cx="862" cy="236" r="40" fill="#ee8fb9" opacity=".95"/>
+    <circle cx="898" cy="258" r="30" fill="#f6b7d3" opacity=".95"/>
+    <circle cx="844" cy="272" r="26" fill="#e97fb0" opacity=".95"/>
+    <circle cx="886" cy="284" r="21" fill="#f2a3c6" opacity=".95"/>
+    <rect x="700" y="302" width="16" height="44" fill="#333a33"/>
+    <path d="M690,302 L726,302 708,286 Z" fill="#2a302a"/>
+    <circle cx="708" cy="308" r="5" fill="#ffe08c" opacity=".9"/>
+    <circle cx="780" cy="358" r="4" fill="#f2a3c6" opacity=".8"/>
+    <circle cx="920" cy="362" r="3" fill="#f2a3c6" opacity=".8"/>
+    <circle cx="860" cy="368" r="3.5" fill="#ee8fb9" opacity=".8"/>
+    <rect x="0" y="350" width="1200" height="50" fill="#14210f" opacity=".95"/>
   </svg>`,
   temple: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
-    <path d="M0,330 L200,260 400,310 600,240 800,300 1000,250 1200,300 1200,400 0,400 Z" fill="#4a1620" opacity=".35"/>
-    <rect x="560" y="230" width="16" height="90" fill="#2a0e14" opacity=".55"/>
-    <rect x="624" y="230" width="16" height="90" fill="#2a0e14" opacity=".55"/>
-    <path d="M540,230 L660,230 640,200 560,200 Z" fill="#7a2230" opacity=".6"/>
-    <path d="M520,200 L680,200 645,165 555,165 Z" fill="#6a1c28" opacity=".6"/>
-    <path d="M545,165 L655,165 630,135 570,135 Z" fill="#5a1622" opacity=".6"/>
-    <circle cx="470" cy="260" r="7" fill="#ffb648" opacity=".7"/>
-    <circle cx="730" cy="260" r="7" fill="#ffb648" opacity=".7"/>
+    <path d="M0,280 L220,225 430,270 640,230 860,275 1060,235 1200,265 L1200,400 0,400 Z" fill="#3a1017" opacity=".5"/>
+    <path d="M0,325 C260,300 520,320 780,305 1000,293 1120,312 1200,304 L1200,400 0,400 Z" fill="#200a0e" opacity=".85"/>
+    <rect x="730" y="336" width="180" height="12" fill="#14060a"/>
+    <rect x="760" y="300" width="120" height="36" fill="#401017"/>
+    <path d="M740,300 L900,300 870,276 770,276 Z" fill="#6b1b28"/>
+    <rect x="778" y="246" width="84" height="30" fill="#401017"/>
+    <path d="M760,246 L880,246 856,224 784,224 Z" fill="#7a2230"/>
+    <rect x="794" y="200" width="52" height="24" fill="#401017"/>
+    <path d="M780,200 L860,200 840,180 800,180 Z" fill="#8a2838"/>
+    <rect x="818" y="166" width="4" height="14" fill="#d4a94e"/>
+    <rect x="806" y="308" width="12" height="16" fill="#ffb648" opacity=".85"/>
+    <rect x="826" y="308" width="12" height="16" fill="#ffb648" opacity=".85"/>
+    <rect x="280" y="290" width="10" height="60" fill="#5a1622"/>
+    <rect x="352" y="290" width="10" height="60" fill="#5a1622"/>
+    <rect x="264" y="282" width="114" height="10" fill="#7a2230"/>
+    <rect x="276" y="304" width="90" height="7" fill="#7a2230"/>
+    <circle cx="480" cy="330" r="6" fill="#ff9d5c" opacity=".85"/>
+    <circle cx="560" cy="336" r="6" fill="#ff9d5c" opacity=".85"/>
+    <circle cx="640" cy="330" r="6" fill="#ff9d5c" opacity=".85"/>
+    <rect x="0" y="348" width="1200" height="52" fill="#12050a" opacity=".95"/>
   </svg>`,
   gold: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
-    <circle cx="600" cy="220" r="150" fill="#ffb648" opacity=".18"/>
-    <path d="M0,330 L250,270 500,320 700,260 950,310 1200,270 1200,400 0,400 Z" fill="#3a2a06" opacity=".4"/>
-    <rect x="520" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
-    <rect x="600" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
-    <rect x="680" y="240" width="18" height="100" fill="#3a2a08" opacity=".6"/>
-    <path d="M500,240 L700,240 670,205 530,205 Z" fill="#9a6a1c" opacity=".65"/>
-    <path d="M480,205 L720,205 680,165 520,165 Z" fill="#c68a28" opacity=".65"/>
-    <path d="M510,165 L690,165 655,125 545,125 Z" fill="#e0a838" opacity=".65"/>
-    <circle cx="600" cy="115" r="10" fill="#ffe08c" opacity=".85"/>
+    <path d="M0,285 C220,250 460,275 700,255 C920,237 1080,265 1200,250 L1200,400 0,400 Z" fill="#4a3408" opacity=".5"/>
+    <path d="M0,330 C280,305 560,325 840,308 1040,297 1140,312 1200,306 L1200,400 0,400 Z" fill="#2a1d05" opacity=".85"/>
+    <rect x="700" y="340" width="240" height="12" fill="#1a1204"/>
+    <rect x="724" y="330" width="192" height="10" fill="#241804"/>
+    <rect x="740" y="296" width="160" height="34" fill="#6b4a10"/>
+    <rect x="756" y="300" width="10" height="30" fill="#8a6318"/>
+    <rect x="810" y="300" width="10" height="30" fill="#8a6318"/>
+    <rect x="864" y="300" width="10" height="30" fill="#8a6318"/>
+    <path d="M715,296 L925,296 888,264 752,264 Z" fill="#e0a838"/>
+    <path d="M746,264 L894,264 864,240 776,240 Z" fill="#c68a28"/>
+    <circle cx="820" cy="232" r="8" fill="#ffe08c"/>
+    <circle cx="540" cy="250" r="4" fill="#ffe08c" opacity=".9"/>
+    <circle cx="980" cy="270" r="3" fill="#ffe08c" opacity=".8"/>
+    <circle cx="620" cy="300" r="3" fill="#ffe08c" opacity=".7"/>
+    <circle cx="1050" cy="235" r="4" fill="#ffe08c" opacity=".85"/>
+    <ellipse cx="330" cy="352" rx="46" ry="10" fill="#e0a838" opacity=".5"/>
+    <ellipse cx="330" cy="346" rx="30" ry="8" fill="#ffd34d" opacity=".5"/>
+    <rect x="0" y="350" width="1200" height="50" fill="#171004" opacity=".95"/>
   </svg>`,
   celestial: `<svg viewBox="0 0 1200 400" preserveAspectRatio="xMidYMax slice">
-    <circle cx="920" cy="110" r="70" fill="#dce4ff" opacity=".28"/>
-    <circle cx="150" cy="90" r="2.5" fill="#fff" opacity=".8"/>
-    <circle cx="260" cy="140" r="2" fill="#fff" opacity=".6"/>
-    <circle cx="380" cy="70" r="2.5" fill="#fff" opacity=".7"/>
-    <circle cx="720" cy="60" r="2" fill="#fff" opacity=".6"/>
-    <circle cx="1020" cy="200" r="2.5" fill="#fff" opacity=".7"/>
-    <path d="M0,330 L200,270 420,320 640,260 860,310 1080,260 1200,290 1200,400 0,400 Z" fill="#1a1240" opacity=".4"/>
+    <circle cx="960" cy="230" r="46" fill="#dce4ff" opacity=".9"/>
+    <circle cx="946" cy="220" r="9" fill="#b9c4ea" opacity=".9"/>
+    <circle cx="972" cy="244" r="6" fill="#b9c4ea" opacity=".9"/>
+    <circle cx="962" cy="208" r="4" fill="#b9c4ea" opacity=".8"/>
+    <circle cx="240" cy="210" r="2.5" fill="#fff" opacity=".8"/>
+    <circle cx="380" cy="250" r="2" fill="#fff" opacity=".6"/>
+    <circle cx="520" cy="200" r="2.5" fill="#fff" opacity=".7"/>
+    <circle cx="660" cy="240" r="2" fill="#fff" opacity=".6"/>
+    <circle cx="1100" cy="300" r="2.5" fill="#fff" opacity=".7"/>
+    <circle cx="150" cy="300" r="2" fill="#fff" opacity=".6"/>
+    <ellipse cx="300" cy="270" rx="90" ry="14" fill="#8fa3ff" opacity=".14"/>
+    <ellipse cx="1050" cy="330" rx="110" ry="16" fill="#8fa3ff" opacity=".12"/>
+    <path d="M716,322 C736,292 904,292 924,322 L900,346 740,346 Z" fill="#2a2158"/>
+    <path d="M760,346 L798,382 822,346 Z" fill="#1a1240"/>
+    <path d="M842,346 L868,372 886,346 Z" fill="#1a1240"/>
+    <rect x="798" y="284" width="44" height="24" fill="#3a2d78"/>
+    <path d="M786,284 L854,284 838,264 802,264 Z" fill="#6a5ac8"/>
+    <rect x="818" y="254" width="4" height="10" fill="#b9c4ea"/>
+    <rect x="806" y="290" width="8" height="12" fill="#8fa3ff" opacity=".9"/>
+    <rect x="0" y="356" width="1200" height="44" fill="#0a081c" opacity=".9"/>
   </svg>`,
 };
 function idleSetScenery(theme) {
@@ -261,14 +325,15 @@ function idleSetScenery(theme) {
   if (box) box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
 }
 
-// Fond réel tiré d'un anime (jaquette AniList déjà en base, cf. idle.routes.js
-// decorArtForTheme) : net DANS la scène (comme l'arène d'un jeu mobile), et
-// flouté/assombri en fond de page pour la profondeur.
+// Jaquette de l'anime du gardien (AniList, déjà en base) : affichée NETTE dans
+// un petit cadre façon kakémono accroché dans la scène — jamais étirée en fond
+// (la vignette ~100-230 px devenait une bouillie floue en pleine largeur, cf.
+// retour utilisateur). Le décor lui-même reste la scène stylisée en SVG.
 function idleRenderBackdrop(url) {
-  const page = document.getElementById('idle-backdrop');
-  if (page) page.style.backgroundImage = url ? `url('${url}')` : 'none';
-  const scene = document.getElementById('idle-scene-bg');
-  if (scene) scene.style.backgroundImage = url ? `url('${url}')` : 'none';
+  const poster = document.getElementById('idle-scene-poster');
+  if (!poster) return;
+  poster.classList.toggle('hidden', !url);
+  poster.style.backgroundImage = url ? `url('${url}')` : 'none';
 }
 
 // Le « gardien » mythique du palier trône au centre de la scène — vrai
