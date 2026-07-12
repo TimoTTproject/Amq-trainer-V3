@@ -5854,7 +5854,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 /* ── Roster : ligne de héros compacte façon Clicker Heroes (pas de grosse
    carte gacha — jusqu'à 10 emplacements doivent tenir sans scroll excessif) ── */
-.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .idle-hero {
   position: relative; display: flex; flex-direction: column; border-radius: 10px; overflow: hidden;
   background: var(--bg-2); border: 2px solid rgba(255,255,255,.14); cursor: pointer;
@@ -5866,24 +5866,28 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-hero.r-legendary { border-color: #ffb648; box-shadow: 0 0 10px #ffb64833; }
 .idle-hero.r-mythic { border-color: #ff5d8f; box-shadow: 0 0 12px #ff5d8f44; }
 .idle-hero-portrait { width: 100%; aspect-ratio: 1 / 1; background-size: cover; background-position: center top; background-color: var(--bg-3); }
-.idle-hero-name { padding: 4px 6px 0; font-size: .68rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.idle-hero-meta { display: flex; justify-content: space-between; gap: 4px; padding: 1px 6px 4px; font-size: .6rem; font-weight: 700; }
+/* Tailles remontées : la 1ère version (0.6-0.68rem, ~9-11px) était
+   objectivement trop petite pour être lue confortablement — retour direct
+   "c'est illisible". La grille passe à 120px min (au lieu de 96px) pour
+   laisser la place à ce texte plus grand sans qu'il ne déborde. */
+.idle-hero-name { padding: 5px 7px 0; font-size: .82rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idle-hero-meta { display: flex; justify-content: space-between; gap: 4px; padding: 2px 7px 5px; font-size: .74rem; font-weight: 700; }
 .idle-hero-lvl { color: #ffd54a; }
 .idle-hero-rate { color: #7ec8ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .idle-hero-remove {
-  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
-  background: rgba(0,0,0,.6); color: #fff; border: none; font-size: .6rem; cursor: pointer;
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0,0,0,.65); color: #fff; border: none; font-size: .7rem; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .idle-hero-remove:hover { background: var(--red); }
 .idle-hero-levelup {
   border: none; width: 100%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
-  font-size: .62rem; font-weight: 700; padding: 4px 2px; cursor: pointer;
+  font-size: .76rem; font-weight: 700; padding: 6px 2px; cursor: pointer;
 }
 .idle-hero-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
 .idle-hero-empty, .idle-hero-locked {
   align-items: center; justify-content: center; gap: 6px; aspect-ratio: 3 / 4;
-  color: var(--text-2); font-size: .72rem;
+  color: var(--text-2); font-size: .82rem;
 }
 .idle-hero-empty {
   flex-direction: column; background: rgba(0,0,0,.22); border: 2px dashed rgba(255,255,255,.18);
