@@ -22,6 +22,10 @@ const {
   OFFLINE_CAP_MS,
   pendingEssence,
   charLevelUpCost,
+  charLevelBulkCost,
+  RARITY_RATE,
+  RARITY_LEVEL_BONUS,
+  RARITY_PASSIVE,
   dojoLevelForXp,
   dojoXpForLevel,
   dojoLevelMultiplier,
@@ -250,6 +254,10 @@ async function buildState(userId) {
         level,
         rate: slotRate(row.character.rarity, level),
         levelUpCost: charLevelUpCost(row.character.rarity, level),
+        levelCosts: Object.fromEntries([1, 5, 10, 100].map((n) => [n, charLevelBulkCost(row.character.rarity, level, n)])),
+        baseRate: RARITY_RATE[row.character.rarity] || 0,
+        scaling: RARITY_LEVEL_BONUS[row.character.rarity] || 0,
+        passive: RARITY_PASSIVE[row.character.rarity] || '',
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -507,9 +515,11 @@ router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
 // (cf. commentaire IdleSlot.level).
 router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
+  const amount = Number(req.body?.amount || 1);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
     return res.status(400).json({ error: 'Emplacement invalide' });
   }
+  if (![1, 5, 10, 100].includes(amount)) return res.status(400).json({ error: 'Quantité invalide' });
   try {
     await withSettle(req.user.id, async (tx, user) => {
       const slot = await tx.idleSlot.findUnique({
@@ -517,10 +527,10 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name
         include: { character: { select: { rarity: true } } },
       });
       if (!slot || !slot.characterId || !slot.character) throw new IdleError(400, 'Cet emplacement est vide');
-      const cost = charLevelUpCost(slot.character.rarity, slot.level || 1);
+      const cost = charLevelBulkCost(slot.character.rarity, slot.level || 1, amount);
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
-      await tx.idleSlot.update({ where: { id: slot.id }, data: { level: { increment: 1 } } });
+      await tx.idleSlot.update({ where: { id: slot.id }, data: { level: { increment: amount } } });
     });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
