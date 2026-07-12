@@ -83,6 +83,16 @@ function bossMechanicForStage(stage) {
   ][(zone - 1) % 4];
 }
 
+function idleAchievementDefs({ stage, recruits, teamLevels, worlds, prestige }) {
+  return [
+    { key: 'boss_hunter', title: 'Chasseur de boss', description: 'Atteindre la vague 25', icon: 'fa-skull', progress: Math.min(stage, 25), target: 25, reward: 1000 },
+    { key: 'recruiter', title: 'Maître recruteur', description: 'Posséder 10 recrues', icon: 'fa-users', progress: Math.min(recruits, 10), target: 10, reward: 1500 },
+    { key: 'trainer', title: 'Entraînement sans fin', description: 'Cumuler 250 niveaux actifs', icon: 'fa-dumbbell', progress: Math.min(teamLevels, 250), target: 250, reward: 3000 },
+    { key: 'explorer', title: 'Voyageur des mondes', description: 'Découvrir 5 mondes', icon: 'fa-map', progress: Math.min(worlds, 5), target: 5, reward: 5000 },
+    { key: 'sage', title: 'Premier éveil', description: 'Effectuer un Prestige', icon: 'fa-brain', progress: Math.min(prestige, 1), target: 1, reward: 7500 },
+  ];
+}
+
 // ── Habillage visuel du décor : un « gardien » mythique réel (portrait
 // AniList déjà en base) + un fond tiré d'un anime (jaquette déjà récupérée
 // par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée externe
@@ -343,6 +353,10 @@ async function buildState(userId) {
   const masteries = [...masteryMap.values()].map((m) => { const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = [25,100,250,500].find((n) => n > m.levels) || null; return { ...m, bonus, next }; }).sort((a,b) => b.levels-a.levels);
   const periods = idlePeriods(); const weeklyLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
   let weeklyClaimed = false; try { weeklyClaimed = !!(await prisma.idleMissionClaim.findUnique({ where: { userId_missionKey_period: { userId, missionKey: 'weekly_convergence', period: periods.week } } })); } catch (e) { if (e?.code) throw e; }
+  const achievementDefs = idleAchievementDefs({ stage, recruits: recruitCount, teamLevels: weeklyLevels, worlds: DOJO_DECOR.filter((w) => dojoLevel >= w.level).length, prestige: user.prestigeLevel });
+  let achievementClaims = []; try { achievementClaims = await prisma.idleMissionClaim.findMany({ where: { userId, period: 'lifetime', missionKey: { in: achievementDefs.map((a) => `achievement_${a.key}`) } }, select: { missionKey: true } }); } catch (e) { if (e?.code) throw e; }
+  const claimedAchievements = new Set(achievementClaims.map((c) => c.missionKey));
+  const achievements = achievementDefs.map((a) => ({ ...a, completed: a.progress >= a.target, claimed: claimedAchievements.has(`achievement_${a.key}`) }));
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -368,6 +382,7 @@ async function buildState(userId) {
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
     event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Cumule 100 niveaux dans ton équipe active', progress: Math.min(weeklyLevels, 100), target: 100, reward: 3000, completed: weeklyLevels >= 100, claimed: weeklyClaimed } },
+    achievements,
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
@@ -736,6 +751,29 @@ router.post('/event/claim', requireAuth, requireAdmin, rateLimit({ max: 10, name
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Récompense déjà réclamée' });
+    throw e;
+  }
+});
+
+router.post('/achievement/claim', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-achievement' }), async (req, res) => {
+  const key = String(req.body?.key || '');
+  try {
+    const reward = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id } });
+      const [recruits, slots] = await Promise.all([tx.dojoRecruit.count({ where: { userId: user.id } }), tx.idleSlot.findMany({ where: { userId: user.id, characterId: { not: null } }, select: { level: true } })]);
+      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal); const stage = stageForXp(user.essenceEarnedTotal);
+      const defs = idleAchievementDefs({ stage, recruits, teamLevels: slots.reduce((n,s)=>n+(s.level||1),0), worlds: DOJO_DECOR.filter((w)=>dojoLevel>=w.level).length, prestige: user.prestigeLevel });
+      const achievement = defs.find((a) => a.key === key);
+      if (!achievement) throw new IdleError(400, 'Succès inconnu');
+      if (achievement.progress < achievement.target) throw new IdleError(400, 'Succès incomplet');
+      await tx.idleMissionClaim.create({ data: { userId: user.id, missionKey: `achievement_${key}`, period: 'lifetime' } });
+      await tx.user.update({ where: { id: user.id }, data: { essence: { increment: achievement.reward }, essenceEarnedTotal: { increment: achievement.reward } } });
+      return achievement.reward;
+    });
+    res.json({ ok: true, reward });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    if (e?.code === 'P2002') return res.status(409).json({ error: 'Succès déjà réclamé' });
     throw e;
   }
 });
