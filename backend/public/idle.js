@@ -225,6 +225,7 @@ function renderIdleState(state) {
   if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
+  renderIdleBattleSpeed(state.battle?.speed);
   renderIdleBossChest(state.battle?.bossChest);
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
@@ -390,6 +391,8 @@ function renderIdleBossChest(chest) {
   const label = document.getElementById('idle-boss-chest-label');
   if (label && chest) label.textContent = `Boss ${chest.tier} · +${idleFormatNumber(chest.reward)} Essence`;
 }
+function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
+async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){alert(e.message);}}
 
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
@@ -1133,6 +1136,7 @@ function initIdleUI() {
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
+  document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
