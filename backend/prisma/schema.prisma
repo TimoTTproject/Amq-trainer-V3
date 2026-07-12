@@ -796,6 +796,7 @@ model IdleSlot {
   // ★ d'ascension du gacha (cosmétiques là-bas) — ici chaque niveau augmente
   // la production, coût croissant payé en essence (voir idle.js).
   level       Int       @default(1)
+  ascension   Int       @default(0)
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
