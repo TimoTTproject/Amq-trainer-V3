@@ -192,6 +192,15 @@ const HERO_SPECS = {
 };
 function heroClass(key) { return HERO_CLASSES[key] || HERO_CLASSES.warrior; }
 function heroSpec(classKey, specKey) { return HERO_SPECS[classKey]?.find((s)=>s.key===specKey) || { click:1,prod:1,burst:1,team:1,name:'Non spécialisée' }; }
+const CHARACTER_TALENTS = [
+  {key:'prodigy',name:'Prodige',description:'+12% de production personnelle',self:.12,team:0},
+  {key:'mentor',name:'Mentor',description:'+4% de production à toute l’équipe',self:0,team:.04},
+  {key:'relentless',name:'Inépuisable',description:'+8% de production personnelle',self:.08,team:0},
+  {key:'leader',name:'Leader',description:'+6% de production à toute l’équipe',self:0,team:.06},
+  {key:'chosen',name:'Élu',description:'+15% de production personnelle',self:.15,team:0},
+  {key:'strategist',name:'Stratège',description:'+5% de production à toute l’équipe',self:0,team:.05},
+];
+function characterTalent(characterId){return CHARACTER_TALENTS[Math.abs(Number(characterId)||0)%CHARACTER_TALENTS.length];}
 const HERO_STYLES = {
   auras: [{ key:'none',name:'Sans aura',level:1 },{key:'flame',name:'Flammes',level:10},{key:'lightning',name:'Éclairs',level:25},{key:'void',name:'Énergie obscure',level:50},{key:'divine',name:'Aura divine',level:100}],
   stances: [{key:'balanced',name:'Équilibrée',level:1},{key:'power',name:'Puissance',level:20},{key:'speed',name:'Vitesse',level:40},{key:'master',name:'Maître',level:75}],
@@ -218,15 +227,16 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
+  const talentTeamBonus=slots.reduce((n,s)=>n+(s.character?characterTalent(s.character.id).team:0),0);
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * Math.pow(2, s.ascension || 0) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) * (1 + masteryBonus(s.character.series)) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * (1+characterTalent(s.character.id).self) * Math.pow(2, s.ascension || 0) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) * (1 + masteryBonus(s.character.series)) : sum),
     0
   );
   const teamPassive = slots.reduce((mult, s) => {
     if (!s.character || (s.level || 1) < 10) return mult;
     return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
   }, 1);
-  return base * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+  return base * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
 }
 
 function roleForCharacter(character) {
@@ -338,6 +348,7 @@ async function buildState(userId) {
         canAscend: level >= 500 && (row.ascension || 0) < 5,
         ascensionCost: Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[row.character.rarity] || 25000) * Math.pow(3, row.ascension || 0)),
         equipments: ['weapon', 'relic', 'accessory'].map((kind) => (row.equipments || []).find((e) => e.kind === kind) || { kind, empty: true }),
+        talent: characterTalent(row.character.id),
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -524,7 +535,7 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
   // (compteur/coût du prochain) déjà renvoyé par buildState() — le spread
   // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
   // même nom.
-  res.json({ ...(await buildState(req.user.id)), recruited: result });
+  res.json({ ...(await buildState(req.user.id)), recruited: { ...result, talent: characterTalent(result.id) } });
 });
 
 router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
