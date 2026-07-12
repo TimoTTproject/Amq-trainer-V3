@@ -5739,6 +5739,10 @@ body.idle-fullscreen #app { padding-top: 0; }
   max-width: 190px;
 }
 .idle-boss-name small { display: block; font-weight: 600; color: #ff9dbd; font-size: .64rem; text-transform: uppercase; letter-spacing: .8px; }
+.idle-scene-fighter { padding-top: 0; }
+.idle-fighter-sprite { width: auto; height: 190px; max-width: 205px; object-fit: contain; object-position: center bottom; filter: drop-shadow(0 13px 8px rgba(0,0,0,.78)); animation: idleFighterStance 2.5s ease-in-out infinite; }
+.idle-scene-fighter .idle-boss-name { position: relative; z-index: 2; margin-top: -18px; }
+@keyframes idleFighterStance { 0%,100% { transform: translateY(0) rotate(.35deg); } 50% { transform: translateY(-5px) rotate(-.35deg); } }
 
 /* Gains flottants (+X essence) dans la scène */
 .idle-floats { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
@@ -5896,6 +5900,7 @@ body.idle-fullscreen #app { padding-top: 0; }
   .idle-main-hero { left: 22%; transform: translate(-50%,-38%) scale(.82); }
   .idle-scene-boss { left: 69%; width: 38%; transform: translate(-50%,-43%) scale(.86); }
   .idle-scene-poster { opacity: .55; }
+  .idle-fighter-sprite { height: 165px; max-width: 175px; }
 }
 
 /* ── Roster : ligne de héros compacte façon Clicker Heroes (pas de grosse

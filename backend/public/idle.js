@@ -346,7 +346,7 @@ function renderIdleDecor(dojo, prevDojo) {
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = dojo.decor.flavor || '';
   idleRenderBackdrop(dojo.decor.backgroundUrl);
-  idleRenderBoss(dojo.decor.boss);
+  idleRenderBoss(dojo.decor.boss, dojo.decor.theme);
   // La barre #idle-xp-fill est la barre de PV du combat (cf. renderIdleBattle,
   // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
@@ -553,15 +553,30 @@ function idleRenderBackdrop(url) {
 
 // Le « gardien » mythique du palier trône au centre de la scène — vrai
 // personnage AniList, pas une illustration générique.
-function idleRenderBoss(boss) {
+function idleRenderBoss(boss, theme) {
   const el = document.getElementById('idle-decor-boss');
   if (!el) return;
-  if (!boss) {
+  if (!boss && !['wood', 'garden', 'temple', 'gold', 'celestial'].includes(theme)) {
     el.classList.add('hidden');
     el.innerHTML = '';
     return;
   }
   el.classList.remove('hidden');
+  const fighters = {
+    wood: { name: 'Naruto Uzumaki', image: '/assets/idle/fighters/naruto.webp' },
+    garden: { name: 'Son Goku', image: '/assets/idle/fighters/goku.webp' },
+    temple: { name: 'Monkey D. Luffy', image: '/assets/idle/fighters/luffy.webp' },
+    gold: { name: 'Tanjiro Kamado', image: '/assets/idle/fighters/tanjiro.webp' },
+    celestial: { name: 'Eren Yeager', image: '/assets/idle/fighters/eren.webp' },
+  };
+  const fighter = fighters[theme];
+  if (fighter) {
+    el.classList.add('idle-scene-fighter');
+    el.innerHTML = `<img class="idle-fighter-sprite" src="${fighter.image}" alt="${escapeHtml(fighter.name)}">
+      <span class="idle-boss-name">${escapeHtml(fighter.name)}<small>Gardien du lieu</small></span>`;
+    return;
+  }
+  el.classList.remove('idle-scene-fighter');
   // Portrait IA généré via la route admin (voir POST /api/admin/dojo/generate-boss-art)
   // si disponible, sinon repli sur le portrait AniList existant (comportement historique).
   const url = boss.generatedImageUrl || boss.imageUrl;
