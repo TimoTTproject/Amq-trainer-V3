@@ -5629,6 +5629,14 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-slot-filled { display: block; cursor: pointer; }
 .idle-slot-filled:hover .gcard { filter: brightness(1.08); }
 .idle-slot-filled .gcard { width: 100%; height: 100%; }
+/* cardHTML() dessine son propre nom/rareté sous l'image (.gcard-info, en flux
+   normal) — mais nos propres bandeaux (niveau/rate/retirer/monter) sont en
+   position absolute calés sur LE BAS DE L'EMPLACEMENT, pas sur celui de
+   l'image. Sur un slot compact (mobile), .gcard-info dépasse pile dans cette
+   zone et son texte se superposait au bandeau de taux (ex. "Gray Fullbus+3/s
+   ter"). Le niveau (badge) + la couleur de bordure (rareté) suffisent déjà à
+   identifier la carte ici ; le nom complet reste visible dans le sélecteur. */
+.idle-slot-filled .gcard-info { display: none; }
 .idle-slot-lvl {
   position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 8px;
   background: rgba(0,0,0,.6); color: #ffd54a; font-size: .62rem; font-weight: 700;
