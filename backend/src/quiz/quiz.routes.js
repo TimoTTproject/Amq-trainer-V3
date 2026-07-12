@@ -425,6 +425,26 @@ router.post('/like', requireAuth, async (req, res) => {
   res.json({ liked: stat.liked });
 });
 
+// Signalement « ce son ne correspond pas » — le joueur n'a le titre/artiste
+// (et jamais l'id AniList) sous les yeux qu'APRÈS révélation, donc pas moyen
+// de décrire l'entrée fautive du catalogue autrement qu'en la signalant sur
+// le coup. Même modèle de confiance que /like : songId vient du client mais
+// n'est révélé qu'après coup (anti-triche), donc sûr à accepter tel quel —
+// c'est juste un signal de revue, pas une action qui modifie des données.
+router.post('/report-song', requireAuth, rateLimit({ max: 20, name: 'report-song' }), async (req, res) => {
+  const { songId, context, note } = req.body || {};
+  if (!songId) return res.status(400).json({ error: 'songId requis' });
+  await prisma.songReport.create({
+    data: {
+      userId: req.user.id,
+      songId: Number(songId),
+      context: String(context || 'quiz').slice(0, 40),
+      note: note ? String(note).slice(0, 300) : null,
+    },
+  });
+  res.json({ ok: true });
+});
+
 // Compteurs pour le centre d'entraînement
 router.get('/training-stats', requireAuth, async (req, res) => {
   const userId = req.user.id;

@@ -26,6 +26,21 @@ router.get('/r2-status', requireAuth, requireAdmin, async (req, res) => {
   res.json(await r2Status());
 });
 
+// Signalements « ce son ne correspond pas » (voir POST /api/quiz/report-song)
+// — les plus récents en premier, avec de quoi corriger l'entrée directement
+// (titre/artiste/anilistId/URL du média) sans requête manuelle en base.
+router.get('/song-reports', requireAuth, requireAdmin, async (req, res) => {
+  const reports = await prisma.songReport.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: {
+      user: { select: { displayName: true } },
+      song: { select: { id: true, anilistId: true, animeTitle: true, title: true, artist: true, type: true, number: true, videoUrl: true, audioUrl: true } },
+    },
+  });
+  res.json({ reports });
+});
+
 // Migre un seul média par requête afin de ne pas saturer Railway ni AnimeThemes.
 // Le client admin enchaîne quelques requêtes et affiche la progression.
 router.post('/r2-migrate', requireAuth, requireAdmin, async (req, res) => {

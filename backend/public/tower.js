@@ -86,6 +86,7 @@ async function enterFloor(floor) {
   const towerMsg = document.getElementById('tower-msg');
   towerMsg.textContent = 'Chargement du son…';
   document.getElementById('tower-like')?.classList.add('hidden'); // ❤ caché tant que le son n'est pas révélé
+  document.getElementById('tower-report')?.classList.add('hidden');
 
   // 4 propositions
   document.getElementById('tower-choices').innerHTML = floor.options
@@ -175,12 +176,36 @@ async function answerTower(choice, timeout = false) {
   }
   // Bouton ❤ : on connaît enfin la musique (révélée) → on peut l'ajouter à la playlist.
   if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('tower-like'), r.songId);
+  setupTowerReport(r.songId);
 
   if (r.status === 'over') {
     setTimeout(() => showTowerOver(r), 2200);
   } else {
     setTimeout(() => enterFloor(r.next), 2200);
   }
+}
+
+// Bouton « Signaler » (drapeau) à côté du ❤ en révélation — même position que
+// le son ne correspond à aucune des 4 réponses proposées ne peut être décrit
+// précisément qu'à ce moment-là (avant révélation, ni titre ni id AniList ne
+// sont visibles côté client, cf. commentaire anti-triche de floorPayload).
+function setupTowerReport(songId) {
+  const btn = document.getElementById('tower-report');
+  if (!btn) return;
+  if (!songId || !currentUser || currentUser.isGuest) { btn.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.classList.remove('liked');
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      await api('/api/quiz/report-song', { method: 'POST', body: JSON.stringify({ songId, context: 'tower' }) });
+      btn.classList.add('liked'); // réutilise le style ❤ « actif » du bouton pour confirmer visuellement
+      btn.title = 'Signalé — merci !';
+    } catch {
+      btn.disabled = false; // échec réseau : on laisse réessayer
+    }
+  };
 }
 
 function showTowerOver(result) {

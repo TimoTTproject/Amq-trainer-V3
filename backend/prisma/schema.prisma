@@ -160,6 +160,7 @@ model User {
   idleSlots       IdleSlot[]
   dojoRecruits    DojoRecruit[]
   ancientLevels   AncientLevel[]
+  songReports     SongReport[]
 }
 
 model PasswordResetToken {
@@ -428,10 +429,31 @@ model Song {
   stats          UserSongStat[]
   catalogEntries UserCatalogEntry[]
   playlistEntries PlaylistSong[]
+  reports         SongReport[]
 
   // Un même opening n'existe qu'une fois dans le catalogue global
   @@unique([anilistId, type, number, title])
   @@index([anilistId])
+}
+
+// Signalement « ce son ne correspond pas » — le joueur n'a ni le titre ni le
+// numéro AniList sous les yeux (Château/Multi masquent la réponse jusqu'à la
+// révélation), donc pas moyen de décrire précisément une entrée mal
+// catégorisée autrement qu'en la signalant sur le coup. `context` distingue
+// d'où vient le signalement (tower/quiz/mp) à titre indicatif seulement.
+model SongReport {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  songId    Int
+  context   String
+  note      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────
