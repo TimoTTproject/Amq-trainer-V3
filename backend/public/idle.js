@@ -14,6 +14,7 @@ let idleActivePanel = 'home'; // onglet courant de la barre du bas (home | team 
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
 let idleBurstReadyAt = 0;
+let idleTeamSkillReadyAt = 0;
 
 function idleFormatNumber(n) {
   n = Math.floor(n || 0);
@@ -339,6 +340,8 @@ function idleRenderSkillCooldown() {
   if (!btn || !label) return;
   const left = Math.max(0, idleBurstReadyAt - Date.now());
   btn.disabled = left > 0;
+  const teamBtn = document.getElementById('idle-skill-team'); const teamLabel = document.getElementById('idle-team-skill-status');
+  if (teamBtn && teamLabel) { const teamLeft = Math.max(0, idleTeamSkillReadyAt - Date.now()); const count = idleState?.slots?.filter((s) => s.character).length || 0; teamBtn.disabled = teamLeft > 0 || count < 2; teamLabel.textContent = count < 2 ? '2 héros requis' : (teamLeft > 0 ? `Recharge · ${Math.ceil(teamLeft / 1000)}s` : 'Prêt · rôles variés = bonus'); }
   label.textContent = left > 0 ? `Recharge · ${Math.ceil(left / 1000)}s` : 'Prêt · ×25';
 }
 
@@ -354,6 +357,13 @@ async function idleUseBurst(event) {
     idleCombatMotion('hero');
     await refreshIdleState();
   } catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
+  idleRenderSkillCooldown();
+}
+
+async function idleUseTeamSkill(event) {
+  event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt) return;
+  try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO ${r.uniqueRoles} RÔLES +${idleFormatNumber(r.gained)}`, 'crit'); idleCombatMotion('team'); await refreshIdleState(); }
+  catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
   idleRenderSkillCooldown();
 }
 
@@ -1031,6 +1041,7 @@ function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
+  document.getElementById('idle-skill-team')?.addEventListener('click', idleUseTeamSkill);
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.

@@ -155,7 +155,22 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus) {
     (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) : sum),
     0
   );
-  return base * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel);
+  return base * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+}
+
+function roleForCharacter(character) {
+  return ['attaquant', 'support', 'tank', 'assassin', 'producteur'][Math.abs(Number(character?.id) || 0) % 5];
+}
+
+function synergyForSlots(slots) {
+  const active = slots.filter((s) => s.characterId && s.character);
+  const counts = new Map();
+  for (const s of active) if (s.character.series) counts.set(s.character.series, (counts.get(s.character.series) || 0) + 1);
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (best?.[1] >= 3) return { key: 'license', name: `Alliance ${best[0]}`, bonus: .25, multiplier: 1.25 };
+  if (best?.[1] === 2) return { key: 'license', name: `Duo ${best[0]}`, bonus: .10, multiplier: 1.10 };
+  if (active.length >= 3) return { key: 'crossover', name: 'Crossover', bonus: .05, multiplier: 1.05 };
+  return { key: 'none', name: 'Aucune synergie', bonus: 0, multiplier: 1 };
 }
 
 // Niveaux d'Ancients du joueur (Map clé→niveau, absent = pas encore acheté).
@@ -215,6 +230,7 @@ async function buildState(userId) {
   const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
   const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus);
+  const strategy = synergyForSlots(slots);
   const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
@@ -266,6 +282,7 @@ async function buildState(userId) {
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
+    strategy: { ...strategy, roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
     slots: slotsOut,
@@ -589,6 +606,17 @@ router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 300
   const gained = clickYield(req.user.idleClickLevel || 0, ancientBonus(levels, 'clickMult')) * 25;
   await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
   res.json({ ok: true, gained, cooldownMs: 30000 });
+});
+
+router.post('/skill/team', requireAuth, requireAdmin, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
+  const [user, slots, levels] = await Promise.all([prisma.user.findUnique({ where: { id: req.user.id } }), loadSlots(prisma, req.user.id), loadAncientLevels(prisma, req.user.id)]);
+  const roles = slots.filter((s) => s.character).map((s) => roleForCharacter(s.character));
+  if (roles.length < 2) return res.status(400).json({ error: 'Équipe insuffisante' });
+  const rate = computeTotalRate(slots, user.idleProdLevel, dojoLevelForXp(user.essenceEarnedTotal), ancientBonus(levels, 'prodMult'));
+  const uniqueRoles = new Set(roles).size;
+  const gained = Math.max(1, Math.floor(rate * (20 + uniqueRoles * 5)));
+  await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
+  res.json({ ok: true, gained, cooldownMs: 60000, uniqueRoles });
 });
 
 router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mission' }), async (req, res) => {
