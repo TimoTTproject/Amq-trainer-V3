@@ -188,6 +188,9 @@ const HERO_STYLES = {
   auras: [{ key:'none',name:'Sans aura',level:1 },{key:'flame',name:'Flammes',level:10},{key:'lightning',name:'Éclairs',level:25},{key:'void',name:'Énergie obscure',level:50},{key:'divine',name:'Aura divine',level:100}],
   stances: [{key:'balanced',name:'Équilibrée',level:1},{key:'power',name:'Puissance',level:20},{key:'speed',name:'Vitesse',level:40},{key:'master',name:'Maître',level:75}],
   titles: [{key:'rookie',name:'Novice du Dojo',level:1},{key:'guardian',name:'Gardien des mondes',level:25},{key:'legend',name:'Légende du multivers',level:60},{key:'transcendent',name:'Transcendant',level:100}],
+  hairs: [{key:'short',name:'Courte',level:1},{key:'spiky',name:'Hérissée',level:10},{key:'long',name:'Longue',level:30},{key:'wild',name:'Sauvage',level:60}],
+  outfits: [{key:'dojo',name:'Tenue du Dojo',level:1},{key:'ninja',name:'Armure ninja',level:20},{key:'captain',name:'Manteau de capitaine',level:45},{key:'divine',name:'Armure divine',level:90}],
+  colors: [{key:'red',name:'Rouge AMQ',level:1},{key:'blue',name:'Bleu céleste',level:15},{key:'gold',name:'Or légendaire',level:40},{key:'violet',name:'Violet obscur',level:70}],
 };
 function unlockedStyles(level, selected) { return Object.fromEntries(Object.entries(HERO_STYLES).map(([type,items]) => [type, items.map((x)=>({...x,unlocked:level>=x.level,selected:selected[type]===x.key}))])); }
 function currentIdleEvent(now = new Date()) {
@@ -278,7 +281,7 @@ async function buildState(userId) {
       essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true,
     },
   });
   if (!user) return null;
@@ -373,7 +376,7 @@ async function buildState(userId) {
     pendingEssence: pending,
     totalRate,
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
-    heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle}) },
+    heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
     strategy: { ...strategy, roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
@@ -749,7 +752,7 @@ router.post('/hero-class', requireAuth, requireAdmin, rateLimit({ max: 20, name:
 
 router.post('/hero-style', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-hero-style' }), async (req, res) => {
   const type = String(req.body?.type || ''); const key = String(req.body?.key || '');
-  const field = { auras:'idleHeroAura', stances:'idleHeroStance', titles:'idleHeroTitle' }[type];
+  const field = { auras:'idleHeroAura', stances:'idleHeroStance', titles:'idleHeroTitle', hairs:'idleHeroHair', outfits:'idleHeroOutfit', colors:'idleHeroColor' }[type];
   const item = HERO_STYLES[type]?.find((x)=>x.key===key);
   if (!field || !item) return res.status(400).json({ error:'Personnalisation inconnue' });
   const user = await prisma.user.findUnique({ where:{id:req.user.id},select:{essenceEarnedTotal:true} });
