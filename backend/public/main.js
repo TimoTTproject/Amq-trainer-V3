@@ -199,6 +199,110 @@ const settings = {
   noDuplicate: localStorage.getItem('amq_noDuplicate') === 'true', // ne repropose pas un anime déjà sorti cette session
 };
 
+// ── Presets de réglages (solo + multi) — stockage local générique, partagé
+// entre main.js et mp-client.js (chargé après, mêmes fonctions globales).
+function loadPresets(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; }
+}
+function savePresetList(key, list) {
+  localStorage.setItem(key, JSON.stringify(list));
+}
+function upsertPreset(key, name, data) {
+  const list = loadPresets(key);
+  const idx = list.findIndex((p) => p.name === name);
+  const preset = { name, data };
+  if (idx >= 0) list[idx] = preset; else list.push(preset);
+  savePresetList(key, list);
+  return list;
+}
+function deletePreset(key, name) {
+  const list = loadPresets(key).filter((p) => p.name !== name);
+  savePresetList(key, list);
+  return list;
+}
+// Remplit un <select> de presets ; conserve la sélection si elle existe encore.
+function renderPresetSelect(selectId, key) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const list = loadPresets(key);
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Preset —</option>'
+    + list.map((p) => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
+  if (list.some((p) => p.name === current)) sel.value = current;
+}
+
+const SOLO_PRESET_KEY = 'amq_presets_solo';
+// Réglages de manche à proprement parler — exclut les préférences d'affichage
+// (langue des titres, disposition) qui relèvent du joueur, pas de la partie.
+const SOLO_PRESET_FIELDS = [
+  'randomStart', 'clipSeconds', 'autoNext', 'count', 'difficulty', 'yearMin',
+  'yearMax', 'answerSeconds', 'autoNextDelay', 'listStatuses', 'genres', 'noDuplicate',
+];
+function snapshotSoloPreset() {
+  const data = {};
+  SOLO_PRESET_FIELDS.forEach((k) => { data[k] = settings[k]; });
+  return data;
+}
+function applySoloPreset(data) {
+  SOLO_PRESET_FIELDS.forEach((k) => { if (data[k] !== undefined) settings[k] = data[k]; });
+  localStorage.setItem('amq_randomStart', String(settings.randomStart));
+  localStorage.setItem('amq_clip', String(settings.clipSeconds));
+  localStorage.setItem('amq_autonext', String(settings.autoNext));
+  localStorage.setItem('amq_count', String(settings.count));
+  localStorage.setItem('amq_difficulty', settings.difficulty);
+  localStorage.setItem('amq_yearMin', String(settings.yearMin));
+  localStorage.setItem('amq_yearMax', String(settings.yearMax));
+  localStorage.setItem('amq_answer', String(settings.answerSeconds));
+  localStorage.setItem('amq_autonextDelay', String(settings.autoNextDelay));
+  if (settings.listStatuses) localStorage.setItem('amq_listStatuses', JSON.stringify(settings.listStatuses));
+  else localStorage.removeItem('amq_listStatuses');
+  if (settings.genres.length) localStorage.setItem('amq_genres', JSON.stringify(settings.genres));
+  else localStorage.removeItem('amq_genres');
+  localStorage.setItem('amq_noDuplicate', String(settings.noDuplicate));
+
+  const byId = (id) => document.getElementById(id);
+  if (byId('opt-random-start')) byId('opt-random-start').checked = settings.randomStart;
+  if (byId('opt-clip')) byId('opt-clip').value = String(settings.clipSeconds);
+  if (byId('opt-autonext')) byId('opt-autonext').checked = settings.autoNext;
+  if (byId('opt-count')) byId('opt-count').value = String(settings.count);
+  if (byId('opt-difficulty')) byId('opt-difficulty').value = settings.difficulty;
+  if (byId('opt-year-min')) byId('opt-year-min').value = String(settings.yearMin);
+  if (byId('opt-year-max')) byId('opt-year-max').value = String(settings.yearMax);
+  if (byId('opt-answer-time')) byId('opt-answer-time').value = String(settings.answerSeconds);
+  if (byId('opt-autonext-delay')) byId('opt-autonext-delay').value = String(settings.autoNextDelay);
+  if (typeof renderGenreChips === 'function') renderGenreChips('opt-genres-chips', settings.genres);
+  const statusBox = byId('opt-list-status');
+  if (statusBox) {
+    const active = Array.isArray(settings.listStatuses) && settings.listStatuses.length;
+    statusBox.querySelectorAll('input[type="checkbox"]').forEach((b) => {
+      b.checked = active ? settings.listStatuses.includes(b.value) : true;
+    });
+  }
+  if (byId('opt-no-duplicate')) byId('opt-no-duplicate').checked = settings.noDuplicate;
+}
+function initSoloPresetsUI() {
+  const sel = document.getElementById('opt-preset-select');
+  if (!sel) return;
+  renderPresetSelect('opt-preset-select', SOLO_PRESET_KEY);
+  sel.addEventListener('change', () => {
+    if (!sel.value) return;
+    const preset = loadPresets(SOLO_PRESET_KEY).find((p) => p.name === sel.value);
+    if (preset) applySoloPreset(preset.data);
+  });
+  document.getElementById('opt-preset-save')?.addEventListener('click', () => {
+    const name = (prompt('Nom du preset ?', sel.value || '') || '').trim().slice(0, 40);
+    if (!name) return;
+    upsertPreset(SOLO_PRESET_KEY, name, snapshotSoloPreset());
+    renderPresetSelect('opt-preset-select', SOLO_PRESET_KEY);
+    sel.value = name;
+  });
+  document.getElementById('opt-preset-delete')?.addEventListener('click', () => {
+    if (!sel.value) return;
+    deletePreset(SOLO_PRESET_KEY, sel.value);
+    renderPresetSelect('opt-preset-select', SOLO_PRESET_KEY);
+  });
+}
+
 // ── Genres AniList (filtre du quiz) — liste FERMÉE, partagée solo + multi.
 // Les valeurs envoyées au serveur sont les libellés AniList (anglais) ;
 // l'affichage passe par les libellés français.
@@ -1828,6 +1932,7 @@ function setupAppUI() {
     });
   }
   applyQuizLayout();
+  initSoloPresetsUI();
   // « Passer » : abandonne la manche (révèle la réponse, sans tokens).
   document.getElementById('skip-btn').addEventListener('click', () => {
     if (!currentSong || answered) return;

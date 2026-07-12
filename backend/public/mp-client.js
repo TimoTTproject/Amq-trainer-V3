@@ -831,6 +831,15 @@ function renderRoom(d) {
     document.getElementById('mp-field-years').classList.toggle('hidden', isCoop);
     document.getElementById('mp-field-genres')?.classList.toggle('hidden', isCoop);
   }
+  // Presets : mêmes conditions que les réglages qu'ils remplissent (masqués en
+  // classé/coop puisque figés, verrouillés pour les non-hôtes).
+  document.getElementById('mp-presets')?.classList.toggle('hidden', ranked || isCoop);
+  const mpPresetSelect = document.getElementById('mp-preset-select');
+  if (mpPresetSelect) mpPresetSelect.disabled = !isHost;
+  const mpPresetSave = document.getElementById('mp-preset-save');
+  if (mpPresetSave) mpPresetSave.disabled = !isHost;
+  const mpPresetDelete = document.getElementById('mp-preset-delete');
+  if (mpPresetDelete) mpPresetDelete.disabled = !isHost;
   // Encart explicatif du mode Coop (Tour en équipe)
   const coopInfo = document.getElementById('mp-coop-info');
   coopInfo.classList.toggle('hidden', !isCoop);
@@ -1134,6 +1143,44 @@ function mpSettingsPayload() {
   };
 }
 
+const MP_PRESET_KEY = 'amq_presets_mp';
+function applyMpPreset(data) {
+  const byId = (id) => document.getElementById(id);
+  if (data.rounds != null && byId('mp-set-rounds')) byId('mp-set-rounds').value = String(data.rounds);
+  if (data.roundMs != null && byId('mp-set-speed')) byId('mp-set-speed').value = String(data.roundMs);
+  if (data.mode && byId('mp-set-mode')) byId('mp-set-mode').value = data.mode;
+  if (data.themeType && byId('mp-set-theme')) byId('mp-set-theme').value = data.themeType;
+  if (data.songSource && byId('mp-set-source')) byId('mp-set-source').value = data.songSource;
+  if (data.listScope && byId('mp-set-list-scope')) byId('mp-set-list-scope').value = data.listScope;
+  if (data.difficulty && byId('mp-set-difficulty')) byId('mp-set-difficulty').value = data.difficulty;
+  if (data.yearMin != null && byId('mp-set-year-min')) byId('mp-set-year-min').value = String(data.yearMin);
+  if (data.yearMax != null && byId('mp-set-year-max')) byId('mp-set-year-max').value = String(data.yearMax);
+  if (typeof renderGenreChips === 'function') renderGenreChips('mp-set-genres', data.genres || []);
+  mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload());
+}
+function initMpPresetsUI() {
+  const sel = document.getElementById('mp-preset-select');
+  if (!sel) return;
+  renderPresetSelect('mp-preset-select', MP_PRESET_KEY);
+  sel.addEventListener('change', () => {
+    if (!sel.value || sel.disabled) return;
+    const preset = loadPresets(MP_PRESET_KEY).find((p) => p.name === sel.value);
+    if (preset) applyMpPreset(preset.data);
+  });
+  document.getElementById('mp-preset-save')?.addEventListener('click', () => {
+    const name = (prompt('Nom du preset ?', sel.value || '') || '').trim().slice(0, 40);
+    if (!name) return;
+    upsertPreset(MP_PRESET_KEY, name, mpSettingsPayload());
+    renderPresetSelect('mp-preset-select', MP_PRESET_KEY);
+    sel.value = name;
+  });
+  document.getElementById('mp-preset-delete')?.addEventListener('click', () => {
+    if (!sel.value) return;
+    deletePreset(MP_PRESET_KEY, sel.value);
+    renderPresetSelect('mp-preset-select', MP_PRESET_KEY);
+  });
+}
+
 function initMpUI() {
   document.getElementById('mp-quick').addEventListener('click', () => {
     const sel = document.getElementById('mp-quick-rounds');
@@ -1213,6 +1260,7 @@ function initMpUI() {
   document.getElementById('mp-set-difficulty')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-min')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
   document.getElementById('mp-set-year-max')?.addEventListener('change', () => mpSocket && mpSocket.emit('mp:settings', mpSettingsPayload()));
+  initMpPresetsUI();
   // Chat global du menu
   document.getElementById('mp-gchat-send')?.addEventListener('click', sendGlobalChat);
   document.getElementById('mp-gchat-text')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGlobalChat(); });

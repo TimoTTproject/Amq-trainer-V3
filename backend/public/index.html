@@ -700,6 +700,13 @@
           <span class="quiz-collapse-hint">Difficulté, durée, période… <i class="fas fa-chevron-down"></i></span>
         </span>
       </summary>
+      <div class="opt-presets" id="opt-presets">
+        <label>Preset :
+          <select id="opt-preset-select"></select>
+        </label>
+        <button type="button" class="btn-secondary" id="opt-preset-save"><i class="fas fa-floppy-disk"></i> Enregistrer</button>
+        <button type="button" class="btn-link" id="opt-preset-delete">Supprimer</button>
+      </div>
       <div class="quiz-options quiz-options-grid" id="quiz-options">
         <fieldset class="opt-group">
           <legend><i class="fas fa-filter"></i> Sélection des musiques</legend>
@@ -2006,6 +2013,13 @@
           <div class="profile-section mp-room-config">
             <h3><i class="fas fa-sliders"></i> Réglages</h3>
             <div id="mp-ranked-note" class="mp-ranked-note hidden"></div>
+            <div class="opt-presets" id="mp-presets">
+              <label>Preset :
+                <select id="mp-preset-select"></select>
+              </label>
+              <button type="button" class="btn-secondary" id="mp-preset-save"><i class="fas fa-floppy-disk"></i> Enregistrer</button>
+              <button type="button" class="btn-link" id="mp-preset-delete">Supprimer</button>
+            </div>
             <div id="mp-settings" class="mp-settings">
               <label id="mp-field-mode">Mode
                 <select id="mp-set-mode">
