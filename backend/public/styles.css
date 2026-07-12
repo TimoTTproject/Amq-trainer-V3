@@ -5817,6 +5817,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 /* ── Rangée d'actions ── */
 .idle-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.idle-skills{grid-column:1/-1;display:flex;align-items:center;gap:8px}.idle-skill{display:flex;align-items:center;gap:9px;padding:8px 13px;border:1px solid #fb923c;border-radius:12px;color:#fff;background:linear-gradient(135deg,#c2410c,#7c2d12);box-shadow:0 0 18px #f9731638;cursor:pointer}.idle-skill i{font-size:20px}.idle-skill span{display:flex;flex-direction:column;text-align:left}.idle-skill small{font-size:10px;opacity:.8}.idle-skill:disabled{filter:grayscale(.8);opacity:.55}.idle-boss-mechanic{font-size:11px;padding:7px 10px;border-radius:9px;background:#0f172ecc;border:1px solid #ffffff1f}.idle-scene.skill-burst{animation:idleSkillBurst .55s ease}@keyframes idleSkillBurst{30%{filter:brightness(1.8) saturate(1.7);transform:scale(1.008)}100%{filter:none;transform:none}}
 .idle-actions > button { justify-content: center; padding: 14px 8px; font-size: .92rem; white-space: nowrap; min-width: 0; }
 #idle-top-recruit-btn:disabled, .idle-recruit-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-click-btn { position: relative; overflow: visible; }
