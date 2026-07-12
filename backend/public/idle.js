@@ -273,10 +273,14 @@ function renderIdleDecor(dojo, prevDojo) {
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
-    const base = `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
-    next.textContent = dojo.nextDecor
+    const base = `Dojo ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
+    const text = dojo.nextDecor
       ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : base;
+    // Icône dédiée : la barre de PV juste au-dessus est le combat (stage),
+    // cette ligne est une mesure différente (niveau de Dojo/décor) — sans ce
+    // repère visuel les deux se lisaient comme une seule et même barre.
+    next.innerHTML = `<i class="fas fa-torii-gate idle-decor-next-ico"></i>${escapeHtml(text)}`;
   }
   // Le niveau du Dojo a grimpé depuis le dernier rendu : petite célébration
   // (pas au tout premier rendu de la session, sinon ça se déclenche à chaque ouverture).

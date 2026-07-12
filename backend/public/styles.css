@@ -5728,8 +5728,13 @@ body.idle-fullscreen #app { padding-top: 0; }
   50% { transform: translateY(-8px); }
 }
 .idle-boss-name {
-  padding: 4px 14px; border-radius: 999px; background: rgba(0,0,0,.62);
+  /* Rectangle arrondi (pas un pilule 999px) : ce badge tient DEUX lignes
+     (nom + "Gardien du lieu"), un radius plein pilule pinçait le texte sur
+     les bords et rendait l'ensemble illisible — un radius fixe + plus de
+     marge verticale suffit. */
+  padding: 6px 16px; border-radius: 12px; background: rgba(0,0,0,.68);
   border: 1px solid rgba(255,255,255,.2); font-size: .78rem; font-weight: 700; text-align: center;
+  max-width: 170px;
 }
 .idle-boss-name small { display: block; font-weight: 600; color: #ff9dbd; font-size: .56rem; text-transform: uppercase; letter-spacing: .8px; }
 
@@ -5771,7 +5776,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
 .idle-enemy-hp { height: 13px; border-color: rgba(255,255,255,.4); box-shadow: inset 0 1px 4px #000, 0 1px 4px #0008; }
 .idle-enemy-hp .idle-xp-fill { margin-left: auto; background: linear-gradient(180deg, #7ee34c, #2ba729); box-shadow: inset 0 1px rgba(255,255,255,.45); }
-.idle-decor-next { font-size: .68rem; color: #fff; opacity: .9; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+/* Distinct de la barre de PV juste au-dessus (combat) : c'est la progression
+   du NIVEAU DE DOJO (décor), une mesure différente — marge + icône dédiée
+   pour ne pas laisser croire que ce texte appartient à la barre verte. */
+.idle-decor-next { display: flex; align-items: center; gap: 5px; font-size: .68rem; color: #fff; opacity: .9; margin-top: 8px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+.idle-decor-next-ico { flex: none; color: #ffd54a; }
 
 .idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin: 10px 2px 14px; }
 
