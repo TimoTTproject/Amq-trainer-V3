@@ -13,6 +13,7 @@ let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déc
 let idleActivePanel = 'home'; // onglet courant de la barre du bas (home | team | upgrades)
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
+let idleBurstReadyAt = 0;
 
 function idleFormatNumber(n) {
   n = Math.floor(n || 0);
@@ -141,6 +142,7 @@ function idleTick() {
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
   idleTickInterpolateBattle(elapsed);
+  idleRenderSkillCooldown();
   // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
   // purement cosmétique, ça montre la production "vivre" comme dans un vrai
   // idle game. Seulement si la scène est visible et produit au moins 1.
@@ -304,6 +306,10 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const wave = ((stage - 1) % 10) + 1;
   const zone = Math.floor((stage - 1) / 10) + 1;
   const boss = wave === 10;
+  const mechanics = [['Bouclier','résiste aux dégâts passifs'],['Rage','se renforce sous 30% PV'],['Régénération','récupère entre les assauts'],['Contre','résiste aux clics ordinaires']];
+  const mechanic = mechanics[(zone - 1) % mechanics.length];
+  const mechanicEl = document.getElementById('idle-boss-mechanic');
+  if (mechanicEl) { mechanicEl.classList.toggle('hidden', !boss); mechanicEl.innerHTML = boss ? `<i class="fas fa-shield-halved"></i> <b>${mechanic[0]}</b> · ${mechanic[1]}` : ''; }
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
   const total = Math.max(1, battle?.xpForNextStage || 1);
   const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
@@ -324,6 +330,30 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if (prevBattle && stage > Math.max(1, prevBattle.stage || 1)) {
     idleKillBurst(stage - Math.max(1, prevBattle.stage || 1));
   }
+}
+
+function idleRenderSkillCooldown() {
+  const btn = document.getElementById('idle-skill-burst');
+  const label = document.getElementById('idle-skill-status');
+  if (!btn || !label) return;
+  const left = Math.max(0, idleBurstReadyAt - Date.now());
+  btn.disabled = left > 0;
+  label.textContent = left > 0 ? `Recharge · ${Math.ceil(left / 1000)}s` : 'Prêt · ×25';
+}
+
+async function idleUseBurst(event) {
+  event?.stopPropagation();
+  if (Date.now() < idleBurstReadyAt) return;
+  try {
+    const result = await api('/api/idle/skill/burst', { method: 'POST', body: JSON.stringify({}) });
+    idleBurstReadyAt = Date.now() + result.cooldownMs;
+    const scene = document.getElementById('idle-scene');
+    scene?.classList.add('skill-burst'); setTimeout(() => scene?.classList.remove('skill-burst'), 600);
+    idleSpawnFloat(`ULTIME +${idleFormatNumber(result.gained)}`, 'crit');
+    idleCombatMotion('hero');
+    await refreshIdleState();
+  } catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
+  idleRenderSkillCooldown();
 }
 
 function renderIdleRecruit(recruit, essence) {
@@ -989,6 +1019,7 @@ async function prestigeIdle() {
 function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
+  document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('click', clickIdle);

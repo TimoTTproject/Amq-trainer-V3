@@ -557,6 +557,13 @@ router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COO
   res.json({ essence: user.essence, gained });
 });
 
+router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
+  const levels = await loadAncientLevels(prisma, req.user.id);
+  const gained = clickYield(req.user.idleClickLevel || 0, ancientBonus(levels, 'clickMult')) * 25;
+  await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
+  res.json({ ok: true, gained, cooldownMs: 30000 });
+});
+
 // Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse
 // (wisdomPoints — PAS l'essence, monnaie séparée), incrémente son niveau.
 // Indépendant de withSettle : les Ancients ne dépendent ni de la production
