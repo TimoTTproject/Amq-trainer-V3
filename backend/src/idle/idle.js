@@ -313,7 +313,6 @@ module.exports = {
   CHAR_LEVEL_GROWTH,
   charLevelUpCost,
   charLevelBulkCost,
-  RARITY_RATE,
   RARITY_LEVEL_BONUS,
   RARITY_PASSIVE,
   DOJO_XP_BASE,
