@@ -25,17 +25,29 @@ const {
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
   prestigeMultiplier,
+  RECRUIT_WEIGHTS,
+  rollRecruitRarity,
+  recruitCost,
 } = require('../src/idle/idle');
 
-test('slotRate : croît avec la rareté, le niveau ★ et le niveau d\'entraînement', () => {
+test('slotRate : croît avec la rareté et le niveau d\'entraînement, indépendant de tout autre système', () => {
   const order = ['common', 'rare', 'epic', 'legendary', 'mythic'];
   for (let i = 1; i < order.length; i++) {
     assert.ok(slotRate(order[i], 1) > slotRate(order[i - 1], 1), `${order[i]} > ${order[i - 1]}`);
   }
-  assert.ok(slotRate('mythic', 5) > slotRate('mythic', 1));
   assert.equal(slotRate('unknown-rarity', 1), 0);
-  assert.ok(slotRate('rare', 1, 10) > slotRate('rare', 1, 1));
-  assert.equal(slotRate('rare', 1), slotRate('rare', 1, 1)); // niveau absent = niveau 1 (pas de bonus)
+  assert.ok(slotRate('rare', 10) > slotRate('rare', 1));
+  assert.equal(slotRate('rare'), slotRate('rare', 1)); // niveau absent = niveau 1 (pas de bonus)
+});
+
+test('rollRecruitRarity : ne renvoie que des raretés connues, pondération propre au Dojo', () => {
+  const known = new Set(RECRUIT_WEIGHTS.map(([r]) => r));
+  for (let i = 0; i < 200; i++) assert.ok(known.has(rollRecruitRarity()));
+});
+
+test('recruitCost : croît avec le nombre déjà recruté, jamais nul', () => {
+  assert.ok(recruitCost(0) > 0);
+  assert.ok(recruitCost(20) > recruitCost(0));
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {

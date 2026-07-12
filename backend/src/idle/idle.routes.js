@@ -1,6 +1,7 @@
-// Routes du Dojo (idle/clicker) : état, récolte, assignation d'emplacements,
-// clic manuel, améliorations. Monnaie "essence" entièrement séparée des tokens
-// (cf. src/idle/idle.js) — pas de TokenTransaction ici.
+// Routes du Dojo (idle/clicker) : état, récolte, recrutement, assignation
+// d'emplacements, clic manuel, améliorations. Monnaie "essence" et roster de
+// personnages ENTIÈREMENT séparés du gacha — ni UserCard/CardInstance/tokens
+// ni TokenTransaction ne sont jamais lus ou écrits ici (cf. src/idle/idle.js).
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
@@ -30,6 +31,8 @@ const {
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
   prestigeMultiplier,
+  rollRecruitRarity,
+  recruitCost,
 } = require('./idle');
 
 const router = express.Router();
@@ -42,13 +45,13 @@ class IdleError extends Error {
 }
 
 // ── Habillage visuel du décor : un « gardien » mythique réel (portrait
-// AniList déjà en base via le gacha) + un fond tiré d'un anime (jaquette déjà
-// récupérée par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée
-// externe nouvelle, aucune URL inventée, tout vient de ce que le site a déjà
-// importé. Choix déterministe par palier (même gardien pour tout le monde à
-// un palier donné, pas de tirage aléatoire à chaque requête) + petit cache
-// mémoire (le pool de personnages/jaquettes ne change pas d'une requête à
-// l'autre) pour ne pas taper la base à chaque GET /state.
+// AniList déjà en base) + un fond tiré d'un anime (jaquette déjà récupérée
+// par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée externe
+// nouvelle, aucune URL inventée, tout vient de ce que le site a déjà importé.
+// Choix déterministe par palier (même gardien pour tout le monde à un palier
+// donné, pas de tirage aléatoire à chaque requête) + petit cache mémoire (le
+// pool de personnages/jaquettes ne change pas d'une requête à l'autre) pour
+// ne pas taper la base à chaque GET /state.
 const DECOR_ART_TTL_MS = 30 * 60 * 1000;
 const decorArtCache = new Map(); // theme -> { data, at }
 async function decorArtForTheme(theme) {
@@ -86,38 +89,26 @@ async function fetchDecorArt(theme) {
   return null;
 }
 
-// Emplacements + niveau ★ (issu de UserCard) des personnages assignés.
-async function loadRateInputs(tx, userId) {
-  const slots = await tx.idleSlot.findMany({
+// Emplacements + personnage (catalogue) assigné, pour le calcul de production.
+// Pas besoin de revérifier la possession ici : un IdleSlot.characterId n'est
+// posé QUE par /assign (qui vérifie le roster DojoRecruit à ce moment-là), et
+// DojoRecruit/Character sont en CASCADE l'un sur l'autre — si un personnage
+// disparaît un jour du catalogue, la ligne IdleSlot qui le référence se vide
+// automatiquement via la contrainte FK (onDelete: SetNull), pas besoin d'un
+// garde-fou applicatif en plus.
+async function loadSlots(tx, userId) {
+  return tx.idleSlot.findMany({
     where: { userId },
     include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
   });
-  const charIds = slots.filter((s) => s.characterId).map((s) => s.characterId);
-  const cards = charIds.length
-    ? await tx.userCard.findMany({ where: { userId, characterId: { in: charIds } }, select: { characterId: true, stars: true } })
-    : [];
-  const starsMap = new Map(cards.map((c) => [c.characterId, c.stars || 1]));
-  return { slots, starsMap };
 }
 
-// N'accepte que les emplacements dont le personnage est encore RÉELLEMENT
-// possédé (présent dans starsMap, dérivé de UserCard) — pas seulement encore
-// présent dans le catalogue (`s.character`). Un perso échangé/vendu/fusionné
-// pendant qu'il était assigné disparaît de UserCard (la ligne est supprimée à
-// 0 exemplaire, cf. trade/market/fuse) sans que l'IdleSlot soit prévenu ; sans
-// ce garde-fou, `?? 1` ferait tourner l'emplacement comme si de rien n'était.
-function computeTotalRate(slots, starsMap, prodLevel, dojoLevel, prestigeLevel) {
+function computeTotalRate(slots, prodLevel, dojoLevel, prestigeLevel) {
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character && starsMap.has(s.characterId) ? sum + slotRate(s.character.rarity, starsMap.get(s.characterId), s.level) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) : sum),
     0
   );
   return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel) * prestigeMultiplier(prestigeLevel);
-}
-
-// Emplacements dont le personnage assigné n'est plus possédé (cf. commentaire
-// de computeTotalRate) — à vider.
-function orphanedSlotIndexes(slots, starsMap) {
-  return slots.filter((s) => s.characterId && !starsMap.has(s.characterId)).map((s) => s.slotIndex);
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
@@ -131,32 +122,21 @@ async function withSettle(userId, mutate) {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) throw new IdleError(404, 'Compte introuvable');
-    const { slots, starsMap } = await loadRateInputs(tx, userId);
+    const slots = await loadSlots(tx, userId);
     const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-    const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel, user.prestigeLevel);
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, user.prestigeLevel);
     const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
     const settledUser = await tx.user.update({
       where: { id: userId },
       data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
     });
-    // Vide les emplacements dont le personnage a été échangé/vendu/fusionné
-    // entre-temps (cf. computeTotalRate) — la production n'en tenait déjà plus
-    // compte, ceci nettoie juste l'IdleSlot pour que l'emplacement redevienne
-    // assignable normalement au lieu de rester "occupé" par un fantôme.
-    const orphans = orphanedSlotIndexes(slots, starsMap);
-    if (orphans.length) {
-      await tx.idleSlot.updateMany({
-        where: { userId, slotIndex: { in: orphans } },
-        data: { characterId: null, assignedAt: null, level: 1 },
-      });
-    }
     if (mutate) await mutate(tx, settledUser);
     return settledUser;
   });
 }
 
 // État complet pour l'affichage (essence, emplacements 0..MAX_SLOTS-1, coûts,
-// niveau/décor du Dojo).
+// niveau/décor du Dojo, recrutement).
 async function buildState(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -166,9 +146,12 @@ async function buildState(userId) {
     },
   });
   if (!user) return null;
-  const { slots, starsMap } = await loadRateInputs(prisma, userId);
+  const [slots, recruitCount] = await Promise.all([
+    loadSlots(prisma, userId),
+    prisma.dojoRecruit.count({ where: { userId } }),
+  ]);
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-  const totalRate = computeTotalRate(slots, starsMap, user.idleProdLevel, dojoLevel, user.prestigeLevel);
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, user.prestigeLevel);
   const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
@@ -177,20 +160,15 @@ async function buildState(userId) {
     const row = bySlot.get(i);
     const locked = i >= user.idleSlotsUnlocked;
     let character = null;
-    // starsMap.has(...) : n'affiche que si le personnage est encore RÉELLEMENT
-    // possédé (cf. computeTotalRate) — un slot orphelin s'affiche vide, prêt à
-    // être auto-nettoyé en base à la prochaine action (voir withSettle).
-    if (row && row.characterId && row.character && starsMap.has(row.characterId)) {
-      const stars = starsMap.get(row.characterId);
+    if (row && row.characterId && row.character) {
       const level = row.level || 1;
       character = {
         id: row.character.id,
         name: row.character.name,
         imageUrl: row.character.imageUrl,
         rarity: row.character.rarity,
-        stars,
         level,
-        rate: slotRate(row.character.rarity, stars, level),
+        rate: slotRate(row.character.rarity, level),
         levelUpCost: charLevelUpCost(row.character.rarity, level),
       };
     }
@@ -213,6 +191,7 @@ async function buildState(userId) {
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
+    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount) },
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel),
@@ -251,11 +230,26 @@ async function buildState(userId) {
 }
 
 // TEMPORAIRE (phase de test) : réservé aux admins tant que le Dojo n'est pas
-// ouvert à tous — retirer `requireAdmin` sur ces 6 routes pour la sortie publique.
+// ouvert à tous — retirer `requireAdmin` sur ces routes pour la sortie publique.
 router.get('/state', requireAuth, requireAdmin, async (req, res) => {
   const state = await buildState(req.user.id);
   if (!state) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(state);
+});
+
+// Roster du joueur (personnages recrutés) — pour le sélecteur d'assignation.
+// Totalement indépendant de /api/gacha/collection.
+router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
+  const recruits = await prisma.dojoRecruit.findMany({
+    where: { userId: req.user.id },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
+    orderBy: { recruitedAt: 'desc' },
+  });
+  res.json({
+    recruits: recruits.map((r) => ({
+      id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity,
+    })),
+  });
 });
 
 router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
@@ -266,6 +260,43 @@ router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
     throw e;
   }
   res.json(await buildState(req.user.id));
+});
+
+// Recrute un personnage au hasard (pondéré par rareté, cf. RECRUIT_WEIGHTS)
+// contre de l'essence — la SEULE façon d'obtenir un personnage dans le Dojo.
+// Exclut les personnages déjà recrutés par ce joueur ; si la rareté tirée est
+// épuisée (tout recruté), retombe sur les autres raretés dans l'ordre.
+router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+  let result;
+  try {
+    await withSettle(req.user.id, async (tx, user) => {
+      const count = await tx.dojoRecruit.count({ where: { userId: user.id } });
+      const cost = recruitCost(count);
+      if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
+      const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
+      const rolled = rollRecruitRarity();
+      let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true } });
+      if (!pool.length) {
+        for (const r of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
+          pool = await tx.character.findMany({ where: { rarity: r, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true } });
+          if (pool.length) break;
+        }
+      }
+      if (!pool.length) throw new IdleError(400, 'Tu as déjà recruté tout le roster disponible !');
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
+      await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id } });
+      result = picked;
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  // `recruited` (le personnage tout juste obtenu) est distinct de `recruit`
+  // (compteur/coût du prochain) déjà renvoyé par buildState() — le spread
+  // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
+  // même nom.
+  res.json({ ...(await buildState(req.user.id)), recruited: result });
 });
 
 router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
@@ -279,8 +310,8 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
   try {
     await withSettle(req.user.id, async (tx, user) => {
       if (slotIndex >= user.idleSlotsUnlocked) throw new IdleError(400, 'Cet emplacement est verrouillé');
-      const owned = await tx.userCard.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
-      if (!owned) throw new IdleError(400, 'Tu ne possèdes pas ce personnage');
+      const recruited = await tx.dojoRecruit.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
+      if (!recruited) throw new IdleError(400, "Tu n'as pas recruté ce personnage");
       // Le niveau d'entraînement appartient à L'EMPLACEMENT, pas au personnage
       // (cf. IdleSlot.level) : il doit repartir à 1 dès qu'un AUTRE personnage
       // y prend place — sinon un perso tout juste assigné hériterait gratuitement
@@ -353,8 +384,8 @@ router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
 });
 
 // Monte le niveau d'entraînement (illimité) du personnage assigné à un
-// emplacement — distinct des ★ d'ascension gacha, remis à 1 si on change de
-// personnage sur cet emplacement (cf. commentaire IdleSlot.level).
+// emplacement, remis à 1 si on change de personnage sur cet emplacement
+// (cf. commentaire IdleSlot.level).
 router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
@@ -402,12 +433,12 @@ router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, 
 
 // Prestige (« Retraite du Maître ») : reset la RUN contre un bonus de
 // production permanent (+PRESTIGE_BONUS_PER_LEVEL par niveau, cumulable à
-// l'infini). Le niveau du Dojo (essenceEarnedTotal) et les jalons réclamés
-// sont volontairement CONSERVÉS — seule la puissance personnelle repart à zéro.
-// Passe par withSettle (comme toutes les autres actions) pour que la
-// production en attente soit soldée AVANT le reset : sinon elle disparaissait
-// sans même compter dans l'XP du Dojo, ce qui contredit l'idée que le lieu
-// garde tout — le joueur part avec le crédit de sa dernière session.
+// l'infini). Le niveau du Dojo (essenceEarnedTotal), le roster recruté et les
+// jalons réclamés sont volontairement CONSERVÉS — seule la puissance
+// personnelle (essence, emplacements, améliorations) repart à zéro, pas le
+// lieu ni les personnages déjà recrutés. Passe par withSettle (comme toutes
+// les autres actions) pour que la production en attente soit soldée AVANT le
+// reset : sinon elle disparaissait sans même compter dans l'XP du Dojo.
 router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   try {
     await withSettle(req.user.id, async (tx, user) => {

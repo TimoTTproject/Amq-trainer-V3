@@ -93,6 +93,20 @@ function renderIdleState(state) {
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
+  renderIdleRecruit(state.recruit, state.essence);
+}
+
+function renderIdleRecruit(recruit, essence) {
+  const costLabel = `(${idleFormatNumber(recruit.nextCost)})`;
+  const affordable = essence >= recruit.nextCost;
+  for (const id of ['idle-top-recruit-cost', 'idle-recruit-cost']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = costLabel;
+  }
+  for (const id of ['idle-top-recruit-btn', 'idle-recruit-btn']) {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !affordable;
+  }
 }
 
 function idleBump(el) {
@@ -385,22 +399,45 @@ async function unassignIdleSlot(slotIndex) {
 
 async function openIdlePicker(slotIndex) {
   idlePickerSlot = slotIndex;
+  document.getElementById('idle-picker').classList.remove('hidden');
+  await refreshIdlePickerList();
+}
+
+// Roster du Dojo (/api/idle/roster) — PAS la collection gacha : le Dojo est
+// un jeu à part, ses personnages viennent du recrutement (voir recruitIdle).
+async function refreshIdlePickerList() {
+  if (idlePickerSlot == null) return;
   document.getElementById('idle-picker-hint').textContent = 'Chargement…';
   document.getElementById('idle-picker-list').innerHTML = '';
-  document.getElementById('idle-picker').classList.remove('hidden');
   let data;
   try {
-    data = await api('/api/gacha/collection');
+    data = await api('/api/idle/roster');
   } catch (e) {
     document.getElementById('idle-picker-hint').textContent = e.message;
     return;
   }
-  const assignedIds = new Set((idleState?.slots || []).filter((s) => s.character && s.index !== slotIndex).map((s) => s.character.id));
-  const available = (data.cards || []).filter((c) => !assignedIds.has(c.id));
+  const assignedIds = new Set((idleState?.slots || []).filter((s) => s.character && s.index !== idlePickerSlot).map((s) => s.character.id));
+  const available = (data.recruits || []).filter((c) => !assignedIds.has(c.id));
   document.getElementById('idle-picker-hint').textContent = available.length
-    ? `${available.length} personnage(s) disponible(s)`
-    : 'Aucun personnage disponible (déjà tous assignés, ou aucune carte possédée).';
+    ? `${available.length} personnage(s) recruté(s) disponible(s)`
+    : 'Aucun personnage disponible — recrute-en un ci-dessus.';
   document.getElementById('idle-picker-list').innerHTML = available.map((c, i) => cardHTML(c, { index: i })).join('');
+}
+
+async function recruitIdle() {
+  let r;
+  try {
+    r = await api('/api/idle/recruit', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(r.recruited.rarity);
+  if (['epic', 'legendary', 'mythic'].includes(r.recruited.rarity) && typeof burstConfetti === 'function') {
+    burstConfetti(r.recruited.rarity === 'mythic' ? 50 : 30);
+  }
+  renderIdleState(r);
+  await refreshIdlePickerList(); // no-op si la modale n'est pas ouverte
 }
 
 function closeIdlePicker() {
@@ -473,6 +510,8 @@ function initIdleUI() {
     const card = e.target.closest('[data-cid]');
     if (card) pickIdleCharacter(Number(card.dataset.cid));
   });
+  document.getElementById('idle-top-recruit-btn')?.addEventListener('click', recruitIdle);
+  document.getElementById('idle-recruit-btn')?.addEventListener('click', recruitIdle);
   document.getElementById('idle-milestone-btn')?.addEventListener('click', claimIdleMilestone);
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
   document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));

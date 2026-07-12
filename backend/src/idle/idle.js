@@ -1,7 +1,10 @@
 // Dojo (idle/clicker) — configuration et calculs purs (pas d'accès DB ici).
-// Réutilise les raretés du gacha : un personnage assigné à un emplacement
-// produit de l'essence en continu, proportionnellement à sa rareté, son
-// niveau d'ascension (★, cf. gacha/rarity.js) et son niveau d'entraînement
+// Jeu à PART ENTIÈRE, indépendant de la collection gacha : les personnages du
+// roster sont RECRUTÉS contre de l'essence (voir RECRUIT_*/recruitCost plus
+// bas), pas tirés au gacha — seule la table Character (nom/portrait/rareté)
+// est partagée, comme référentiel de contenu, jamais UserCard/CardInstance/
+// tokens. Un personnage assigné à un emplacement produit de l'essence en
+// continu, proportionnellement à sa rareté et à son niveau d'entraînement
 // PROPRE à l'emplacement (illimité). Le Dojo lui-même a un niveau (dérivé de
 // l'essence gagnée à vie) qui fait évoluer son décor et son bonus global.
 
@@ -17,14 +20,6 @@ const RARITY_RATE = {
   legendary: 3,
   mythic: 12,
 };
-
-// Multiplicateur de production selon le niveau d'ascension de la carte assignée
-// (même échelle 1-5 que l'ascension gacha, purement cosmétique là-bas — ici elle
-// prend un sens : ascensionner ses meilleures cartes accélère le Dojo).
-const STAR_MULTIPLIER = { 1: 1, 2: 1.2, 3: 1.5, 4: 2, 5: 3 };
-function starMultiplier(stars) {
-  return STAR_MULTIPLIER[Math.min(5, Math.max(1, stars || 1))] || 1;
-}
 
 // Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité, remis
 // à 1 quand on change de personnage sur l'emplacement (cf. IdleSlot.level).
@@ -44,8 +39,34 @@ function charLevelUpCost(rarity, level) {
 
 // Taux de production d'un emplacement (essence/s), avant multiplicateurs
 // globaux (Discipline + niveau du Dojo).
-function slotRate(rarity, stars, charLevel) {
-  return (RARITY_RATE[rarity] || 0) * starMultiplier(stars) * charLevelMultiplier(charLevel);
+function slotRate(rarity, charLevel) {
+  return (RARITY_RATE[rarity] || 0) * charLevelMultiplier(charLevel);
+}
+
+// ── Recrutement : la SEULE façon d'obtenir un personnage dans le Dojo, contre
+// de l'essence — jamais via le gacha. Pondération par rareté propre au Dojo
+// (indépendante de gacha/rarity.js, pour pouvoir l'équilibrer séparément).
+const RECRUIT_WEIGHTS = [
+  ['common', 60],
+  ['rare', 25],
+  ['epic', 10],
+  ['legendary', 4],
+  ['mythic', 1],
+];
+const RECRUIT_TOTAL_WEIGHT = RECRUIT_WEIGHTS.reduce((s, [, w]) => s + w, 0);
+function rollRecruitRarity() {
+  let r = Math.random() * RECRUIT_TOTAL_WEIGHT;
+  for (const [rarity, w] of RECRUIT_WEIGHTS) {
+    if (r < w) return rarity;
+    r -= w;
+  }
+  return 'common';
+}
+const RECRUIT_BASE_COST = 10;
+const RECRUIT_GROWTH = 1.1;
+// `count` = nombre de personnages déjà recrutés par le joueur.
+function recruitCost(count) {
+  return Math.round(RECRUIT_BASE_COST * Math.pow(RECRUIT_GROWTH, Math.max(0, count || 0)));
 }
 
 // Amélioration « Discipline » : multiplicateur de production globale.
@@ -165,9 +186,13 @@ module.exports = {
   START_SLOTS,
   MAX_SLOTS,
   RARITY_RATE,
-  STAR_MULTIPLIER,
-  starMultiplier,
   slotRate,
+  RECRUIT_WEIGHTS,
+  RECRUIT_TOTAL_WEIGHT,
+  rollRecruitRarity,
+  RECRUIT_BASE_COST,
+  RECRUIT_GROWTH,
+  recruitCost,
   PROD_LEVEL_BONUS,
   PROD_LEVEL_MAX,
   prodMultiplier,
