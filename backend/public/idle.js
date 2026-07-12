@@ -813,6 +813,7 @@ function idleSlotHTML(slot) {
     </div>
     <div class="idle-hero-stats"><span>Base <b>${idleFormatNumber(c.baseRate)}/s</b></span><span>Scaling <b>+${Math.round(c.scaling * 100)}%/niv.</b></span></div>
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
+    <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
     <div class="idle-equipment">${c.equipments.map((e) => `<span class="${e.empty ? 'empty' : `r-${e.rarity}`}" title="${e.empty ? 'Emplacement vide' : `+${Math.round(e.bonus * 100)}% production`}"><i class="fas ${e.kind === 'weapon' ? 'fa-khanda' : e.kind === 'relic' ? 'fa-gem' : 'fa-ring'}"></i><small>${e.empty ? 'Vide' : `+${Math.round(e.bonus * 100)}%`}</small></span>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
@@ -1043,7 +1044,8 @@ function showIdleRecruitReveal(character) {
     </div>
     <strong class="idle-recruit-reveal-name">${escapeHtml(character.name)}</strong>
     <span class="idle-recruit-reveal-series">${escapeHtml(character.series || 'Univers inconnu')}</span>
-    <span class="idle-recruit-reveal-rarity r-${character.rarity}">${escapeHtml(rarity)}</span>`;
+    <span class="idle-recruit-reveal-rarity r-${character.rarity}">${escapeHtml(rarity)}</span>
+    ${character.talent ? `<div class="idle-reveal-talent"><i class="fas fa-fingerprint"></i><div><b>Talent · ${escapeHtml(character.talent.name)}</b><span>${escapeHtml(character.talent.description)}</span></div></div>` : ''}`;
   const freeSlot = idleState?.slots?.find((s) => !s.locked && !s.character);
   const assign = document.getElementById('idle-recruit-assign');
   if (assign) assign.innerHTML = freeSlot
