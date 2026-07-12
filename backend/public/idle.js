@@ -219,10 +219,33 @@ function renderIdleState(state) {
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
+  renderIdleTeamStrategy(state);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
   renderIdleAncients(state.ancients);
   renderIdleRecruit(state.recruit, state.essence);
+}
+
+const IDLE_ROLES = [
+  { name: 'Attaquant', icon: 'fa-burst', color: '#ff704d' },
+  { name: 'Support', icon: 'fa-wand-magic-sparkles', color: '#b06cff' },
+  { name: 'Tank', icon: 'fa-shield-halved', color: '#4db8ff' },
+  { name: 'Assassin', icon: 'fa-bolt', color: '#ffd54a' },
+  { name: 'Producteur', icon: 'fa-gears', color: '#3ec98a' },
+];
+function idleRoleFor(character) { return IDLE_ROLES[Math.abs(Number(character?.id) || 0) % IDLE_ROLES.length]; }
+function renderIdleTeamStrategy(state) {
+  const active = (state.slots || []).filter((s) => s.character).map((s) => s.character);
+  const stage = document.getElementById('idle-stage-team');
+  if (stage) stage.innerHTML = active.slice(0, 4).map((c) => {
+    const role = idleRoleFor(c); const img = c.imageUrl ? `style="background-image:url('${escapeHtml(c.imageUrl)}')"` : '';
+    return `<span class="idle-stage-ally" ${img} title="${escapeHtml(c.name)} · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i></span>`;
+  }).join('');
+  const counts = new Map(); active.forEach((c) => { const key=c.series||'Crossover'; counts.set(key,(counts.get(key)||0)+1); });
+  const best = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
+  const bonus = best?.[1] >= 3 ? 25 : best?.[1] >= 2 ? 10 : active.length >= 3 ? 5 : 0;
+  const bar = document.getElementById('idle-synergy-bar');
+  if (bar) bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}</span></div>` : '<i class="fas fa-link"></i><div><b>Aucune synergie active</b><span>Aligne 2 héros d’une même licence ou 3 univers différents.</span></div>';
 }
 
 // Frise des paliers de décor (Progression) — équivalent simplifié d'une
