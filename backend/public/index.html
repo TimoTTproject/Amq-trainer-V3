@@ -1669,7 +1669,7 @@
             <h3><i class="fas fa-route"></i> Parcours des mondes</h3>
             <div class="idle-roadmap" id="idle-roadmap"></div>
           </div>
-          <div class="profile-section idle-codex-panel"><h3><i class="fas fa-book-open"></i> Codex des mondes</h3><div class="idle-world-codex" id="idle-world-codex"></div></div>
+          <div class="profile-section idle-codex-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-book-open"></i> Codex des mondes</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-world-codex" id="idle-world-codex"></div></div></div>
           <div class="profile-section idle-missions-panel"><h3><i class="fas fa-scroll"></i> Missions du Dojo</h3><div class="idle-missions" id="idle-missions"></div></div>
         </section>
 
@@ -1678,7 +1678,7 @@
           <div class="idle-help"><i class="fas fa-users-gear"></i><div><b>Équipe et production</b><span>Assigne tes recrues aux emplacements. Elles combattent seules, produisent de l’Essence par seconde et activent des synergies.</span></div></div>
           <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
-          <h3 class="idle-section-title">Maîtrise des licences</h3><div class="idle-masteries" id="idle-masteries"></div>
+          <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-star"></i> Maîtrise des licences</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-masteries" id="idle-masteries"></div></div></div>
           <h3 class="idle-section-title">Équipe recrutée</h3>
           <div id="idle-slots" class="idle-slots"></div>
         </section>
@@ -1699,9 +1699,8 @@
             <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
           </div>
 
-          <h3 class="idle-section-title">Ancients <span class="hint">— permanents, jamais remis à zéro</span></h3>
-          <div id="idle-ancients" class="idle-upgrades"></div>
-          <h3 class="idle-section-title">Succès permanents</h3><div class="idle-achievements" id="idle-achievements"></div>
+          <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-landmark"></i> Ancients <small>Bonus permanents</small></span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div id="idle-ancients" class="idle-upgrades"></div></div></div>
+          <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-trophy"></i> Succès permanents</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-achievements" id="idle-achievements"></div></div></div>
         </section>
       </div>
 

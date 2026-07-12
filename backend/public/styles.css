@@ -6113,6 +6113,15 @@ body.idle-fullscreen #app { padding-top: 0; }
 @media(max-width:1050px){#view-idle .idle-slots{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){#view-idle .idle-slots{grid-template-columns:1fr;gap:12px}#view-idle .idle-hero{grid-template-columns:82px minmax(0,1fr)}#view-idle .idle-hero-portrait{width:82px;height:108px}}
 
+/* Sections secondaires repliables : garde les actions importantes visibles
+   et évite plusieurs écrans de scroll pour les collections longues. */
+#view-idle .idle-collapsible{margin:12px 0;border:1px solid var(--border);border-radius:12px;background:var(--bg);overflow:hidden}
+#view-idle .profile-section.idle-collapsible{padding:0}
+#view-idle .idle-collapse-title{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:50px;padding:12px 15px;border:0;background:transparent;color:var(--text);cursor:pointer;text-align:left}
+#view-idle .idle-collapse-title>span{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800}#view-idle .idle-collapse-title>span>i{color:var(--accent)}#view-idle .idle-collapse-title small{color:var(--text-2);font-size:9px;font-weight:500}
+#view-idle .idle-collapse-title>i{color:var(--text-2);transition:transform .2s ease}#view-idle .idle-collapsible:not(.collapsed) .idle-collapse-title>i{transform:rotate(180deg)}
+#view-idle .idle-collapse-body{padding:2px 14px 14px}#view-idle .idle-collapsible.collapsed .idle-collapse-body{display:none}
+
 @media (max-width: 700px) {
   .idle-content { padding: 10px 10px 30px; }
   .idle-scene { min-height: 215px; border-radius: 14px; }

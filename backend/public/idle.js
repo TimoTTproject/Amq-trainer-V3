@@ -1106,6 +1106,10 @@ async function prestigeIdle() {
 }
 
 function initIdleUI() {
+  document.getElementById('view-idle')?.addEventListener('click', (e) => {
+    const title = e.target.closest('[data-idle-collapse]'); if (!title) return;
+    const section = title.closest('.idle-collapsible'); section?.classList.toggle('collapsed');
+  });
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
