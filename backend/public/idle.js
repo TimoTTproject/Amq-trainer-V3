@@ -226,6 +226,7 @@ function renderIdleState(state) {
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleBattleSpeed(state.battle?.speed);
+  renderIdleBattleMode(state.battle?.mode);
   renderIdleBossChest(state.battle?.bossChest);
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
@@ -333,7 +334,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
   const total = Math.max(1, battle?.xpForNextStage || 1);
   const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
-  const guardianName = boss ? `Boss de la zone ${zone}` : `Gardien · vague ${wave}`;
+  const enemies=['Éclaireur corrompu','Soldat spectral','Bête d’énergie','Rival masqué','Guerrier renégat','Ombre ancienne','Chasseur dimensionnel','Golem mystique','Commandant ennemi'];
+  const guardianName = boss ? `Boss de la zone ${zone}` : enemies[(stage-1)%enemies.length];
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
   const titleEl = document.getElementById('idle-enemy-title');
@@ -392,6 +394,8 @@ function renderIdleBossChest(chest) {
   if (label && chest) label.textContent = `Boss ${chest.tier} · +${idleFormatNumber(chest.reward)} Essence`;
 }
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
+function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>b.classList.toggle('active',b.dataset.battleMode===mode));}
+async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){alert(e.message);}}
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){alert(e.message);}}
 
 function openIdleClassPicker() {
@@ -884,6 +888,7 @@ async function clickIdle() {
     return; // 429 (anti-spam) ou réseau : on ignore silencieusement, pas de quoi bloquer le joueur
   }
   if (idleState) idleState.essence = r.essence;
+  if(r.critical){idleSpawnFloat(`CRITIQUE +${r.gained}`,'crit');idleCombatMotion('hero');}
   // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
   // le passage à la vague/zone suivante après le coup.
   refreshIdleState();
@@ -1138,6 +1143,7 @@ function initIdleUI() {
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
+  document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
