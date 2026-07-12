@@ -245,7 +245,7 @@ function renderIdleTeamStrategy(state) {
   const stage = document.getElementById('idle-stage-team');
   if (stage) stage.innerHTML = active.slice(0, 4).map((c) => {
     const role = idleRoleFor(c); const img = c.imageUrl ? `style="background-image:url('${escapeHtml(c.imageUrl)}')"` : '';
-    return `<span class="idle-stage-ally" ${img} title="${escapeHtml(c.name)} · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i><b>${escapeHtml(c.name.split(' ')[0])}</b></span>`;
+    return `<span class="idle-stage-ally" ${img} title="Membre de l'équipe · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i></span>`;
   }).join('');
   const counts = new Map(); active.forEach((c) => { const key=c.series||'Crossover'; counts.set(key,(counts.get(key)||0)+1); });
   const best = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
@@ -317,7 +317,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
   const total = Math.max(1, battle?.xpForNextStage || 1);
   const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
-  const guardianName = dojo?.decor?.boss?.name || (boss ? 'Maître du palier' : "Disciple de l'Idle");
+  const guardianName = boss ? `Boss de la zone ${zone}` : `Gardien · vague ${wave}`;
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
   const titleEl = document.getElementById('idle-enemy-title');
@@ -655,7 +655,7 @@ function idleRenderBoss(boss, theme) {
   if (fighter) {
     el.classList.add('idle-scene-fighter');
     el.innerHTML = `<img class="idle-fighter-sprite" src="${fighter.image}" alt="${escapeHtml(fighter.name)}">
-      <span class="idle-boss-name">${escapeHtml(fighter.name)}<small>Gardien du lieu</small></span>`;
+      <span class="idle-boss-name"><small>Gardien du lieu</small></span>`;
     return;
   }
   el.classList.remove('idle-scene-fighter');
@@ -664,7 +664,7 @@ function idleRenderBoss(boss, theme) {
   const url = boss.generatedImageUrl || boss.imageUrl;
   const img = url ? ` style="background-image:url('${url}')"` : '';
   el.innerHTML = `<span class="idle-boss-portrait"${img}></span>
-    <span class="idle-boss-name">${escapeHtml(boss.name)}<small>Gardien du lieu</small></span>`;
+    <span class="idle-boss-name"><small>Gardien du lieu</small></span>`;
 }
 
 function renderIdleMilestone(dojo) {
@@ -750,7 +750,8 @@ function idleSlotHTML(slot) {
       <span class="idle-hero-rate">+${idleFormatNumber(c.rate)}/s</span>
     </div>
     <div class="idle-hero-stats"><span>Base <b>${idleFormatNumber(c.baseRate)}/s</b></span><span>Scaling <b>+${Math.round(c.scaling * 100)}%/niv.</b></span></div>
-    <div class="idle-hero-passive"><i class="fas fa-wand-sparkles"></i> ${escapeHtml(c.passive)}</div>
+    <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
+    <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
   </div>`;
 }
