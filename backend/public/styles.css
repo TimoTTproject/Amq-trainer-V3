@@ -5562,6 +5562,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-space[data-decor="temple"] { background: radial-gradient(1200px 600px at 20% -10%, #3a1418, transparent), linear-gradient(160deg, #1a0c0e, #2a1013 60%, #34141a); }
 .idle-space[data-decor="gold"] { background: radial-gradient(1200px 600px at 20% -10%, #3f2c05, transparent), linear-gradient(160deg, #1c1404, #2e2107 60%, #3a2a08); }
 .idle-space[data-decor="celestial"] { background: radial-gradient(1200px 600px at 20% -10%, #1a1240, transparent), linear-gradient(160deg, #0a081c, #140f33 60%, #1a1348); }
+.idle-space[data-decor="hueco"] { background: radial-gradient(1200px 600px at 20% -10%, #dce7f0, transparent), linear-gradient(160deg, #111820, #293440 60%, #e5eaf0); }
+.idle-space[data-decor="ua"] { background: radial-gradient(1200px 600px at 20% -10%, #3c8cff, transparent), linear-gradient(160deg, #0b2554, #174a8d 60%, #cf3150); }
+.idle-space[data-decor="shibuya"] { background: radial-gradient(1200px 600px at 20% -10%, #d0164d, transparent), linear-gradient(160deg, #090510, #28103f 60%, #710c31); }
+.idle-space[data-decor="aincrad"] { background: radial-gradient(1200px 600px at 20% -10%, #ffc65a, transparent), linear-gradient(160deg, #102954, #23518e 60%, #d18a33); }
+.idle-space[data-decor="void"] { background: radial-gradient(1200px 600px at 20% -10%, #8b5cff, transparent), linear-gradient(160deg, #050310, #17103c 60%, #38207a); }
 
 /* Particules ambiantes du décor (pétales/lanternes/étoiles), cosmétique pur */
 .idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
@@ -5624,11 +5629,26 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-space[data-decor="temple"] .idle-scene { background: linear-gradient(160deg, #250e13, #4a161f); }
 .idle-space[data-decor="gold"] .idle-scene { background: linear-gradient(160deg, #2a1d06, #4a3408); }
 .idle-space[data-decor="celestial"] .idle-scene { background: linear-gradient(160deg, #0d0a24, #221856); }
+.idle-space[data-decor="hueco"] .idle-scene { background: linear-gradient(160deg, #121a22, #dce4eb); }
+.idle-space[data-decor="ua"] .idle-scene { background: linear-gradient(160deg, #1761bc, #d63c52); }
+.idle-space[data-decor="shibuya"] .idle-scene { background: linear-gradient(160deg, #100617, #6e0d42); }
+.idle-space[data-decor="aincrad"] .idle-scene { background: linear-gradient(160deg, #1f5791, #e2a54e); }
+.idle-space[data-decor="void"] .idle-scene { background: linear-gradient(160deg, #09051c, #49248e); }
 
 /* Scène « peinte » : les SVG plats du palier sont le décor principal
    (la jaquette photo étirée était une bouillie floue — supprimée). */
-.idle-scenery { position: absolute; inset: 0; pointer-events: none; }
-.idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; }
+.idle-scenery {
+  position: absolute; inset: 0; pointer-events: none;
+  background-position: center; background-size: cover;
+  filter: saturate(1.04) contrast(1.03);
+}
+.idle-scenery::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(5,7,12,.08), transparent 38%, rgba(5,7,12,.42) 100%),
+    radial-gradient(circle at 50% 52%, transparent 0 22%, rgba(5,7,12,.12) 68%, rgba(5,7,12,.34) 100%);
+}
+.idle-scenery svg { position: absolute; z-index: -1; bottom: 0; left: 0; width: 100%; height: 100%; }
 
 /* Jaquette de l'anime du gardien : kakémono NET accroché à gauche de la scène,
    à sa taille utile (~110 px) — jamais étirée. */
@@ -5647,16 +5667,42 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 .idle-scene-head { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .idle-scene-head h2 { font-size: 1.15rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
+.idle-battle-kicker {
+  display: block; margin-bottom: 2px; color: #ffd54a; font-size: .6rem;
+  font-weight: 800; letter-spacing: 1.2px; text-shadow: 0 2px 6px rgba(0,0,0,.9);
+}
 .idle-scene-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .idle-chip {
   padding: 3px 10px; border-radius: 999px; font-size: .66rem; font-weight: 700; letter-spacing: .4px;
   background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.28); text-transform: uppercase; white-space: nowrap;
 }
 .idle-chip-gold { color: #ffd54a; border-color: #ffd54a66; }
+.idle-chip-danger { color: #ffb0b0; border-color: #ff6b6b88; background: rgba(100,12,18,.72); }
+.idle-chip-danger.boss { color: #fff0a8; border-color: #ffd54a; background: rgba(130,38,12,.86); animation: idleBossTagPulse 1.2s ease-in-out infinite; }
+@keyframes idleBossTagPulse { 50% { transform: scale(1.08); box-shadow: 0 0 12px rgba(255,213,74,.5); } }
 
-/* Gardien mythique au centre de la scène */
+/* Duel lisible : héros du joueur à gauche, gardien de licence à droite. */
+.idle-main-hero {
+  position: absolute; z-index: 2; left: 21%; top: 50%; transform: translate(-50%,-44%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.idle-main-hero-avatar {
+  width: 94px; height: 94px; border: 3px solid #4db8ff; border-radius: 50%;
+  background-color: #14263d; background-position: center; background-size: cover;
+  box-shadow: 0 0 26px #4db8ff88, 0 10px 28px #0009; font-size: 2rem;
+  display: grid; place-items: center; animation: idleHeroReady 2.8s ease-in-out infinite;
+}
+.idle-main-hero-name { max-width: 160px; padding: 4px 11px; border: 1px solid #4db8ff88; border-radius: 10px; background: rgba(0,0,0,.72); text-align: center; }
+.idle-main-hero-name>* { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idle-main-hero-name small { color: #7ec8ff; font-size: .5rem; font-weight: 800; letter-spacing: 1px; }
+.idle-main-hero-name b { font-size: .7rem; }
+.idle-main-hero-name em { color: #ffd54a; font-size: .54rem; font-style: normal; }
+.idle-main-hero>button { position: absolute; top: -3px; right: -8px; width: 28px; height: 28px; border: 1px solid #fff6; border-radius: 50%; background: #14263ddd; color: #fff; cursor: pointer; }
+.idle-main-hero>button:hover { background: #2879b9; transform: scale(1.08); }
+@keyframes idleHeroReady { 50% { transform: translateY(-5px) rotate(-1deg); } }
+
 .idle-scene-boss {
-  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  position: absolute; left: 65%; top: 50%; width: 30%; z-index: 1; pointer-events: none; transform: translate(-50%,-47%);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding-top: 16px;
 }
 .idle-boss-portrait {
@@ -5688,8 +5734,13 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 
 .idle-scene-foot { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 2; }
+.idle-enemy-title { display: flex; align-items: end; justify-content: space-between; gap: 10px; margin-bottom: 4px; color: #fff; text-shadow: 0 2px 5px #000; }
+.idle-enemy-title strong { overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.idle-enemy-title span { flex: none; font-size: .62rem; font-weight: 700; }
 .idle-xp-bar { height: 8px; border-radius: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.16); overflow: hidden; }
 .idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
+.idle-enemy-hp { height: 13px; border-color: rgba(255,255,255,.4); box-shadow: inset 0 1px 4px #000, 0 1px 4px #0008; }
+.idle-enemy-hp .idle-xp-fill { margin-left: auto; background: linear-gradient(180deg, #7ee34c, #2ba729); box-shadow: inset 0 1px rgba(255,255,255,.45); }
 .idle-decor-next { font-size: .68rem; color: #fff; opacity: .9; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
 
 .idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin: 10px 2px 14px; }
@@ -5733,6 +5784,15 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-stat-tile small { color: var(--text-2); font-size: .64rem; text-transform: uppercase; letter-spacing: .5px; }
 
 .idle-section-title { font-size: 1rem; color: var(--text-2); margin: 6px 0 10px; }
+.idle-team-intro { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 13px 15px; border: 1px solid #4db8ff44; border-radius: 12px; background: linear-gradient(135deg,#4db8ff16,#8a6cff12); }
+.idle-team-intro>i { color: #4db8ff; font-size: 1.4rem; }
+.idle-team-intro b,.idle-team-intro span { display: block; }.idle-team-intro b{font-size:.86rem}.idle-team-intro span{margin-top:3px;color:var(--text-2);font-size:.7rem;line-height:1.4}
+
+@media (max-width: 560px) {
+  .idle-main-hero { left: 22%; transform: translate(-50%,-38%) scale(.82); }
+  .idle-scene-boss { left: 69%; width: 38%; transform: translate(-50%,-43%) scale(.86); }
+  .idle-scene-poster { opacity: .55; }
+}
 
 /* ── Emplacements d'entraînement ── */
 .idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }

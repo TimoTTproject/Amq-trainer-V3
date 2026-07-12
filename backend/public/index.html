@@ -1587,16 +1587,26 @@
             <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
             <span class="idle-scene-poster hidden" id="idle-scene-poster" title="Affiche de l'anime du gardien"></span>
             <div class="idle-scene-head">
-              <h2 id="idle-decor-name">—</h2>
+              <div>
+                <span class="idle-battle-kicker" id="idle-battle-zone">ZONE 1 · VAGUE 1/10</span>
+                <h2 id="idle-decor-name">—</h2>
+              </div>
               <div class="idle-scene-chips">
+                <span class="idle-chip idle-chip-danger" id="idle-battle-tag">GARDIEN</span>
                 <span class="idle-chip" id="idle-dojo-level">Niveau 1</span>
                 <span class="idle-chip idle-chip-gold" id="idle-mult-val">×1.00</span>
               </div>
             </div>
+            <div class="idle-main-hero" id="idle-main-hero">
+              <span class="avatar idle-main-hero-avatar" id="idle-main-hero-avatar"></span>
+              <span class="idle-main-hero-name"><small>TON HÉROS</small><b id="idle-main-hero-name">—</b><em id="idle-main-hero-power">1 puissance</em></span>
+              <button type="button" id="idle-customize-hero" title="Personnaliser mon héros"><i class="fas fa-palette"></i></button>
+            </div>
             <div class="idle-scene-boss hidden" id="idle-decor-boss"></div>
             <div class="idle-floats" id="idle-floats" aria-hidden="true"></div>
             <div class="idle-scene-foot">
-              <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
+              <div class="idle-enemy-title"><strong id="idle-enemy-title">Gardien du Dojo</strong><span id="idle-enemy-hp-text">— PV</span></div>
+              <div class="idle-xp-bar idle-enemy-hp"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
               <div class="idle-decor-next" id="idle-decor-next"></div>
             </div>
           </div>
@@ -1605,7 +1615,7 @@
           <div class="idle-actions">
             <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
             <button class="btn-secondary" id="idle-top-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
-            <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
+            <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Frapper <span id="idle-click-yield"></span></button>
           </div>
 
           <div class="idle-stats">
@@ -1622,7 +1632,8 @@
 
         <!-- Onglet ÉQUIPE : emplacements d'entraînement -->
         <section id="idle-panel-team" class="idle-panel hidden">
-          <h3 class="idle-section-title">Emplacements d'entraînement</h3>
+          <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
+          <h3 class="idle-section-title">Équipe recrutée</h3>
           <div id="idle-slots" class="idle-slots"></div>
         </section>
 
