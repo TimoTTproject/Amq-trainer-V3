@@ -184,6 +184,12 @@ const HERO_CLASSES = {
   summoner: { name: 'Invocateur', icon: 'fa-dragon', description: '+20% production de l’équipe', click: 1, prod: 1.2, burst: 1, team: 1 },
 };
 function heroClass(key) { return HERO_CLASSES[key] || HERO_CLASSES.warrior; }
+const HERO_STYLES = {
+  auras: [{ key:'none',name:'Sans aura',level:1 },{key:'flame',name:'Flammes',level:10},{key:'lightning',name:'Éclairs',level:25},{key:'void',name:'Énergie obscure',level:50},{key:'divine',name:'Aura divine',level:100}],
+  stances: [{key:'balanced',name:'Équilibrée',level:1},{key:'power',name:'Puissance',level:20},{key:'speed',name:'Vitesse',level:40},{key:'master',name:'Maître',level:75}],
+  titles: [{key:'rookie',name:'Novice du Dojo',level:1},{key:'guardian',name:'Gardien des mondes',level:25},{key:'legend',name:'Légende du multivers',level:60},{key:'transcendent',name:'Transcendant',level:100}],
+};
+function unlockedStyles(level, selected) { return Object.fromEntries(Object.entries(HERO_STYLES).map(([type,items]) => [type, items.map((x)=>({...x,unlocked:level>=x.level,selected:selected[type]===x.key}))])); }
 function currentIdleEvent(now = new Date()) {
   const events = [
     { key: 'training', name: 'Entraînement intensif', icon: 'fa-dumbbell', description: '+25% production d’équipe', prod: 1.25, click: 1 },
@@ -272,6 +278,7 @@ async function buildState(userId) {
       essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true,
     },
   });
   if (!user) return null;
@@ -366,6 +373,7 @@ async function buildState(userId) {
     pendingEssence: pending,
     totalRate,
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
+    heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle}) },
     strategy: { ...strategy, roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
@@ -736,6 +744,17 @@ router.post('/hero-class', requireAuth, requireAdmin, rateLimit({ max: 20, name:
   const key = String(req.body?.key || '');
   if (!HERO_CLASSES[key]) return res.status(400).json({ error: 'Classe inconnue' });
   await withSettle(req.user.id, async (tx, user) => { await tx.user.update({ where: { id: user.id }, data: { idleHeroClass: key } }); });
+  res.json(await buildState(req.user.id));
+});
+
+router.post('/hero-style', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-hero-style' }), async (req, res) => {
+  const type = String(req.body?.type || ''); const key = String(req.body?.key || '');
+  const field = { auras:'idleHeroAura', stances:'idleHeroStance', titles:'idleHeroTitle' }[type];
+  const item = HERO_STYLES[type]?.find((x)=>x.key===key);
+  if (!field || !item) return res.status(400).json({ error:'Personnalisation inconnue' });
+  const user = await prisma.user.findUnique({ where:{id:req.user.id},select:{essenceEarnedTotal:true} });
+  if (dojoLevelForXp(user.essenceEarnedTotal) < item.level) return res.status(403).json({ error:`Débloqué au niveau ${item.level}` });
+  await prisma.user.update({ where:{id:req.user.id},data:{[field]:key} });
   res.json(await buildState(req.user.id));
 });
 

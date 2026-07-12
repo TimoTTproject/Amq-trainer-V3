@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN "idleHeroAura" TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE "User" ADD COLUMN "idleHeroStance" TEXT NOT NULL DEFAULT 'balanced';
+ALTER TABLE "User" ADD COLUMN "idleHeroTitle" TEXT NOT NULL DEFAULT 'rookie';
