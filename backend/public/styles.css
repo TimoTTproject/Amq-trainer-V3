@@ -5669,6 +5669,14 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 /* Texte d'ambiance + coffre de jalon */
 .idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin-top: 8px; }
+
+/* Gardien mythique du palier (vrai personnage AniList du gacha) */
+.idle-decor-boss { display: inline-flex; align-items: center; gap: 8px; margin-left: 14px; }
+.idle-boss-portrait {
+  width: 34px; height: 34px; border-radius: 50%; background-size: cover; background-position: center top;
+  background-color: var(--bg-3); border: 2px solid #ff5d8f; box-shadow: 0 0 10px #ff5d8f66; flex: none;
+}
+.idle-boss-name { font-size: .74rem; color: var(--text-2); white-space: nowrap; }
 .idle-milestone-btn {
   margin-left: auto; flex: none; border: none; border-radius: 10px; cursor: pointer;
   background: linear-gradient(135deg, #ffb648, #ff5d8f); color: #2a1400; font-weight: 700; font-size: .78rem;
@@ -5692,6 +5700,13 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-prestige-card .btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Particules ambiantes du décor (feuilles/braises/étoiles), purement cosmétique */
+/* Fond réel (jaquette d'anime AniList, déjà en base) : flouté + assombri pour
+   rester lisible sous l'interface, agrandi pour masquer les bords du flou. */
+.idle-backdrop {
+  position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center;
+  filter: blur(22px) brightness(.45) saturate(1.1); transform: scale(1.15);
+  transition: background-image .6s ease; pointer-events: none;
+}
 .idle-scenery { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; transition: opacity .5s ease; }
 .idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 45vh; }
 .idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
@@ -5727,6 +5742,7 @@ body.idle-fullscreen #app { padding-top: 0; }
   .idle-decor-banner { margin: 10px 12px 0; }
   .idle-space-header { padding: 14px 12px 4px; }
   .idle-decor-row { flex-wrap: wrap; }
+  .idle-decor-boss { margin-left: 0; }
   .idle-milestone-btn { margin-left: 0; }
   .idle-prestige-card { flex-direction: column; align-items: stretch; }
 }

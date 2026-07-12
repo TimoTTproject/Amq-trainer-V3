@@ -1569,6 +1569,7 @@
 
     <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
     <div id="view-idle" class="hidden idle-space" data-decor="wood">
+      <div id="idle-backdrop" class="idle-backdrop" aria-hidden="true"></div>
       <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
       <div id="idle-particles" class="idle-particles" aria-hidden="true"></div>
       <div class="idle-space-header">
@@ -1586,6 +1587,7 @@
             <b id="idle-decor-name">—</b>
             <span class="idle-decor-lvl" id="idle-dojo-level">Niveau 1</span>
           </div>
+          <span class="idle-decor-boss hidden" id="idle-decor-boss"></span>
           <button class="idle-milestone-btn hidden" id="idle-milestone-btn"><i class="fas fa-gift"></i> Coffre <span id="idle-milestone-reward"></span></button>
         </div>
         <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>

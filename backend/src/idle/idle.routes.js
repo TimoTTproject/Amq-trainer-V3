@@ -25,6 +25,7 @@ const {
   dojoXpForLevel,
   dojoLevelMultiplier,
   decorForLevel,
+  DOJO_DECOR,
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
@@ -38,6 +39,51 @@ class IdleError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+// ── Habillage visuel du décor : un « gardien » mythique réel (portrait
+// AniList déjà en base via le gacha) + un fond tiré d'un anime (jaquette déjà
+// récupérée par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée
+// externe nouvelle, aucune URL inventée, tout vient de ce que le site a déjà
+// importé. Choix déterministe par palier (même gardien pour tout le monde à
+// un palier donné, pas de tirage aléatoire à chaque requête) + petit cache
+// mémoire (le pool de personnages/jaquettes ne change pas d'une requête à
+// l'autre) pour ne pas taper la base à chaque GET /state.
+const DECOR_ART_TTL_MS = 30 * 60 * 1000;
+const decorArtCache = new Map(); // theme -> { data, at }
+async function decorArtForTheme(theme) {
+  const cached = decorArtCache.get(theme);
+  if (cached && Date.now() - cached.at < DECOR_ART_TTL_MS) return cached.data;
+  const data = await fetchDecorArt(theme);
+  decorArtCache.set(theme, { data, at: Date.now() });
+  return data;
+}
+async function fetchDecorArt(theme) {
+  const tierIndex = Math.max(0, DOJO_DECOR.findIndex((t) => t.theme === theme));
+  const mythics = await prisma.character.findMany({
+    where: { rarity: 'mythic' },
+    select: { id: true, name: true, imageUrl: true, seriesId: true },
+    orderBy: { id: 'asc' },
+  });
+  if (!mythics.length) return null;
+  // Essaie quelques candidats à partir du palier (déterministe) si le premier
+  // choix n'a pas de portrait ou de jaquette exploitable.
+  for (let offset = 0; offset < Math.min(mythics.length, 6); offset++) {
+    const boss = mythics[(tierIndex + offset) % mythics.length];
+    if (!boss.imageUrl) continue;
+    let backgroundUrl = null;
+    if (boss.seriesId) {
+      // `NOT IN (NULL, ...)` en SQL ne filtre RIEN (NULL dans la liste rend la
+      // condition UNKNOWN pour toutes les lignes) — deux conditions séparées.
+      const song = await prisma.song.findFirst({
+        where: { anilistId: boss.seriesId, coverUrl: { not: null, notIn: [''] } },
+        select: { coverUrl: true },
+      });
+      backgroundUrl = song?.coverUrl || null;
+    }
+    return { characterId: boss.id, name: boss.name, imageUrl: boss.imageUrl, backgroundUrl };
+  }
+  return null;
 }
 
 // Emplacements + niveau ★ (issu de UserCard) des personnages assignés.
@@ -152,6 +198,7 @@ async function buildState(userId) {
   }
 
   const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
+  const decorArt = await decorArtForTheme(decor.theme);
   const xpIntoLevel = user.essenceEarnedTotal - dojoXpForLevel(dojoLevel);
   const xpForNextLevel = dojoXpForLevel(dojoLevel + 1) - dojoXpForLevel(dojoLevel);
   const milestoneTier = milestoneTierForLevel(dojoLevel);
@@ -185,7 +232,7 @@ async function buildState(userId) {
       xpForNextLevel,
       progress: xpForNextLevel > 0 ? Math.min(1, xpIntoLevel / xpForNextLevel) : 1,
       multiplier: dojoLevelMultiplier(dojoLevel),
-      decor,
+      decor: { ...decor, boss: decorArt ? { characterId: decorArt.characterId, name: decorArt.name, imageUrl: decorArt.imageUrl } : null, backgroundUrl: decorArt?.backgroundUrl || null },
       nextDecor: nextDecor ? { ...nextDecor, levelsRemaining: nextDecor.level - dojoLevel } : null,
       milestone: {
         tier: milestoneTier,
@@ -401,4 +448,6 @@ router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COO
   res.json({ essence: user.essence, gained });
 });
 
-module.exports = { router };
+// decorArtCache exposé UNIQUEMENT pour les tests (`.clear()` entre les cas —
+// sinon le cache mémoire fait fuiter l'état d'un test à l'autre).
+module.exports = { router, decorArtCache };

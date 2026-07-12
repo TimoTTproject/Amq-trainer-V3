@@ -28,6 +28,13 @@ test.after(() => app.close());
 test.beforeEach(() => {
   prisma.idleSlot.findMany = async () => [];
   prisma.userCard.findMany = async () => [];
+  // buildState() appelle systématiquement decorArtForTheme() : sans stub par
+  // défaut, tous les tests existants (qui ne testent pas l'habillage visuel)
+  // planteraient sur "prisma.character.findMany non stubbé". Le cache mémoire
+  // du module doit aussi être vidé, sinon un test pollue le suivant.
+  prisma.character.findMany = async () => [];
+  prisma.song.findFirst = async () => null;
+  idleRoutes.decorArtCache.clear();
 });
 
 test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {
@@ -110,6 +117,41 @@ test('GET /state : le niveau du Dojo dérive de essenceEarnedTotal, décor + XP 
   assert.equal(res.json.dojo.xpIntoLevel, 0);
   assert.ok(res.json.dojo.decor && res.json.dojo.decor.theme);
   assert.ok(res.json.dojo.multiplier > 1);
+});
+
+test("GET /state : le décor porte un gardien mythique réel + le fond de son anime quand disponibles", async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.character.findMany = async () => [
+    { id: 101, name: 'Sans imageUrl (à ignorer)', imageUrl: null, seriesId: 1 },
+    { id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/yamato.jpg', seriesId: 42 },
+  ];
+  prisma.song.findFirst = async ({ where }) => (where.anilistId === 42 ? { coverUrl: 'https://cdn.example/cover42.jpg' } : null);
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.decor.boss.name, 'Yamato');
+  assert.equal(res.json.dojo.decor.boss.imageUrl, 'https://cdn.example/yamato.jpg');
+  assert.equal(res.json.dojo.decor.backgroundUrl, 'https://cdn.example/cover42.jpg');
+});
+
+test('GET /state : sans mythique en base (ou sans portrait), le décor reste utilisable sans gardien', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.character.findMany = async () => [{ id: 101, name: 'Sans imageUrl', imageUrl: null, seriesId: 1 }];
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.decor.boss, null);
+  assert.equal(res.json.dojo.decor.backgroundUrl, null);
+});
+
+test('GET /state : le gardien du décor est mis en cache (pas de re-requête tant que le thème ne change pas)', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  let calls = 0;
+  prisma.character.findMany = async () => { calls++; return [{ id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/y.jpg', seriesId: null }]; };
+  await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(calls, 1);
 });
 
 test('slot-level : refuse un emplacement vide, sinon débite selon charLevelUpCost et incrémente le niveau', async () => {
