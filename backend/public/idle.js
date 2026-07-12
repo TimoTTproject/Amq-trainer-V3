@@ -196,7 +196,9 @@ function renderIdleState(state) {
   essenceEl.textContent = idleFormatNumber(state.essence + state.pendingEssence);
   if (prev && state.essence > prev.essence) idleBump(essenceEl);
   document.getElementById('idle-rate-val').textContent = idleFormatNumber(state.totalRate);
-  document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `(+${idleFormatNumber(state.pendingEssence)})` : '';
+  document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `+${idleFormatNumber(state.pendingEssence)}` : '0';
+  const collectHelp = document.getElementById('idle-collect-help');
+  if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-coins"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en attente.</b> Encaisse-la maintenant dans ton solde.` : '<i class="fas fa-check"></i> Tous les gains automatiques sont encaissés. Ton équipe continue à produire.';
   document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
