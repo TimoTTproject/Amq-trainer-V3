@@ -390,6 +390,8 @@ async function buildState(userId) {
   let achievementClaims = []; try { achievementClaims = await prisma.idleMissionClaim.findMany({ where: { userId, period: 'lifetime', missionKey: { in: achievementDefs.map((a) => `achievement_${a.key}`) } }, select: { missionKey: true } }); } catch (e) { if (e?.code) throw e; }
   const claimedAchievements = new Set(achievementClaims.map((c) => c.missionKey));
   const achievements = achievementDefs.map((a) => ({ ...a, completed: a.progress >= a.target, claimed: claimedAchievements.has(`achievement_${a.key}`) }));
+  const now=new Date();const seasonPeriod=`${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`;const seasonName=['Hiver Éternel','Floraison des héros','Brasier des mondes','Crépuscule dimensionnel'][Math.floor(now.getUTCMonth()/3)];
+  const seasonDefs=[{tier:1,level:10,reward:500},{tier:2,level:25,reward:2000},{tier:3,level:50,reward:5000},{tier:4,level:100,reward:10000}];let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
   const activeSlots=slots.filter((s)=>s.character);
   const guide=[
     {key:'recruit',title:'Recrute ton premier héros',description:'Utilise ton Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
@@ -432,6 +434,7 @@ async function buildState(userId) {
     event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Cumule 100 niveaux dans ton équipe active', progress: Math.min(weeklyLevels, 100), target: 100, reward: 3000, completed: weeklyLevels >= 100, claimed: weeklyClaimed } },
     achievements,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
+    season:{period:seasonPeriod,name:seasonName,level:dojoLevel,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:seasonDefs.map((x)=>({...x,completed:dojoLevel>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
@@ -901,6 +904,7 @@ router.post('/achievement/claim', requireAuth, requireAdmin, rateLimit({ max: 20
     throw e;
   }
 });
+router.post('/season/claim',requireAuth,requireAdmin,rateLimit({max:20,name:'idle-season'}),async(req,res)=>{const tier=Number(req.body?.tier);const def=[{tier:1,level:10,reward:500},{tier:2,level:25,reward:2000},{tier:3,level:50,reward:5000},{tier:4,level:100,reward:10000}].find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier invalide'});const now=new Date();const period=`season-${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`;try{await prisma.$transaction(async(tx)=>{const user=await tx.user.findUnique({where:{id:req.user.id}});if(dojoLevelForXp(user.essenceEarnedTotal)<def.level)throw new IdleError(400,'Palier saisonnier verrouillé');await tx.idleMissionClaim.create({data:{userId:user.id,missionKey:`season_tier_${tier}`,period}});await tx.user.update({where:{id:user.id},data:{essence:{increment:def.reward},essenceEarnedTotal:{increment:def.reward}}});});res.json({ok:true,reward:def.reward});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}});
 
 router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
   try {
