@@ -162,13 +162,13 @@ async function fetchDecorArt(theme) {
 async function loadSlots(tx, userId) {
   return tx.idleSlot.findMany({
     where: { userId },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } } },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } }, equipments: true },
   });
 }
 
 function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus) {
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) : sum),
     0
   );
   const teamPassive = slots.reduce((mult, s) => {
@@ -278,6 +278,7 @@ async function buildState(userId) {
         passiveUnlocked: level >= 10,
         milestones: HERO_MILESTONES.map((target) => ({ target, reached: level >= target })),
         nextMilestone: HERO_MILESTONES.find((target) => target > level) || null,
+        equipments: ['weapon', 'relic', 'accessory'].map((kind) => (row.equipments || []).find((e) => e.kind === kind) || { kind, empty: true }),
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -680,7 +681,7 @@ router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, na
 
 router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
   try {
-    const reward = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
       const defeated = Math.floor(Math.max(0, stageForXp(user.essenceEarnedTotal) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
@@ -688,9 +689,22 @@ router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name:
       const amount = Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
       const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 }, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
-      return amount;
+      const slot = await tx.idleSlot.findFirst({ where: { userId: user.id, characterId: { not: null } }, orderBy: { slotIndex: 'asc' } });
+      let loot = null;
+      if (slot) {
+        const kinds = ['weapon', 'relic', 'accessory']; const kind = kinds[(tier - 1) % kinds.length];
+        const rarity = tier % 10 === 0 ? 'mythic' : tier % 5 === 0 ? 'legendary' : tier % 3 === 0 ? 'epic' : 'rare';
+        const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
+        const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
+        const current = await tx.idleEquipment.findUnique({ where: { idleSlotId_kind: { idleSlotId: slot.id, kind } } });
+        if (!current || bonus > current.bonus) {
+          await tx.idleEquipment.upsert({ where: { idleSlotId_kind: { idleSlotId: slot.id, kind } }, create: { idleSlotId: slot.id, kind, rarity, bonus }, update: { rarity, bonus, obtainedAt: new Date() } });
+          loot = { kind, rarity, bonus, equipped: true, slotIndex: slot.slotIndex };
+        } else loot = { kind, rarity, bonus, equipped: false, slotIndex: slot.slotIndex };
+      }
+      return { reward: amount, loot };
     });
-    res.json({ ok: true, reward });
+    res.json({ ok: true, ...result });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 

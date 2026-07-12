@@ -378,8 +378,14 @@ function renderIdleBossChest(chest) {
 }
 
 async function claimIdleBossChest() {
-  try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); if (typeof burstConfetti === 'function') burstConfetti(35); await refreshIdleState(); }
+  try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); if (r.loot) idleShowLoot(r.loot); if (typeof burstConfetti === 'function') burstConfetti(35); await refreshIdleState(); }
   catch (e) { alert(e.message); }
+}
+
+function idleShowLoot(loot) {
+  const names = { weapon: 'Arme', relic: 'Relique', accessory: 'Accessoire' };
+  const message = loot.equipped ? `${names[loot.kind]} ${loot.rarity} équipée · +${Math.round(loot.bonus * 100)}%` : `${names[loot.kind]} trouvée, mais moins puissante`;
+  idleSpawnFloat(message, 'xp');
 }
 
 function renderIdleRecruit(recruit, essence) {
@@ -765,6 +771,7 @@ function idleSlotHTML(slot) {
     <div class="idle-hero-stats"><span>Base <b>${idleFormatNumber(c.baseRate)}/s</b></span><span>Scaling <b>+${Math.round(c.scaling * 100)}%/niv.</b></span></div>
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
+    <div class="idle-equipment">${c.equipments.map((e) => `<span class="${e.empty ? 'empty' : `r-${e.rarity}`}" title="${e.empty ? 'Emplacement vide' : `+${Math.round(e.bonus * 100)}% production`}"><i class="fas ${e.kind === 'weapon' ? 'fa-khanda' : e.kind === 'relic' ? 'fa-gem' : 'fa-ring'}"></i><small>${e.empty ? 'Vide' : `+${Math.round(e.bonus * 100)}%`}</small></span>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
   </div>`;
 }
