@@ -490,6 +490,11 @@ router.get('/state', requireAuth, requireAdmin, async (req, res) => {
   res.json(state);
 });
 
+router.get('/leaderboard', requireAuth, requireAdmin, async(req,res)=>{
+  const users=await prisma.user.findMany({where:{essenceEarnedTotal:{gt:0}},select:{id:true,displayName:true,avatarUrl:true,essenceEarnedTotal:true,prestigeLevel:true,idleHeroClass:true},orderBy:{essenceEarnedTotal:'desc'},take:50});
+  res.json({players:users.map((u,i)=>({rank:i+1,id:u.id,name:u.displayName,avatarUrl:u.avatarUrl,progression:u.essenceEarnedTotal,stage:stageForXp(u.essenceEarnedTotal),level:dojoLevelForXp(u.essenceEarnedTotal),prestige:u.prestigeLevel,className:heroClass(u.idleHeroClass).name,isMe:u.id===req.user.id}))});
+});
+
 // Roster du joueur (personnages recrutés) — pour le sélecteur d'assignation.
 // Totalement indépendant de /api/gacha/collection.
 router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
