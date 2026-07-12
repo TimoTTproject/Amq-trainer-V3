@@ -242,7 +242,7 @@ test('recruit : exclut les personnages déjà recrutés et retombe sur une autre
   let firstCall = true;
   prisma.character.findMany = async ({ where }) => {
     if (firstCall) { firstCall = false; return []; }
-    return where.rarity === 'common' ? [{ id: 9, name: 'Repli', imageUrl: null, rarity: 'common' }] : [];
+    return where.rarity === 'rare' ? [{ id: 9, name: 'Repli', imageUrl: null, rarity: 'rare' }] : [];
   };
   let created = null;
   prisma.dojoRecruit.create = async (args) => { created = args.data; return args.data; };

@@ -55,11 +55,10 @@ function slotRate(rarity, charLevel) {
 // de l'essence — jamais via le gacha. Pondération par rareté propre au Dojo
 // (indépendante de gacha/rarity.js, pour pouvoir l'équilibrer séparément).
 const RECRUIT_WEIGHTS = [
-  ['common', 60],
-  ['rare', 25],
-  ['epic', 10],
-  ['legendary', 4],
-  ['mythic', 1],
+  ['rare', 70],
+  ['epic', 20],
+  ['legendary', 8],
+  ['mythic', 2],
 ];
 const RECRUIT_TOTAL_WEIGHT = RECRUIT_WEIGHTS.reduce((s, [, w]) => s + w, 0);
 // `luckBonus` (0-0.9, cf. Ancient « Œil du Recruteur ») déplace une fraction
@@ -67,16 +66,16 @@ const RECRUIT_TOTAL_WEIGHT = RECRUIT_WEIGHTS.reduce((s, [, w]) => s + w, 0);
 // poids respectif — la somme totale des poids ne bouge pas.
 function rollRecruitRarity(luckBonus) {
   const bonus = Math.max(0, Math.min(0.9, luckBonus || 0));
-  const commonWeight = RECRUIT_WEIGHTS[0][1];
-  const shift = commonWeight * bonus;
-  const nonCommonTotal = RECRUIT_TOTAL_WEIGHT - commonWeight;
+  const rareWeight = RECRUIT_WEIGHTS[0][1];
+  const shift = rareWeight * bonus;
+  const higherTotal = RECRUIT_TOTAL_WEIGHT - rareWeight;
   let r = Math.random() * RECRUIT_TOTAL_WEIGHT;
   for (const [rarity, w] of RECRUIT_WEIGHTS) {
-    const adjusted = rarity === 'common' ? w - shift : w + shift * (w / nonCommonTotal);
+    const adjusted = rarity === 'rare' ? w - shift : w + shift * (w / higherTotal);
     if (r < adjusted) return rarity;
     r -= adjusted;
   }
-  return 'common';
+  return 'rare';
 }
 const RECRUIT_BASE_COST = 10;
 const RECRUIT_GROWTH = 1.1;

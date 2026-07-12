@@ -351,7 +351,7 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
       const rolled = rollRecruitRarity(ancientBonus(ancientLevelsByKey, 'recruitLuck'));
       let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
       if (!pool.length) {
-        for (const r of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
+        for (const r of ['rare', 'epic', 'legendary', 'mythic']) {
           pool = await tx.character.findMany({ where: { rarity: r, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
           if (pool.length) break;
         }
