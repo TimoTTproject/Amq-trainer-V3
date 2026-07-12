@@ -26,7 +26,11 @@ const {
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
-  prestigeMultiplier,
+  wisdomForPrestige,
+  ANCIENTS,
+  ancientCost,
+  ancientByKey,
+  ancientBonus,
   RECRUIT_WEIGHTS,
   rollRecruitRarity,
   recruitCost,
@@ -47,9 +51,26 @@ test('rollRecruitRarity : ne renvoie que des raretés connues, pondération prop
   for (let i = 0; i < 200; i++) assert.ok(known.has(rollRecruitRarity()));
 });
 
-test('recruitCost : croît avec le nombre déjà recruté, jamais nul', () => {
+test('rollRecruitRarity : le bonus de chance (Ancient) réduit statistiquement la part du commun', () => {
+  const known = new Set(RECRUIT_WEIGHTS.map(([r]) => r));
+  const N = 3000;
+  let commonBase = 0, commonBoosted = 0;
+  for (let i = 0; i < N; i++) {
+    const a = rollRecruitRarity();
+    const b = rollRecruitRarity(0.9);
+    assert.ok(known.has(a));
+    assert.ok(known.has(b));
+    if (a === 'common') commonBase++;
+    if (b === 'common') commonBoosted++;
+  }
+  assert.ok(commonBoosted < commonBase);
+});
+
+test('recruitCost : croît avec le nombre déjà recruté, jamais nul ; la remise (Ancient) réduit sans jamais atteindre 0', () => {
   assert.ok(recruitCost(0) > 0);
   assert.ok(recruitCost(20) > recruitCost(0));
+  assert.ok(recruitCost(0, 0.5) < recruitCost(0));
+  assert.ok(recruitCost(0, 999) >= 1); // plancher, jamais gratuit même avec un bonus aberrant
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {
@@ -105,18 +126,20 @@ test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DEC
   assert.equal(atLast.next, null); // plus de palier au-delà, mais le niveau continue de grimper
 });
 
-test('prodMultiplier/prodUpgradeCost : croissants, plafonnés à PROD_LEVEL_MAX', () => {
+test('prodMultiplier/prodUpgradeCost : croissants, plafonnés à PROD_LEVEL_MAX ; bonus d\'Ancient cumulable', () => {
   assert.equal(prodMultiplier(0), 1);
   assert.ok(prodMultiplier(5) > prodMultiplier(0));
   assert.equal(prodMultiplier(PROD_LEVEL_MAX), prodMultiplier(PROD_LEVEL_MAX + 10)); // plafonné
   assert.ok(prodUpgradeCost(5) > prodUpgradeCost(0));
+  assert.ok(prodMultiplier(5, 0.2) > prodMultiplier(5));
 });
 
-test('clickYield/clickUpgradeCost : croissants, plafonnés à CLICK_LEVEL_MAX', () => {
+test('clickYield/clickUpgradeCost : croissants, plafonnés à CLICK_LEVEL_MAX ; bonus d\'Ancient cumulable', () => {
   assert.ok(clickYield(0) > 0);
   assert.ok(clickYield(5) > clickYield(0));
   assert.equal(clickYield(CLICK_LEVEL_MAX), clickYield(CLICK_LEVEL_MAX + 10));
   assert.ok(clickUpgradeCost(5) > clickUpgradeCost(0));
+  assert.ok(clickYield(5, 0.5) > clickYield(5));
 });
 
 test('slotUpgradeCost : croît à chaque emplacement débloqué au-delà des gratuits', () => {
@@ -134,6 +157,11 @@ test('pendingEssence : 0 sans taux ni horodatage, sinon linéaire et plafonné �
 
   const wayBefore = new Date(now.getTime() - OFFLINE_CAP_MS - 3600000);
   assert.equal(pendingEssence(wayBefore, 2, now), (OFFLINE_CAP_MS / 1000) * 2); // plafonné à 12h
+
+  // Plafond étendu (Ancient « Bourse Profonde ») : le surplus au-delà de
+  // OFFLINE_CAP_MS mais dans le nouveau plafond compte désormais.
+  const extendedCap = OFFLINE_CAP_MS + 3600000;
+  assert.equal(pendingEssence(wayBefore, 2, now, extendedCap), (extendedCap / 1000) * 2);
 });
 
 test('milestoneTierForLevel/milestoneReward : un palier tous les MILESTONE_INTERVAL niveaux, récompense croissante', () => {
@@ -145,9 +173,24 @@ test('milestoneTierForLevel/milestoneReward : un palier tous les MILESTONE_INTER
   assert.ok(milestoneReward(2) > milestoneReward(1));
 });
 
-test('prestigeMultiplier : +10%/niveau, permanent et illimité ; seuil minimum exposé', () => {
-  assert.equal(prestigeMultiplier(0), 1);
-  assert.ok(prestigeMultiplier(1) > 1);
-  assert.ok(prestigeMultiplier(10) > prestigeMultiplier(1));
+test('wisdomForPrestige : croît avec le niveau du Dojo au moment du Prestige, jamais nul ; seuil minimum exposé', () => {
   assert.ok(PRESTIGE_MIN_DOJO_LEVEL > 1); // pas prestigeable dès le niveau 1 (rien à gagner)
+  assert.equal(wisdomForPrestige(0), 1); // plancher : jamais un Prestige pour rien
+  assert.ok(wisdomForPrestige(50) > wisdomForPrestige(PRESTIGE_MIN_DOJO_LEVEL));
+});
+
+test('ancientCost : croissant, jamais nul, pas de plafond (puits de très long terme)', () => {
+  assert.ok(ancientCost(0) > 0);
+  assert.ok(ancientCost(20) > ancientCost(0));
+});
+
+test('ancientByKey/ancientBonus : liste fermée, bonus cumulé par type, absent = 0 (pas acheté)', () => {
+  for (const a of ANCIENTS) assert.equal(ancientByKey(a.key), a);
+  assert.equal(ancientByKey('inexistant'), null);
+
+  const prodKey = ANCIENTS.find((a) => a.kind === 'prodMult').key;
+  const levels = new Map([[prodKey, 5]]);
+  assert.equal(ancientBonus(levels, 'prodMult'), ancientByKey(prodKey).effectPerLevel * 5);
+  assert.equal(ancientBonus(levels, 'clickMult'), 0); // absent de la map → pas acheté, pas 1 niveau gratuit
+  assert.equal(ancientBonus(new Map(), 'prodMult'), 0);
 });

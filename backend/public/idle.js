@@ -134,6 +134,8 @@ async function refreshIdleState() {
   } catch (e) {
     document.getElementById('idle-slots').innerHTML = `<p class="hint">${escapeHtml(e.message)}</p>`;
     document.getElementById('idle-upgrades').innerHTML = '';
+    const ancientsBox = document.getElementById('idle-ancients');
+    if (ancientsBox) ancientsBox.innerHTML = '';
     return;
   }
   renderIdleState(state);
@@ -155,14 +157,15 @@ function renderIdleState(state) {
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
   if (xpTotal) xpTotal.textContent = idleFormatNumber(state.dojo.xpTotal);
-  // Multiplicateur TOTAL affiché sur la scène : Discipline × niveau du Dojo × Prestige.
+  // Multiplicateur TOTAL affiché sur la scène : Discipline (Ancients inclus) × niveau du Dojo.
   const mult = document.getElementById('idle-mult-val');
-  if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier * state.dojo.prestige.multiplier).toFixed(2)}`;
+  if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier).toFixed(2)}`;
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleMainHero(state);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
+  renderIdleAncients(state.ancients);
   renderIdleRecruit(state.recruit, state.essence);
 }
 
@@ -492,7 +495,6 @@ function renderIdleMilestone(dojo) {
 
 function renderIdlePrestige(dojo) {
   document.getElementById('idle-prestige-lvl').textContent = `Nv. ${dojo.prestige.level}`;
-  document.getElementById('idle-prestige-mult').textContent = dojo.prestige.multiplier.toFixed(2);
   const btn = document.getElementById('idle-prestige-btn');
   const hint = document.getElementById('idle-prestige-hint');
   if (btn) btn.disabled = !dojo.prestige.eligible;
@@ -501,6 +503,38 @@ function renderIdlePrestige(dojo) {
       ? ''
       : `Débloqué au niveau ${dojo.prestige.minLevel} du Dojo (actuellement ${dojo.level}).`;
   }
+}
+
+// Description lisible d'un Ancient selon son `kind` (cf. ANCIENTS côté serveur,
+// src/idle/idle.js) — même logique de mise en forme que renderIdleUpgrades,
+// juste une monnaie différente (Sagesse, jamais l'essence).
+const IDLE_ANCIENT_DESC = {
+  prodMult: (v) => `+${(v * 100).toFixed(0)}% production totale / niveau`,
+  clickMult: (v) => `+${(v * 100).toFixed(0)}% puissance de clic / niveau`,
+  offlineCapMs: (v) => `+${Math.round(v / 60000)} min de plafond hors-ligne / niveau`,
+  recruitLuck: (v) => `+${(v * 100).toFixed(1)}% chance de recrue rareté sup. / niveau`,
+  recruitDiscount: (v) => `−${(v * 100).toFixed(1)}% coût de recrutement / niveau`,
+};
+// Ancients : arbre de Prestige PERMANENT (jamais reset), payé en Sagesse —
+// pas en essence. Mêmes cartes visuelles que renderIdleUpgrades (idle-upgrade-card),
+// bouton distinct (data-ancient) pour router vers /api/idle/ancient.
+function renderIdleAncients(ancients) {
+  const box = document.getElementById('idle-ancients');
+  const points = document.getElementById('idle-wisdom-points');
+  if (points) points.textContent = idleFormatNumber(ancients.points);
+  if (!box) return;
+  box.innerHTML = ancients.items.map((it) => {
+    const desc = (IDLE_ANCIENT_DESC[it.kind] || (() => ''))(it.effectPerLevel);
+    return `
+    <div class="idle-upgrade-card">
+      <div class="idle-upgrade-ico"><i class="fas ${it.icon}"></i></div>
+      <div class="idle-upgrade-info">
+        <h4>${escapeHtml(it.name)} <span class="idle-upgrade-lvl">Nv. ${it.level}</span></h4>
+        <p>${desc}</p>
+      </div>
+      <button class="btn-secondary idle-ancient-btn" data-ancient="${it.key}"${ancients.points < it.cost ? ' disabled' : ''}>${idleFormatNumber(it.cost)} <i class="fas fa-brain"></i></button>
+    </div>`;
+  }).join('');
 }
 
 // Ligne de héros compacte façon Clicker Heroes — volontairement PAS cardHTML()
@@ -636,6 +670,20 @@ async function levelUpIdleSlot(slotIndex, slotEl) {
 async function buyIdleUpgrade(type, cardEl) {
   try {
     await api('/api/idle/upgrade', { method: 'POST', body: JSON.stringify({ type }) });
+  } catch (e) {
+    alert(e.message);
+    return;
+  }
+  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (cardEl) idleCardBump(cardEl);
+  refreshIdleState();
+}
+
+// Achète (ou monte) un Ancient — payé en Sagesse (wisdomPoints), jamais en
+// essence, cf. POST /api/idle/ancient.
+async function buyIdleAncient(key, cardEl) {
+  try {
+    await api('/api/idle/ancient', { method: 'POST', body: JSON.stringify({ key }) });
   } catch (e) {
     alert(e.message);
     return;
@@ -807,6 +855,10 @@ function initIdleUI() {
   document.getElementById('idle-upgrades')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.idle-upgrade-btn');
     if (btn) buyIdleUpgrade(btn.dataset.upgrade, btn.closest('.idle-upgrade-card'));
+  });
+  document.getElementById('idle-ancients')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.idle-ancient-btn');
+    if (btn) buyIdleAncient(btn.dataset.ancient, btn.closest('.idle-upgrade-card'));
   });
   document.getElementById('idle-picker-list')?.addEventListener('click', (e) => {
     const card = e.target.closest('[data-cid]');

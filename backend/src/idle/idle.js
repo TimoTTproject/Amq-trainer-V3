@@ -62,37 +62,54 @@ const RECRUIT_WEIGHTS = [
   ['mythic', 1],
 ];
 const RECRUIT_TOTAL_WEIGHT = RECRUIT_WEIGHTS.reduce((s, [, w]) => s + w, 0);
-function rollRecruitRarity() {
+// `luckBonus` (0-0.9, cf. Ancient « Œil du Recruteur ») déplace une fraction
+// du poids du commun vers les autres raretés, proportionnellement à leur
+// poids respectif — la somme totale des poids ne bouge pas.
+function rollRecruitRarity(luckBonus) {
+  const bonus = Math.max(0, Math.min(0.9, luckBonus || 0));
+  const commonWeight = RECRUIT_WEIGHTS[0][1];
+  const shift = commonWeight * bonus;
+  const nonCommonTotal = RECRUIT_TOTAL_WEIGHT - commonWeight;
   let r = Math.random() * RECRUIT_TOTAL_WEIGHT;
   for (const [rarity, w] of RECRUIT_WEIGHTS) {
-    if (r < w) return rarity;
-    r -= w;
+    const adjusted = rarity === 'common' ? w - shift : w + shift * (w / nonCommonTotal);
+    if (r < adjusted) return rarity;
+    r -= adjusted;
   }
   return 'common';
 }
 const RECRUIT_BASE_COST = 10;
 const RECRUIT_GROWTH = 1.1;
-// `count` = nombre de personnages déjà recrutés par le joueur.
-function recruitCost(count) {
-  return Math.round(RECRUIT_BASE_COST * Math.pow(RECRUIT_GROWTH, Math.max(0, count || 0)));
+// `count` = nombre de personnages déjà recrutés par le joueur. `discountBonus`
+// (0-0.6, cf. Ancient « Marché Facile ») réduit le coût multiplicativement —
+// plancher à 1 essence, jamais gratuit.
+function recruitCost(count, discountBonus) {
+  const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
+  const base = RECRUIT_BASE_COST * Math.pow(RECRUIT_GROWTH, Math.max(0, count || 0));
+  return Math.max(1, Math.round(base * (1 - discount)));
 }
 
 // Amélioration « Discipline » : multiplicateur de production globale.
+// `ancientBonus` (cf. Ancient « Discipline Éternelle ») s'applique par-dessus,
+// multiplicativement.
 const PROD_LEVEL_BONUS = 0.08; // +8% par niveau
 const PROD_LEVEL_MAX = 40;
-function prodMultiplier(level) {
-  return 1 + Math.min(level, PROD_LEVEL_MAX) * PROD_LEVEL_BONUS;
+function prodMultiplier(level, ancientBonus) {
+  const base = 1 + Math.min(level, PROD_LEVEL_MAX) * PROD_LEVEL_BONUS;
+  return base * (1 + Math.max(0, ancientBonus || 0));
 }
 function prodUpgradeCost(level) {
   return Math.round(50 * Math.pow(1.6, level));
 }
 
-// Amélioration « Concentration » : puissance du clic manuel.
+// Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
+// (cf. Ancient « Poigne du Maître ») s'applique par-dessus, multiplicativement.
 const CLICK_BASE = 1;
 const CLICK_LEVEL_BONUS = 1;
 const CLICK_LEVEL_MAX = 30;
-function clickYield(level) {
-  return CLICK_BASE + Math.min(level, CLICK_LEVEL_MAX) * CLICK_LEVEL_BONUS;
+function clickYield(level, ancientBonus) {
+  const base = CLICK_BASE + Math.min(level, CLICK_LEVEL_MAX) * CLICK_LEVEL_BONUS;
+  return Math.round(base * (1 + Math.max(0, ancientBonus || 0)));
 }
 function clickUpgradeCost(level) {
   return Math.round(30 * Math.pow(1.5, level));
@@ -108,11 +125,12 @@ function slotUpgradeCost(nextSlotIndex) {
 // encourage à revenir régulièrement sans punir une grosse pause.
 const OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // 12h
 
-// Essence en attente depuis `lastCollectAt`, plafonnée à OFFLINE_CAP_MS, pour un
+// Essence en attente depuis `lastCollectAt`, plafonnée à `capMs` (défaut
+// OFFLINE_CAP_MS ; cf. Ancient « Bourse Profonde » pour l'étendre), pour un
 // taux de production total `totalRate` (essence/s).
-function pendingEssence(lastCollectAt, totalRate, now = new Date()) {
+function pendingEssence(lastCollectAt, totalRate, now = new Date(), capMs = OFFLINE_CAP_MS) {
   if (!lastCollectAt || totalRate <= 0) return 0;
-  const elapsedMs = Math.min(OFFLINE_CAP_MS, Math.max(0, now.getTime() - new Date(lastCollectAt).getTime()));
+  const elapsedMs = Math.min(capMs, Math.max(0, now.getTime() - new Date(lastCollectAt).getTime()));
   return (elapsedMs / 1000) * totalRate;
 }
 
@@ -212,14 +230,46 @@ function milestoneReward(tier) {
 }
 
 // ── Prestige (« Retraite du Maître ») : remet à zéro la RUN (essence,
-// emplacements, niveaux de personnage, Discipline/Concentration) contre un
-// bonus de production PERMANENT, cumulable indéfiniment. Le niveau du Dojo
-// (donc son décor) et les jalons déjà réclamés sont conservés — seule la
-// puissance personnelle du joueur repart de zéro, pas le lieu lui-même.
+// emplacements, niveaux de personnage, Discipline/Concentration). Le niveau
+// du Dojo (donc son décor) et les jalons déjà réclamés sont conservés — seule
+// la puissance personnelle du joueur repart de zéro, pas le lieu lui-même.
+// En échange, crédite de la Sagesse (voir ANCIENTS ci-dessous) — PAS de
+// multiplicateur automatique : depuis la refonte, c'est aux Ancients de
+// convertir cette Sagesse en puissance, avec de vrais choix à faire.
 const PRESTIGE_MIN_DOJO_LEVEL = 10; // en dessous, rien à gagner à prestiger (on perdrait plus qu'on ne gagne)
-const PRESTIGE_BONUS_PER_LEVEL = 0.1; // +10% de production permanente par Prestige
-function prestigeMultiplier(level) {
-  return 1 + Math.max(0, level || 0) * PRESTIGE_BONUS_PER_LEVEL;
+// Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
+// généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
+// rapporter de nul (toujours au moins 1 point).
+function wisdomForPrestige(dojoLevel) {
+  return Math.max(1, Math.floor((dojoLevel || 1) / 5));
+}
+
+// ── Ancients : arbre de Prestige PERMANENT (jamais reset, y compris par un
+// nouveau Prestige), payé en Sagesse. Chaque effet se branche en paramètre
+// OPTIONNEL sur une fonction pure déjà existante (`prodMultiplier`,
+// `clickYield`, `pendingEssence`, `rollRecruitRarity`, `recruitCost`) — pas
+// de nouvelle couche de calcul, juste un bonus de plus par-dessus.
+const ANCIENT_BASE_COST = 1;
+const ANCIENT_COST_GROWTH = 1.3; // pas de plafond : puits de Sagesse à très long terme
+function ancientCost(level) {
+  return Math.round(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)));
+}
+const ANCIENTS = [
+  { key: 'discipline_eternelle', name: 'Discipline Éternelle', icon: 'fa-infinity', kind: 'prodMult', effectPerLevel: 0.02 },
+  { key: 'poigne_maitre', name: 'Poigne du Maître', icon: 'fa-hand-back-fist', kind: 'clickMult', effectPerLevel: 0.03 },
+  { key: 'bourse_profonde', name: 'Bourse Profonde', icon: 'fa-vault', kind: 'offlineCapMs', effectPerLevel: 20 * 60 * 1000 },
+  { key: 'oeil_recruteur', name: 'Œil du Recruteur', icon: 'fa-eye', kind: 'recruitLuck', effectPerLevel: 0.015 },
+  { key: 'marche_facile', name: 'Marché Facile', icon: 'fa-hand-holding-dollar', kind: 'recruitDiscount', effectPerLevel: 0.015 },
+];
+function ancientByKey(key) {
+  return ANCIENTS.find((a) => a.key === key) || null;
+}
+// Bonus cumulé de tous les Ancients d'un `kind` donné, à partir d'une Map
+// clé→niveau (niveaux ABSENTS de la map = pas encore achetés = 0, pas 1).
+function ancientBonus(levelsByKey, kind) {
+  return ANCIENTS
+    .filter((a) => a.kind === kind)
+    .reduce((sum, a) => sum + a.effectPerLevel * Math.max(0, levelsByKey.get(a.key) || 0), 0);
 }
 
 module.exports = {
@@ -269,6 +319,11 @@ module.exports = {
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
-  PRESTIGE_BONUS_PER_LEVEL,
-  prestigeMultiplier,
+  wisdomForPrestige,
+  ANCIENT_BASE_COST,
+  ANCIENT_COST_GROWTH,
+  ancientCost,
+  ANCIENTS,
+  ancientByKey,
+  ancientBonus,
 };

@@ -9,8 +9,8 @@ const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
-  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_DOJO_LEVEL, recruitCost,
-  START_SLOTS, MAX_SLOTS,
+  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_DOJO_LEVEL, wisdomForPrestige,
+  ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -18,7 +18,8 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleMilestoneClaimed: 0, prestigeLevel: 0, ...over,
+    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleMilestoneClaimed: 0, prestigeLevel: 0,
+    wisdomPoints: 0, ...over,
   };
 }
 
@@ -30,12 +31,14 @@ test.after(() => app.close());
 test.beforeEach(() => {
   prisma.idleSlot.findMany = async () => [];
   prisma.dojoRecruit.count = async () => 0;
-  // buildState() appelle systématiquement decorArtForTheme() : sans stub par
-  // défaut, tous les tests existants (qui ne testent pas l'habillage visuel)
-  // planteraient sur "prisma.character.findMany non stubbé". Le cache mémoire
-  // du module doit aussi être vidé, sinon un test pollue le suivant.
+  // buildState()/withSettle() appellent systématiquement decorArtForTheme()
+  // et loadAncientLevels() : sans stub par défaut, tous les tests existants
+  // (qui ne testent ni l'habillage visuel ni les Ancients) planteraient sur
+  // "non stubbé". Le cache mémoire du module doit aussi être vidé, sinon un
+  // test pollue le suivant.
   prisma.character.findMany = async () => [];
   prisma.song.findFirst = async () => null;
+  prisma.ancientLevel.findMany = async () => [];
   idleRoutes.decorArtCache.clear();
 });
 
@@ -62,6 +65,30 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(res.json.recruit.nextCost, recruitCost(0));
   assert.equal(res.json.battle.stage, 1);
   assert.equal(res.json.battle.xpIntoStage, 0);
+  assert.equal(res.json.ancients.points, 0);
+  assert.equal(res.json.ancients.items.length, ANCIENTS.length);
+  res.json.ancients.items.forEach((it) => {
+    assert.equal(it.level, 0); // rien acheté par défaut
+    assert.equal(it.cost, ancientCost(0));
+  });
+});
+
+test('GET /state : reflète les niveaux d\'Ancients déjà achetés (bonus appliqués, coût du niveau suivant)', async () => {
+  const key = ANCIENTS[0].key;
+  const user = dbUser({ wisdomPoints: 7 });
+  prisma.user.findUnique = async () => user;
+  prisma.ancientLevel.findMany = async () => [{ ancientKey: key, level: 3 }];
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.ancients.points, 7);
+  const item = res.json.ancients.items.find((it) => it.key === key);
+  assert.equal(item.level, 3);
+  assert.equal(item.cost, ancientCost(3));
+  // Discipline Éternelle (prodMult) : le bonus doit se refléter dans le
+  // multiplicateur de production affiché.
+  if (ANCIENTS[0].kind === 'prodMult') {
+    assert.ok(res.json.prod.multiplier > 1);
+  }
 });
 
 test('GET /state : le stage de combat avance BEAUCOUP plus vite que le niveau de Dojo, à essence égale', async () => {
@@ -435,7 +462,7 @@ test('claim-milestone : un palier déjà réclamé ne peut pas l\'être une seco
   assert.equal(res.status, 400);
 });
 
-test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/emplacements/améliorations) et incrémente prestigeLevel', async () => {
+test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/emplacements/améliorations), incrémente prestigeLevel et crédite la Sagesse', async () => {
   const tooLow = dbUser({ essenceEarnedTotal: 0 });
   prisma.user.findUnique = async () => tooLow;
   prisma.user.update = async () => tooLow;
@@ -462,6 +489,9 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(userUpdate.idleClickLevel, 0);
   assert.equal(userUpdate.prestigeLevel.increment, 1);
   assert.equal(userUpdate.essenceEarnedTotal, undefined); // le niveau du Dojo (le lieu) n'est jamais reset
+  // Plus de multiplicateur automatique : la Sagesse gagnée dépend du niveau
+  // du Dojo AU MOMENT du Prestige, à dépenser ensuite dans les Ancients.
+  assert.equal(userUpdate.wisdomPoints.increment, wisdomForPrestige(PRESTIGE_MIN_DOJO_LEVEL));
 });
 
 test("prestige : solde la production en attente AVANT le reset — elle compte dans l'XP du Dojo au lieu d'être perdue", async () => {
@@ -482,4 +512,55 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   // 2e appel = le reset lui-même : ne touche jamais essenceEarnedTotal.
   assert.equal(updateCalls[1].essenceEarnedTotal, undefined);
   assert.equal(updateCalls[1].essence, 0);
+});
+
+test('ancient : refuse une clé inconnue', async () => {
+  const res = await app.request('/api/idle/ancient', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { key: 'inexistant' },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /invalide/);
+});
+
+test('ancient : refuse si Sagesse insuffisante, sinon débite selon ancientCost et crée/incrémente AncientLevel', async () => {
+  const key = ANCIENTS[0].key;
+  const poor = dbUser({ wisdomPoints: ancientCost(0) - 1 });
+  prisma.user.findUnique = async () => poor;
+  prisma.ancientLevel.findUnique = async () => null; // jamais acheté → niveau 0
+  const poorRes = await app.request('/api/idle/ancient', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { key },
+  });
+  assert.equal(poorRes.status, 400);
+  assert.match(poorRes.json.error, /insuffisante/);
+
+  const rich = dbUser({ wisdomPoints: ancientCost(0) });
+  prisma.user.findUnique = async () => rich;
+  prisma.ancientLevel.findUnique = async () => null;
+  let userDecrement = null;
+  let upsertArgs = null;
+  prisma.user.update = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return rich; };
+  prisma.ancientLevel.upsert = async (args) => { upsertArgs = args; return {}; };
+  const okRes = await app.request('/api/idle/ancient', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { key },
+  });
+  assert.equal(okRes.status, 200);
+  assert.equal(userDecrement, ancientCost(0));
+  assert.equal(upsertArgs.create.ancientKey, key);
+  assert.equal(upsertArgs.create.level, 1);
+  assert.equal(upsertArgs.update.level.increment, 1);
+});
+
+test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas ancientCost(0)', async () => {
+  const key = ANCIENTS[0].key;
+  const user = dbUser({ wisdomPoints: ancientCost(4) });
+  prisma.user.findUnique = async () => user;
+  prisma.ancientLevel.findUnique = async () => ({ level: 4 });
+  let userDecrement = null;
+  prisma.user.update = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return user; };
+  prisma.ancientLevel.upsert = async () => ({});
+  const res = await app.request('/api/idle/ancient', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { key },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(userDecrement, ancientCost(4));
 });

@@ -32,7 +32,11 @@ const {
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
-  prestigeMultiplier,
+  wisdomForPrestige,
+  ANCIENTS,
+  ancientByKey,
+  ancientCost,
+  ancientBonus,
   rollRecruitRarity,
   recruitCost,
 } = require('./idle');
@@ -109,12 +113,18 @@ async function loadSlots(tx, userId) {
   });
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prestigeLevel) {
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus) {
   const base = slots.reduce(
     (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) : sum),
     0
   );
-  return base * prodMultiplier(prodLevel) * dojoLevelMultiplier(dojoLevel) * prestigeMultiplier(prestigeLevel);
+  return base * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel);
+}
+
+// Niveaux d'Ancients du joueur (Map clé→niveau, absent = pas encore acheté).
+async function loadAncientLevels(client, userId) {
+  const rows = await client.ancientLevel.findMany({ where: { userId }, select: { ancientKey: true, level: true } });
+  return new Map(rows.map((r) => [r.ancientKey, r.level]));
 }
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
@@ -129,14 +139,19 @@ async function withSettle(userId, mutate) {
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) throw new IdleError(404, 'Compte introuvable');
     const slots = await loadSlots(tx, userId);
+    const ancientLevelsByKey = await loadAncientLevels(tx, userId);
     const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, user.prestigeLevel);
-    const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'));
+    const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
+    const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
     const settledUser = await tx.user.update({
       where: { id: userId },
       data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
     });
-    if (mutate) await mutate(tx, settledUser);
+    // `ancientLevelsByKey` passé au mutateur : certaines routes (recrutement)
+    // ont besoin d'autres bonus d'Ancients (chance, remise) que celui déjà
+    // appliqué ci-dessus à la production.
+    if (mutate) await mutate(tx, settledUser, ancientLevelsByKey);
     return settledUser;
   });
 }
@@ -148,17 +163,22 @@ async function buildState(userId) {
     where: { id: userId },
     select: {
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
-      essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true,
+      essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
     },
   });
   if (!user) return null;
-  const [slots, recruitCount] = await Promise.all([
+  const [slots, recruitCount, ancientLevelsByKey] = await Promise.all([
     loadSlots(prisma, userId),
     prisma.dojoRecruit.count({ where: { userId } }),
+    loadAncientLevels(prisma, userId),
   ]);
+  const prodAncientBonus = ancientBonus(ancientLevelsByKey, 'prodMult');
+  const clickAncientBonus = ancientBonus(ancientLevelsByKey, 'clickMult');
+  const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
+  const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, user.prestigeLevel);
-  const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate));
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus);
+  const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
   const slotsOut = [];
@@ -200,12 +220,12 @@ async function buildState(userId) {
     pendingEssence: pending,
     totalRate,
     lastCollectAt: user.idleLastCollectAt,
-    offlineCapMs: OFFLINE_CAP_MS,
+    offlineCapMs,
     slots: slotsOut,
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount) },
+    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus) },
     battle: {
       stage,
       xpIntoStage,
@@ -214,15 +234,22 @@ async function buildState(userId) {
     },
     prod: {
       level: user.idleProdLevel,
-      multiplier: prodMultiplier(user.idleProdLevel),
+      multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
       nextCost: user.idleProdLevel < PROD_LEVEL_MAX ? prodUpgradeCost(user.idleProdLevel) : null,
       maxed: user.idleProdLevel >= PROD_LEVEL_MAX,
     },
     click: {
       level: user.idleClickLevel,
-      yield: clickYield(user.idleClickLevel),
+      yield: clickYield(user.idleClickLevel, clickAncientBonus),
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
+    },
+    ancients: {
+      points: user.wisdomPoints,
+      items: ANCIENTS.map((a) => {
+        const level = ancientLevelsByKey.get(a.key) || 0;
+        return { key: a.key, name: a.name, icon: a.icon, kind: a.kind, level, effectPerLevel: a.effectPerLevel, cost: ancientCost(level) };
+      }),
     },
     dojo: {
       level: dojoLevel,
@@ -239,9 +266,11 @@ async function buildState(userId) {
         available: milestoneTier > user.idleMilestoneClaimed,
         reward: milestoneTier > user.idleMilestoneClaimed ? milestoneReward(milestoneTier) : null,
       },
+      // Le multiplicateur plat automatique a disparu : la Sagesse gagnée au
+      // Prestige (cf. bloc `ancients` ci-dessus, `points`) se dépense
+      // maintenant volontairement dans les Ancients.
       prestige: {
         level: user.prestigeLevel,
-        multiplier: prestigeMultiplier(user.prestigeLevel),
         minLevel: PRESTIGE_MIN_DOJO_LEVEL,
         eligible: dojoLevel >= PRESTIGE_MIN_DOJO_LEVEL,
       },
@@ -289,12 +318,12 @@ router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
 router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
   let result;
   try {
-    await withSettle(req.user.id, async (tx, user) => {
+    await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const count = await tx.dojoRecruit.count({ where: { userId: user.id } });
-      const cost = recruitCost(count);
+      const cost = recruitCost(count, ancientBonus(ancientLevelsByKey, 'recruitDiscount'));
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
-      const rolled = rollRecruitRarity();
+      const rolled = rollRecruitRarity(ancientBonus(ancientLevelsByKey, 'recruitLuck'));
       let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
       if (!pool.length) {
         for (const r of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
@@ -451,14 +480,15 @@ router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, 
   res.json(await buildState(req.user.id));
 });
 
-// Prestige (« Retraite du Maître ») : reset la RUN contre un bonus de
-// production permanent (+PRESTIGE_BONUS_PER_LEVEL par niveau, cumulable à
-// l'infini). Le niveau du Dojo (essenceEarnedTotal), le roster recruté et les
-// jalons réclamés sont volontairement CONSERVÉS — seule la puissance
-// personnelle (essence, emplacements, améliorations) repart à zéro, pas le
-// lieu ni les personnages déjà recrutés. Passe par withSettle (comme toutes
-// les autres actions) pour que la production en attente soit soldée AVANT le
-// reset : sinon elle disparaissait sans même compter dans l'XP du Dojo.
+// Prestige (« Retraite du Maître ») : reset la RUN contre de la Sagesse
+// (voir wisdomForPrestige), dépensée ensuite dans les Ancients — plus de
+// multiplicateur automatique. Le niveau du Dojo (essenceEarnedTotal), le
+// roster recruté, les jalons réclamés ET les Ancients déjà achetés sont
+// volontairement CONSERVÉS — seule la puissance personnelle (essence,
+// emplacements, améliorations) repart à zéro, pas le lieu ni les personnages
+// déjà recrutés. Passe par withSettle (comme toutes les autres actions) pour
+// que la production en attente soit soldée AVANT le reset : sinon elle
+// disparaissait sans même compter dans l'XP du Dojo.
 router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   try {
     await withSettle(req.user.id, async (tx, user) => {
@@ -475,6 +505,7 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
           idleProdLevel: 0,
           idleClickLevel: 0,
           prestigeLevel: { increment: 1 },
+          wisdomPoints: { increment: wisdomForPrestige(dojoLevel) },
         },
       });
     });
@@ -490,13 +521,43 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
 // l'arrondi si le clic est spammé, cf. commentaire de withSettle). Compte
 // aussi pour l'XP du Dojo (essenceEarnedTotal).
 router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COOLDOWN_MS, max: 1, name: 'idle-click' }), async (req, res) => {
-  const gained = clickYield(req.user.idleClickLevel || 0);
+  const ancientLevelsByKey = await loadAncientLevels(prisma, req.user.id);
+  const gained = clickYield(req.user.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult'));
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } },
     select: { essence: true },
   });
   res.json({ essence: user.essence, gained });
+});
+
+// Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse
+// (wisdomPoints — PAS l'essence, monnaie séparée), incrémente son niveau.
+// Indépendant de withSettle : les Ancients ne dépendent ni de la production
+// ni de l'essence, pas besoin de solder quoi que ce soit avant.
+router.post('/ancient', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+  const key = String(req.body?.key || '');
+  if (!ancientByKey(key)) return res.status(400).json({ error: 'Ancient invalide' });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id }, select: { wisdomPoints: true } });
+      if (!user) throw new IdleError(404, 'Compte introuvable');
+      const existing = await tx.ancientLevel.findUnique({ where: { userId_ancientKey: { userId: req.user.id, ancientKey: key } } });
+      const level = existing?.level || 0;
+      const cost = ancientCost(level);
+      if (user.wisdomPoints < cost) throw new IdleError(400, 'Sagesse insuffisante');
+      await tx.user.update({ where: { id: req.user.id }, data: { wisdomPoints: { decrement: cost } } });
+      await tx.ancientLevel.upsert({
+        where: { userId_ancientKey: { userId: req.user.id, ancientKey: key } },
+        update: { level: { increment: 1 } },
+        create: { userId: req.user.id, ancientKey: key, level: 1 },
+      });
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  res.json(await buildState(req.user.id));
 });
 
 // decorArtCache exposé UNIQUEMENT pour les tests (`.clear()` entre les cas —

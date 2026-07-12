@@ -114,10 +114,17 @@ model User {
   // du Dojo qui les débloque est lui aussi permanent).
   idleMilestoneClaimed Int @default(0)
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
-  // (essence, niveaux des emplacements, améliorations) contre un bonus de
-  // production PERMANENT — le niveau du Dojo (donc le décor) n'est PAS remis
-  // à zéro, voir POST /api/idle/prestige.
+  // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
+  // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
+  // prestigeLevel est un simple compteur (achievement) : il n'a plus d'effet
+  // automatique depuis l'introduction des Ancients ci-dessous, qui l'ont
+  // remplacé par des choix (voir src/idle/idle.js).
   prestigeLevel Int @default(0)
+  // Sagesse : monnaie PERMANENTE gagnée à chaque Prestige (jamais remise à
+  // zéro, contrairement à `essence`), dépensée dans les Ancients — l'arbre
+  // d'améliorations permanentes qui remplace l'ancien multiplicateur plat de
+  // Prestige par de vrais choix stratégiques.
+  wisdomPoints Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -152,6 +159,7 @@ model User {
   songsAdded      Song[]
   idleSlots       IdleSlot[]
   dojoRecruits    DojoRecruit[]
+  ancientLevels   AncientLevel[]
 }
 
 model PasswordResetToken {
@@ -787,5 +795,22 @@ model DojoRecruit {
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([userId, characterId])
+  @@index([userId])
+}
+
+// Niveau d'un Ancient (arbre de Prestige permanent, voir ANCIENTS dans
+// src/idle/idle.js) — `ancientKey` référence une clé de constante côté code,
+// pas une table séparée (liste fermée, faible cardinalité, pas besoin d'un
+// modèle Ancient dédié). Jamais remis à zéro, y compris par un Prestige
+// (contrairement à IdleSlot/essence/améliorations de la run).
+model AncientLevel {
+  id         Int    @id @default(autoincrement())
+  userId     String
+  ancientKey String
+  level      Int    @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ancientKey])
   @@index([userId])
 }
