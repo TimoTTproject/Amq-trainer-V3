@@ -243,7 +243,7 @@ function renderIdleTeamStrategy(state) {
   const stage = document.getElementById('idle-stage-team');
   if (stage) stage.innerHTML = active.slice(0, 4).map((c) => {
     const role = idleRoleFor(c); const img = c.imageUrl ? `style="background-image:url('${escapeHtml(c.imageUrl)}')"` : '';
-    return `<span class="idle-stage-ally" ${img} title="${escapeHtml(c.name)} · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i></span>`;
+    return `<span class="idle-stage-ally" ${img} title="${escapeHtml(c.name)} · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i><b>${escapeHtml(c.name.split(' ')[0])}</b></span>`;
   }).join('');
   const counts = new Map(); active.forEach((c) => { const key=c.series||'Crossover'; counts.set(key,(counts.get(key)||0)+1); });
   const best = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
@@ -800,6 +800,11 @@ async function collectIdle() {
 }
 
 async function clickIdle() {
+  // Retour immédiat : l'animation part au pointer-down, sans attendre le
+  // réseau. Le serveur reste autoritaire pour le solde et l'anti-spam.
+  const predicted = idleState?.click?.yield || 1;
+  idleClickFeedback(predicted);
+  idleSpawnFloat(`+${predicted}`, idleFloatTier(predicted));
   let r;
   try {
     r = await api('/api/idle/click', { method: 'POST', body: JSON.stringify({}) });
@@ -807,8 +812,6 @@ async function clickIdle() {
     return; // 429 (anti-spam) ou réseau : on ignore silencieusement, pas de quoi bloquer le joueur
   }
   if (idleState) idleState.essence = r.essence;
-  idleClickFeedback(r.gained);
-  idleSpawnFloat(`+${r.gained}`, idleFloatTier(r.gained));
   // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
   // le passage à la vague/zone suivante après le coup.
   refreshIdleState();
@@ -851,6 +854,7 @@ function idleCombatMotion(source) {
     setTimeout(() => el.classList.remove(cls), 420);
   };
   if (source === 'hero') restart(hero, 'idle-hero-attacking');
+  if (source === 'team') document.querySelectorAll('.idle-stage-ally').forEach((ally, i) => setTimeout(() => restart(ally, 'idle-ally-attacking'), i * 45));
   restart(boss, source === 'hero' ? 'idle-fighter-hit' : 'idle-fighter-team-hit');
   if (!scene) return;
   const impact = document.createElement('span');
@@ -1045,7 +1049,7 @@ function initIdleUI() {
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
-  document.getElementById('idle-scene')?.addEventListener('click', clickIdle);
+  document.getElementById('idle-scene')?.addEventListener('pointerdown', clickIdle);
   document.getElementById('idle-tabs')?.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-idle-tab]');
     if (tab) idleShowPanel(tab.dataset.idleTab);
