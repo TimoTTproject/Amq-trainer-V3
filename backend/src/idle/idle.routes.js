@@ -321,7 +321,7 @@ router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
   });
 });
 
-router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   try {
     await withSettle(req.user.id, null);
   } catch (e) {
@@ -335,7 +335,7 @@ router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
 // contre de l'essence — la SEULE façon d'obtenir un personnage dans le Dojo.
 // Exclut les personnages déjà recrutés par ce joueur ; si la rareté tirée est
 // épuisée (tout recruté), retombe sur les autres raretés dans l'ordre.
-router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   let result;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
@@ -368,7 +368,7 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
   res.json({ ...(await buildState(req.user.id)), recruited: result });
 });
 
-router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   const characterId = Number(req.body?.characterId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
@@ -406,7 +406,7 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'id
   res.json(await buildState(req.user.id));
 });
 
-router.post('/unassign', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/unassign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
     return res.status(400).json({ error: 'Emplacement invalide' });
@@ -422,7 +422,7 @@ router.post('/unassign', requireAuth, requireAdmin, rateLimit({ max: 30, name: '
   res.json(await buildState(req.user.id));
 });
 
-router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const type = req.body?.type;
   if (!['prod', 'click', 'slot'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
 
@@ -455,7 +455,7 @@ router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
 // Monte le niveau d'entraînement (illimité) du personnage assigné à un
 // emplacement, remis à 1 si on change de personnage sur cet emplacement
 // (cf. commentaire IdleSlot.level).
-router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
     return res.status(400).json({ error: 'Emplacement invalide' });
@@ -481,7 +481,7 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 30, name:
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
 // Dojo). Permanent : n'est jamais remis à zéro, y compris après une Prestige.
-router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   try {
     await withSettle(req.user.id, async (tx, user) => {
       const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
@@ -555,7 +555,7 @@ router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COO
 // (wisdomPoints — PAS l'essence, monnaie séparée), incrémente son niveau.
 // Indépendant de withSettle : les Ancients ne dépendent ni de la production
 // ni de l'essence, pas besoin de solder quoi que ce soit avant.
-router.post('/ancient', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mutate' }), async (req, res) => {
+router.post('/ancient', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const key = String(req.body?.key || '');
   if (!ancientByKey(key)) return res.status(400).json({ error: 'Ancient invalide' });
   try {
