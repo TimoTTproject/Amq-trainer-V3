@@ -798,9 +798,22 @@ model IdleSlot {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  equipments IdleEquipment[]
 
   @@unique([userId, slotIndex])
   @@index([userId])
+}
+
+model IdleEquipment {
+  id         Int      @id @default(autoincrement())
+  idleSlotId Int
+  kind       String
+  rarity     String
+  bonus      Float
+  obtainedAt DateTime @default(now())
+  idleSlot IdleSlot @relation(fields: [idleSlotId], references: [id], onDelete: Cascade)
+  @@unique([idleSlotId, kind])
+  @@index([idleSlotId])
 }
 
 model IdleMissionClaim {
