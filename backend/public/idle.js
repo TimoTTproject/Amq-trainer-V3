@@ -147,7 +147,7 @@ function renderIdleState(state) {
   const mult = document.getElementById('idle-mult-val');
   if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier * state.dojo.prestige.multiplier).toFixed(2)}`;
   renderIdleDecor(state.dojo, prev?.dojo);
-  renderIdleBattle(state.dojo);
+  renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleMainHero(state);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
@@ -174,19 +174,22 @@ function idleEtaSuffix(remainingXp) {
   return label ? ` · ${label}` : '';
 }
 
-// La boucle de combat réutilise la progression serveur du Dojo : chaque niveau
-// est un ennemi, chaque dixième niveau un boss, et les « PV » sont exactement
-// l'XP restant avant le niveau suivant. Aucun état parallèle ni récompense
-// locale : l'habillage Clicker Heroes reste fidèle aux données autoritaires.
-function renderIdleBattle(dojo) {
-  const stage = Math.max(1, dojo.level || 1);
+// La boucle de combat utilise le STAGE (cf. src/idle/idle.js), volontairement
+// découplé du niveau du Dojo : le Dojo reste lent (décor/paliers), le stage
+// s'incrémente en quelques secondes pour que le combat se sente vivant en
+// continu, façon Clicker Heroes. Chaque stage est un ennemi, chaque dixième
+// un boss, et les « PV » sont l'XP de stage restant avant le suivant. Le
+// gardien affiché (portrait) reste lui lié au DÉCOR (dojo), cohérent : le
+// visuel change par grand palier, le rythme de combat lui est indépendant.
+function renderIdleBattle(battle, dojo, prevBattle) {
+  const stage = Math.max(1, battle?.stage || 1);
   const wave = ((stage - 1) % 10) + 1;
   const zone = Math.floor((stage - 1) / 10) + 1;
   const boss = wave === 10;
-  const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
-  const total = Math.max(1, dojo.xpForNextLevel || 1);
+  const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
+  const total = Math.max(1, battle?.xpForNextStage || 1);
   const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
-  const guardianName = dojo.decor?.boss?.name || (boss ? 'Maître du palier' : 'Disciple du Dojo');
+  const guardianName = dojo?.decor?.boss?.name || (boss ? 'Maître du palier' : 'Disciple du Dojo');
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
   const titleEl = document.getElementById('idle-enemy-title');
@@ -197,6 +200,12 @@ function renderIdleBattle(dojo) {
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
   if (fill) fill.style.width = `${hpPct}%`;
+  // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
+  // léger et fréquent, distinct de la célébration (confettis) réservée aux
+  // vrais niveaux de Dojo — voir idleKillBurst plus bas (chantier 2).
+  if (prevBattle && stage > Math.max(1, prevBattle.stage || 1) && typeof idleKillBurst === 'function') {
+    idleKillBurst(stage - Math.max(1, prevBattle.stage || 1));
+  }
 }
 
 function renderIdleRecruit(recruit, essence) {
@@ -244,9 +253,8 @@ function renderIdleDecor(dojo, prevDojo) {
   document.getElementById('idle-decor-flavor').textContent = dojo.decor.flavor || '';
   idleRenderBackdrop(dojo.decor.backgroundUrl);
   idleRenderBoss(dojo.decor.boss);
-  const pct = Math.round((dojo.progress || 0) * 100);
-  const fill = document.getElementById('idle-xp-fill');
-  if (fill) fill.style.width = `${pct}%`;
+  // La barre #idle-xp-fill est la barre de PV du combat (cf. renderIdleBattle,
+  // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));

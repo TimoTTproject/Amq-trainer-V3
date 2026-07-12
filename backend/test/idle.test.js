@@ -18,6 +18,8 @@ const {
   dojoXpForLevel,
   dojoLevelForXp,
   dojoLevelMultiplier,
+  stageXpForLevel,
+  stageForXp,
   decorForLevel,
   DOJO_DECOR,
   MILESTONE_INTERVAL,
@@ -67,6 +69,24 @@ test('dojoXpForLevel/dojoLevelForXp : formule fermée, cohérente aux paliers', 
     assert.equal(dojoLevelForXp(xp), lvl, `pile au seuil du niveau ${lvl}`);
     assert.equal(dojoLevelForXp(xp - 1), lvl - 1, `juste avant le seuil du niveau ${lvl}`);
   }
+});
+
+test('stageXpForLevel/stageForXp : même formule fermée que le Dojo, cohérente aux paliers', () => {
+  assert.equal(stageXpForLevel(1), 0);
+  assert.equal(stageForXp(0), 1);
+  for (const lvl of [2, 3, 10, 50, 80]) {
+    const xp = stageXpForLevel(lvl);
+    assert.equal(stageForXp(xp), lvl, `pile au seuil du stage ${lvl}`);
+    assert.equal(stageForXp(xp - 1), lvl - 1, `juste avant le seuil du stage ${lvl}`);
+  }
+});
+
+test('stageXpForLevel : courbe bien plus douce que le Dojo (kills fréquents)', () => {
+  // Même formule, même point de départ (niveau/stage 2) : le stage doit être
+  // nettement moins cher à atteindre pour rythmer le combat plus vite que la
+  // progression du Dojo (décor, volontairement lente).
+  assert.ok(stageXpForLevel(2) < dojoXpForLevel(2));
+  assert.ok(stageXpForLevel(10) < dojoXpForLevel(10));
 });
 
 test('dojoLevelMultiplier : +1%/niveau, illimité', () => {

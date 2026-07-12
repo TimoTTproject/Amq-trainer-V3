@@ -25,6 +25,8 @@ const {
   dojoLevelForXp,
   dojoXpForLevel,
   dojoLevelMultiplier,
+  stageForXp,
+  stageXpForLevel,
   decorForLevel,
   DOJO_DECOR,
   milestoneTierForLevel,
@@ -185,6 +187,14 @@ async function buildState(userId) {
   const xpForNextLevel = dojoXpForLevel(dojoLevel + 1) - dojoXpForLevel(dojoLevel);
   const milestoneTier = milestoneTierForLevel(dojoLevel);
 
+  // Stage de combat : PAS le niveau du Dojo (trop lent, volontairement — il
+  // pilote le décor/les paliers). Le stage vient de la même source (l'essence
+  // gagnée à vie) mais avec une courbe bien plus douce, pour des kills toutes
+  // les quelques secondes façon Clicker Heroes (cf. commentaire dans idle.js).
+  const stage = stageForXp(user.essenceEarnedTotal);
+  const xpIntoStage = user.essenceEarnedTotal - stageXpForLevel(stage);
+  const xpForNextStage = stageXpForLevel(stage + 1) - stageXpForLevel(stage);
+
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -196,6 +206,12 @@ async function buildState(userId) {
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
     recruit: { count: recruitCount, nextCost: recruitCost(recruitCount) },
+    battle: {
+      stage,
+      xpIntoStage,
+      xpForNextStage,
+      progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
+    },
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel),

@@ -125,27 +125,47 @@ function pendingEssence(lastCollectAt, totalRate, now = new Date()) {
 // sans changer la forme de la courbe (toujours +35%/niveau au-delà).
 const DOJO_XP_BASE = 70; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
 const DOJO_XP_GROWTH = 1.35; // +35% de coût par niveau
-function dojoXpForLevel(level) {
+
+// Formule fermée générique (suite géométrique) — XP cumulé requis pour
+// atteindre `level` à partir d'un coût de base et d'une croissance par
+// niveau. O(1), pas de boucle : réutilisée pour le niveau du Dojo (lent,
+// prestigieux) ET le stage de combat (rapide, voir plus bas) — même
+// mathématique, juste deux jeux de constantes très différents.
+function xpForLevel(base, growth, level) {
   if (level <= 1) return 0;
-  return Math.round((DOJO_XP_BASE * (Math.pow(DOJO_XP_GROWTH, level - 1) - 1)) / (DOJO_XP_GROWTH - 1));
+  return Math.round((base * (Math.pow(growth, level - 1) - 1)) / (growth - 1));
 }
-function dojoLevelForXp(xp) {
+function levelForXp(base, growth, xp) {
   if (!xp || xp <= 0) return 1;
-  const raw = 1 + Math.log(1 + (xp * (DOJO_XP_GROWTH - 1)) / DOJO_XP_BASE) / Math.log(DOJO_XP_GROWTH);
+  const raw = 1 + Math.log(1 + (xp * (growth - 1)) / base) / Math.log(growth);
   let level = Math.max(1, Math.floor(raw + 1e-9));
   // log/exp ne sont pas exacts : petite correction pour rester cohérent avec
-  // dojoXpForLevel (la source de vérité), qui dérive sinon d'un niveau près
-  // des seuils. Converge en 0-1 itération dans l'immense majorité des cas.
-  while (dojoXpForLevel(level + 1) <= xp) level++;
-  while (level > 1 && dojoXpForLevel(level) > xp) level--;
+  // xpForLevel (la source de vérité), qui dérive sinon d'un niveau près des
+  // seuils. Converge en 0-1 itération dans l'immense majorité des cas.
+  while (xpForLevel(base, growth, level + 1) <= xp) level++;
+  while (level > 1 && xpForLevel(base, growth, level) > xp) level--;
   return level;
 }
+function dojoXpForLevel(level) { return xpForLevel(DOJO_XP_BASE, DOJO_XP_GROWTH, level); }
+function dojoLevelForXp(xp) { return levelForXp(DOJO_XP_BASE, DOJO_XP_GROWTH, xp); }
 
 // Bonus de production globale offert par le niveau du Dojo (cumulable avec Discipline).
 const DOJO_LEVEL_BONUS = 0.01; // +1% par niveau de Dojo
 function dojoLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * DOJO_LEVEL_BONUS;
 }
+
+// ── Stage de combat (vague) — décorrélé du niveau du Dojo : c'est LUI qui
+// pilote la scène (zone/vague/boss/PV, cf. public/idle.js#renderIdleBattle).
+// Le niveau du Dojo reste volontairement lent (décor, paliers, Prestige) ;
+// le stage doit au contraire s'incrémenter en quelques secondes dès le début
+// de partie pour que le combat se sente vivant en continu, façon Clicker
+// Heroes — même suite géométrique que le Dojo, courbe bien plus douce
+// (+5%/stage contre +35%/niveau de Dojo).
+const STAGE_XP_BASE = 6;
+const STAGE_XP_GROWTH = 1.05;
+function stageXpForLevel(stage) { return xpForLevel(STAGE_XP_BASE, STAGE_XP_GROWTH, stage); }
+function stageForXp(xp) { return levelForXp(STAGE_XP_BASE, STAGE_XP_GROWTH, xp); }
 
 // Décor du Dojo : change d'apparence par palier de niveau (voir public/idle.js).
 // La liste boucle visuellement au-delà du dernier palier (même thème, le
@@ -237,6 +257,10 @@ module.exports = {
   dojoLevelForXp,
   DOJO_LEVEL_BONUS,
   dojoLevelMultiplier,
+  STAGE_XP_BASE,
+  STAGE_XP_GROWTH,
+  stageXpForLevel,
+  stageForXp,
   DOJO_DECOR,
   decorForLevel,
   MILESTONE_INTERVAL,

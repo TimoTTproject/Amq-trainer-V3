@@ -60,6 +60,20 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(locked.unlockCost, slotUpgradeCost(locked.index));
   assert.equal(res.json.recruit.count, 0);
   assert.equal(res.json.recruit.nextCost, recruitCost(0));
+  assert.equal(res.json.battle.stage, 1);
+  assert.equal(res.json.battle.xpIntoStage, 0);
+});
+
+test('GET /state : le stage de combat avance BEAUCOUP plus vite que le niveau de Dojo, à essence égale', async () => {
+  // Assez d'essence gagnée pour plusieurs stages, mais pas de quoi bouger le
+  // niveau du Dojo (courbe bien plus raide) — prouve le découplage voulu :
+  // le combat doit rester vivant même quand le Dojo (décor) n'a pas bougé.
+  const user = dbUser({ essenceEarnedTotal: 40 });
+  prisma.user.findUnique = async () => user;
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.level, 1);
+  assert.ok(res.json.battle.stage > 1);
 });
 
 test('GET /state : la production hors-ligne est plafonnée et reflétée dans pendingEssence', async () => {
