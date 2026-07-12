@@ -1570,59 +1570,86 @@
     <!-- VUE DOJO (idle/clicker) — réservée aux admins en phase de test -->
     <div id="view-idle" class="hidden idle-space" data-decor="wood">
       <div id="idle-backdrop" class="idle-backdrop" aria-hidden="true"></div>
-      <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
       <div id="idle-particles" class="idle-particles" aria-hidden="true"></div>
-      <div class="idle-space-header">
-        <button class="idle-back" id="back-home-idle" title="Accueil" aria-label="Accueil"><i class="fas fa-arrow-left"></i></button>
-        <div class="idle-space-title">
-          <h2><i class="fas fa-fire"></i> Dojo <span class="hub-badge">BÊTA ADMIN</span></h2>
-          <p>Assigne tes personnages aux emplacements d'entraînement : ils génèrent de l'essence en continu, même hors-ligne.</p>
-        </div>
-      </div>
 
-      <div class="idle-decor-banner">
-        <div class="idle-decor-row">
-          <span class="idle-decor-ico" id="idle-decor-ico"><i class="fas fa-tree"></i></span>
-          <div class="idle-decor-info">
-            <b id="idle-decor-name">—</b>
-            <span class="idle-decor-lvl" id="idle-dojo-level">Niveau 1</span>
-          </div>
-          <span class="idle-decor-boss hidden" id="idle-decor-boss"></span>
-          <button class="idle-milestone-btn hidden" id="idle-milestone-btn"><i class="fas fa-gift"></i> Coffre <span id="idle-milestone-reward"></span></button>
-        </div>
-        <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
-        <div class="idle-decor-next" id="idle-decor-next"></div>
-        <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
-      </div>
+      <!-- HUD collant façon jeu mobile : retour · logo · essence · niveau · coffre -->
+      <header class="idle-hud">
+        <button class="idle-back" id="back-home-idle" title="Quitter le Dojo" aria-label="Quitter le Dojo"><i class="fas fa-arrow-left"></i></button>
+        <span class="idle-hud-logo">Dojo <span class="hub-badge">BÊTA</span></span>
+        <span class="idle-hud-badge idle-hud-essence" title="Essence"><i class="fas fa-mortar-pestle"></i> <b id="idle-essence-val">0</b></span>
+        <span class="idle-hud-badge" id="idle-hud-level">Nv. 1</span>
+        <button class="idle-milestone-btn hidden" id="idle-milestone-btn" title="Coffre de jalon"><i class="fas fa-gift"></i> <span id="idle-milestone-reward"></span></button>
+      </header>
 
       <div class="idle-content">
-        <div class="idle-top">
-          <div class="idle-essence">
-            <i class="fas fa-mortar-pestle"></i>
-            <div><b id="idle-essence-val">0</b><small>Essence</small></div>
+        <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
+        <section id="idle-panel-home" class="idle-panel">
+          <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
+            <div class="idle-scene-bg" id="idle-scene-bg"></div>
+            <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
+            <div class="idle-scene-head">
+              <h2 id="idle-decor-name">—</h2>
+              <div class="idle-scene-chips">
+                <span class="idle-chip" id="idle-dojo-level">Niveau 1</span>
+                <span class="idle-chip idle-chip-gold" id="idle-mult-val">×1.00</span>
+              </div>
+            </div>
+            <div class="idle-scene-boss hidden" id="idle-decor-boss"></div>
+            <div class="idle-floats" id="idle-floats" aria-hidden="true"></div>
+            <div class="idle-scene-foot">
+              <div class="idle-xp-bar"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
+              <div class="idle-decor-next" id="idle-decor-next"></div>
+            </div>
           </div>
-          <div class="idle-rate"><span id="idle-rate-val">0</span> /s</div>
-          <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
-          <button class="btn-secondary" id="idle-top-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
-          <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
-        </div>
+          <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
 
-        <h3 class="idle-section-title">Emplacements d'entraînement</h3>
-        <div id="idle-slots" class="idle-slots"></div>
-
-        <h3 class="idle-section-title">Améliorations</h3>
-        <div id="idle-upgrades" class="idle-upgrades"></div>
-
-        <h3 class="idle-section-title">Prestige</h3>
-        <div class="idle-prestige-card">
-          <div class="idle-prestige-info">
-            <b>Retraite du Maître <span id="idle-prestige-lvl" class="idle-upgrade-lvl">Nv. 0</span></b>
-            <p>Repars de zéro (essence, emplacements, améliorations) contre un bonus de production <b>permanent</b> (×<span id="idle-prestige-mult">1.00</span> actuellement). Le niveau du Dojo et les coffres réclamés sont conservés.</p>
-            <p class="hint" id="idle-prestige-hint"></p>
+          <div class="idle-actions">
+            <button class="btn-secondary" id="idle-collect-btn"><i class="fas fa-hand-holding"></i> Récolter <span id="idle-pending-val"></span></button>
+            <button class="btn-secondary" id="idle-top-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
+            <button class="btn-primary idle-click-btn" id="idle-click-btn"><i class="fas fa-hand-fist"></i> Entraîner <span id="idle-click-yield"></span></button>
           </div>
-          <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
-        </div>
+
+          <div class="idle-stats">
+            <div class="idle-stat-tile">
+              <span class="idle-stat-ico"><i class="fas fa-bolt"></i></span>
+              <div><b><span id="idle-rate-val">0</span>/s</b><small>Production</small></div>
+            </div>
+            <div class="idle-stat-tile">
+              <span class="idle-stat-ico fire"><i class="fas fa-fire"></i></span>
+              <div><b id="idle-xptotal-val">0</b><small>Essence à vie</small></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Onglet ÉQUIPE : emplacements d'entraînement -->
+        <section id="idle-panel-team" class="idle-panel hidden">
+          <h3 class="idle-section-title">Emplacements d'entraînement</h3>
+          <div id="idle-slots" class="idle-slots"></div>
+        </section>
+
+        <!-- Onglet AMÉLIORER : améliorations + prestige -->
+        <section id="idle-panel-upgrades" class="idle-panel hidden">
+          <h3 class="idle-section-title">Améliorations</h3>
+          <div id="idle-upgrades" class="idle-upgrades"></div>
+
+          <h3 class="idle-section-title">Prestige</h3>
+          <div class="idle-prestige-card">
+            <div class="idle-prestige-info">
+              <b>Retraite du Maître <span id="idle-prestige-lvl" class="idle-upgrade-lvl">Nv. 0</span></b>
+              <p>Repars de zéro (essence, emplacements, améliorations) contre un bonus de production <b>permanent</b> (×<span id="idle-prestige-mult">1.00</span> actuellement). Le niveau du Dojo et les coffres réclamés sont conservés.</p>
+              <p class="hint" id="idle-prestige-hint"></p>
+            </div>
+            <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
+          </div>
+        </section>
       </div>
+
+      <!-- Barre d'onglets bas d'écran, façon appli mobile -->
+      <nav class="idle-tabs" id="idle-tabs">
+        <button class="idle-tab active" data-idle-tab="home"><i class="fas fa-fire"></i><span>Dojo</span></button>
+        <button class="idle-tab" data-idle-tab="team"><i class="fas fa-users"></i><span>Équipe</span></button>
+        <button class="idle-tab" data-idle-tab="upgrades"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
+      </nav>
     </div>
 
     <!-- « Pendant ton absence » : résumé de la production accumulée hors-ligne -->
