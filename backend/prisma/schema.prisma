@@ -144,6 +144,7 @@ model User {
   promotionVotes  PromotionVote[]
   wishlist        Wishlist[]
   quests          Quest[]
+  idleMissionClaims IdleMissionClaim[]
   dailyStats      DailyStat[]
   coopWeekly      CoopWeeklyScore[]
   cosmetics       UserCosmetic[]
@@ -799,6 +800,17 @@ model IdleSlot {
 
   @@unique([userId, slotIndex])
   @@index([userId])
+}
+
+model IdleMissionClaim {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  missionKey String
+  period     String
+  claimedAt  DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, missionKey, period])
+  @@index([userId, period])
 }
 
 // Roster du Dojo : personnages RECRUTÉS via l'essence (voir POST

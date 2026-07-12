@@ -50,6 +50,23 @@ class IdleError extends Error {
   }
 }
 
+function idlePeriods(now = new Date()) {
+  const day = now.toISOString().slice(0, 10);
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return { day, week: d.toISOString().slice(0, 10) };
+}
+
+function idleMissionList(user, recruitCount, activeCount, stage) {
+  const p = idlePeriods();
+  return [
+    { key: 'daily_stage', period: p.day, cadence: 'Quotidienne', title: 'Atteindre la vague 10', progress: Math.min(stage, 10), target: 10, reward: 250 },
+    { key: 'daily_team', period: p.day, cadence: 'Quotidienne', title: 'Former une équipe de 3 héros', progress: Math.min(activeCount, 3), target: 3, reward: 400 },
+    { key: 'weekly_roster', period: p.week, cadence: 'Hebdomadaire', title: 'Posséder 8 recrues', progress: Math.min(recruitCount, 8), target: 8, reward: 2500 },
+    { key: 'weekly_master', period: p.week, cadence: 'Hebdomadaire', title: 'Atteindre le niveau 25 du Dojo', progress: Math.min(dojoLevelForXp(user.essenceEarnedTotal), 25), target: 25, reward: 5000 },
+  ];
+}
+
 // ── Habillage visuel du décor : un « gardien » mythique réel (portrait
 // AniList déjà en base) + un fond tiré d'un anime (jaquette déjà récupérée
 // par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée externe
@@ -236,6 +253,15 @@ async function buildState(userId) {
   const xpIntoStage = user.essenceEarnedTotal - stageXpForLevel(stage);
   const xpForNextStage = stageXpForLevel(stage + 1) - stageXpForLevel(stage);
 
+  const missionDefs = idleMissionList(user, recruitCount, slots.filter((s) => s.characterId).length, stage);
+  let claims = [];
+  try { claims = await prisma.idleMissionClaim.findMany({ where: { userId, OR: missionDefs.map((m) => ({ missionKey: m.key, period: m.period })) }, select: { missionKey: true, period: true } }); } catch (e) {
+    // Compatibilité pendant le court instant où l'application redémarre avant
+    // que la migration ne soit appliquée, ainsi qu'avec les doubles de tests.
+    if (e?.code && e.code !== 'P2021') throw e;
+  }
+  const claimed = new Set(claims.map((c) => `${c.missionKey}:${c.period}`));
+  const missions = missionDefs.map((m) => ({ ...m, completed: m.progress >= m.target, claimed: claimed.has(`${m.key}:${m.period}`) }));
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -254,6 +280,7 @@ async function buildState(userId) {
       xpForNextStage,
       progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
     },
+    missions,
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
@@ -562,6 +589,27 @@ router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 300
   const gained = clickYield(req.user.idleClickLevel || 0, ancientBonus(levels, 'clickMult')) * 25;
   await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
   res.json({ ok: true, gained, cooldownMs: 30000 });
+});
+
+router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mission' }), async (req, res) => {
+  const key = String(req.body?.key || '');
+  try {
+    const reward = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id } });
+      const [recruits, slots] = await Promise.all([tx.dojoRecruit.count({ where: { userId: req.user.id } }), tx.idleSlot.count({ where: { userId: req.user.id, characterId: { not: null } } })]);
+      const mission = idleMissionList(user, recruits, slots, stageForXp(user.essenceEarnedTotal)).find((m) => m.key === key);
+      if (!mission) throw new IdleError(400, 'Mission inconnue');
+      if (mission.progress < mission.target) throw new IdleError(400, 'Mission incomplète');
+      await tx.idleMissionClaim.create({ data: { userId: req.user.id, missionKey: key, period: mission.period } });
+      await tx.user.update({ where: { id: req.user.id }, data: { essence: { increment: mission.reward }, essenceEarnedTotal: { increment: mission.reward } } });
+      return mission.reward;
+    });
+    res.json({ ok: true, reward });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    if (e?.code === 'P2002') return res.status(409).json({ error: 'Mission déjà réclamée' });
+    throw e;
+  }
 });
 
 // Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse

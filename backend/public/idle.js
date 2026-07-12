@@ -199,6 +199,7 @@ function renderIdleState(state) {
   document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
+  renderIdleMissions(state.missions || []);
   const hudLevel = document.getElementById('idle-hud-level');
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
@@ -367,6 +368,16 @@ function renderIdleRecruit(recruit, essence) {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = !affordable;
   }
+}
+
+function renderIdleMissions(missions) {
+  const box = document.getElementById('idle-missions'); if (!box) return;
+  box.innerHTML = missions.map((m) => `<div class="idle-mission ${m.completed ? 'done' : ''}"><span class="idle-mission-icon"><i class="fas ${m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i></span><div><small>${m.cadence}</small><b>${escapeHtml(m.title)}</b><span>${idleFormatNumber(m.progress)} / ${idleFormatNumber(m.target)}</span><em style="--progress:${Math.min(100, m.progress / m.target * 100)}%"></em></div><button class="btn-secondary" data-idle-mission="${m.key}" ${!m.completed || m.claimed ? 'disabled' : ''}>${m.claimed ? 'Réclamée' : `+${idleFormatNumber(m.reward)}`}</button></div>`).join('');
+}
+
+async function claimIdleMission(key) {
+  try { const r = await api('/api/idle/mission/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`MISSION +${idleFormatNumber(r.reward)}`, 'xp'); await refreshIdleState(); }
+  catch (e) { alert(e.message); }
 }
 
 function idleBump(el) {
@@ -1020,6 +1031,7 @@ function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
+  document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('click', clickIdle);
