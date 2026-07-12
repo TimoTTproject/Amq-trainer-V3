@@ -190,7 +190,7 @@
       <button class="nav-item" data-nav="community"><i class="fas fa-user-group"></i><span data-i18n="Communauté">Communauté</span><span id="trades-nav-badge" class="nav-badge hidden"></span></button>
       <div class="navbar-sep hidden" id="navbar-pinned-sep"></div>
       <div id="navbar-pinned" class="navbar-pinned"></div>
-      <button class="nav-item hidden" id="nav-idle" data-nav="idle"><i class="fas fa-fire"></i><span data-i18n="Dojo">Dojo</span></button>
+      <button class="nav-item hidden" id="nav-idle" data-nav="idle"><i class="fas fa-fire"></i><span data-i18n="Idle">Idle</span></button>
       <button class="nav-item hidden" id="nav-admin" data-nav="admin"><i class="fas fa-screwdriver-wrench"></i><span data-i18n="Admin">Admin</span></button>
     </nav>
 
@@ -1580,8 +1580,8 @@
 
       <!-- HUD collant façon jeu mobile : retour · logo · essence · niveau · coffre -->
       <header class="idle-hud">
-        <button class="idle-back" id="back-home-idle" title="Quitter le Dojo" aria-label="Quitter le Dojo"><i class="fas fa-arrow-left"></i></button>
-        <span class="idle-hud-logo">Dojo <span class="hub-badge">BÊTA</span></span>
+        <button class="idle-back" id="back-home-idle" title="Quitter l'Idle" aria-label="Quitter l'Idle"><i class="fas fa-arrow-left"></i></button>
+        <span class="idle-hud-logo">Idle <span class="hub-badge">BÊTA</span></span>
         <span class="idle-hud-badge idle-hud-essence" title="Essence"><i class="fas fa-mortar-pestle"></i> <b id="idle-essence-val">0</b></span>
         <span class="idle-hud-badge" id="idle-hud-level">Nv. 1</span>
         <button class="idle-milestone-btn hidden" id="idle-milestone-btn" title="Coffre de jalon"><i class="fas fa-gift"></i> <span id="idle-milestone-reward"></span></button>
@@ -1612,7 +1612,7 @@
             <div class="idle-scene-boss hidden" id="idle-decor-boss"></div>
             <div class="idle-floats" id="idle-floats" aria-hidden="true"></div>
             <div class="idle-scene-foot">
-              <div class="idle-enemy-title"><strong id="idle-enemy-title">Gardien du Dojo</strong><span id="idle-enemy-hp-text">— PV</span></div>
+              <div class="idle-enemy-title"><strong id="idle-enemy-title">Gardien de l'Idle</strong><span id="idle-enemy-hp-text">— PV</span></div>
               <div class="idle-xp-bar idle-enemy-hp"><div class="idle-xp-fill" id="idle-xp-fill"></div></div>
               <div class="idle-decor-next" id="idle-decor-next"></div>
             </div>
@@ -1653,7 +1653,7 @@
           <div class="idle-prestige-card">
             <div class="idle-prestige-info">
               <b>Retraite du Maître <span id="idle-prestige-lvl" class="idle-upgrade-lvl">Nv. 0</span></b>
-              <p>Repars de zéro (essence, emplacements, améliorations) contre de la <b>Sagesse</b> (<span id="idle-wisdom-points">0</span> actuellement) — à dépenser ci-dessous dans les Ancients, des bonus permanents. Le niveau du Dojo, les coffres réclamés et les Ancients déjà achetés sont conservés.</p>
+              <p>Repars de zéro (essence, emplacements, améliorations) contre de la <b>Sagesse</b> (<span id="idle-wisdom-points">0</span> actuellement) — à dépenser ci-dessous dans les Ancients, des bonus permanents. Le niveau de l'Idle, les coffres réclamés et les Ancients déjà achetés sont conservés.</p>
               <p class="hint" id="idle-prestige-hint"></p>
             </div>
             <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
@@ -1666,7 +1666,7 @@
 
       <!-- Barre d'onglets bas d'écran, façon appli mobile -->
       <nav class="idle-tabs" id="idle-tabs">
-        <button class="idle-tab active" data-idle-tab="home"><i class="fas fa-fire"></i><span>Dojo</span></button>
+        <button class="idle-tab active" data-idle-tab="home"><i class="fas fa-fire"></i><span>Idle</span></button>
         <button class="idle-tab" data-idle-tab="team"><i class="fas fa-users"></i><span>Équipe</span></button>
         <button class="idle-tab" data-idle-tab="upgrades"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
       </nav>
@@ -1689,7 +1689,7 @@
       <div class="modal-card wide">
         <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
-        <p class="hint">Ton roster du Dojo — indépendant de ta collection gacha. Recrute de nouveaux personnages contre de l'essence.</p>
+        <p class="hint">Ton roster de l'Idle — indépendant de ta collection gacha. Recrute de nouveaux personnages contre de l'essence.</p>
         <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-user-plus"></i> Recruter <span id="idle-recruit-cost"></span></button>
         <p class="hint" id="idle-picker-hint"></p>
         <div id="idle-picker-list" class="card-grid"></div>

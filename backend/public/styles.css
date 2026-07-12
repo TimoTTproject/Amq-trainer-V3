@@ -5606,11 +5606,11 @@ body.idle-fullscreen #app { padding-top: 0; }
   background: rgba(0,0,0,.3); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .idle-back:hover { background: rgba(0,0,0,.55); }
-.idle-hud-logo { font-weight: 800; font-size: 1.02rem; letter-spacing: .4px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.idle-hud-logo { font-weight: 800; font-size: 1.18rem; letter-spacing: .4px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .idle-hud-badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-  font-size: .8rem; font-weight: 700; white-space: nowrap;
+  font-size: .88rem; font-weight: 700; white-space: nowrap;
 }
 .idle-hud-essence { margin-left: auto; color: #ffd54a; border-color: #ffd54a44; }
 .idle-hud-essence i { font-size: .75rem; }
@@ -5626,12 +5626,12 @@ body.idle-fullscreen #app { padding-top: 0; }
   50% { transform: scale(1.05); box-shadow: 0 0 14px rgba(255,182,72,.55); }
 }
 
-.idle-content { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 14px 14px 30px; }
+.idle-content { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 18px 16px 30px; }
 
 /* ── Scène jouable ── */
 .idle-scene {
   position: relative; border-radius: 18px; overflow: hidden; cursor: pointer;
-  min-height: 250px; border: 1px solid rgba(255,255,255,.14);
+  min-height: 320px; border: 1px solid rgba(255,255,255,.14);
   background: linear-gradient(160deg, #241a10, #3a2a16);
   box-shadow: 0 10px 40px rgba(0,0,0,.45);
   user-select: none; -webkit-tap-highlight-color: transparent;
@@ -5678,15 +5678,15 @@ body.idle-fullscreen #app { padding-top: 0; }
   width: 3px; height: 12px; background: #d4a94e;
 }
 
-.idle-scene-head { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.idle-scene-head h2 { font-size: 1.15rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
+.idle-scene-head { position: absolute; top: 12px; left: 14px; right: 14px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.idle-scene-head h2 { font-size: 1.35rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
 .idle-battle-kicker {
-  display: block; margin-bottom: 2px; color: #ffd54a; font-size: .6rem;
+  display: block; margin-bottom: 3px; color: #ffd54a; font-size: .7rem;
   font-weight: 800; letter-spacing: 1.2px; text-shadow: 0 2px 6px rgba(0,0,0,.9);
 }
-.idle-scene-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.idle-scene-chips { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 .idle-chip {
-  padding: 3px 10px; border-radius: 999px; font-size: .66rem; font-weight: 700; letter-spacing: .4px;
+  padding: 4px 12px; border-radius: 999px; font-size: .74rem; font-weight: 700; letter-spacing: .4px;
   background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.28); text-transform: uppercase; white-space: nowrap;
 }
 .idle-chip-gold { color: #ffd54a; border-color: #ffd54a66; }
@@ -5700,16 +5700,16 @@ body.idle-fullscreen #app { padding-top: 0; }
   display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .idle-main-hero-avatar {
-  width: 94px; height: 94px; border: 3px solid #4db8ff; border-radius: 50%;
+  width: 106px; height: 106px; border: 3px solid #4db8ff; border-radius: 50%;
   background-color: #14263d; background-position: center; background-size: cover;
   box-shadow: 0 0 26px #4db8ff88, 0 10px 28px #0009; font-size: 2rem;
   display: grid; place-items: center; animation: idleHeroReady 2.8s ease-in-out infinite;
 }
-.idle-main-hero-name { max-width: 160px; padding: 4px 11px; border: 1px solid #4db8ff88; border-radius: 10px; background: rgba(0,0,0,.72); text-align: center; }
+.idle-main-hero-name { max-width: 180px; padding: 5px 13px; border: 1px solid #4db8ff88; border-radius: 10px; background: rgba(0,0,0,.72); text-align: center; }
 .idle-main-hero-name>* { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.idle-main-hero-name small { color: #7ec8ff; font-size: .5rem; font-weight: 800; letter-spacing: 1px; }
-.idle-main-hero-name b { font-size: .7rem; }
-.idle-main-hero-name em { color: #ffd54a; font-size: .54rem; font-style: normal; }
+.idle-main-hero-name small { color: #7ec8ff; font-size: .58rem; font-weight: 800; letter-spacing: 1px; }
+.idle-main-hero-name b { font-size: .8rem; }
+.idle-main-hero-name em { color: #ffd54a; font-size: .62rem; font-style: normal; }
 .idle-main-hero>button { position: absolute; top: -3px; right: -8px; width: 28px; height: 28px; border: 1px solid #fff6; border-radius: 50%; background: #14263ddd; color: #fff; cursor: pointer; }
 .idle-main-hero>button:hover { background: #2879b9; transform: scale(1.08); }
 @keyframes idleHeroReady { 50% { transform: translateY(-5px) rotate(-1deg); } }
@@ -5719,7 +5719,7 @@ body.idle-fullscreen #app { padding-top: 0; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding-top: 16px;
 }
 .idle-boss-portrait {
-  width: 112px; height: 112px; border-radius: 16px; background-size: cover; background-position: center top;
+  width: 128px; height: 128px; border-radius: 16px; background-size: cover; background-position: center top;
   background-color: var(--bg-3); border: 3px solid #ff5d8f; box-shadow: 0 0 26px #ff5d8f77, 0 10px 30px rgba(0,0,0,.6);
   animation: idleBossFloat 3.6s ease-in-out infinite;
 }
@@ -5732,11 +5732,11 @@ body.idle-fullscreen #app { padding-top: 0; }
      (nom + "Gardien du lieu"), un radius plein pilule pinçait le texte sur
      les bords et rendait l'ensemble illisible — un radius fixe + plus de
      marge verticale suffit. */
-  padding: 6px 16px; border-radius: 12px; background: rgba(0,0,0,.68);
-  border: 1px solid rgba(255,255,255,.2); font-size: .78rem; font-weight: 700; text-align: center;
-  max-width: 170px;
+  padding: 7px 18px; border-radius: 12px; background: rgba(0,0,0,.68);
+  border: 1px solid rgba(255,255,255,.2); font-size: .88rem; font-weight: 700; text-align: center;
+  max-width: 190px;
 }
-.idle-boss-name small { display: block; font-weight: 600; color: #ff9dbd; font-size: .56rem; text-transform: uppercase; letter-spacing: .8px; }
+.idle-boss-name small { display: block; font-weight: 600; color: #ff9dbd; font-size: .64rem; text-transform: uppercase; letter-spacing: .8px; }
 
 /* Gains flottants (+X essence) dans la scène */
 .idle-floats { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
@@ -5768,10 +5768,10 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 .idle-kill-flash { animation: idleKillShake .3s ease; }
 
-.idle-scene-foot { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 2; }
-.idle-enemy-title { display: flex; align-items: end; justify-content: space-between; gap: 10px; margin-bottom: 4px; color: #fff; text-shadow: 0 2px 5px #000; }
-.idle-enemy-title strong { overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
-.idle-enemy-title span { flex: none; font-size: .62rem; font-weight: 700; }
+.idle-scene-foot { position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 2; }
+.idle-enemy-title { display: flex; align-items: end; justify-content: space-between; gap: 10px; margin-bottom: 5px; color: #fff; text-shadow: 0 2px 5px #000; }
+.idle-enemy-title strong { overflow: hidden; font-size: .88rem; text-overflow: ellipsis; white-space: nowrap; }
+.idle-enemy-title span { flex: none; font-size: .72rem; font-weight: 700; }
 .idle-xp-bar { height: 8px; border-radius: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.16); overflow: hidden; }
 .idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
 .idle-enemy-hp { height: 13px; border-color: rgba(255,255,255,.4); box-shadow: inset 0 1px 4px #000, 0 1px 4px #0008; }
@@ -5779,14 +5779,14 @@ body.idle-fullscreen #app { padding-top: 0; }
 /* Distinct de la barre de PV juste au-dessus (combat) : c'est la progression
    du NIVEAU DE DOJO (décor), une mesure différente — marge + icône dédiée
    pour ne pas laisser croire que ce texte appartient à la barre verte. */
-.idle-decor-next { display: flex; align-items: center; gap: 5px; font-size: .68rem; color: #fff; opacity: .9; margin-top: 8px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+.idle-decor-next { display: flex; align-items: center; gap: 5px; font-size: .76rem; color: #fff; opacity: .9; margin-top: 8px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
 .idle-decor-next-ico { flex: none; color: #ffd54a; }
 
-.idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin: 10px 2px 14px; }
+.idle-decor-flavor { font-size: .84rem; color: var(--text-2); font-style: italic; margin: 12px 2px 16px; }
 
 /* ── Rangée d'actions ── */
-.idle-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-.idle-actions > button { justify-content: center; padding: 12px 6px; font-size: .84rem; white-space: nowrap; min-width: 0; }
+.idle-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.idle-actions > button { justify-content: center; padding: 14px 8px; font-size: .92rem; white-space: nowrap; min-width: 0; }
 #idle-top-recruit-btn:disabled, .idle-recruit-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-click-btn { position: relative; overflow: visible; }
 .idle-click-fx {
@@ -5808,24 +5808,24 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 
 /* ── Tuiles de stats ── */
-.idle-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.idle-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .idle-stat-tile {
-  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
   background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
 }
 .idle-stat-ico {
-  width: 38px; height: 38px; border-radius: 10px; flex: none;
+  width: 42px; height: 42px; border-radius: 10px; flex: none;
   background: rgba(56,214,214,.14); color: #38d6d6;
-  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
 }
 .idle-stat-ico.fire { background: rgba(255,93,143,.14); color: #ff5d8f; }
-.idle-stat-tile b { display: block; font-size: 1.15rem; line-height: 1.15; }
-.idle-stat-tile small { color: var(--text-2); font-size: .64rem; text-transform: uppercase; letter-spacing: .5px; }
+.idle-stat-tile b { display: block; font-size: 1.3rem; line-height: 1.2; }
+.idle-stat-tile small { color: var(--text-2); font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; }
 
-.idle-section-title { font-size: 1rem; color: var(--text-2); margin: 6px 0 10px; }
-.idle-team-intro { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 13px 15px; border: 1px solid #4db8ff44; border-radius: 12px; background: linear-gradient(135deg,#4db8ff16,#8a6cff12); }
-.idle-team-intro>i { color: #4db8ff; font-size: 1.4rem; }
-.idle-team-intro b,.idle-team-intro span { display: block; }.idle-team-intro b{font-size:.86rem}.idle-team-intro span{margin-top:3px;color:var(--text-2);font-size:.7rem;line-height:1.4}
+.idle-section-title { font-size: 1.1rem; color: var(--text-2); margin: 8px 0 12px; }
+.idle-team-intro { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 15px 17px; border: 1px solid #4db8ff44; border-radius: 12px; background: linear-gradient(135deg,#4db8ff16,#8a6cff12); }
+.idle-team-intro>i { color: #4db8ff; font-size: 1.5rem; }
+.idle-team-intro b,.idle-team-intro span { display: block; }.idle-team-intro b{font-size:.95rem}.idle-team-intro span{margin-top:3px;color:var(--text-2);font-size:.8rem;line-height:1.45}
 
 /* Révélation de recrutement : impossible de rater le personnage obtenu. */
 .idle-recruit-reveal-card { max-width: 410px; overflow: hidden; text-align: center; background: radial-gradient(circle at 50% 28%, #25345a, var(--bg-2) 58%); }

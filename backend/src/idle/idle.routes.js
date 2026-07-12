@@ -514,7 +514,7 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
     await withSettle(req.user.id, async (tx, user) => {
       const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
       if (dojoLevel < PRESTIGE_MIN_DOJO_LEVEL) {
-        throw new IdleError(400, `Le Dojo doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
+        throw new IdleError(400, `L'Idle doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
       }
       await tx.idleSlot.updateMany({ where: { userId: user.id }, data: { characterId: null, assignedAt: null, level: 1 } });
       await tx.user.update({

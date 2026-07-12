@@ -6,6 +6,7 @@
 let idleState = null; // dernier état reçu du serveur
 let idleFetchedAt = 0; // Date.now() de ce dernier état (base du ticker en direct)
 let idleTicker = null;
+let idleSyncTicker = null; // resynchronisation périodique légère (cf. openIdle) — sans ça, un joueur qui ne clique jamais ne verrait aucun kill se produire réellement côté serveur
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
 let idleParticleTheme = null; // dernier thème pour lequel les particules ambiantes ont été générées
 let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
@@ -46,8 +47,28 @@ async function openIdle() {
   idleStopTicker();
   idleWelcomeChecked = false;
   idleTicker = setInterval(idleTick, 400);
+  // Sync serveur périodique (6 s) : GET /state ne fait que LIRE l'état (il ne
+  // solde jamais la production en attente en base) — sans ce collecte
+  // périodique, essenceEarnedTotal ne bougerait jamais entre deux clics et le
+  // stage resterait figé indéfiniment, même avec la barre qui semble baisser
+  // (illusion purement visuelle côté client, cf. idleTickInterpolateBattle).
+  idleSyncTicker = setInterval(() => {
+    if (idleActivePanel === 'home' && !document.hidden) idleBackgroundSync();
+  }, 6000);
   await refreshIdleState();
   maybeShowIdleWelcome();
+}
+
+// Collecte silencieuse (pas de son/animation, contrairement à collectIdle) :
+// crédite la production en attente en base à intervalle régulier pour que le
+// combat progresse réellement même quand le joueur ne clique sur rien.
+async function idleBackgroundSync() {
+  try {
+    await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
+  } catch {
+    return; // pas grave : la prochaine synchro (6 s plus tard) rattrapera
+  }
+  refreshIdleState();
 }
 
 // Onglets de la barre du bas (façon appli mobile) : home = scène, team =
@@ -109,6 +130,8 @@ function closeIdle() {
 function idleStopTicker() {
   clearInterval(idleTicker);
   idleTicker = null;
+  clearInterval(idleSyncTicker);
+  idleSyncTicker = null;
 }
 
 function idleTick() {
@@ -117,6 +140,7 @@ function idleTick() {
   const display = idleState.essence + idleState.pendingEssence + elapsed * idleState.totalRate;
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
+  idleTickInterpolateBattle(elapsed);
   // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
   // purement cosmétique, ça montre la production "vivre" comme dans un vrai
   // idle game. Seulement si la scène est visible et produit au moins 1.
@@ -125,6 +149,25 @@ function idleTick() {
   if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
     idleSpawnFloat(`+${idleFormatNumber(passiveGain)}`, 'xp');
   }
+}
+
+// Fait baisser la barre de PV du gardien en continu entre deux synchros
+// serveur (~6 s, cf. openIdle), exactement comme l'essence affichée
+// ci-dessus : même taux (essenceEarnedTotal progresse au même rythme que
+// l'essence), simple extrapolation visuelle. Le vrai kill (nouveau stage,
+// nouvelle vague) n'arrive qu'à la prochaine synchro — la barre se contente
+// de tendre vers 0 en l'attendant, jamais de fausse transition côté client.
+function idleTickInterpolateBattle(elapsed) {
+  if (!idleState?.battle || idleActivePanel !== 'home') return;
+  const gained = elapsed * (idleState.totalRate || 0);
+  const total = Math.max(1, idleState.battle.xpForNextStage || 1);
+  const xpIntoStage = Math.min(total, (idleState.battle.xpIntoStage || 0) + gained);
+  const remaining = Math.max(0, total - xpIntoStage);
+  const hpPct = Math.max(0, Math.min(100, (remaining / total) * 100));
+  const hpEl = document.getElementById('idle-enemy-hp-text');
+  const fill = document.getElementById('idle-xp-fill');
+  if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
+  if (fill) fill.style.width = `${hpPct}%`;
 }
 
 async function refreshIdleState() {
@@ -204,7 +247,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
   const total = Math.max(1, battle?.xpForNextStage || 1);
   const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
-  const guardianName = dojo?.decor?.boss?.name || (boss ? 'Maître du palier' : 'Disciple du Dojo');
+  const guardianName = dojo?.decor?.boss?.name || (boss ? 'Maître du palier' : "Disciple de l'Idle");
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
   const titleEl = document.getElementById('idle-enemy-title');
@@ -273,7 +316,7 @@ function renderIdleDecor(dojo, prevDojo) {
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
-    const base = `Dojo ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
+    const base = `Idle ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
     const text = dojo.nextDecor
       ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : base;
@@ -508,7 +551,7 @@ function renderIdlePrestige(dojo) {
   if (hint) {
     hint.textContent = dojo.prestige.eligible
       ? ''
-      : `Débloqué au niveau ${dojo.prestige.minLevel} du Dojo (actuellement ${dojo.level}).`;
+      : `Débloqué au niveau ${dojo.prestige.minLevel} de l'Idle (actuellement ${dojo.level}).`;
   }
 }
 
@@ -823,7 +866,7 @@ async function claimIdleMilestone() {
 async function prestigeIdle() {
   if (!idleState || !idleState.dojo.prestige.eligible) return;
   const ok = confirm(
-    "Prestiger remet à zéro l'essence, les emplacements et les améliorations de cette run (le niveau du Dojo et les coffres réclamés sont conservés) contre un bonus de production permanent. Confirmer ?"
+    "Prestiger remet à zéro l'essence, les emplacements et les améliorations de cette run (le niveau de l'Idle et les coffres réclamés sont conservés) contre de la Sagesse, à dépenser dans les Ancients. Confirmer ?"
   );
   if (!ok) return;
   try {
