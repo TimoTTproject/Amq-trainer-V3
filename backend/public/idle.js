@@ -203,6 +203,7 @@ function renderIdleState(state) {
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleMissions(state.missions || []);
+  renderIdleEvent(state.event);
   const hudLevel = document.getElementById('idle-hud-level');
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
@@ -423,6 +424,15 @@ function renderIdleMissions(missions) {
   const box = document.getElementById('idle-missions'); if (!box) return;
   box.innerHTML = missions.map((m) => `<div class="idle-mission ${m.completed ? 'done' : ''}"><span class="idle-mission-icon"><i class="fas ${m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i></span><div><small>${m.cadence}</small><b>${escapeHtml(m.title)}</b><span>${idleFormatNumber(m.progress)} / ${idleFormatNumber(m.target)}</span><em style="--progress:${Math.min(100, m.progress / m.target * 100)}%"></em></div><button class="btn-secondary" data-idle-mission="${m.key}" ${!m.completed || m.claimed ? 'disabled' : ''}>${m.claimed ? 'Réclamée' : `+${idleFormatNumber(m.reward)}`}</button></div>`).join('');
 }
+
+function renderIdleEvent(event) {
+  const box = document.getElementById('idle-event-banner'); if (!box || !event) return;
+  const w = event.weekly;
+  box.innerHTML = `<div class="idle-event-today"><i class="fas ${event.icon}"></i><div><small>ÉVÉNEMENT DU JOUR</small><b>${escapeHtml(event.name)}</b><span>${escapeHtml(event.description)}</span></div><time data-event-end="${event.endsAt}"></time></div><div class="idle-weekly"><i class="fas fa-trophy"></i><div><small>DÉFI HEBDOMADAIRE</small><b>${escapeHtml(w.title)}</b><span>${escapeHtml(w.description)} · ${w.progress}/${w.target}</span><em style="--progress:${w.progress/w.target*100}%"></em></div><button class="btn-secondary" id="idle-event-claim" ${!w.completed || w.claimed ? 'disabled' : ''}>${w.claimed ? 'Réclamé' : `+${idleFormatNumber(w.reward)}`}</button></div>`;
+  const time = box.querySelector('[data-event-end]'); if (time) { const left = Math.max(0, new Date(event.endsAt) - Date.now()); time.textContent = `${Math.floor(left/3600000)}h ${Math.floor(left%3600000/60000)}m`; }
+  box.querySelector('#idle-event-claim')?.addEventListener('click', claimIdleEvent);
+}
+async function claimIdleEvent() { try { const r = await api('/api/idle/event/claim', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`CONVERGENCE +${idleFormatNumber(r.reward)}`, 'crit'); await refreshIdleState(); } catch (e) { alert(e.message); } }
 
 async function claimIdleMission(key) {
   try { const r = await api('/api/idle/mission/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`MISSION +${idleFormatNumber(r.reward)}`, 'xp'); await refreshIdleState(); }

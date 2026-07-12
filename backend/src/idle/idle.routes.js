@@ -174,6 +174,18 @@ const HERO_CLASSES = {
   summoner: { name: 'Invocateur', icon: 'fa-dragon', description: '+20% production de l’équipe', click: 1, prod: 1.2, burst: 1, team: 1 },
 };
 function heroClass(key) { return HERO_CLASSES[key] || HERO_CLASSES.warrior; }
+function currentIdleEvent(now = new Date()) {
+  const events = [
+    { key: 'training', name: 'Entraînement intensif', icon: 'fa-dumbbell', description: '+25% production d’équipe', prod: 1.25, click: 1 },
+    { key: 'fury', name: 'Fureur du héros', icon: 'fa-fire-flame-curved', description: '+50% puissance de frappe', prod: 1, click: 1.5 },
+    { key: 'alliance', name: 'Alliance des univers', icon: 'fa-people-group', description: '+15% production et +20% frappe', prod: 1.15, click: 1.2 },
+    { key: 'meditation', name: 'Méditation sacrée', icon: 'fa-om', description: '+35% production d’équipe', prod: 1.35, click: 1 },
+  ];
+  const day = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 86400000);
+  const event = events[((day % events.length) + events.length) % events.length];
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  return { ...event, endsAt: end.toISOString() };
+}
 
 function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey) {
   const seriesLevels = new Map();
@@ -187,7 +199,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if (!s.character || (s.level || 1) < 10) return mult;
     return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
   }, 1);
-  return base * teamPassive * heroClass(classKey).prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+  return base * teamPassive * heroClass(classKey).prod * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
 }
 
 function roleForCharacter(character) {
@@ -329,6 +341,8 @@ async function buildState(userId) {
   for (const r of recruits) if (r.character?.series) { const x = masteryMap.get(r.character.series) || { series: r.character.series, recruits: 0, levels: 0 }; x.recruits++; masteryMap.set(r.character.series, x); }
   for (const s of slots) if (s.character?.series) { const x = masteryMap.get(s.character.series) || { series: s.character.series, recruits: 0, levels: 0 }; x.levels += s.level || 1; masteryMap.set(s.character.series, x); }
   const masteries = [...masteryMap.values()].map((m) => { const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = [25,100,250,500].find((n) => n > m.levels) || null; return { ...m, bonus, next }; }).sort((a,b) => b.levels-a.levels);
+  const periods = idlePeriods(); const weeklyLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
+  let weeklyClaimed = false; try { weeklyClaimed = !!(await prisma.idleMissionClaim.findUnique({ where: { userId_missionKey_period: { userId, missionKey: 'weekly_convergence', period: periods.week } } })); } catch (e) { if (e?.code) throw e; }
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -353,6 +367,7 @@ async function buildState(userId) {
     },
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
+    event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Cumule 100 niveaux dans ton équipe active', progress: Math.min(weeklyLevels, 100), target: 100, reward: 3000, completed: weeklyLevels >= 100, claimed: weeklyClaimed } },
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
@@ -651,7 +666,7 @@ router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COO
   const ancientLevelsByKey = await loadAncientLevels(prisma, req.user.id);
   const liveUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, essenceEarnedTotal: true, idleHeroClass: true } });
   const mechanic = bossMechanicForStage(stageForXp(liveUser.essenceEarnedTotal));
-  const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click;
+  const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click * currentIdleEvent().click;
   const gained = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1)));
   const user = await prisma.user.update({
     where: { id: req.user.id },
@@ -704,6 +719,23 @@ router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, na
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Mission déjà réclamée' });
+    throw e;
+  }
+});
+
+router.post('/event/claim', requireAuth, requireAdmin, rateLimit({ max: 10, name: 'idle-event' }), async (req, res) => {
+  const period = idlePeriods().week;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const slots = await tx.idleSlot.findMany({ where: { userId: req.user.id, characterId: { not: null } }, select: { level: true } });
+      if (slots.reduce((n, s) => n + (s.level || 1), 0) < 100) throw new IdleError(400, 'Défi hebdomadaire incomplet');
+      await tx.idleMissionClaim.create({ data: { userId: req.user.id, missionKey: 'weekly_convergence', period } });
+      await tx.user.update({ where: { id: req.user.id }, data: { essence: { increment: 3000 }, essenceEarnedTotal: { increment: 3000 } } });
+    });
+    res.json({ ok: true, reward: 3000 });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    if (e?.code === 'P2002') return res.status(409).json({ error: 'Récompense déjà réclamée' });
     throw e;
   }
 });
