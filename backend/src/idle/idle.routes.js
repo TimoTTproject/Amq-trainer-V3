@@ -26,6 +26,7 @@ const {
   RARITY_RATE,
   RARITY_LEVEL_BONUS,
   RARITY_PASSIVE,
+  HERO_MILESTONES,
   dojoLevelForXp,
   dojoXpForLevel,
   dojoLevelMultiplier,
@@ -159,7 +160,11 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus) {
     (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) : sum),
     0
   );
-  return base * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+  const teamPassive = slots.reduce((mult, s) => {
+    if (!s.character || (s.level || 1) < 10) return mult;
+    return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
+  }, 1);
+  return base * teamPassive * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
 }
 
 function roleForCharacter(character) {
@@ -258,6 +263,9 @@ async function buildState(userId) {
         baseRate: RARITY_RATE[row.character.rarity] || 0,
         scaling: RARITY_LEVEL_BONUS[row.character.rarity] || 0,
         passive: RARITY_PASSIVE[row.character.rarity] || '',
+        passiveUnlocked: level >= 10,
+        milestones: HERO_MILESTONES.map((target) => ({ target, reached: level >= target })),
+        nextMilestone: HERO_MILESTONES.find((target) => target > level) || null,
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });

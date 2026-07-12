@@ -37,10 +37,11 @@ const RARITY_RATE = {
 const CHAR_LEVEL_BONUS = 0.12;
 const RARITY_LEVEL_BONUS = { common: .08, rare: .10, epic: .13, legendary: .17, mythic: .22 };
 const RARITY_PASSIVE = {
-  common: 'Apprenti · progression économique', rare: 'Endurance · +10% de puissance par niveau',
-  epic: 'Aura · +13% de puissance par niveau', legendary: 'Domination · +17% de puissance par niveau',
-  mythic: 'Transcendance · +22% de puissance par niveau',
+  common: 'Apprenti · progression économique', rare: 'Endurance · +5% de production personnelle au niveau 10',
+  epic: 'Aura · +3% de production à toute l’équipe au niveau 10', legendary: 'Domination · +8% de production à toute l’équipe au niveau 10',
+  mythic: 'Transcendance · +15% de production à toute l’équipe au niveau 10',
 };
+const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
@@ -60,7 +61,8 @@ function charLevelBulkCost(rarity, level, amount) {
 // globaux (Discipline + niveau du Dojo).
 function slotRate(rarity, charLevel) {
   const scaling = RARITY_LEVEL_BONUS[rarity] || CHAR_LEVEL_BONUS;
-  return (RARITY_RATE[rarity] || 0) * (1 + Math.max(0, (charLevel || 1) - 1) * scaling);
+  const endurance = rarity === 'rare' && charLevel >= 10 ? 1.05 : 1;
+  return (RARITY_RATE[rarity] || 0) * (1 + Math.max(0, (charLevel || 1) - 1) * scaling) * endurance;
 }
 
 // ── Recrutement : la SEULE façon d'obtenir un personnage dans le Dojo, contre
@@ -315,6 +317,7 @@ module.exports = {
   charLevelBulkCost,
   RARITY_LEVEL_BONUS,
   RARITY_PASSIVE,
+  HERO_MILESTONES,
   DOJO_XP_BASE,
   DOJO_XP_GROWTH,
   dojoXpForLevel,
