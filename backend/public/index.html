@@ -1686,6 +1686,20 @@
       </div>
     </div>
 
+    <!-- Révélation immédiate après un recrutement Dojo -->
+    <div id="idle-recruit-reveal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-recruit-reveal-title">
+      <div class="modal-card idle-recruit-reveal-card">
+        <button class="modal-close" id="idle-recruit-reveal-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <span class="idle-recruit-kicker">NOUVELLE RECRUE</span>
+        <h3 id="idle-recruit-reveal-title">Ton équipe s'agrandit !</h3>
+        <div id="idle-recruit-reveal-body"></div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="idle-recruit-again"><i class="fas fa-rotate"></i> Recruter encore</button>
+          <button class="btn-primary" id="idle-recruit-assign"><i class="fas fa-user-plus"></i> Ajouter à l'équipe</button>
+        </div>
+      </div>
+    </div>
+
     <!-- VUE CENTRE D'ENTRAÎNEMENT -->
     <div id="view-training" class="hidden">
       <button class="btn-back" id="back-play-training"><i class="fas fa-arrow-left"></i> Jouer</button>
