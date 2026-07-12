@@ -6069,6 +6069,21 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-tab.active { color: var(--accent); }
 .idle-tab.active i { filter: drop-shadow(0 0 8px currentColor); }
 
+/* Dojo harmonisé avec la DA globale AMQ : rouge principal, bleu secondaire,
+   surfaces et bordures issues du thème courant. Placé après les styles du
+   module pour garantir la cohérence finale. */
+#view-idle{--idle-surface:var(--bg-2);--idle-surface-2:var(--bg-3);--idle-line:var(--border);--idle-accent:var(--accent);--idle-secondary:var(--accent-2);--idle-muted:var(--text-2)}
+#view-idle .idle-content{max-width:1180px;margin:0 auto;padding-bottom:92px}
+#view-idle .profile-section{padding:16px;margin-bottom:12px;border:1px solid var(--border);border-radius:14px;background:var(--bg);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+#view-idle .profile-section>h3,#view-idle .idle-section-title{margin:0 0 12px;color:var(--text)!important;font-size:13px!important;font-weight:800!important}
+#view-idle .profile-section>h3 i{color:var(--accent)!important}
+#view-idle .idle-help{margin-bottom:12px;padding:10px 12px;border-color:color-mix(in srgb,var(--accent-2) 28%,transparent);background:color-mix(in srgb,var(--accent-2) 7%,transparent)}#view-idle .idle-help>i{color:var(--accent-2)}
+#view-idle .idle-currency-item,#view-idle .idle-upgrade-card,#view-idle .idle-prestige-card,#view-idle .idle-achievement,#view-idle .idle-mastery,#view-idle .idle-mission,#view-idle .idle-event-today,#view-idle .idle-weekly{border-color:var(--border);background:var(--bg-2);box-shadow:none}
+#view-idle .idle-skill{min-height:48px;border-color:var(--border);background:var(--bg-3);box-shadow:none}#view-idle .idle-skill:first-child{border-left:3px solid var(--accent)}#view-idle .idle-skill-team{border-left:3px solid var(--accent-2)}
+#view-idle .idle-hero{border-width:1px!important;border-color:var(--border)!important;background:var(--bg-2);box-shadow:0 5px 15px rgba(0,0,0,.25)!important}#view-idle .idle-hero.r-rare{border-left:3px solid #3b82f6!important}#view-idle .idle-hero.r-epic{border-left:3px solid #a855f7!important}#view-idle .idle-hero.r-legendary{border-left:3px solid #f59e0b!important}#view-idle .idle-hero.r-mythic{border-left:3px solid var(--accent)!important}
+#view-idle .idle-level-buys .idle-hero-levelup{border:1px solid var(--border);border-radius:6px;background:var(--bg-3)}#view-idle .idle-level-buys .idle-hero-levelup:not(:disabled):hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--bg-3))}
+#view-idle .idle-tabs{left:50%;right:auto;bottom:12px;transform:translateX(-50%);width:min(520px,calc(100% - 24px));padding:5px;border:1px solid var(--border);border-radius:15px;background:color-mix(in srgb,var(--bg-2) 94%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(12px)}#view-idle .idle-tab{flex:1;flex-direction:row;justify-content:center;padding:10px 12px;font-size:11px}#view-idle .idle-tab.active{color:#fff;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#000))}#view-idle .idle-tab.active i{filter:none}
+
 @media (max-width: 700px) {
   .idle-content { padding: 10px 10px 30px; }
   .idle-scene { min-height: 215px; border-radius: 14px; }
