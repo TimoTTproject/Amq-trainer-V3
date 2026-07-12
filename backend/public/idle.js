@@ -116,6 +116,8 @@ function renderIdleDecor(dojo, prevDojo) {
   document.getElementById('idle-decor-name').textContent = dojo.decor.name;
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)} · ×${dojo.multiplier.toFixed(2)}`;
   document.getElementById('idle-decor-flavor').textContent = dojo.decor.flavor || '';
+  idleRenderBackdrop(dojo.decor.backgroundUrl);
+  idleRenderBoss(dojo.decor.boss);
   const pct = Math.round((dojo.progress || 0) * 100);
   const fill = document.getElementById('idle-xp-fill');
   if (fill) fill.style.width = `${pct}%`;
@@ -206,6 +208,29 @@ const IDLE_SCENERY_SVG = {
 function idleSetScenery(theme) {
   const box = document.getElementById('idle-scenery');
   if (box) box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
+}
+
+// Fond réel tiré d'un anime (jaquette AniList déjà en base, cf. idle.routes.js
+// decorArtForTheme) — flouté en arrière-plan derrière la scène SVG/particules.
+function idleRenderBackdrop(url) {
+  const box = document.getElementById('idle-backdrop');
+  if (!box) return;
+  box.style.backgroundImage = url ? `url('${url}')` : 'none';
+}
+
+// Portrait du « gardien » mythique du palier — vrai personnage AniList déjà
+// possédable dans le gacha, pas une illustration générique.
+function idleRenderBoss(boss) {
+  const el = document.getElementById('idle-decor-boss');
+  if (!el) return;
+  if (!boss) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  el.classList.remove('hidden');
+  const img = boss.imageUrl ? ` style="background-image:url('${boss.imageUrl}')"` : '';
+  el.innerHTML = `<span class="idle-boss-portrait"${img}></span><span class="idle-boss-name">Gardien : ${escapeHtml(boss.name)}</span>`;
 }
 
 function renderIdleMilestone(dojo) {
