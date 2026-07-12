@@ -13,7 +13,11 @@ const {
   r2Status,
   startContinuousMigration,
   stopContinuousMigration,
+  uploadBuffer,
 } = require('../storage/r2');
+const { pickBossForTheme, decorArtCache } = require('../idle/idle.routes');
+const { DOJO_DECOR } = require('../idle/idle');
+const { generateImageBuffer } = require('../ai/openai.service');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
@@ -40,6 +44,55 @@ router.post('/r2-migration/start', requireAuth, requireAdmin, async (req, res) =
 
 router.post('/r2-migration/stop', requireAuth, requireAdmin, async (req, res) => {
   res.json({ migration: stopContinuousMigration() });
+});
+
+// Génère (une fois, en cache PERMANENT via DojoBossArt) le portrait IA du
+// gardien d'un ou plusieurs paliers de décor du Dojo — jamais déclenché à la
+// demande d'un joueur : coût réel par appel OpenAI. body optionnel
+// { theme?: string, force?: boolean }. Traitement séquentiel (10 paliers
+// max) ; un échec sur un palier (ex. contenu refusé par OpenAI pour un
+// personnage sous licence) n'empêche pas les autres de continuer.
+router.post('/dojo/generate-boss-art', requireAuth, requireAdmin, async (req, res) => {
+  const onlyTheme = req.body?.theme ? String(req.body.theme) : null;
+  const force = !!req.body?.force;
+  const tiers = onlyTheme ? DOJO_DECOR.filter((t) => t.theme === onlyTheme) : DOJO_DECOR;
+  if (onlyTheme && !tiers.length) return res.status(400).json({ error: 'Palier de décor inconnu' });
+
+  const results = [];
+  for (const tier of tiers) {
+    try {
+      const boss = await pickBossForTheme(tier.theme);
+      if (!boss) {
+        results.push({ theme: tier.theme, status: 'error', error: 'Aucun gardien mythique disponible' });
+        continue;
+      }
+      if (!force) {
+        const existing = await prisma.dojoBossArt.findUnique({
+          where: { characterId_theme: { characterId: boss.id, theme: tier.theme } },
+        });
+        if (existing) {
+          results.push({ theme: tier.theme, status: 'skipped', characterId: boss.id, characterName: boss.name });
+          continue;
+        }
+      }
+      const prompt = `Anime-style character portrait of ${boss.name} from ${boss.series || 'an anime'}, `
+        + `heroic guardian pose, ${tier.flavor}, dramatic lighting, high quality digital illustration, `
+        + `vertical portrait framing, no text, no watermark.`;
+      const buffer = await generateImageBuffer(prompt);
+      const key = `dojo-boss-art/${tier.theme}-${boss.id}.png`;
+      const imageUrl = await uploadBuffer(key, buffer, 'image/png');
+      await prisma.dojoBossArt.upsert({
+        where: { characterId_theme: { characterId: boss.id, theme: tier.theme } },
+        update: { imageUrl, generatedAt: new Date() },
+        create: { characterId: boss.id, theme: tier.theme, imageUrl },
+      });
+      decorArtCache.delete(tier.theme); // sinon jusqu'à 30 min avant que le nouveau visuel apparaisse
+      results.push({ theme: tier.theme, status: 'ok', characterId: boss.id, characterName: boss.name, imageUrl });
+    } catch (error) {
+      results.push({ theme: tier.theme, status: 'error', error: error.message, code: error.code });
+    }
+  }
+  res.json({ results });
 });
 
 // Crédite des tokens au compte courant (test gacha / achats)

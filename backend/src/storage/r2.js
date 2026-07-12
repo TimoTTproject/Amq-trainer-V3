@@ -128,6 +128,26 @@ async function migrateOneSongToR2() {
   }
 }
 
+// Upload générique d'un buffer déjà en mémoire (contrairement à
+// migrateOneSongToR2, qui streame une source distante) — utilisé par la
+// génération de portraits IA du Dojo (voir src/ai/openai.service.js +
+// src/idle/idle.routes.js). Retourne l'URL publique.
+async function uploadBuffer(key, buffer, contentType) {
+  if (!isR2Configured()) throw new Error('R2 non configuré');
+  const upload = new Upload({
+    client: r2Client(),
+    params: {
+      Bucket: r2Config().bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    },
+  });
+  await upload.done();
+  return `${r2Config().publicUrl}/${key}`;
+}
+
 async function r2Status() {
   let connected = false;
   let error = null;
@@ -238,6 +258,7 @@ module.exports = {
   preferredMediaUrl,
   r2Config,
   r2Status,
+  uploadBuffer,
   runContinuousMigration, // exporté pour les tests (worker injectable)
   startContinuousMigration,
   stopContinuousMigration,

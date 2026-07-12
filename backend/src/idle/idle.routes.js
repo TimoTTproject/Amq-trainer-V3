@@ -67,36 +67,56 @@ async function decorArtForTheme(theme) {
   decorArtCache.set(theme, { data, at: Date.now() });
   return data;
 }
-async function fetchDecorArt(theme) {
+// Personnage mythique déterministe pour un palier de décor donné — même
+// gardien pour tout le monde à ce palier, pas de tirage aléatoire à chaque
+// requête. Réutilisé par fetchDecorArt (lecture, cache 30 min) ET la route
+// admin de génération de portraits IA plus bas : une seule source de vérité
+// pour « qui est le gardien d'un palier ».
+async function pickBossForTheme(theme) {
   const tierIndex = Math.max(0, DOJO_DECOR.findIndex((t) => t.theme === theme));
   const mythics = await prisma.character.findMany({
     where: { rarity: 'mythic' },
-    select: { id: true, name: true, imageUrl: true, seriesId: true },
+    select: { id: true, name: true, imageUrl: true, seriesId: true, series: true },
     orderBy: { id: 'asc' },
   });
   if (!mythics.length) return null;
   // Essaie quelques candidats à partir du palier (déterministe) si le premier
-  // choix n'a pas de portrait ou de jaquette exploitable.
+  // choix n'a pas de portrait exploitable.
   for (let offset = 0; offset < Math.min(mythics.length, 6); offset++) {
     const boss = mythics[(tierIndex + offset) % mythics.length];
-    if (!boss.imageUrl) continue;
-    let backgroundUrl = null;
-    if (boss.seriesId) {
-      // `NOT IN (NULL, ...)` en SQL ne filtre RIEN (NULL dans la liste rend la
-      // condition UNKNOWN pour toutes les lignes) — deux conditions séparées.
-      const song = await prisma.song.findFirst({
-        where: { anilistId: boss.seriesId, coverUrl: { not: null, notIn: [''] } },
-        select: { coverUrl: true },
-      });
-      // Song.coverUrl stocke coverImage.medium (~100 px, suffisant pour les
-      // vignettes du quiz) — bien trop petit pour un visuel de scène : étiré,
-      // ça donnait une bouillie floue. Le CDN AniList sert la même image en
-      // /large/ (~230 px), on réécrit juste le segment du chemin.
-      backgroundUrl = song?.coverUrl ? song.coverUrl.replace('/medium/', '/large/') : null;
-    }
-    return { characterId: boss.id, name: boss.name, imageUrl: boss.imageUrl, backgroundUrl };
+    if (boss.imageUrl) return boss;
   }
   return null;
+}
+
+async function fetchDecorArt(theme) {
+  const boss = await pickBossForTheme(theme);
+  if (!boss) return null;
+  let backgroundUrl = null;
+  if (boss.seriesId) {
+    // `NOT IN (NULL, ...)` en SQL ne filtre RIEN (NULL dans la liste rend la
+    // condition UNKNOWN pour toutes les lignes) — deux conditions séparées.
+    const song = await prisma.song.findFirst({
+      where: { anilistId: boss.seriesId, coverUrl: { not: null, notIn: [''] } },
+      select: { coverUrl: true },
+    });
+    // Song.coverUrl stocke coverImage.medium (~100 px, suffisant pour les
+    // vignettes du quiz) — bien trop petit pour un visuel de scène : étiré,
+    // ça donnait une bouillie floue. Le CDN AniList sert la même image en
+    // /large/ (~230 px), on réécrit juste le segment du chemin.
+    backgroundUrl = song?.coverUrl ? song.coverUrl.replace('/medium/', '/large/') : null;
+  }
+  // Portrait IA généré une fois pour toutes via la route admin (jamais à la
+  // demande d'un joueur) — absent = repli silencieux sur le portrait AniList
+  // existant (boss.imageUrl), comportement inchangé si rien n'a été généré.
+  const generated = await prisma.dojoBossArt.findUnique({
+    where: { characterId_theme: { characterId: boss.id, theme } },
+    select: { imageUrl: true },
+  });
+  return {
+    characterId: boss.id, name: boss.name, imageUrl: boss.imageUrl, backgroundUrl,
+    generatedImageUrl: generated?.imageUrl || null,
+  };
 }
 
 // Emplacements + personnage (catalogue) assigné, pour le calcul de production.
@@ -258,7 +278,7 @@ async function buildState(userId) {
       xpForNextLevel,
       progress: xpForNextLevel > 0 ? Math.min(1, xpIntoLevel / xpForNextLevel) : 1,
       multiplier: dojoLevelMultiplier(dojoLevel),
-      decor: { ...decor, boss: decorArt ? { characterId: decorArt.characterId, name: decorArt.name, imageUrl: decorArt.imageUrl } : null, backgroundUrl: decorArt?.backgroundUrl || null },
+      decor: { ...decor, boss: decorArt ? { characterId: decorArt.characterId, name: decorArt.name, imageUrl: decorArt.imageUrl, generatedImageUrl: decorArt.generatedImageUrl } : null, backgroundUrl: decorArt?.backgroundUrl || null },
       nextDecor: nextDecor ? { ...nextDecor, levelsRemaining: nextDecor.level - dojoLevel } : null,
       milestone: {
         tier: milestoneTier,
@@ -562,4 +582,11 @@ router.post('/ancient', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'i
 
 // decorArtCache exposé UNIQUEMENT pour les tests (`.clear()` entre les cas —
 // sinon le cache mémoire fait fuiter l'état d'un test à l'autre).
-module.exports = { router, decorArtCache };
+module.exports = {
+  router,
+  decorArtCache,
+  // Exportés pour la route admin de génération de portraits IA
+  // (src/admin/admin.routes.js) — même sélection déterministe du gardien
+  // que celle utilisée pour l'affichage, une seule source de vérité.
+  pickBossForTheme,
+};

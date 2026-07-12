@@ -52,6 +52,7 @@ un Postgres local ou l'URL publique du Postgres Railway.
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | non | Active le bouton OAuth Google. |
 | `ADMIN_EMAILS` | non | CSV des emails admin (défaut `melfisk6@gmail.com`). |
 | `R2_ACCOUNT_ID` / `R2_BUCKET` / `R2_ENDPOINT` / `R2_PUBLIC_URL` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | non | Stockage médias Cloudflare R2 (voir `src/storage/r2.js`). |
+| `OPENAI_API_KEY` / `OPENAI_IMAGE_MODEL` | non | Génération IA des portraits de gardiens du Dojo (voir `src/ai/openai.service.js`), déclenchée uniquement via `POST /api/admin/dojo/generate-boss-art` — jamais à la demande d'un joueur. Sans clé, repli sur les portraits AniList existants. `OPENAI_IMAGE_MODEL` par défaut `gpt-image-1`. |
 
 La config est vérifiée au démarrage par `src/util/env.js` : des avertissements
 sont loggés si quelque chose manque, sans jamais bloquer le démarrage.

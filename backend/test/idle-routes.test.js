@@ -39,6 +39,7 @@ test.beforeEach(() => {
   prisma.character.findMany = async () => [];
   prisma.song.findFirst = async () => null;
   prisma.ancientLevel.findMany = async () => [];
+  prisma.dojoBossArt.findUnique = async () => null;
   idleRoutes.decorArtCache.clear();
 });
 
@@ -143,6 +144,34 @@ test("GET /state : le décor porte un gardien mythique réel + le fond de son an
   // La jaquette stockée est la vignette /medium/ (~100 px) : trop petite pour
   // la scène, l'URL doit être réécrite vers /large/ (même image, CDN AniList).
   assert.equal(res.json.dojo.decor.backgroundUrl, 'https://cdn.example/media/anime/cover/large/bx42.jpg');
+});
+
+test("GET /state : le portrait IA généré (DojoBossArt) prime sur le portrait AniList quand il existe", async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.character.findMany = async () => [
+    { id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/yamato.jpg', seriesId: null },
+  ];
+  prisma.dojoBossArt.findUnique = async ({ where }) => (
+    where.characterId_theme.characterId === 102
+      ? { imageUrl: 'https://r2.example/dojo-boss-art/wood-102.png' }
+      : null
+  );
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.decor.boss.imageUrl, 'https://cdn.example/yamato.jpg'); // portrait AniList inchangé
+  assert.equal(res.json.dojo.decor.boss.generatedImageUrl, 'https://r2.example/dojo-boss-art/wood-102.png');
+});
+
+test('GET /state : sans portrait IA généré, generatedImageUrl reste null (repli sur le portrait AniList)', async () => {
+  const user = dbUser();
+  prisma.user.findUnique = async () => user;
+  prisma.character.findMany = async () => [
+    { id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/yamato.jpg', seriesId: null },
+  ];
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.dojo.decor.boss.generatedImageUrl, null);
 });
 
 test('GET /state : sans mythique en base (ou sans portrait), le décor reste utilisable sans gardien', async () => {

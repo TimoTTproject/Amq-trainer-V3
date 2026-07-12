@@ -589,6 +589,7 @@ model Character {
   marketListings MarketListing[]
   idleSlots      IdleSlot[]
   dojoRecruits   DojoRecruit[]
+  dojoBossArts   DojoBossArt[]
 
   @@index([rarity])
   @@index([series])
@@ -813,4 +814,24 @@ model AncientLevel {
 
   @@unique([userId, ancientKey])
   @@index([userId])
+}
+
+// Cache PERMANENT (jamais régénéré automatiquement) du portrait IA généré
+// pour le « gardien » d'un palier de décor du Dojo — voir
+// POST /api/admin/dojo/generate-boss-art et src/ai/openai.service.js.
+// Clé (characterId, theme) : le même personnage mythique peut en théorie
+// devenir gardien de plusieurs paliers (marche circulaire dans
+// pickBossForTheme), chaque palier a sa propre ambiance/prompt donc sa
+// propre image. Table séparée plutôt qu'une colonne sur Character : ce
+// visuel est Dojo-only, Character reste un modèle partagé avec le gacha.
+model DojoBossArt {
+  id          Int      @id @default(autoincrement())
+  characterId Int
+  theme       String
+  imageUrl    String
+  generatedAt DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, theme])
 }

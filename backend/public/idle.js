@@ -479,7 +479,10 @@ function idleRenderBoss(boss) {
     return;
   }
   el.classList.remove('hidden');
-  const img = boss.imageUrl ? ` style="background-image:url('${boss.imageUrl}')"` : '';
+  // Portrait IA généré via la route admin (voir POST /api/admin/dojo/generate-boss-art)
+  // si disponible, sinon repli sur le portrait AniList existant (comportement historique).
+  const url = boss.generatedImageUrl || boss.imageUrl;
+  const img = url ? ` style="background-image:url('${url}')"` : '';
   el.innerHTML = `<span class="idle-boss-portrait"${img}></span>
     <span class="idle-boss-name">${escapeHtml(boss.name)}<small>Gardien du lieu</small></span>`;
 }
