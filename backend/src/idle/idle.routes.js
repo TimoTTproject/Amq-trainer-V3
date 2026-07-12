@@ -72,6 +72,17 @@ function idleMissionList(user, recruitCount, activeCount, stage) {
   ];
 }
 
+function bossMechanicForStage(stage) {
+  const wave = ((stage - 1) % 10) + 1; if (wave !== 10) return null;
+  const zone = Math.floor((stage - 1) / 10) + 1;
+  return [
+    { key: 'shield', name: 'Bouclier', description: 'Frappes normales réduites de 40%.', clickMultiplier: .6 },
+    { key: 'rage', name: 'Rage', description: 'Dégâts actifs réduits de 25%.', clickMultiplier: .75 },
+    { key: 'regen', name: 'Régénération', description: 'Dégâts actifs réduits de 20%.', clickMultiplier: .8 },
+    { key: 'counter', name: 'Contre', description: 'Frappes normales réduites de 50%.', clickMultiplier: .5 },
+  ][(zone - 1) % 4];
+}
+
 // ── Habillage visuel du décor : un « gardien » mythique réel (portrait
 // AniList déjà en base) + un fond tiré d'un anime (jaquette déjà récupérée
 // par le catalogue de musiques, cf. Song.coverUrl) — aucune donnée externe
@@ -225,6 +236,7 @@ async function buildState(userId) {
     select: {
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
       essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
+      idleBossClaimed: true,
     },
   });
   if (!user) return null;
@@ -284,6 +296,9 @@ async function buildState(userId) {
   const stage = stageForXp(user.essenceEarnedTotal);
   const xpIntoStage = user.essenceEarnedTotal - stageXpForLevel(stage);
   const xpForNextStage = stageXpForLevel(stage + 1) - stageXpForLevel(stage);
+  const defeatedBosses = Math.floor(Math.max(0, stage - 1) / 10);
+  const nextBossChest = user.idleBossClaimed + 1;
+  const bossReward = (tier) => Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
 
   const missionDefs = idleMissionList(user, recruitCount, slots.filter((s) => s.characterId).length, stage);
   let claims = [];
@@ -312,6 +327,8 @@ async function buildState(userId) {
       xpIntoStage,
       xpForNextStage,
       progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
+      bossChest: { defeated: defeatedBosses, claimed: user.idleBossClaimed, available: defeatedBosses >= nextBossChest, tier: nextBossChest, reward: bossReward(nextBossChest) },
+      mechanic: bossMechanicForStage(stage),
     },
     missions,
     prod: {
@@ -610,13 +627,16 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
 // aussi pour l'XP du Dojo (essenceEarnedTotal).
 router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COOLDOWN_MS, max: 1, name: 'idle-click' }), async (req, res) => {
   const ancientLevelsByKey = await loadAncientLevels(prisma, req.user.id);
-  const gained = clickYield(req.user.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult'));
+  const liveUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, essenceEarnedTotal: true } });
+  const mechanic = bossMechanicForStage(stageForXp(liveUser.essenceEarnedTotal));
+  const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult'));
+  const gained = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1)));
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } },
     select: { essence: true },
   });
-  res.json({ essence: user.essence, gained });
+  res.json({ essence: user.essence, gained, mechanic: mechanic?.key || null });
 });
 
 router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
@@ -656,6 +676,22 @@ router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, na
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Mission déjà réclamée' });
     throw e;
   }
+});
+
+router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
+  try {
+    const reward = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id } });
+      const defeated = Math.floor(Math.max(0, stageForXp(user.essenceEarnedTotal) - 1) / 10);
+      const tier = user.idleBossClaimed + 1;
+      if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
+      const amount = Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
+      const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 }, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
+      if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
+      return amount;
+    });
+    res.json({ ok: true, reward });
+  } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
 // Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse

@@ -113,6 +113,7 @@ model User {
   // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
   // du Dojo qui les débloque est lui aussi permanent).
   idleMilestoneClaimed Int @default(0)
+  idleBossClaimed      Int @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
