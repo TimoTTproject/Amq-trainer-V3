@@ -202,7 +202,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) * (1 + masteryBonus(s.character.series)) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * Math.pow(2, s.ascension || 0) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) * (1 + masteryBonus(s.character.series)) : sum),
     0
   );
   const teamPassive = slots.reduce((mult, s) => {
@@ -306,7 +306,7 @@ async function buildState(userId) {
         rarity: row.character.rarity,
         series: row.character.series,
         level,
-        rate: slotRate(row.character.rarity, level),
+        rate: slotRate(row.character.rarity, level) * Math.pow(2, row.ascension || 0),
         levelUpCost: charLevelUpCost(row.character.rarity, level),
         levelCosts: Object.fromEntries([1, 5, 10, 100].map((n) => [n, charLevelBulkCost(row.character.rarity, level, n)])),
         baseRate: RARITY_RATE[row.character.rarity] || 0,
@@ -315,6 +315,10 @@ async function buildState(userId) {
         passiveUnlocked: level >= 10,
         milestones: HERO_MILESTONES.map((target) => ({ target, reached: level >= target })),
         nextMilestone: HERO_MILESTONES.find((target) => target > level) || null,
+        ascension: row.ascension || 0,
+        ascensionMultiplier: Math.pow(2, row.ascension || 0),
+        canAscend: level >= 500 && (row.ascension || 0) < 5,
+        ascensionCost: Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[row.character.rarity] || 25000) * Math.pow(3, row.ascension || 0)),
         equipments: ['weapon', 'relic', 'accessory'].map((kind) => (row.equipments || []).find((e) => e.kind === kind) || { kind, empty: true }),
       };
     }
@@ -614,6 +618,24 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name
     throw e;
   }
   res.json(await buildState(req.user.id));
+});
+
+router.post('/slot-ascend', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-ascend' }), async (req, res) => {
+  const slotIndex = Number(req.body?.slotIndex);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) return res.status(400).json({ error: 'Emplacement invalide' });
+  try {
+    await withSettle(req.user.id, async (tx, user) => {
+      const slot = await tx.idleSlot.findUnique({ where: { userId_slotIndex: { userId: user.id, slotIndex } }, include: { character: { select: { rarity: true } } } });
+      if (!slot?.character) throw new IdleError(400, 'Emplacement vide');
+      if ((slot.level || 1) < 500) throw new IdleError(400, 'Niveau 500 requis');
+      if ((slot.ascension || 0) >= 5) throw new IdleError(400, 'Ascension maximale atteinte');
+      const cost = Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[slot.character.rarity] || 25000) * Math.pow(3, slot.ascension || 0));
+      if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
+      await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
+      await tx.idleSlot.update({ where: { id: slot.id }, data: { level: 1, ascension: { increment: 1 } } });
+    });
+    res.json(await buildState(req.user.id));
+  } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de

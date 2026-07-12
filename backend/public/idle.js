@@ -801,12 +801,14 @@ function idleSlotHTML(slot) {
     <div class="idle-hero-meta">
       <span class="idle-hero-lvl">Nv. ${idleFormatNumber(c.level)}</span>
       <span class="idle-hero-rate">+${idleFormatNumber(c.rate)}/s</span>
+      ${c.ascension ? `<span class="idle-ascension-rank"><i class="fas fa-sun"></i> A${c.ascension} · ×${c.ascensionMultiplier}</span>` : ''}
     </div>
     <div class="idle-hero-stats"><span>Base <b>${idleFormatNumber(c.baseRate)}/s</b></span><span>Scaling <b>+${Math.round(c.scaling * 100)}%/niv.</b></span></div>
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
     <div class="idle-equipment">${c.equipments.map((e) => `<span class="${e.empty ? 'empty' : `r-${e.rarity}`}" title="${e.empty ? 'Emplacement vide' : `+${Math.round(e.bonus * 100)}% production`}"><i class="fas ${e.kind === 'weapon' ? 'fa-khanda' : e.kind === 'relic' ? 'fa-gem' : 'fa-ring'}"></i><small>${e.empty ? 'Vide' : `+${Math.round(e.bonus * 100)}%`}</small></span>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
+    ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau 500 · prochain multiplicateur ×${c.ascensionMultiplier * 2}</span>`}
   </div>`;
 }
 
@@ -933,6 +935,11 @@ async function levelUpIdleSlot(slotIndex, slotEl, amount = 1) {
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
   if (slotEl) idleCardBump(slotEl);
   refreshIdleState();
+}
+async function ascendIdleSlot(slotIndex) {
+  if (!confirm('Le héros revient au niveau 1, mais sa production est doublée définitivement sur cet emplacement. Continuer ?')) return;
+  try { const state = await api('/api/idle/slot-ascend', { method: 'POST', body: JSON.stringify({ slotIndex }) }); if (typeof burstConfetti === 'function') burstConfetti(60); idleSpawnFloat('ASCENSION · PUISSANCE DOUBLÉE', 'crit'); renderIdleState(state); }
+  catch (e) { alert(e.message); }
 }
 
 async function buyIdleUpgrade(type, cardEl) {
@@ -1120,6 +1127,8 @@ function initIdleUI() {
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));
     const levelBtn = e.target.closest('[data-action="levelup"]');
     if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-hero'), Number(levelBtn.dataset.amount || 1));
+    const ascendBtn = e.target.closest('[data-action="ascend"]');
+    if (ascendBtn) return ascendIdleSlot(Number(ascendBtn.dataset.slot));
     const unlockBtn = e.target.closest('.idle-unlock-btn');
     if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-hero'));
     const pickBtn = e.target.closest('[data-action="pick"]');
