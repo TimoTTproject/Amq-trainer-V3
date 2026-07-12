@@ -82,7 +82,11 @@ async function fetchDecorArt(theme) {
         where: { anilistId: boss.seriesId, coverUrl: { not: null, notIn: [''] } },
         select: { coverUrl: true },
       });
-      backgroundUrl = song?.coverUrl || null;
+      // Song.coverUrl stocke coverImage.medium (~100 px, suffisant pour les
+      // vignettes du quiz) — bien trop petit pour un visuel de scène : étiré,
+      // ça donnait une bouillie floue. Le CDN AniList sert la même image en
+      // /large/ (~230 px), on réécrit juste le segment du chemin.
+      backgroundUrl = song?.coverUrl ? song.coverUrl.replace('/medium/', '/large/') : null;
     }
     return { characterId: boss.id, name: boss.name, imageUrl: boss.imageUrl, backgroundUrl };
   }

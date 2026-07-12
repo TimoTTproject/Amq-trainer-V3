@@ -5563,13 +5563,6 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-space[data-decor="gold"] { background: radial-gradient(1200px 600px at 20% -10%, #3f2c05, transparent), linear-gradient(160deg, #1c1404, #2e2107 60%, #3a2a08); }
 .idle-space[data-decor="celestial"] { background: radial-gradient(1200px 600px at 20% -10%, #1a1240, transparent), linear-gradient(160deg, #0a081c, #140f33 60%, #1a1348); }
 
-/* Fond de page : jaquette d'anime (AniList, déjà en base) floutée + assombrie */
-.idle-backdrop {
-  position: fixed; inset: 0; z-index: 0; background-size: cover; background-position: center;
-  filter: blur(26px) brightness(.35) saturate(1.1); transform: scale(1.2);
-  transition: background-image .6s ease; pointer-events: none;
-}
-
 /* Particules ambiantes du décor (pétales/lanternes/étoiles), cosmétique pur */
 .idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .idle-particle {
@@ -5632,15 +5625,25 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-space[data-decor="gold"] .idle-scene { background: linear-gradient(160deg, #2a1d06, #4a3408); }
 .idle-space[data-decor="celestial"] .idle-scene { background: linear-gradient(160deg, #0d0a24, #221856); }
 
-/* Jaquette d'anime nette dans la scène, sous un dégradé de lisibilité */
-.idle-scene-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transition: background-image .6s ease; }
-.idle-scene-bg::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.12) 42%, rgba(0,0,0,.68));
-}
-/* Silhouettes SVG du palier, par-dessus la jaquette */
+/* Scène « peinte » : les SVG plats du palier sont le décor principal
+   (la jaquette photo étirée était une bouillie floue — supprimée). */
 .idle-scenery { position: absolute; inset: 0; pointer-events: none; }
-.idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 72%; }
+.idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; }
+
+/* Jaquette de l'anime du gardien : kakémono NET accroché à gauche de la scène,
+   à sa taille utile (~110 px) — jamais étirée. */
+.idle-scene-poster {
+  position: absolute; left: 4%; bottom: 14%; z-index: 1;
+  width: 21%; max-width: 108px; aspect-ratio: 2 / 3;
+  background-size: cover; background-position: center;
+  border: 3px solid #d4a94e; border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.6);
+  transform: rotate(-2.5deg);
+}
+.idle-scene-poster::before {
+  content: ''; position: absolute; left: 50%; top: -12px; transform: translateX(-50%);
+  width: 3px; height: 12px; background: #d4a94e;
+}
 
 .idle-scene-head { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .idle-scene-head h2 { font-size: 1.15rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.85); }

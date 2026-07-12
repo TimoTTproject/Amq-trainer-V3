@@ -94,12 +94,14 @@ test("GET /state : le décor porte un gardien mythique réel + le fond de son an
     { id: 101, name: 'Sans imageUrl (à ignorer)', imageUrl: null, seriesId: 1 },
     { id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/yamato.jpg', seriesId: 42 },
   ];
-  prisma.song.findFirst = async ({ where }) => (where.anilistId === 42 ? { coverUrl: 'https://cdn.example/cover42.jpg' } : null);
+  prisma.song.findFirst = async ({ where }) => (where.anilistId === 42 ? { coverUrl: 'https://cdn.example/media/anime/cover/medium/bx42.jpg' } : null);
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.dojo.decor.boss.name, 'Yamato');
   assert.equal(res.json.dojo.decor.boss.imageUrl, 'https://cdn.example/yamato.jpg');
-  assert.equal(res.json.dojo.decor.backgroundUrl, 'https://cdn.example/cover42.jpg');
+  // La jaquette stockée est la vignette /medium/ (~100 px) : trop petite pour
+  // la scène, l'URL doit être réécrite vers /large/ (même image, CDN AniList).
+  assert.equal(res.json.dojo.decor.backgroundUrl, 'https://cdn.example/media/anime/cover/large/bx42.jpg');
 });
 
 test('GET /state : sans mythique en base (ou sans portrait), le décor reste utilisable sans gardien', async () => {
