@@ -234,6 +234,7 @@ function renderIdleState(state) {
   renderIdlePrestige(state.dojo);
   renderIdleAncients(state.ancients);
   renderIdleRecruit(state.recruit, state.essence);
+  renderIdleRecruitHistory(state.recruitHistory || []);
 }
 
 const IDLE_ROLES = [
@@ -1046,6 +1047,8 @@ function showIdleRecruitReveal(character) {
     <span class="idle-recruit-reveal-series">${escapeHtml(character.series || 'Univers inconnu')}</span>
     <span class="idle-recruit-reveal-rarity r-${character.rarity}">${escapeHtml(rarity)}</span>
     ${character.talent ? `<div class="idle-reveal-talent"><i class="fas fa-fingerprint"></i><div><b>Talent · ${escapeHtml(character.talent.name)}</b><span>${escapeHtml(character.talent.description)}</span></div></div>` : ''}`;
+  const rates=(idleState?.slots||[]).filter((s)=>s.character).map((s)=>s.character.rate); const weakest=rates.length?Math.min(...rates):0;
+  body.insertAdjacentHTML('beforeend',`<div class="idle-recruit-comparison"><span><small>PRODUCTION DE BASE</small><b>+${idleFormatNumber(character.baseRate||0)}/s</b></span><span><small>COMPARAISON ÉQUIPE</small><b class="${(character.baseRate||0)>weakest?'better':''}">${!rates.length?'Premier héros':(character.baseRate||0)>weakest?'Plus forte que le plus faible':'À entraîner'}</b></span></div>`);
   const freeSlot = idleState?.slots?.find((s) => !s.locked && !s.character);
   const assign = document.getElementById('idle-recruit-assign');
   if (assign) assign.innerHTML = freeSlot
@@ -1053,6 +1056,8 @@ function showIdleRecruitReveal(character) {
     : '<i class="fas fa-users"></i> Voir mon équipe';
   modal.classList.remove('hidden');
 }
+
+function renderIdleRecruitHistory(items){const box=document.getElementById('idle-recruit-history');if(!box)return;box.innerHTML=items.length?items.map((c)=>`<div class="idle-history-row"><i class="fas fa-user-plus"></i><div><b>${escapeHtml(c.name||'Personnage')}</b><span>${escapeHtml(c.series||'Univers inconnu')} · ${escapeHtml(c.talent?.name||'')}</span></div><small>${c.recruitedAt?new Date(c.recruitedAt).toLocaleDateString('fr-FR'):''}</small></div>`).join(''):'<p class="hint">Aucun recrutement pour le moment.</p>';}
 
 function closeIdleRecruitReveal() {
   document.getElementById('idle-recruit-reveal')?.classList.add('hidden');
