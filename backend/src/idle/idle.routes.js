@@ -176,8 +176,11 @@ const HERO_CLASSES = {
 function heroClass(key) { return HERO_CLASSES[key] || HERO_CLASSES.warrior; }
 
 function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey) {
+  const seriesLevels = new Map();
+  for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
+  const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
   const base = slots.reduce(
-    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) : sum),
+    (sum, s) => (s.characterId && s.character ? sum + slotRate(s.character.rarity, s.level) * (1 + (s.equipments || []).reduce((v, e) => v + e.bonus, 0)) * (1 + masteryBonus(s.character.series)) : sum),
     0
   );
   const teamPassive = slots.reduce((mult, s) => {
@@ -255,6 +258,8 @@ async function buildState(userId) {
     prisma.dojoRecruit.count({ where: { userId } }),
     loadAncientLevels(prisma, userId),
   ]);
+  let recruits = [];
+  try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { series: true, rarity: true } } } }); } catch (e) { if (e?.code) throw e; }
   const prodAncientBonus = ancientBonus(ancientLevelsByKey, 'prodMult');
   const clickAncientBonus = ancientBonus(ancientLevelsByKey, 'clickMult');
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
@@ -320,6 +325,10 @@ async function buildState(userId) {
   }
   const claimed = new Set(claims.map((c) => `${c.missionKey}:${c.period}`));
   const missions = missionDefs.map((m) => ({ ...m, completed: m.progress >= m.target, claimed: claimed.has(`${m.key}:${m.period}`) }));
+  const masteryMap = new Map();
+  for (const r of recruits) if (r.character?.series) { const x = masteryMap.get(r.character.series) || { series: r.character.series, recruits: 0, levels: 0 }; x.recruits++; masteryMap.set(r.character.series, x); }
+  for (const s of slots) if (s.character?.series) { const x = masteryMap.get(s.character.series) || { series: s.character.series, recruits: 0, levels: 0 }; x.levels += s.level || 1; masteryMap.set(s.character.series, x); }
+  const masteries = [...masteryMap.values()].map((m) => { const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = [25,100,250,500].find((n) => n > m.levels) || null; return { ...m, bonus, next }; }).sort((a,b) => b.levels-a.levels);
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -343,6 +352,7 @@ async function buildState(userId) {
       mechanic: bossMechanicForStage(stage),
     },
     missions,
+    codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),

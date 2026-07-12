@@ -227,6 +227,7 @@ function renderIdleState(state) {
   renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
   renderIdleTeamStrategy(state);
+  renderIdleCodex(state.codex);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
   renderIdleAncients(state.ancients);
@@ -253,6 +254,13 @@ function renderIdleTeamStrategy(state) {
   const bonus = best?.[1] >= 3 ? 25 : best?.[1] >= 2 ? 10 : active.length >= 3 ? 5 : 0;
   const bar = document.getElementById('idle-synergy-bar');
   if (bar) bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}</span></div>` : '<i class="fas fa-link"></i><div><b>Aucune synergie active</b><span>Aligne 2 héros d’une même licence ou 3 univers différents.</span></div>';
+}
+
+function renderIdleCodex(codex) {
+  const masteries = document.getElementById('idle-masteries');
+  if (masteries) masteries.innerHTML = (codex?.masteries || []).length ? codex.masteries.map((m) => `<div class="idle-mastery"><i class="fas fa-star"></i><div><b>${escapeHtml(m.series)}</b><span>${m.recruits} recrue(s) · ${idleFormatNumber(m.levels)} niveaux cumulés</span><em style="--progress:${m.next ? Math.min(100,m.levels/m.next*100) : 100}%"></em></div><strong>+${Math.round(m.bonus*100)}%</strong><small>${m.next ? `Prochain bonus niv. ${m.next}` : 'MAÎTRISE MAX'}</small></div>`).join('') : '<p class="hint">Recrute puis entraîne des héros pour découvrir leurs licences.</p>';
+  const worlds = document.getElementById('idle-world-codex');
+  if (worlds) worlds.innerHTML = (codex?.worlds || []).map((w) => `<span class="idle-world-entry ${w.discovered ? 'discovered' : 'locked'}"><i class="fas ${w.discovered ? 'fa-map-location-dot' : 'fa-lock'}"></i><b>${w.discovered ? escapeHtml(w.name) : 'Monde inconnu'}</b><small>Niveau ${w.level}</small></span>`).join('');
 }
 
 // Frise des paliers de décor (Progression) — équivalent simplifié d'une
