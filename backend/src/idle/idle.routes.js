@@ -279,7 +279,7 @@ async function withSettle(userId, mutate) {
     const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
     const settledUser = await tx.user.update({
       where: { id: userId },
-      data: { essence: { increment: collected }, essenceEarnedTotal: { increment: collected }, idleLastCollectAt: new Date() },
+      data: { essence: { increment: collected }, ...(user.idleBattleMode==='farm'?{}:{essenceEarnedTotal:{increment:collected}}), idleLastCollectAt: new Date() },
     });
     // `ancientLevelsByKey` passé au mutateur : certaines routes (recrutement)
     // ont besoin d'autres bonus d'Ancients (chance, remise) que celui déjà
@@ -299,7 +299,7 @@ async function buildState(userId) {
       essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true,
     },
   });
   if (!user) return null;
@@ -415,6 +415,7 @@ async function buildState(userId) {
       bossChest: { defeated: defeatedBosses, claimed: user.idleBossClaimed, available: defeatedBosses >= nextBossChest, tier: nextBossChest, reward: bossReward(nextBossChest) },
       mechanic: bossMechanicForStage(stage),
       speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
+      mode: user.idleBattleMode||'progress',
     },
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
@@ -697,6 +698,7 @@ router.post('/battle-speed', requireAuth, requireAdmin, rateLimit({ max: 20, nam
   const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<required)return res.status(403).json({error:`Débloqué au niveau ${required}`});
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleSpeed:speed}});});res.json(await buildState(req.user.id));
 });
+router.post('/battle-mode', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-mode' }), async(req,res)=>{const mode=String(req.body?.mode||'');if(!['progress','farm'].includes(mode))return res.status(400).json({error:'Mode invalide'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleMode:mode}});});res.json(await buildState(req.user.id));});
 
 router.post('/equipment/enhance', requireAuth, requireAdmin, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const slotIndex=Number(req.body?.slotIndex);const kind=String(req.body?.kind||'');if(!Number.isInteger(slotIndex)||!['weapon','relic','accessory'].includes(kind))return res.status(400).json({error:'Équipement invalide'});
@@ -766,16 +768,16 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
 // aussi pour l'XP du Dojo (essenceEarnedTotal).
 router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COOLDOWN_MS, max: 1, name: 'idle-click' }), async (req, res) => {
   const ancientLevelsByKey = await loadAncientLevels(prisma, req.user.id);
-  const liveUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, essenceEarnedTotal: true, idleHeroClass: true, idleHeroSpec:true } });
+  const liveUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, essenceEarnedTotal: true, idleHeroClass: true, idleHeroSpec:true, idleBattleMode:true } });
   const mechanic = bossMechanicForStage(stageForXp(liveUser.essenceEarnedTotal));
   const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click * (heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1) * currentIdleEvent().click;
-  const gained = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1)));
+  const critical=Math.random()<.12; const gained = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1) * (critical?2:1)));
   const user = await prisma.user.update({
     where: { id: req.user.id },
-    data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } },
+    data: { essence: { increment: gained }, ...(liveUser.idleBattleMode==='farm'?{}:{essenceEarnedTotal:{increment:gained}}) },
     select: { essence: true },
   });
-  res.json({ essence: user.essence, gained, mechanic: mechanic?.key || null });
+  res.json({ essence: user.essence, gained, critical, mechanic: mechanic?.key || null });
 });
 
 router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
