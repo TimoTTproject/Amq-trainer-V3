@@ -5542,7 +5542,9 @@ textarea::placeholder {
   }
 }
 
-/* ── Dojo (idle/clicker) : espace dédié plein écran, décor évolutif ── */
+/* ── Dojo (idle/clicker) : espace dédié plein écran, style « vrai jeu mobile » ──
+   Structure : HUD collant (essence/niveau) · scène jouable (décor + gardien +
+   gains flottants) · tuiles de stats · barre d'onglets fixe en bas. */
 body.idle-fullscreen #app-header,
 body.idle-fullscreen #navbar,
 body.idle-fullscreen #navbar-pinned-sep,
@@ -5553,7 +5555,7 @@ body.idle-fullscreen #app { padding-top: 0; }
   position: fixed; inset: 0; z-index: 30; overflow-y: auto;
   background: radial-gradient(1200px 600px at 20% -10%, #2a2115, transparent), linear-gradient(160deg, #14100c, #1c1712 60%, #221a12);
   color: var(--text);
-  transition: background .6s ease;
+  padding-bottom: 74px; /* laisse la place à la barre d'onglets fixe */
 }
 /* Paliers de décor — palette qui se réchauffe/s'illumine avec le niveau. */
 .idle-space[data-decor="garden"] { background: radial-gradient(1200px 600px at 20% -10%, #17301f, transparent), linear-gradient(160deg, #0d1911, #142819 60%, #16321d); }
@@ -5561,45 +5563,138 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-space[data-decor="gold"] { background: radial-gradient(1200px 600px at 20% -10%, #3f2c05, transparent), linear-gradient(160deg, #1c1404, #2e2107 60%, #3a2a08); }
 .idle-space[data-decor="celestial"] { background: radial-gradient(1200px 600px at 20% -10%, #1a1240, transparent), linear-gradient(160deg, #0a081c, #140f33 60%, #1a1348); }
 
-.idle-space-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px 6px; }
+/* Fond de page : jaquette d'anime (AniList, déjà en base) floutée + assombrie */
+.idle-backdrop {
+  position: fixed; inset: 0; z-index: 0; background-size: cover; background-position: center;
+  filter: blur(26px) brightness(.35) saturate(1.1); transform: scale(1.2);
+  transition: background-image .6s ease; pointer-events: none;
+}
+
+/* Particules ambiantes du décor (pétales/lanternes/étoiles), cosmétique pur */
+.idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.idle-particle {
+  position: absolute; top: -10%; opacity: 0; pointer-events: none;
+  animation-name: idleParticleFall; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+@keyframes idleParticleFall {
+  0% { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+  8% { opacity: .8; }
+  92% { opacity: .6; }
+  100% { transform: translateY(110vh) translateX(40px) rotate(200deg); opacity: 0; }
+}
+
+/* ── HUD collant ── */
+.idle-hud {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: rgba(10, 10, 16, .74); backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
 .idle-back {
-  width: 38px; height: 38px; border-radius: 50%; flex: none; border: 1px solid var(--border);
+  width: 36px; height: 36px; border-radius: 50%; flex: none; border: 1px solid rgba(255,255,255,.15);
   background: rgba(0,0,0,.3); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-.idle-back:hover { background: rgba(0,0,0,.5); }
-.idle-space-title h2 { font-size: 1.3rem; display: flex; align-items: center; gap: 8px; }
-.idle-space-title h2 i { color: var(--orange); }
-.idle-space-title p { color: var(--text-2); font-size: .85rem; margin-top: 2px; }
+.idle-back:hover { background: rgba(0,0,0,.55); }
+.idle-hud-logo { font-weight: 800; font-size: 1.02rem; letter-spacing: .4px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.idle-hud-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+  font-size: .8rem; font-weight: 700; white-space: nowrap;
+}
+.idle-hud-essence { margin-left: auto; color: #ffd54a; border-color: #ffd54a44; }
+.idle-hud-essence i { font-size: .75rem; }
 
-.idle-decor-banner {
-  margin: 10px 20px 0; padding: 12px 16px; border-radius: 14px;
-  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(2px);
+.idle-milestone-btn {
+  flex: none; border: none; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(135deg, #ffb648, #ff5d8f); color: #2a1400; font-weight: 700; font-size: .76rem;
+  padding: 7px 11px; display: inline-flex; align-items: center; gap: 5px;
+  animation: idleMilestonePulse 1.6s ease-in-out infinite;
 }
-.idle-decor-row { display: flex; align-items: center; gap: 10px; }
-.idle-decor-ico {
-  width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.08);
-  display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--orange); flex: none;
+@keyframes idleMilestonePulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,182,72,0); }
+  50% { transform: scale(1.05); box-shadow: 0 0 14px rgba(255,182,72,.55); }
 }
-.idle-decor-info { display: flex; flex-direction: column; line-height: 1.2; }
-.idle-decor-info b { font-size: 1rem; }
-.idle-decor-lvl { font-size: .74rem; color: var(--text-2); }
-.idle-xp-bar { height: 7px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 10px; }
+
+.idle-content { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 14px 14px 30px; }
+
+/* ── Scène jouable ── */
+.idle-scene {
+  position: relative; border-radius: 18px; overflow: hidden; cursor: pointer;
+  min-height: 250px; border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(160deg, #241a10, #3a2a16);
+  box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease;
+}
+.idle-scene:active { transform: scale(.99); }
+.idle-space[data-decor="garden"] .idle-scene { background: linear-gradient(160deg, #10261a, #1d4029); }
+.idle-space[data-decor="temple"] .idle-scene { background: linear-gradient(160deg, #250e13, #4a161f); }
+.idle-space[data-decor="gold"] .idle-scene { background: linear-gradient(160deg, #2a1d06, #4a3408); }
+.idle-space[data-decor="celestial"] .idle-scene { background: linear-gradient(160deg, #0d0a24, #221856); }
+
+/* Jaquette d'anime nette dans la scène, sous un dégradé de lisibilité */
+.idle-scene-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transition: background-image .6s ease; }
+.idle-scene-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.12) 42%, rgba(0,0,0,.68));
+}
+/* Silhouettes SVG du palier, par-dessus la jaquette */
+.idle-scenery { position: absolute; inset: 0; pointer-events: none; }
+.idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 72%; }
+
+.idle-scene-head { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.idle-scene-head h2 { font-size: 1.15rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
+.idle-scene-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.idle-chip {
+  padding: 3px 10px; border-radius: 999px; font-size: .66rem; font-weight: 700; letter-spacing: .4px;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.28); text-transform: uppercase; white-space: nowrap;
+}
+.idle-chip-gold { color: #ffd54a; border-color: #ffd54a66; }
+
+/* Gardien mythique au centre de la scène */
+.idle-scene-boss {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding-top: 16px;
+}
+.idle-boss-portrait {
+  width: 112px; height: 112px; border-radius: 16px; background-size: cover; background-position: center top;
+  background-color: var(--bg-3); border: 3px solid #ff5d8f; box-shadow: 0 0 26px #ff5d8f77, 0 10px 30px rgba(0,0,0,.6);
+  animation: idleBossFloat 3.6s ease-in-out infinite;
+}
+@keyframes idleBossFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.idle-boss-name {
+  padding: 4px 14px; border-radius: 999px; background: rgba(0,0,0,.62);
+  border: 1px solid rgba(255,255,255,.2); font-size: .78rem; font-weight: 700; text-align: center;
+}
+.idle-boss-name small { display: block; font-weight: 600; color: #ff9dbd; font-size: .56rem; text-transform: uppercase; letter-spacing: .8px; }
+
+/* Gains flottants (+X essence) dans la scène */
+.idle-floats { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+.idle-float {
+  position: absolute; font-weight: 800; font-size: 1.05rem; color: #ffd54a;
+  text-shadow: 0 2px 6px rgba(0,0,0,.9); animation: idleFloatUp 1.4s ease-out forwards;
+}
+.idle-float.xp { color: #7ec8ff; font-size: .9rem; }
+@keyframes idleFloatUp {
+  0% { opacity: 0; transform: translateY(10px) scale(.8); }
+  15% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-70px) scale(1.12); }
+}
+
+.idle-scene-foot { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 2; }
+.idle-xp-bar { height: 8px; border-radius: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.16); overflow: hidden; }
 .idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
-.idle-decor-next { font-size: .72rem; color: var(--text-2); margin-top: 6px; }
+.idle-decor-next { font-size: .68rem; color: #fff; opacity: .9; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,.9); }
 
-.idle-content { max-width: 1100px; margin: 0 auto; padding: 18px 20px 60px; }
+.idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin: 10px 2px 14px; }
 
-.idle-top {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
-  padding: 14px 16px; margin: 0 0 22px;
-}
-.idle-essence { display: flex; align-items: center; gap: 10px; }
-.idle-essence i { font-size: 1.4rem; color: var(--orange); }
-.idle-essence div { display: flex; flex-direction: column; line-height: 1.1; }
-.idle-essence b { font-size: 1.3rem; }
-.idle-essence small { color: var(--text-2); font-size: .72rem; }
-.idle-rate { color: var(--text-2); font-size: .9rem; margin-right: auto; }
+/* ── Rangée d'actions ── */
+.idle-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.idle-actions > button { justify-content: center; padding: 12px 6px; font-size: .84rem; white-space: nowrap; min-width: 0; }
+#idle-top-recruit-btn:disabled, .idle-recruit-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-click-btn { position: relative; overflow: visible; }
 .idle-click-fx {
   position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
@@ -5610,9 +5705,33 @@ body.idle-fullscreen #app { padding-top: 0; }
   0% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -26px); }
 }
+.idle-click-coin {
+  position: absolute; top: 30%; left: 50%; pointer-events: none; font-size: 1rem;
+  animation: idleCoinFly .6s ease-out forwards;
+}
+@keyframes idleCoinFly {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(.8); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.1); }
+}
 
-.idle-section-title { font-size: 1rem; color: var(--text-2); margin: 22px 0 10px; }
+/* ── Tuiles de stats ── */
+.idle-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.idle-stat-tile {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
+}
+.idle-stat-ico {
+  width: 38px; height: 38px; border-radius: 10px; flex: none;
+  background: rgba(56,214,214,.14); color: #38d6d6;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+}
+.idle-stat-ico.fire { background: rgba(255,93,143,.14); color: #ff5d8f; }
+.idle-stat-tile b { display: block; font-size: 1.15rem; line-height: 1.15; }
+.idle-stat-tile small { color: var(--text-2); font-size: .64rem; text-transform: uppercase; letter-spacing: .5px; }
 
+.idle-section-title { font-size: 1rem; color: var(--text-2); margin: 6px 0 10px; }
+
+/* ── Emplacements d'entraînement ── */
 .idle-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 12px; }
 .idle-slot {
   position: relative; border-radius: 10px; min-height: 190px;
@@ -5630,12 +5749,10 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-slot-filled:hover .gcard { filter: brightness(1.08); }
 .idle-slot-filled .gcard { width: 100%; height: 100%; }
 /* cardHTML() dessine son propre nom/rareté sous l'image (.gcard-info, en flux
-   normal) — mais nos propres bandeaux (niveau/rate/retirer/monter) sont en
-   position absolute calés sur LE BAS DE L'EMPLACEMENT, pas sur celui de
-   l'image. Sur un slot compact (mobile), .gcard-info dépasse pile dans cette
-   zone et son texte se superposait au bandeau de taux (ex. "Gray Fullbus+3/s
-   ter"). Le niveau (badge) + la couleur de bordure (rareté) suffisent déjà à
-   identifier la carte ici ; le nom complet reste visible dans le sélecteur. */
+   normal) — nos bandeaux absolus (niveau/taux/boutons) sont calés sur le bas
+   de l'EMPLACEMENT : sur un slot compact le texte du nom finissait dessous et
+   se superposait. Niveau + bordure de rareté suffisent ici ; le nom complet
+   reste dans title et dans le sélecteur. */
 .idle-slot-filled .gcard-info { display: none; }
 .idle-slot-lvl {
   position: absolute; top: 6px; left: 6px; padding: 2px 7px; border-radius: 8px;
@@ -5658,6 +5775,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 .idle-slot-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
 
+/* ── Améliorations ── */
 .idle-upgrades { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .idle-upgrade-card {
   display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08);
@@ -5675,28 +5793,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-upgrade-btn:disabled { opacity: .5; cursor: not-allowed; }
 .idle-upgrade-maxed { flex: none; font-size: .72rem; font-weight: 700; color: var(--green); }
 
-/* Texte d'ambiance + coffre de jalon */
-.idle-decor-flavor { font-size: .74rem; color: var(--text-2); font-style: italic; margin-top: 8px; }
-
-/* Gardien mythique du palier (vrai personnage AniList du gacha) */
-.idle-decor-boss { display: inline-flex; align-items: center; gap: 8px; margin-left: 14px; }
-.idle-boss-portrait {
-  width: 34px; height: 34px; border-radius: 50%; background-size: cover; background-position: center top;
-  background-color: var(--bg-3); border: 2px solid #ff5d8f; box-shadow: 0 0 10px #ff5d8f66; flex: none;
-}
-.idle-boss-name { font-size: .74rem; color: var(--text-2); white-space: nowrap; }
-.idle-milestone-btn {
-  margin-left: auto; flex: none; border: none; border-radius: 10px; cursor: pointer;
-  background: linear-gradient(135deg, #ffb648, #ff5d8f); color: #2a1400; font-weight: 700; font-size: .78rem;
-  padding: 8px 12px; display: inline-flex; align-items: center; gap: 6px;
-  animation: idleMilestonePulse 1.6s ease-in-out infinite;
-}
-@keyframes idleMilestonePulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,182,72,0); }
-  50% { transform: scale(1.05); box-shadow: 0 0 14px rgba(255,182,72,.55); }
-}
-
-/* Prestige */
+/* ── Prestige ── */
 .idle-prestige-card {
   display: flex; align-items: center; gap: 14px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px; padding: 14px 16px; flex-wrap: wrap;
@@ -5707,54 +5804,33 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-prestige-card .btn-secondary { flex: none; }
 .idle-prestige-card .btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
 
-/* Particules ambiantes du décor (feuilles/braises/étoiles), purement cosmétique */
-/* Fond réel (jaquette d'anime AniList, déjà en base) : flouté + assombri pour
-   rester lisible sous l'interface, agrandi pour masquer les bords du flou. */
-.idle-backdrop {
-  position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center;
-  filter: blur(22px) brightness(.45) saturate(1.1); transform: scale(1.15);
-  transition: background-image .6s ease; pointer-events: none;
-}
-.idle-scenery { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; transition: opacity .5s ease; }
-.idle-scenery svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 45vh; }
-.idle-particles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-.idle-particle {
-  position: absolute; top: -10%; opacity: 0; pointer-events: none;
-  animation-name: idleParticleFall; animation-timing-function: linear; animation-iteration-count: infinite;
-}
-@keyframes idleParticleFall {
-  0% { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
-  8% { opacity: .8; }
-  92% { opacity: .6; }
-  100% { transform: translateY(110vh) translateX(40px) rotate(200deg); opacity: 0; }
-}
-.idle-space-header, .idle-decor-banner, .idle-content { position: relative; z-index: 1; }
-
-/* Pièces qui s'envolent au clic manuel */
-.idle-click-coin {
-  position: absolute; top: 30%; left: 50%; pointer-events: none; font-size: 1rem;
-  animation: idleCoinFly .6s ease-out forwards;
-}
-@keyframes idleCoinFly {
-  0% { opacity: 1; transform: translate(-50%, 0) scale(.8); }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.1); }
-}
-
-/* Modale « pendant ton absence » */
+/* ── Modales (retour d'absence + recrutement) ── */
 .idle-welcome-msg { color: var(--text-2); line-height: 1.5; }
-
-/* Recrutement (roster propre au Dojo) */
 .idle-recruit-btn { margin: 4px 0 10px; width: 100%; justify-content: center; }
-.idle-recruit-btn:disabled, #idle-top-recruit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Barre d'onglets fixe en bas ── */
+.idle-tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+  display: flex; justify-content: space-around; align-items: stretch;
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: rgba(10, 10, 16, .88); backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, .1);
+}
+.idle-tab {
+  background: none; border: none; color: var(--text-2); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: .66rem; font-weight: 700; padding: 6px 16px; border-radius: 10px;
+}
+.idle-tab i { font-size: 1.05rem; }
+.idle-tab.active { color: var(--accent); }
+.idle-tab.active i { filter: drop-shadow(0 0 8px currentColor); }
 
 @media (max-width: 700px) {
-  .idle-top { flex-direction: column; align-items: stretch; }
-  .idle-rate { margin-right: 0; }
-  .idle-content { padding: 14px 12px 50px; }
-  .idle-decor-banner { margin: 10px 12px 0; }
-  .idle-space-header { padding: 14px 12px 4px; }
-  .idle-decor-row { flex-wrap: wrap; }
-  .idle-decor-boss { margin-left: 0; }
-  .idle-milestone-btn { margin-left: 0; }
+  .idle-content { padding: 10px 10px 30px; }
+  .idle-scene { min-height: 215px; border-radius: 14px; }
+  .idle-boss-portrait { width: 92px; height: 92px; }
+  .idle-actions { gap: 6px; }
+  .idle-actions > button { font-size: .74rem; padding: 11px 4px; }
+  .idle-hud-logo .hub-badge { display: none; }
   .idle-prestige-card { flex-direction: column; align-items: stretch; }
 }

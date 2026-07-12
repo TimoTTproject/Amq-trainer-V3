@@ -8,6 +8,8 @@ let idleTicker = null;
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
 let idleParticleTheme = null; // dernier thème pour lequel les particules ambiantes ont été générées
 let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
+let idleActivePanel = 'home'; // onglet courant de la barre du bas (home | team | upgrades)
+let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 
 function idleFormatNumber(n) {
   n = Math.floor(n || 0);
@@ -19,16 +21,38 @@ function idleFormatNumber(n) {
   return sign + (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
 }
 
-const IDLE_DECOR_ICONS = { wood: 'fa-tree', garden: 'fa-leaf', temple: 'fa-landmark', gold: 'fa-crown', celestial: 'fa-star' };
-
 async function openIdle() {
   showView('idle');
   document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
+  idleShowPanel('home');
   idleStopTicker();
   idleWelcomeChecked = false;
   idleTicker = setInterval(idleTick, 400);
   await refreshIdleState();
   maybeShowIdleWelcome();
+}
+
+// Onglets de la barre du bas (façon appli mobile) : home = scène, team =
+// emplacements, upgrades = améliorations + prestige.
+function idleShowPanel(name) {
+  idleActivePanel = name;
+  for (const p of ['home', 'team', 'upgrades']) {
+    document.getElementById('idle-panel-' + p)?.classList.toggle('hidden', p !== name);
+  }
+  document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => t.classList.toggle('active', t.dataset.idleTab === name));
+}
+
+// Nombre flottant dans la scène (+essence, façon dégâts/gains d'un jeu mobile).
+function idleSpawnFloat(text, cls) {
+  const box = document.getElementById('idle-floats');
+  if (!box) return;
+  const f = document.createElement('span');
+  f.className = 'idle-float' + (cls ? ' ' + cls : '');
+  f.textContent = text;
+  f.style.left = `${Math.round(12 + Math.random() * 60)}%`;
+  f.style.top = `${Math.round(35 + Math.random() * 30)}%`;
+  box.appendChild(f);
+  setTimeout(() => f.remove(), 1400);
 }
 
 // « Pendant ton absence » : ne s'affiche qu'à l'ouverture (pas à chaque
@@ -64,6 +88,14 @@ function idleTick() {
   const display = idleState.essence + idleState.pendingEssence + elapsed * idleState.totalRate;
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
+  // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
+  // purement cosmétique, ça montre la production "vivre" comme dans un vrai
+  // idle game. Seulement si la scène est visible et produit au moins 1.
+  idleTickCount++;
+  const passiveGain = idleState.totalRate * 3.2;
+  if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
+    idleSpawnFloat(`+${idleFormatNumber(passiveGain)}`, 'xp');
+  }
 }
 
 async function refreshIdleState() {
@@ -90,6 +122,13 @@ function renderIdleState(state) {
   document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
+  const hudLevel = document.getElementById('idle-hud-level');
+  if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
+  const xpTotal = document.getElementById('idle-xptotal-val');
+  if (xpTotal) xpTotal.textContent = idleFormatNumber(state.dojo.xpTotal);
+  // Multiplicateur TOTAL affiché sur la scène : Discipline × niveau du Dojo × Prestige.
+  const mult = document.getElementById('idle-mult-val');
+  if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier * state.dojo.prestige.multiplier).toFixed(2)}`;
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
@@ -125,10 +164,8 @@ function renderIdleDecor(dojo, prevDojo) {
     idleSpawnParticles(dojo.decor.theme);
     idleSetScenery(dojo.decor.theme);
   }
-  const ico = document.getElementById('idle-decor-ico');
-  if (ico) ico.innerHTML = `<i class="fas ${IDLE_DECOR_ICONS[dojo.decor.theme] || 'fa-fire'}"></i>`;
   document.getElementById('idle-decor-name').textContent = dojo.decor.name;
-  document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)} · ×${dojo.multiplier.toFixed(2)}`;
+  document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = dojo.decor.flavor || '';
   idleRenderBackdrop(dojo.decor.backgroundUrl);
   idleRenderBoss(dojo.decor.boss);
@@ -225,15 +262,17 @@ function idleSetScenery(theme) {
 }
 
 // Fond réel tiré d'un anime (jaquette AniList déjà en base, cf. idle.routes.js
-// decorArtForTheme) — flouté en arrière-plan derrière la scène SVG/particules.
+// decorArtForTheme) : net DANS la scène (comme l'arène d'un jeu mobile), et
+// flouté/assombri en fond de page pour la profondeur.
 function idleRenderBackdrop(url) {
-  const box = document.getElementById('idle-backdrop');
-  if (!box) return;
-  box.style.backgroundImage = url ? `url('${url}')` : 'none';
+  const page = document.getElementById('idle-backdrop');
+  if (page) page.style.backgroundImage = url ? `url('${url}')` : 'none';
+  const scene = document.getElementById('idle-scene-bg');
+  if (scene) scene.style.backgroundImage = url ? `url('${url}')` : 'none';
 }
 
-// Portrait du « gardien » mythique du palier — vrai personnage AniList déjà
-// possédable dans le gacha, pas une illustration générique.
+// Le « gardien » mythique du palier trône au centre de la scène — vrai
+// personnage AniList, pas une illustration générique.
 function idleRenderBoss(boss) {
   const el = document.getElementById('idle-decor-boss');
   if (!el) return;
@@ -244,7 +283,8 @@ function idleRenderBoss(boss) {
   }
   el.classList.remove('hidden');
   const img = boss.imageUrl ? ` style="background-image:url('${boss.imageUrl}')"` : '';
-  el.innerHTML = `<span class="idle-boss-portrait"${img}></span><span class="idle-boss-name">Gardien : ${escapeHtml(boss.name)}</span>`;
+  el.innerHTML = `<span class="idle-boss-portrait"${img}></span>
+    <span class="idle-boss-name">${escapeHtml(boss.name)}<small>Gardien du lieu</small></span>`;
 }
 
 function renderIdleMilestone(dojo) {
@@ -345,6 +385,7 @@ async function clickIdle() {
   }
   if (idleState) idleState.essence = r.essence;
   idleClickFeedback(r.gained);
+  idleSpawnFloat(`+${r.gained}`);
 }
 
 function idleClickFeedback(gained) {
@@ -490,6 +531,13 @@ async function prestigeIdle() {
 function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
+  // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
+  // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
+  document.getElementById('idle-scene')?.addEventListener('click', clickIdle);
+  document.getElementById('idle-tabs')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-idle-tab]');
+    if (tab) idleShowPanel(tab.dataset.idleTab);
+  });
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
   document.getElementById('idle-slots')?.addEventListener('click', (e) => {
