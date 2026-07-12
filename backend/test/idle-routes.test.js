@@ -10,7 +10,7 @@ const idleRoutes = require('../src/idle/idle.routes');
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_DOJO_LEVEL, wisdomForPrestige,
-  ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS,
+  ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -65,7 +65,10 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(res.json.recruit.count, 0);
   assert.equal(res.json.recruit.nextCost, recruitCost(0));
   assert.equal(res.json.battle.stage, 1);
+  assert.equal(res.json.battle.kills, 0); // stage 1 = aucun kill encore
   assert.equal(res.json.battle.xpIntoStage, 0);
+  assert.equal(res.json.dojo.tiers.length, DOJO_DECOR.length);
+  assert.deepEqual(res.json.dojo.tiers[0], { level: DOJO_DECOR[0].level, name: DOJO_DECOR[0].name, theme: DOJO_DECOR[0].theme });
   assert.equal(res.json.ancients.points, 0);
   assert.equal(res.json.ancients.items.length, ANCIENTS.length);
   res.json.ancients.items.forEach((it) => {
@@ -102,6 +105,7 @@ test('GET /state : le stage de combat avance BEAUCOUP plus vite que le niveau de
   assert.equal(res.status, 200);
   assert.equal(res.json.dojo.level, 1);
   assert.ok(res.json.battle.stage > 1);
+  assert.equal(res.json.battle.kills, res.json.battle.stage - 1);
 });
 
 test('GET /state : la production hors-ligne est plafonnée et reflétée dans pendingEssence', async () => {

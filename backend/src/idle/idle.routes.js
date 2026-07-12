@@ -248,6 +248,7 @@ async function buildState(userId) {
     recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus) },
     battle: {
       stage,
+      kills: Math.max(0, stage - 1), // les stages commencent à 1 — affichage façon "X ennemis vaincus"
       xpIntoStage,
       xpForNextStage,
       progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
@@ -280,6 +281,10 @@ async function buildState(userId) {
       multiplier: dojoLevelMultiplier(dojoLevel),
       decor: { ...decor, boss: decorArt ? { characterId: decorArt.characterId, name: decorArt.name, imageUrl: decorArt.imageUrl, generatedImageUrl: decorArt.generatedImageUrl } : null, backgroundUrl: decorArt?.backgroundUrl || null },
       nextDecor: nextDecor ? { ...nextDecor, levelsRemaining: nextDecor.level - dojoLevel } : null,
+      // Liste statique (pas de requête DB) des paliers — sert la frise de
+      // progression côté client (renderIdleRoadmap) sans dupliquer DOJO_DECOR
+      // dans public/idle.js (qui se désynchroniserait si un palier change).
+      tiers: DOJO_DECOR.map((t) => ({ level: t.level, name: t.name, theme: t.theme })),
       milestone: {
         tier: milestoneTier,
         claimed: user.idleMilestoneClaimed,

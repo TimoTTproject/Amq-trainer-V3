@@ -200,16 +200,52 @@ function renderIdleState(state) {
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
   if (xpTotal) xpTotal.textContent = idleFormatNumber(state.dojo.xpTotal);
+  const wisdomVal = document.getElementById('idle-wisdom-val');
+  if (wisdomVal) wisdomVal.textContent = idleFormatNumber(state.ancients.points);
   // Multiplicateur TOTAL affiché sur la scène : Discipline (Ancients inclus) × niveau du Dojo.
   const mult = document.getElementById('idle-mult-val');
   if (mult) mult.textContent = `×${(state.prod.multiplier * state.dojo.multiplier).toFixed(2)}`;
+  // Ligne de stats de combat façon PokéClicker — aucune nouvelle donnée,
+  // juste rendues visibles en permanence (auparavant seulement dans la
+  // rangée d'actions/le bouton de clic).
+  const killsEl = document.getElementById('idle-kills-val');
+  if (killsEl) killsEl.textContent = idleFormatNumber(state.battle.kills);
+  const combatClick = document.getElementById('idle-combat-click');
+  if (combatClick) combatClick.textContent = `+${idleFormatNumber(state.click.yield)}`;
+  const combatTeam = document.getElementById('idle-combat-team');
+  if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
   renderIdleDecor(state.dojo, prev?.dojo);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
+  renderIdleRoadmap(state.dojo);
   renderIdleMainHero(state);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
   renderIdleAncients(state.ancients);
   renderIdleRecruit(state.recruit, state.essence);
+}
+
+// Frise des paliers de décor (Progression) — équivalent simplifié d'une
+// carte du monde : notre progression est une séquence linéaire de paliers
+// (dojo.tiers, liste statique envoyée par le serveur), pas un graphe de
+// zones à embranchements.
+function renderIdleRoadmap(dojo) {
+  const box = document.getElementById('idle-roadmap');
+  if (!box || !Array.isArray(dojo.tiers)) return;
+  const currentIndex = dojo.tiers.findIndex((t) => t.theme === dojo.decor.theme);
+  box.innerHTML = dojo.tiers.map((tier, i) => {
+    const isCurrent = i === currentIndex;
+    const isDone = currentIndex >= 0 && i < currentIndex;
+    const cls = isCurrent ? 'current' : (isDone ? 'done' : '');
+    const dotContent = isCurrent ? '<i class="fas fa-fire"></i>' : (isDone ? '<i class="fas fa-check"></i>' : idleFormatNumber(tier.level));
+    return `<div class="idle-roadmap-step ${cls}">
+      <span class="idle-roadmap-dot">${dotContent}</span>
+      <span class="idle-roadmap-name">${escapeHtml(tier.name.split(' · ')[0])}</span>
+      <span class="idle-roadmap-level">Nv. ${idleFormatNumber(tier.level)}</span>
+    </div>`;
+  }).join('');
+  // Centre la frise sur le palier courant plutôt que de la laisser au début.
+  const current = box.querySelector('.idle-roadmap-step.current');
+  if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
 
 // Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),

@@ -5595,21 +5595,23 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 
 /* ── HUD collant ── */
+/* Theme-aware (suit la bascule clair/sombre du site, cf. main.js#applyTheme) :
+   c'est du CHROME d'interface, pas l'ambiance du décor par palier (qui, elle,
+   reste volontairement figée — cf. .idle-space[data-decor] plus bas). */
 .idle-hud {
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 8px; padding: 10px 12px;
-  background: rgba(10, 10, 16, .74); backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: var(--bg-2); border-bottom: 1px solid var(--border);
 }
 .idle-back {
-  width: 36px; height: 36px; border-radius: 50%; flex: none; border: 1px solid rgba(255,255,255,.15);
-  background: rgba(0,0,0,.3); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  width: 36px; height: 36px; border-radius: 50%; flex: none; border: 1px solid var(--border);
+  background: var(--bg-3); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-.idle-back:hover { background: rgba(0,0,0,.55); }
-.idle-hud-logo { font-weight: 800; font-size: 1.18rem; letter-spacing: .4px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.idle-back:hover { background: var(--bg); }
+.idle-hud-logo { font-weight: 800; font-size: 1.18rem; letter-spacing: .4px; color: var(--text); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .idle-hud-badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+  background: var(--bg-3); border: 1px solid var(--border); color: var(--text);
   font-size: .88rem; font-weight: 700; white-space: nowrap;
 }
 .idle-hud-essence { margin-left: auto; color: #ffd54a; border-color: #ffd54a44; }
@@ -5807,20 +5809,64 @@ body.idle-fullscreen #app { padding-top: 0; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), -46px) scale(1.1); }
 }
 
-/* ── Tuiles de stats ── */
-.idle-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.idle-stat-tile {
-  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
-  background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
-}
-.idle-stat-ico {
-  width: 42px; height: 42px; border-radius: 10px; flex: none;
+/* ── Panneaux façon PokéClicker (Essence / Combat / Progression) ──
+   Réutilise .profile-section (déjà utilisé profil + salon multi) pour la
+   carte elle-même — padding/en-tête scopés ici comme le fait chaque vue. */
+#view-idle .profile-section { padding: 18px; margin-bottom: 16px; }
+#view-idle .profile-section h3 { color: var(--text-2); font-size: .95rem; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+#view-idle .profile-section h3 i { color: var(--accent); }
+/* La scène de combat garde son padding propre (la scène elle-même a déjà ses
+   marges internes) — seul le titre du panneau a besoin d'air au-dessus. */
+#view-idle .idle-combat-panel { padding: 18px 18px 0; }
+#view-idle .idle-combat-panel > .idle-actions { margin-top: 16px; }
+
+.idle-currency-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
+.idle-currency-item { display: flex; align-items: center; gap: 10px; }
+.idle-currency-ico {
+  width: 40px; height: 40px; border-radius: 10px; flex: none;
   background: rgba(56,214,214,.14); color: #38d6d6;
-  display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
 }
-.idle-stat-ico.fire { background: rgba(255,93,143,.14); color: #ff5d8f; }
-.idle-stat-tile b { display: block; font-size: 1.3rem; line-height: 1.2; }
-.idle-stat-tile small { color: var(--text-2); font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; }
+.idle-currency-ico.fire { background: rgba(255,93,143,.14); color: #ff5d8f; }
+.idle-currency-ico.wisdom { background: rgba(176,108,255,.14); color: #b06cff; }
+.idle-currency-item b { display: block; font-size: 1.2rem; line-height: 1.2; color: var(--text); }
+.idle-currency-item small { color: var(--text-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; }
+
+/* Ligne de stats de combat façon PokéClicker ("53 Pokémon defeated ·
+   Pokémon Attack: 102 · Click Attack: 36") — jamais de nouvelle donnée : que
+   des champs déjà dans le state (click.yield, totalRate) + battle.kills. */
+.idle-combat-stats {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 2px 0;
+  font-size: .82rem; color: var(--text-2);
+}
+.idle-combat-stats i { color: var(--accent); margin-right: 5px; }
+.idle-combat-stats b { color: var(--text); font-weight: 700; }
+
+/* Frise de progression (paliers de décor) — équivalent simplifié d'une carte
+   du monde : notre progression est une séquence linéaire, pas un graphe. */
+.idle-roadmap { display: flex; overflow-x: auto; gap: 0; padding: 4px 2px 8px; }
+.idle-roadmap-step {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; width: 92px;
+  position: relative; text-align: center;
+}
+.idle-roadmap-step:not(:last-child)::after {
+  content: ''; position: absolute; top: 17px; left: 58px; width: calc(100% - 12px); height: 2px;
+  background: var(--border);
+}
+.idle-roadmap-step.done:not(:last-child)::after { background: var(--accent); }
+.idle-roadmap-dot {
+  width: 34px; height: 34px; border-radius: 50%; flex: none; z-index: 1;
+  display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 800;
+  background: var(--bg-3); border: 2px solid var(--border); color: var(--text-2);
+}
+.idle-roadmap-step.done .idle-roadmap-dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+.idle-roadmap-step.current .idle-roadmap-dot {
+  background: var(--accent-2); border-color: var(--accent-2); color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-2) 25%, transparent);
+}
+.idle-roadmap-name { font-size: .68rem; font-weight: 700; color: var(--text-2); line-height: 1.25; }
+.idle-roadmap-step.current .idle-roadmap-name, .idle-roadmap-step.done .idle-roadmap-name { color: var(--text); }
+.idle-roadmap-level { font-size: .6rem; color: var(--text-2); opacity: .8; }
 
 .idle-section-title { font-size: 1.1rem; color: var(--text-2); margin: 8px 0 12px; }
 .idle-team-intro { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 15px 17px; border: 1px solid #4db8ff44; border-radius: 12px; background: linear-gradient(135deg,#4db8ff16,#8a6cff12); }
@@ -5952,8 +5998,7 @@ body.idle-fullscreen #app { padding-top: 0; }
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
   display: flex; justify-content: space-around; align-items: stretch;
   padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: rgba(10, 10, 16, .88); backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(255, 255, 255, .1);
+  background: var(--bg-2); border-top: 1px solid var(--border);
 }
 .idle-tab {
   background: none; border: none; color: var(--text-2); cursor: pointer;
