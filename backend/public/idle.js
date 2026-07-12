@@ -300,7 +300,7 @@ function renderIdleMainHero(state) {
   if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
-  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice du Dojo')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
+  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
 }
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
@@ -393,6 +393,7 @@ function renderIdleBossChest(chest) {
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
   box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}"><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : ''}</button>`).join('');
+  const specBox=document.getElementById('idle-spec-grid'); if(specBox) specBox.innerHTML=idleState.heroSpecialization.choices.map((s)=>`<button class="idle-style-choice ${s.selected?'active':''}" data-hero-spec="${s.key}" ${idleState.heroSpecialization.unlocked?'':'disabled'}><i class="fas ${idleState.heroSpecialization.unlocked?'fa-code-branch':'fa-lock'}"></i><b>${escapeHtml(s.name)}</b><small>${idleState.heroSpecialization.unlocked?escapeHtml(s.description):'Niveau 25 requis'}</small></button>`).join('');
   renderIdleStyleChoices('hairs','idle-hair-grid','fa-scissors'); renderIdleStyleChoices('outfits','idle-outfit-grid','fa-shirt'); renderIdleStyleChoices('colors','idle-color-grid','fa-palette'); renderIdleStyleChoices('auras','idle-aura-grid','fa-fire'); renderIdleStyleChoices('stances','idle-stance-grid','fa-person-running'); renderIdleStyleChoices('titles','idle-title-grid','fa-crown');
   document.getElementById('idle-class-picker').classList.remove('hidden');
 }
@@ -402,6 +403,7 @@ async function chooseIdleHeroClass(key) {
   catch (e) { alert(e.message); }
 }
 async function chooseIdleHeroStyle(type,key) { try { const state=await api('/api/idle/hero-style',{method:'POST',body:JSON.stringify({type,key})}); idleState=state; openIdleClassPicker(); renderIdleState(state); } catch(e){alert(e.message);} }
+async function chooseIdleHeroSpec(key) { try { const state=await api('/api/idle/hero-specialization',{method:'POST',body:JSON.stringify({key})}); idleState=state; openIdleClassPicker(); renderIdleState(state); } catch(e){alert(e.message);} }
 
 async function claimIdleBossChest() {
   try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); if (r.loot) idleShowLoot(r.loot); if (typeof burstConfetti === 'function') burstConfetti(35); await refreshIdleState(); }
@@ -488,7 +490,7 @@ function renderIdleDecor(dojo, prevDojo) {
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
-    const base = `Idle ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
+    const base = `Ascension ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
     const text = dojo.nextDecor
       ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : base;
@@ -1171,6 +1173,7 @@ function initIdleUI() {
   document.getElementById('idle-class-close')?.addEventListener('click', () => document.getElementById('idle-class-picker').classList.add('hidden'));
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-class-picker') e.currentTarget.classList.add('hidden'); const b = e.target.closest('[data-hero-class]'); if (b) chooseIdleHeroClass(b.dataset.heroClass); });
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { const b=e.target.closest('[data-style-key]'); if(b&&!b.disabled) chooseIdleHeroStyle(b.dataset.styleType,b.dataset.styleKey); });
+  document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { const b=e.target.closest('[data-hero-spec]'); if(b&&!b.disabled) chooseIdleHeroSpec(b.dataset.heroSpec); });
   document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));
   document.getElementById('idle-welcome-collect')?.addEventListener('click', () => {
     document.getElementById('idle-welcome').classList.add('hidden');

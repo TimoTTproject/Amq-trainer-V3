@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "idleHeroSpec" TEXT NOT NULL DEFAULT 'none';
