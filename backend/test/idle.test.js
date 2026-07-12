@@ -51,19 +51,21 @@ test('rollRecruitRarity : ne renvoie que des raretés connues, pondération prop
   for (let i = 0; i < 200; i++) assert.ok(known.has(rollRecruitRarity()));
 });
 
-test('rollRecruitRarity : le bonus de chance (Ancient) réduit statistiquement la part du commun', () => {
+test('rollRecruitRarity : aucun Commun et le bonus de chance réduit la part du Rare', () => {
   const known = new Set(RECRUIT_WEIGHTS.map(([r]) => r));
   const N = 3000;
-  let commonBase = 0, commonBoosted = 0;
+  let rareBase = 0, rareBoosted = 0;
   for (let i = 0; i < N; i++) {
     const a = rollRecruitRarity();
     const b = rollRecruitRarity(0.9);
     assert.ok(known.has(a));
     assert.ok(known.has(b));
-    if (a === 'common') commonBase++;
-    if (b === 'common') commonBoosted++;
+    assert.notEqual(a, 'common');
+    assert.notEqual(b, 'common');
+    if (a === 'rare') rareBase++;
+    if (b === 'rare') rareBoosted++;
   }
-  assert.ok(commonBoosted < commonBase);
+  assert.ok(rareBoosted < rareBase);
 });
 
 test('recruitCost : croît avec le nombre déjà recruté, jamais nul ; la remise (Ancient) réduit sans jamais atteindre 0', () => {
