@@ -292,12 +292,15 @@ function renderIdleRoadmap(dojo) {
 // Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),
 // sa puissance vient de Concentration. Les recrues restent une équipe passive.
 function renderIdleMainHero(state) {
+  const hero = document.getElementById('idle-main-hero');
+  if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'}`; }
   const avatar = document.getElementById('idle-main-hero-avatar');
   if (avatar && currentUser) renderAvatar(avatar, currentUser);
   const name = document.getElementById('idle-main-hero-name');
   if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
-  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
+  const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
+  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice du Dojo')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
 }
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
@@ -390,12 +393,15 @@ function renderIdleBossChest(chest) {
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
   box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}"><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : ''}</button>`).join('');
+  renderIdleStyleChoices('auras','idle-aura-grid','fa-fire'); renderIdleStyleChoices('stances','idle-stance-grid','fa-person-running'); renderIdleStyleChoices('titles','idle-title-grid','fa-crown');
   document.getElementById('idle-class-picker').classList.remove('hidden');
 }
+function renderIdleStyleChoices(type, id, icon) { const box=document.getElementById(id); if(!box)return; box.innerHTML=(idleState.heroStyle?.choices?.[type]||[]).map((x)=>`<button class="idle-style-choice ${x.selected?'active':''}" data-style-type="${type}" data-style-key="${x.key}" ${x.unlocked?'':'disabled'}><i class="fas ${x.unlocked?icon:'fa-lock'}"></i><b>${escapeHtml(x.name)}</b><small>${x.unlocked?(x.selected?'ÉQUIPÉ':'Disponible'):`Niveau ${x.level}`}</small></button>`).join(''); }
 async function chooseIdleHeroClass(key) {
   try { const state = await api('/api/idle/hero-class', { method: 'POST', body: JSON.stringify({ key }) }); document.getElementById('idle-class-picker').classList.add('hidden'); renderIdleState(state); }
   catch (e) { alert(e.message); }
 }
+async function chooseIdleHeroStyle(type,key) { try { const state=await api('/api/idle/hero-style',{method:'POST',body:JSON.stringify({type,key})}); idleState=state; openIdleClassPicker(); renderIdleState(state); } catch(e){alert(e.message);} }
 
 async function claimIdleBossChest() {
   try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); if (r.loot) idleShowLoot(r.loot); if (typeof burstConfetti === 'function') burstConfetti(35); await refreshIdleState(); }
@@ -1164,6 +1170,7 @@ function initIdleUI() {
   });
   document.getElementById('idle-class-close')?.addEventListener('click', () => document.getElementById('idle-class-picker').classList.add('hidden'));
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-class-picker') e.currentTarget.classList.add('hidden'); const b = e.target.closest('[data-hero-class]'); if (b) chooseIdleHeroClass(b.dataset.heroClass); });
+  document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { const b=e.target.closest('[data-style-key]'); if(b&&!b.disabled) chooseIdleHeroStyle(b.dataset.styleType,b.dataset.styleKey); });
   document.getElementById('idle-welcome-close')?.addEventListener('click', () => document.getElementById('idle-welcome').classList.add('hidden'));
   document.getElementById('idle-welcome-collect')?.addEventListener('click', () => {
     document.getElementById('idle-welcome').classList.add('hidden');
