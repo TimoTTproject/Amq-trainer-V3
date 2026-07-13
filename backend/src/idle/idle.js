@@ -394,11 +394,12 @@ function campaignForStage(stage) {
   const world = DOJO_DECOR[worldIndex];
   const enemyPool = CAMPAIGN_ENEMIES[worldIndex];
   const modifier = WORLD_MODIFIERS[worldIndex];
+  const difficulty = act === 1 ? {key:'normal',name:'Normal',power:1} : act === 2 ? {key:'heroic',name:'Héroïque',power:1.35} : {key:'nightmare',name:'Cauchemar',power:1+Math.min(1.5,(act-1)*.35)};
   return {
     index: worldIndex + 1, act, wave, startStage: s - wave + 1, endStage: s - wave + BOSS_INTERVAL,
     name: world.name, theme: world.theme, flavor: world.flavor,
     enemyName: isBossStage(s) ? `Boss de ${world.name.split(' · ')[0]}` : isEliteStage(s) ? `Élite · ${enemyPool[(act + worldIndex) % enemyPool.length]}` : enemyPool[(wave - 1) % enemyPool.length],
-    modifier,
+    modifier,difficulty,
   };
 }
 function decorForLevel(level) {

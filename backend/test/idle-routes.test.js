@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -84,6 +84,12 @@ test('coffres : les paliers majeurs ajoutent de l Essence et une rareté garanti
 test('les gardiens sont comptés uniquement lors dune nouvelle progression', () => {
   assert.equal(progressionBossesCrossed(9,31,'progress'),3);
   assert.equal(progressionBossesCrossed(10,10,'farm'),0);
+});
+
+test('faille hebdomadaire : record, difficulté et récompense dépendent de la puissance',()=>{
+  const counters=new Map([['rift_floor:2026-07-13',3]]);const rift=weeklyRift(counters,1e9,20,20,{week:'2026-07-13'});
+  assert.equal(rift.unlocked,true);assert.equal(rift.bestFloor,3);assert.ok(rift.projectedFloor>3);assert.ok(rift.reward.essence>0);
+  assert.equal(weeklyRift(counters,1e9,20,19,{week:'2026-07-13'}).unlocked,false);
 });
 
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{

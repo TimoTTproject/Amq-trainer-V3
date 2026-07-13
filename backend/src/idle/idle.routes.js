@@ -176,6 +176,20 @@ function weeklyConvergence(counters, periods=idlePeriods()) {
   return {title:'Convergence suprême',description:'Accomplis les quatre objectifs avant la fin de la semaine.',requirements,...challengeProgress(requirements),reward:7,essence:100000,rewardCurrency:'seals'};
 }
 
+function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods()) {
+  const best=Math.max(0,counters.get(`rift_floor:${periods.week}`)||0);
+  const variants=[
+    {key:'iron',name:'Armure astrale',description:'Les ennemis possèdent 35% de PV supplémentaires.',multiplier:1.35},
+    {key:'haste',name:'Course du temps',description:'Chaque salle doit tomber en 15 secondes.',multiplier:20/15},
+    {key:'void',name:'Instabilité du Néant',description:'La résistance augmente de 55% par salle.',multiplier:1.18},
+  ];
+  const variant=variants[Math.abs(Math.floor(Date.parse(`${periods.week}T00:00:00Z`)/604800000))%variants.length];
+  const baseHp=enemyMaxHp(Math.max(1,bestStage||1));
+  const targetFor=(floor)=>Math.round(baseHp*Math.pow(1.48,Math.max(0,floor-1))*variant.multiplier);
+  let projected=0;for(let floor=1;floor<=20;floor++){if(totalRate*20<targetFor(floor))break;projected=floor;}
+  return {period:periods.week,unlocked:(rankLevel||1)>=20,unlockLevel:20,maxFloor:20,bestFloor:best,projectedFloor:projected,nextFloor:Math.min(20,best+1),nextTarget:targetFor(Math.min(20,best+1)),variant,reward:{essence:Math.max(0,250*projected*projected-250*best*best),seals:Math.max(0,Math.floor(projected/5)-Math.floor(best/5))}};
+}
+
 function bossChestRewards(tier) {
   const reward=Math.round(80*Math.pow(1.4,Math.max(0,tier-1)));
   const sealReward=1+Math.min(3,Math.floor(tier/5));
@@ -734,6 +748,7 @@ async function buildState(userId) {
   const challengeDefs=idleChallengeList(missionCounters,slots,periods);
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
   const challenges=challengeDefs.map((c)=>({...c,progress:Math.min(c.progress,c.target),completed:c.progress>=c.target,claimed:claimedChallenges.has(`challenge_${c.key}:${c.period}`)}));
+  const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods);
   const guide=[
     {key:'recruit',title:'Invoque ton premier héros',description:'Utilise 1 Sceau ou de l’Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
@@ -783,6 +798,7 @@ async function buildState(userId) {
     strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',formations:Object.entries(FORMATIONS).map(([key,f])=>({key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier:f.bonus(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character)))})),presets },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
+    offlineSummary:{awayMs:previewElapsedMs,essence:pending,kills:combatPreview.kills,waves:Math.max(0,combatPreview.stage-(user.idleStage||1)),bossBlocked:combatPreview.bossFailed,capped:Date.now()-new Date(user.idleLastCollectAt).getTime()>=offlineCapMs},
     slots: slotsOut,
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
@@ -823,6 +839,7 @@ async function buildState(userId) {
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w,i) => ({ name: w.name, level:i*10+1, discovered:Math.max(user.idleBestStage||1,stage)>=i*10+1 })) },
     event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
+    rift,
     achievements,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     // La première vraie saison utilisera une progression dédiée. L'ancien
@@ -1487,6 +1504,17 @@ router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'
 });
 router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
+router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowMs:60000,name:'idle-rift'}),async(req,res)=>{
+  await withSettle(req.user.id);
+  const state=await buildState(req.user.id);const rift=state.rift;
+  if(!rift.unlocked)return res.status(403).json({error:`Faille débloquée au niveau ${rift.unlockLevel}`});
+  if(rift.projectedFloor<=rift.bestFloor)return res.status(400).json({error:'Ton équipe manque encore de puissance pour battre ton record'});
+  const floor=rift.projectedFloor;const essence=Math.max(0,250*floor*floor-250*rift.bestFloor*rift.bestFloor);const seals=Math.max(0,Math.floor(floor/5)-Math.floor(rift.bestFloor/5));
+  try{await prisma.$transaction(async(tx)=>{const existing=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}}});if((existing?.value||0)!==rift.bestFloor)throw new IdleError(409,'La Faille a déjà été actualisée');await tx.idleProgressCounter.upsert({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}},create:{userId:req.user.id,key:'rift_floor',period:rift.period,value:floor},update:{value:floor}});await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals}}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  void recordIdleEvent(req.user.id,'rift_record',{value:floor,stage:state.battle.stage});
+  res.json({ok:true,floor,essence,seals,state:await buildState(req.user.id)});
+});
+
 router.get('/telemetry/beta', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-telemetry' }), async (req, res) => {
   const since = new Date(Date.now() - 30 * 86400000);
   const [events, players] = await Promise.all([
@@ -1565,6 +1593,7 @@ module.exports = {
   seasonActivityScore,
   idleChallengeList,
   weeklyConvergence,
+  weeklyRift,
   bossChestRewards,
   idleItemDrop,
   itemProductionBonus,
