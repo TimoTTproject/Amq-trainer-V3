@@ -1579,22 +1579,21 @@
       <div class="idle-content">
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel">
-          <div class="idle-help"><i class="fas fa-circle-info"></i><div><b>Combat et gains</b><span>Frappe le gardien pour gagner immédiatement de l’Essence. Ton équipe en produit automatiquement, même lorsque tu quittes le jeu.</span></div></div>
           <div class="idle-event-banner" id="idle-event-banner"></div>
           <div class="idle-season-card" id="idle-season-card"></div>
           <!-- Panneau Essence : theme-aware (.profile-section), regroupe les
                tuiles de stats + la Sagesse (auparavant visible seulement
                dans l'onglet Améliorer). -->
           <div class="profile-section idle-currency-panel">
-            <h3><i class="fas fa-mortar-pestle"></i> Essence</h3>
+            <h3><i class="fas fa-gem"></i> Ressources</h3>
             <div class="idle-currency-grid">
               <div class="idle-currency-item">
                 <i class="fas fa-bolt idle-currency-ico"></i>
-                <div><b><span id="idle-rate-val">0</span>/s</b><small>DPS d’équipe</small></div>
+                <div><b><span id="idle-rate-val">0</span>/s</b><small>Équipe</small></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-fire idle-currency-ico fire"></i>
-                <div><b id="idle-xptotal-val">0</b><small>Essence gagnée à vie</small></div>
+                <div><b id="idle-xptotal-val">0</b><small>Historique</small></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-brain idle-currency-ico wisdom"></i>
@@ -1602,21 +1601,15 @@
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-ticket idle-currency-ico seals"></i>
-                <div><b id="idle-seals-val">0</b><small>Sceaux d’invocation</small></div>
+                <div><b id="idle-seals-val">0</b><small>Sceaux</small></div>
               </div>
             </div>
-          </div>
-
-          <div class="profile-section idle-rank-panel">
-            <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PASSAGE DE NIVEAU</span><h3><i class="fas fa-torii-gate"></i> Épreuves d’Ascension</h3><p id="idle-rank-summary">Accomplis toute la série pour progresser.</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
-            <div class="idle-rank-quests" id="idle-rank-quests"></div>
-            <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> Récompense : 1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Terminer les épreuves</button></div>
           </div>
 
           <!-- Panneau Combat : la scène (décor + gardien) encadrée, plus une
                ligne de stats façon "Pokémon Attack / Click Attack". -->
           <div class="profile-section idle-combat-panel">
-            <h3><i class="fas fa-khanda"></i> Combat</h3>
+            <h3 class="idle-combat-title"><i class="fas fa-khanda"></i> Combat</h3>
             <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
               <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
               <div class="idle-scene-head">
@@ -1657,9 +1650,14 @@
             </div>
             <div class="idle-next-objective" id="idle-next-objective"></div>
             <div class="idle-combat-log" id="idle-combat-log" aria-live="polite"></div>
-            <div class="idle-speed-control"><span><i class="fas fa-forward-fast"></i> Vitesse de combat</span><div id="idle-speed-buttons"></div></div>
-            <div class="idle-mode-control" id="idle-mode-control"><button data-battle-mode="progress"><i class="fas fa-route"></i><span><b>Progression</b><small>Avance dans les vagues</small></span></button><button data-battle-mode="farm"><i class="fas fa-coins"></i><span><b>Farm</b><small>Gagne sans avancer</small></span></button></div>
-            <button class="idle-auto-skills" id="idle-auto-skills"><i class="fas fa-robot"></i><span><b>Compétences automatiques</b><small id="idle-auto-skills-label">Débloquées au niveau 50</small></span><i class="fas fa-toggle-off"></i></button>
+            <details class="idle-combat-options">
+              <summary><span><i class="fas fa-sliders"></i> Réglages de combat</span><i class="fas fa-chevron-down"></i></summary>
+              <div class="idle-combat-options-body">
+                <div class="idle-speed-control"><span><i class="fas fa-forward-fast"></i> Vitesse</span><div id="idle-speed-buttons"></div></div>
+                <div class="idle-mode-control" id="idle-mode-control"><button data-battle-mode="progress"><i class="fas fa-route"></i><span><b>Progression</b><small>Avance</small></span></button><button data-battle-mode="farm"><i class="fas fa-coins"></i><span><b>Farm</b><small>Reste ici</small></span></button></div>
+                <button class="idle-auto-skills" id="idle-auto-skills"><i class="fas fa-robot"></i><span><b>Auto-compétences</b><small id="idle-auto-skills-label">Niveau 50</small></span><i class="fas fa-toggle-off"></i></button>
+              </div>
+            </details>
             <button class="idle-boss-chest hidden" id="idle-boss-chest"><i class="fas fa-box-open"></i><span><b>Coffre de boss disponible</b><small id="idle-boss-chest-label">Récompense</small></span><i class="fas fa-chevron-right"></i></button>
 
             <div class="idle-actions">
@@ -1670,6 +1668,12 @@
             <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
           </div>
 
+          <div class="profile-section idle-rank-panel">
+            <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PROGRESSION</span><h3><i class="fas fa-torii-gate"></i> Épreuves d’Ascension</h3><p id="idle-rank-summary">0/3 épreuves terminées</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
+            <div class="idle-rank-quests" id="idle-rank-quests"></div>
+            <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> +1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Terminer les épreuves</button></div>
+          </div>
+
           <!-- Panneau Progression : frise des paliers de décor (équivalent
                simplifié d'une Town Map — notre monde est une séquence
                linéaire, pas une carte à embranchements). -->
@@ -1678,8 +1682,8 @@
             <div class="idle-roadmap" id="idle-roadmap"></div>
           </div>
           <div class="profile-section idle-codex-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-book-open"></i> Codex des mondes</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-world-codex" id="idle-world-codex"></div></div></div>
-          <div class="profile-section idle-missions-panel"><h3><i class="fas fa-scroll"></i> Missions récurrentes</h3><div class="idle-missions" id="idle-missions"></div></div>
-          <div class="profile-section"><h3><i class="fas fa-tower-observation"></i> Défis récurrents</h3><div class="idle-challenges" id="idle-challenges"></div></div>
+          <div class="profile-section idle-missions-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-scroll"></i> Missions</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-missions" id="idle-missions"></div></div></div>
+          <div class="profile-section idle-challenges-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-tower-observation"></i> Défis</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-challenges" id="idle-challenges"></div></div></div>
           <div class="profile-section idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-chart-line"></i> Observatoire bêta</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><button class="btn-secondary" id="idle-telemetry-load"><i class="fas fa-rotate"></i> Charger les statistiques</button><div id="idle-telemetry-summary"></div><form class="idle-feedback" id="idle-feedback-form"><label for="idle-feedback-text"><b>Signaler un problème ou une idée</b><small>Le stage et la version sont joints automatiquement.</small></label><textarea id="idle-feedback-text" minlength="10" maxlength="1000" required placeholder="Décris ce qui s’est passé et ce que tu attendais…"></textarea><button class="btn-primary" type="submit"><i class="fas fa-paper-plane"></i> Envoyer aux développeurs</button><span id="idle-feedback-status" aria-live="polite"></span></form></div></div>
         </section>
 
