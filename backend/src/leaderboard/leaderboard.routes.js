@@ -124,7 +124,7 @@ async function coopBoard(meId) {
     const better = await prisma.coopWeeklyScore.count({ where: { week, floor: { gt: mineRow.floor } } });
     myRank = { rank: better + 1, value: mineRow.floor };
   }
-  return { top, me: myRank, week, rewards: [1000, 500] };
+  return { top, me: myRank, week, rewards: [800, 400] };
 }
 
 // Tokens : classement par solde

@@ -218,9 +218,9 @@ header h1 { font-size: 1.4rem; } header h1 i { color: var(--accent); }
 .hint { color: var(--text-2); font-size: .78rem; }
 .field-label { display: block; color: var(--text-2); font-size: .85rem; margin: 14px 0 6px; }
 #profile-name, #profile-bio,
-#pls-edit-name, #pls-edit-desc { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 10px; font-size: .95rem; resize: vertical; font-family: inherit; }
+#pls-edit-name, #pls-edit-desc, #feedback-message { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 10px; font-size: .95rem; resize: vertical; font-family: inherit; }
 #profile-name:focus, #profile-bio:focus,
-#pls-edit-name:focus, #pls-edit-desc:focus { outline: none; border-color: var(--accent); }
+#pls-edit-name:focus, #pls-edit-desc:focus, #feedback-message:focus { outline: none; border-color: var(--accent); }
 .profile-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
 .pstat { background: var(--bg); border-radius: 10px; padding: 12px 6px; text-align: center; }
 .pstat span { display: block; font-size: 1.2rem; font-weight: 700; color: var(--accent); }
@@ -1275,6 +1275,16 @@ select.album-form-control {
 .admin-tool-status { flex-basis: 100%; }
 .admin-tool-status:empty { display: none; }
 .admin-tool-search { display: block; }
+.admin-reports-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.admin-report-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px;
+}
+.admin-report-main { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.admin-report-main small { color: var(--text-2); font-size: .78rem; }
+.admin-report-meta { display: flex; flex-direction: column; gap: 2px; font-size: .78rem; color: var(--text-2); text-align: right; }
+.admin-feedback-filter.active { border-color: var(--accent); color: var(--accent); }
 .admin-tool-search .panel-row { margin-bottom: 8px; }
 .admin-tool-search #admin-songs-search-results { display: flex; flex-direction: column; gap: 10px; }
 .admin-danger-warning {
@@ -6344,3 +6354,18 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-combat-quest>button{padding:5px 7px;border:1px solid #f59e0b66;border-radius:6px;background:#211707;color:#fbbf24;font-size:8px;font-weight:900;cursor:pointer}
 .idle-combat-quests>div>p{grid-column:1/-1;margin:0;padding:8px;color:#8b95a5;font-size:9px;text-align:center}.idle-combat-quests>div>p i{color:#22c55e}
 @media(max-width:760px){.idle-combat-quests>div{display:flex;overflow-x:auto}.idle-combat-quest{min-width:210px}.idle-combat-quests{padding:8px}}
+
+/* Bouton flottant « bug / suggestion », visible sur toutes les pages */
+.feedback-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 60;
+  width: 46px; height: 46px; border-radius: 50%; border: none;
+  background: var(--accent); color: #fff; font-size: 1.1rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: pointer;
+}
+.feedback-fab:hover { filter: brightness(1.1); transform: scale(1.05); }
+.feedback-type-row { display: flex; gap: 8px; margin: 10px 0 4px; }
+.feedback-type { flex: 1; padding: 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); cursor: pointer; font-size: .85rem; }
+.feedback-type.active { border-color: var(--accent); color: var(--accent); background: rgba(var(--accent-rgb, 99,102,241), .12); }
+#feedback-message { margin-top: 10px; }
+#feedback-status { min-height: 1.2em; margin-top: 8px; }
+@media (max-width: 760px) { .feedback-fab { right: 12px; bottom: 76px; } }

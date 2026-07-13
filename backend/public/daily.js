@@ -368,8 +368,10 @@ async function submitDaily(forced) {
     : '';
   const eng = answerLabel ? `<strong>${escapeHtml(answerLabel)}</strong>` : '';
   fb.innerHTML = (r.correct ? `✅ +${r.points} · ` : '❌ ') + `${t('Réponse :')} ${eng}`
-    + ` <button class="like-reveal hidden" id="daily-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`;
+    + ` <button class="like-reveal hidden" id="daily-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>`
+    + ` <button class="like-reveal hidden" id="daily-report" title="Signaler ce son" aria-label="Signaler ce son"><i class="fas fa-flag"></i></button>`;
   if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('daily-like'), r.answer && r.answer.songId);
+  if (typeof setupSongReport === 'function') setupSongReport(document.getElementById('daily-report'), r.answer && r.answer.songId, 'daily');
   r.correct ? sfx.correct() : sfx.wrong();
 
   if (r.done) {

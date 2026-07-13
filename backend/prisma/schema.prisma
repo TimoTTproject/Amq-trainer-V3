@@ -212,6 +212,7 @@ model User {
   dojoRecruits         DojoRecruit[]
   ancientLevels        AncientLevel[]
   songReports          SongReport[]
+  feedback             Feedback[]
 }
 
 model PasswordResetToken {
@@ -504,6 +505,23 @@ model SongReport {
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
 
   @@index([songId])
+  @@index([createdAt])
+}
+
+// Retours joueurs génériques : bug ou suggestion (bouton flottant, toutes pages).
+// Distinct de SongReport (qui vise une musique précise pendant une partie).
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  type      String // 'bug' | 'suggestion'
+  message   String
+  page      String? // URL/onglet d'où vient le signalement, à titre indicatif
+  status    String   @default("open") // 'open' | 'resolved'
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
   @@index([createdAt])
 }
 

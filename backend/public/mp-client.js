@@ -579,6 +579,7 @@ function connectMp() {
       : '';
     res.innerHTML = `${skippedBanner}<div class="mp-answer">Réponse : <strong>${escapeHtml(d.answer.animeTitle)}</strong>${englishTitle}
       <button class="like-reveal hidden" id="mp-like" title="Ajouter à ma playlist" aria-label="Ajouter à ma playlist"><i class="far fa-heart"></i></button>
+      <button class="like-reveal hidden" id="mp-report" title="Signaler ce son" aria-label="Signaler ce son"><i class="fas fa-flag"></i></button>
       <span class="hint">${escapeHtml(d.answer.title || '')}${d.answer.artist ? ' — ' + escapeHtml(d.answer.artist) : ''}</span>${addedBy}${community}</div>`;
     // ❤ : la réponse est révélée → on peut ajouter la musique à sa playlist (8 s d'affichage).
     const answerEl = res.querySelector('.mp-answer');
@@ -596,6 +597,7 @@ function connectMp() {
     }
     if (ownersHtml && answerEl) answerEl.insertAdjacentHTML('beforeend', ownersHtml);
     if (typeof setupQuickLike === 'function') setupQuickLike(document.getElementById('mp-like'), d.answer.songId);
+    if (typeof setupSongReport === 'function') setupSongReport(document.getElementById('mp-report'), d.answer.songId, 'mp');
     if (d.coop) {
       mpCoop = true;
       if (typeof d.teamLives === 'number') mpTeamLives = d.teamLives;

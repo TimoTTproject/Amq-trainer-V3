@@ -55,6 +55,7 @@ const mpRoutes = require('./mp/mp.routes');
 const playlistsRoutes = require('./playlists/playlists.routes');
 const albumsRoutes = require('./albums/albums.routes');
 const changelogRoutes = require('./changelog/changelog.routes');
+const feedbackRoutes = require('./feedback/feedback.routes');
 const promotionRoutes = require('./promotion/promotion.routes');
 const idleRoutes = require('./idle/idle.routes');
 const { isEnabled: pushEnabled, sendDailyReminder } = require('./push/push');
@@ -135,6 +136,7 @@ app.use('/api/mp', mpRoutes.router);
 app.use('/api/playlists', playlistsRoutes.router);
 app.use('/api/albums', albumsRoutes.router);
 app.use('/api/changelog', changelogRoutes.router);
+app.use('/api/feedback', feedbackRoutes.router);
 app.use('/api/promotion', promotionRoutes.router);
 app.use('/api/idle', idleRoutes.router);
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -243,11 +245,21 @@ async function payCoopWeekly(week) {
   for (const row of top) {
     const amt = amountByFloor.get(row.floor);
     try {
-      await prisma.$transaction([
-        prisma.user.update({ where: { id: row.userId }, data: { tokens: { increment: amt } } }),
-        prisma.tokenTransaction.create({ data: { userId: row.userId, amount: amt, reason: 'coop_weekly' } }),
-        prisma.coopWeeklyScore.update({ where: { id: row.id }, data: { rewarded: true } }),
-      ]);
+      // Le flag `rewarded` est posé sous condition (WHERE rewarded=false) DANS la
+      // transaction : si deux process (ou deux passages) traitent la même ligne en
+      // parallèle, un seul obtient count===1 et crédite les tokens — l'autre voit
+      // count===0 et n'y touche pas. Le store `coop-weekly:<week>` seul ne suffisait
+      // pas (Map en mémoire non partagée entre process sans REDIS_URL), d'où le
+      // double paiement constaté.
+      await prisma.$transaction(async (tx) => {
+        const { count } = await tx.coopWeeklyScore.updateMany({
+          where: { id: row.id, rewarded: false },
+          data: { rewarded: true },
+        });
+        if (!count) return;
+        await tx.user.update({ where: { id: row.userId }, data: { tokens: { increment: amt } } });
+        await tx.tokenTransaction.create({ data: { userId: row.userId, amount: amt, reason: 'coop_weekly' } });
+      });
     } catch (e) { console.error('coop weekly pay:', e && e.message); }
   }
   if (top.length) console.log(`  → Récompenses coop hebdo (${week}) : ${top.length} joueur(s) payé(s)`);

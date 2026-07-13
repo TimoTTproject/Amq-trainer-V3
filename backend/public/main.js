@@ -667,6 +667,7 @@ function setupGlobalAccessibility() {
   document.getElementById('legal-modal')?.addEventListener('click', (event) => {
     if (event.target.id === 'legal-modal') event.target.classList.add('hidden');
   });
+  setupFeedbackWidget();
   document.getElementById('about-close').addEventListener('click', closeAbout);
   aboutModal.addEventListener('click', (event) => {
     if (event.target.id === 'about-modal') closeAbout();
@@ -952,6 +953,7 @@ function showApp(user) {
   else showView(defaultView, { replace: true });
   applyGameModeUI();
   renderHeaderUser();
+  document.getElementById('feedback-fab')?.classList.remove('hidden');
   if (typeof renderPinnedNav === 'function') renderPinnedNav();
   if (typeof refreshPinIcons === 'function') refreshPinIcons();
   const linked = user.anilistListName || user.anilistName;
@@ -1637,9 +1639,10 @@ function setupAppUI() {
     const tab = e.target.closest('.admin-tab');
     if (!tab) return;
     document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    ['catalog', 'gacha', 'danger'].forEach((p) =>
+    ['catalog', 'gacha', 'reports', 'danger'].forEach((p) =>
       document.getElementById('admin-panel-' + p).classList.toggle('hidden', p !== tab.dataset.adminTab)
     );
+    if (tab.dataset.adminTab === 'reports' && typeof loadAdminReports === 'function') loadAdminReports();
   });
   document.getElementById('admin-songs-search-btn').addEventListener('click', runSongsSearch);
   document.getElementById('admin-songs-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSongsSearch(); });
@@ -2239,6 +2242,7 @@ function setLikeButton() {
   btn.disabled = !currentSong;
   btn.querySelector('i').className = currentLiked ? 'fas fa-heart' : 'far fa-heart';
   btn.classList.toggle('liked', currentLiked);
+  setupSongReport(document.getElementById('report-btn'), currentSong?.id, 'quiz');
 }
 async function toggleLike() {
   if (!currentSong) return;
@@ -2277,6 +2281,71 @@ function setupQuickLike(btn, songId) {
   btn.querySelector('i').className = 'far fa-heart';
   btn.classList.remove('liked');
   btn.onclick = () => quickLike(btn, songId);
+}
+
+// Bouton « Signaler » (drapeau) générique, partagé par tous les modes de jeu
+// (Château, Multi, Quotidien, Solo…). Le joueur n'a le titre/id AniList sous
+// les yeux qu'APRÈS révélation, donc pas moyen de décrire l'entrée fautive
+// autrement qu'en la signalant sur le coup.
+// Bouton flottant « bug / suggestion », présent sur toutes les pages (bootstrap
+// affiché dès showApp()). Le son buggé a son propre circuit (voir report-btn,
+// /api/quiz/report-song) : le message générique ici n'a pas besoin de songId.
+function setupFeedbackWidget() {
+  const fab = document.getElementById('feedback-fab');
+  const modal = document.getElementById('feedback-modal');
+  const closeBtn = document.getElementById('feedback-close');
+  const submitBtn = document.getElementById('feedback-submit');
+  const textarea = document.getElementById('feedback-message');
+  const status = document.getElementById('feedback-status');
+  const typeButtons = [...document.querySelectorAll('.feedback-type')];
+  if (!fab || !modal) return;
+  let type = 'bug';
+  const close = () => modal.classList.add('hidden');
+  fab.addEventListener('click', () => {
+    status.textContent = '';
+    textarea.value = '';
+    modal.classList.remove('hidden');
+  });
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
+  typeButtons.forEach((b) => b.addEventListener('click', () => {
+    type = b.dataset.type;
+    typeButtons.forEach((x) => x.classList.toggle('active', x === b));
+  }));
+  submitBtn.addEventListener('click', async () => {
+    const message = textarea.value.trim();
+    if (!message) { status.textContent = 'Décris un peu le problème ou l’idée avant d’envoyer.'; return; }
+    submitBtn.disabled = true;
+    try {
+      await api('/api/feedback', { method: 'POST', body: JSON.stringify({ type, message, page: location.hash || location.pathname }) });
+      status.textContent = 'Merci, c’est envoyé !';
+      textarea.value = '';
+      setTimeout(close, 1200);
+    } catch (e) {
+      status.textContent = e.message || 'Échec de l’envoi, réessaie.';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+function setupSongReport(btn, songId, context) {
+  if (!btn) return;
+  if (!songId || !currentUser || currentUser.isGuest) { btn.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  btn.disabled = false;
+  btn.classList.remove('liked');
+  btn.title = 'Signaler : ce son ne correspond à aucune réponse';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      await api('/api/quiz/report-song', { method: 'POST', body: JSON.stringify({ songId, context: context || 'quiz' }) });
+      btn.classList.add('liked'); // réutilise le style ❤ « actif » du bouton pour confirmer visuellement
+      btn.title = 'Signalé — merci !';
+    } catch {
+      btn.disabled = false; // échec réseau : on laisse réessayer
+    }
+  };
 }
 
 // Partage du jeu : Web Share API (mobile) sinon copie du lien

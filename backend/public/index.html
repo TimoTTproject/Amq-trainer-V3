@@ -1123,6 +1123,25 @@
       </div>
     </div>
 
+    <!-- Bouton flottant présent sur toutes les pages : bug / suggestion. -->
+    <button id="feedback-fab" class="feedback-fab hidden" title="Signaler un bug ou faire une suggestion" aria-label="Signaler un bug ou faire une suggestion">
+      <i class="fas fa-comment-dots"></i>
+    </button>
+    <div id="feedback-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Signaler un bug ou faire une suggestion">
+      <div class="modal-card">
+        <button class="modal-close" id="feedback-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3><i class="fas fa-comment-dots"></i> Bug ou suggestion ?</h3>
+        <div class="feedback-type-row">
+          <button type="button" class="feedback-type active" data-type="bug"><i class="fas fa-bug"></i> Bug</button>
+          <button type="button" class="feedback-type" data-type="suggestion"><i class="fas fa-lightbulb"></i> Suggestion</button>
+        </div>
+        <p class="hint">Un son mal reconnu ? Signale-le directement avec le drapeau <i class="fas fa-flag"></i> qui apparaît à côté de la réponse en jeu — c'est plus précis qu'un message ici.</p>
+        <textarea id="feedback-message" rows="5" maxlength="2000" placeholder="Décris le bug (ce que tu faisais, ce qui s'est passé) ou ta suggestion…"></textarea>
+        <button class="btn-primary" id="feedback-submit"><i class="fas fa-paper-plane"></i> Envoyer</button>
+        <p id="feedback-status" class="hint"></p>
+      </div>
+    </div>
+
     <div id="promotion-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Vote Édition 2">
       <div class="modal-card">
         <button class="modal-close" id="promotion-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
@@ -1413,6 +1432,7 @@
       <div class="shop-tabs" id="admin-tabs">
         <button class="shop-tab admin-tab active" data-admin-tab="catalog"><i class="fas fa-music"></i> Catalogue</button>
         <button class="shop-tab admin-tab" data-admin-tab="gacha"><i class="fas fa-layer-group"></i> Gacha</button>
+        <button class="shop-tab admin-tab" data-admin-tab="reports"><i class="fas fa-flag"></i> Signalements</button>
         <button class="shop-tab admin-tab" data-admin-tab="danger"><i class="fas fa-triangle-exclamation"></i> Zone danger</button>
       </div>
 
@@ -1540,6 +1560,21 @@
         <button class="btn-secondary" id="admin-next"><i class="fas fa-chevron-right"></i></button>
       </div>
       </div><!-- /admin-panel-gacha -->
+
+      <!-- ══ Onglet Signalements (sons buggés + retours joueurs) ══ -->
+      <div id="admin-panel-reports" class="gacha-panel hidden">
+      <h3 class="admin-section-title"><i class="fas fa-flag"></i> Sons signalés</h3>
+      <p class="admin-section-sub">Bouton drapeau en jeu (« ce son ne correspond à aucune réponse ») — les 100 derniers, plus récents en premier.</p>
+      <div id="admin-song-reports" class="admin-reports-list"><p class="hint">Chargement…</p></div>
+
+      <h3 class="admin-section-title"><i class="fas fa-comment-dots"></i> Retours joueurs (bug / suggestion)</h3>
+      <div class="admin-tool">
+        <button class="shop-tab admin-feedback-filter active" data-status="">Tous</button>
+        <button class="shop-tab admin-feedback-filter" data-status="open">Ouverts</button>
+        <button class="shop-tab admin-feedback-filter" data-status="resolved">Résolus</button>
+      </div>
+      <div id="admin-feedback-list" class="admin-reports-list"><p class="hint">Chargement…</p></div>
+      </div><!-- /admin-panel-reports -->
 
       <!-- ══ Onglet Zone danger ══ -->
       <div id="admin-panel-danger" class="gacha-panel hidden">

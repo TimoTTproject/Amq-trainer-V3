@@ -12,7 +12,7 @@ function openAdmin() {
   document.getElementById('admin-backfill-status').textContent = '';
   // Repart sur l'onglet Catalogue (les panneaux gardent sinon le dernier état).
   document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.adminTab === 'catalog'));
-  ['catalog', 'gacha', 'danger'].forEach((p) =>
+  ['catalog', 'gacha', 'reports', 'danger'].forEach((p) =>
     document.getElementById('admin-panel-' + p)?.classList.toggle('hidden', p !== 'catalog')
   );
   loadAdminStats();
@@ -732,3 +732,76 @@ async function runBackfillSeries() {
     btn.disabled = false;
   }
 }
+
+// ── Onglet Signalements : sons buggés (SongReport) + retours joueurs (Feedback) ──
+let adminFeedbackStatus = '';
+
+async function loadAdminReports() {
+  loadAdminSongReports();
+  loadAdminFeedback();
+}
+
+async function loadAdminSongReports() {
+  const box = document.getElementById('admin-song-reports');
+  try {
+    const { reports } = await api('/api/admin/song-reports');
+    box.innerHTML = reports.length ? reports.map((r) => `
+      <div class="admin-report-row">
+        <div class="admin-report-main">
+          <b>${escapeHtml(r.song.animeTitle || '?')}</b>
+          <small>${escapeHtml(r.song.title || '')}${r.song.artist ? ' — ' + escapeHtml(r.song.artist) : ''} · ${escapeHtml(r.song.type || '')}${r.song.number || ''}</small>
+        </div>
+        <div class="admin-report-meta">
+          <span>${escapeHtml(r.user.displayName)} · ${escapeHtml(r.context)}</span>
+          <span class="hint">${new Date(r.createdAt).toLocaleString()}</span>
+        </div>
+        ${r.note ? `<p class="hint">« ${escapeHtml(r.note)} »</p>` : ''}
+      </div>`).join('') : '<p class="hint">Aucun signalement.</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="hint">Erreur : ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function loadAdminFeedback() {
+  const box = document.getElementById('admin-feedback-list');
+  try {
+    const qs = adminFeedbackStatus ? `?status=${adminFeedbackStatus}` : '';
+    const { items } = await api('/api/admin/feedback' + qs);
+    box.innerHTML = items.length ? items.map((f) => `
+      <div class="admin-report-row" data-fid="${f.id}">
+        <div class="admin-report-main">
+          <b>${f.type === 'bug' ? '🐛 Bug' : '💡 Suggestion'}</b>
+          <small>${escapeHtml(f.message)}</small>
+        </div>
+        <div class="admin-report-meta">
+          <span>${escapeHtml(f.user.displayName)}${f.page ? ' · ' + escapeHtml(f.page) : ''}</span>
+          <span class="hint">${new Date(f.createdAt).toLocaleString()}</span>
+        </div>
+        <button class="btn-secondary admin-feedback-resolve" data-fid="${f.id}" data-resolved="${f.status !== 'resolved'}">
+          ${f.status === 'resolved' ? '<i class="fas fa-rotate-left"></i> Rouvrir' : '<i class="fas fa-check"></i> Résolu'}
+        </button>
+      </div>`).join('') : '<p class="hint">Aucun retour.</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="hint">Erreur : ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+document.getElementById('admin-panel-reports')?.addEventListener('click', async (e) => {
+  const filterBtn = e.target.closest('.admin-feedback-filter');
+  if (filterBtn) {
+    document.querySelectorAll('.admin-feedback-filter').forEach((b) => b.classList.toggle('active', b === filterBtn));
+    adminFeedbackStatus = filterBtn.dataset.status;
+    loadAdminFeedback();
+    return;
+  }
+  const resolveBtn = e.target.closest('.admin-feedback-resolve');
+  if (resolveBtn) {
+    resolveBtn.disabled = true;
+    try {
+      await api(`/api/admin/feedback/${resolveBtn.dataset.fid}/resolve`, {
+        method: 'PATCH', body: JSON.stringify({ resolved: resolveBtn.dataset.resolved === 'true' }),
+      });
+      loadAdminFeedback();
+    } catch { resolveBtn.disabled = false; }
+  }
+});

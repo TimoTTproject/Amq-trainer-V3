@@ -41,6 +41,25 @@ router.get('/song-reports', requireAuth, requireAdmin, async (req, res) => {
   res.json({ reports });
 });
 
+// Retours joueurs génériques (bug/suggestion), voir POST /api/feedback.
+router.get('/feedback', requireAuth, requireAdmin, async (req, res) => {
+  const status = req.query.status === 'resolved' ? 'resolved' : req.query.status === 'open' ? 'open' : undefined;
+  const items = await prisma.feedback.findMany({
+    where: status ? { status } : undefined,
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    include: { user: { select: { displayName: true, email: true } } },
+  });
+  res.json({ items });
+});
+
+router.patch('/feedback/:id/resolve', requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const resolved = req.body?.resolved !== false;
+  await prisma.feedback.update({ where: { id }, data: { status: resolved ? 'resolved' : 'open' } });
+  res.json({ ok: true });
+});
+
 // Migre un seul média par requête afin de ne pas saturer Railway ni AnimeThemes.
 // Le client admin enchaîne quelques requêtes et affiche la progression.
 router.post('/r2-migrate', requireAuth, requireAdmin, async (req, res) => {
