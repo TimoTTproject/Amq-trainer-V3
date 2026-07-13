@@ -634,7 +634,14 @@ function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-sp
 function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>{const active=b.dataset.battleMode===mode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});}
 function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto-skills');const label=document.getElementById('idle-auto-skills-label');if(!btn||!auto)return;btn.disabled=!auto.unlocked;btn.classList.toggle('active',auto.enabled);btn.dataset.enabled=auto.enabled?'1':'0';btn.querySelector(':scope > i:last-child').className=`fas ${auto.enabled?'fa-toggle-on':'fa-toggle-off'}`;label.textContent=!auto.unlocked?`Débloquées au niveau ${auto.level}`:auto.enabled?`Simulation active · rendement moyen +${Math.round(auto.bonus*100)}%`:'Simulation inactive · cliquer pour activer';}
 async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
-async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
+async function chooseIdleBattleMode(mode){
+  if(mode==='farm'&&!window.confirm('Le mode Farm répète volontairement la vague actuelle : le compteur revient à 0/10, mais la vague ne progresse plus. Activer ce mode ?'))return;
+  try{
+    const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode,confirmed:mode==='farm'})});
+    renderIdleState(state);
+    idleNotify(mode==='farm'?'Mode Farm actif : cette vague sera répétée.':'Mode Progression actif : la prochaine vague sera débloquée.');
+  }catch(e){idleNotify(e.message,'error');}
+}
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));}catch(e){alert(e.message);}}
 async function saveIdlePreset(){const name=document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} sauvegardé`,'fa-floppy-disk');}catch(e){alert(e.message);}}

@@ -730,6 +730,13 @@ test('feedback bêta : conserve le message et son contexte', async () => {
   assert.match(created.message,/boss/);
 });
 
+test('mode Farm : exige une confirmation explicite avant de bloquer la progression', async () => {
+  prisma.user.findUnique=async()=>dbUser({roles:['idle_beta']});
+  const res=await app.request('/api/idle/battle-mode',{method:'POST',cookie:app.authCookie('u1'),body:{mode:'farm'}});
+  assert.equal(res.status,400);
+  assert.match(res.json.error,/Confirme/);
+});
+
 test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {
   const noneYet = dbUser({ idleRankLevel:1 }); // niveau 1, aucun palier atteint
   prisma.user.findUnique = async () => noneYet;
