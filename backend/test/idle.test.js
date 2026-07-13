@@ -18,6 +18,7 @@ const {
   dojoXpForLevel,
   dojoLevelForXp,
   dojoLevelMultiplier,
+  rankQuestSeries,
   stageXpForLevel,
   stageForXp,
   decorForLevel,
@@ -170,6 +171,26 @@ test('stageXpForLevel : courbe bien plus douce que le Dojo (kills fréquents)', 
 test('dojoLevelMultiplier : +1%/niveau, illimité', () => {
   assert.equal(dojoLevelMultiplier(1), 1);
   assert.ok(dojoLevelMultiplier(101) > dojoLevelMultiplier(1));
+});
+
+test('rankQuestSeries : impose combat, clics et améliorations avant le niveau suivant', () => {
+  const started = rankQuestSeries({ level:1 });
+  assert.equal(started.nextLevel, 2);
+  assert.equal(started.ready, false);
+  assert.deepEqual(started.quests.map((q) => q.target), [15, 35, 3]);
+  const ready = rankQuestSeries({ level:1, kills:15, clicks:35, upgrades:3 });
+  assert.equal(ready.completed, 3);
+  assert.equal(ready.ready, true);
+  assert.equal(ready.sealReward, 1);
+});
+
+test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de boss et double les Sceaux', () => {
+  const series = rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999 });
+  assert.equal(series.total, 4);
+  assert.equal(series.ready, false);
+  assert.equal(series.quests.at(-1).key, 'bosses');
+  assert.equal(series.sealReward, 2);
+  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bosses:1 }).ready, true);
 });
 
 test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DECOR', () => {

@@ -1594,7 +1594,7 @@
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-fire idle-currency-ico fire"></i>
-                <div><b id="idle-xptotal-val">0</b><small>Progression totale</small></div>
+                <div><b id="idle-xptotal-val">0</b><small>Essence gagnée à vie</small></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-brain idle-currency-ico wisdom"></i>
@@ -1605,6 +1605,12 @@
                 <div><b id="idle-seals-val">0</b><small>Sceaux d’invocation</small></div>
               </div>
             </div>
+          </div>
+
+          <div class="profile-section idle-rank-panel">
+            <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PASSAGE DE NIVEAU</span><h3><i class="fas fa-torii-gate"></i> Épreuves d’Ascension</h3><p id="idle-rank-summary">Accomplis toute la série pour progresser.</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
+            <div class="idle-rank-quests" id="idle-rank-quests"></div>
+            <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> Récompense : 1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Terminer les épreuves</button></div>
           </div>
 
           <!-- Panneau Combat : la scène (décor + gardien) encadrée, plus une
@@ -1670,7 +1676,7 @@
             <div class="idle-roadmap" id="idle-roadmap"></div>
           </div>
           <div class="profile-section idle-codex-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-book-open"></i> Codex des mondes</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-world-codex" id="idle-world-codex"></div></div></div>
-          <div class="profile-section idle-missions-panel"><h3><i class="fas fa-scroll"></i> Missions d’Anime Ascension</h3><div class="idle-missions" id="idle-missions"></div></div>
+          <div class="profile-section idle-missions-panel"><h3><i class="fas fa-scroll"></i> Missions récurrentes</h3><div class="idle-missions" id="idle-missions"></div></div>
           <div class="profile-section"><h3><i class="fas fa-tower-observation"></i> Défis récurrents</h3><div class="idle-challenges" id="idle-challenges"></div></div>
           <div class="profile-section idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-chart-line"></i> Observatoire bêta</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><button class="btn-secondary" id="idle-telemetry-load"><i class="fas fa-rotate"></i> Charger les statistiques</button><div id="idle-telemetry-summary"></div><form class="idle-feedback" id="idle-feedback-form"><label for="idle-feedback-text"><b>Signaler un problème ou une idée</b><small>Le stage et la version sont joints automatiquement.</small></label><textarea id="idle-feedback-text" minlength="10" maxlength="1000" required placeholder="Décris ce qui s’est passé et ce que tu attendais…"></textarea><button class="btn-primary" type="submit"><i class="fas fa-paper-plane"></i> Envoyer aux développeurs</button><span id="idle-feedback-status" aria-live="polite"></span></form></div></div>
         </section>

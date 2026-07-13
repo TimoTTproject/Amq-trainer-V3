@@ -243,12 +243,9 @@ function pendingEssence(lastCollectAt, totalRate, now = new Date(), capMs = OFFL
   return (elapsedMs / 1000) * totalRate;
 }
 
-// ── Niveau du DOJO (le lieu, pas une carte) ──
-// Dérivé de l'essence gagnée à VIE (User.essenceEarnedTotal, jamais décrémentée)
-// via une suite géométrique — formule fermée, donc O(1) même à très haut niveau
-// (pas de boucle : la progression est volontairement quasi infinie).
-// Le premier niveau reste accessible, puis chaque palier demande un
-// investissement sensiblement plus long que le précédent.
+// ── Ancienne courbe du niveau du DOJO ──
+// Conservée pour migrer les comptes existants et vérifier les seuils
+// historiques. Le rang actif est désormais validé par rankQuestSeries().
 const DOJO_XP_BASE = 100; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
 const DOJO_XP_GROWTH = 1.40; // +40% de coût par niveau
 
@@ -281,6 +278,21 @@ function dojoLevelForXp(xp) { return levelForXp(DOJO_XP_BASE, DOJO_XP_GROWTH, xp
 const DOJO_LEVEL_BONUS = 0.01; // +1% par niveau de Dojo
 function dojoLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * DOJO_LEVEL_BONUS;
+}
+
+// Le niveau du joueur n'est plus accordé automatiquement par l'Essence à vie.
+// Chaque rang demande une série d'épreuves, remise à zéro après validation.
+function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosses = 0 } = {}) {
+  const current = Math.max(1, Math.floor(level || 1));
+  const nextLevel = current + 1;
+  const defs = [
+    { key:'kills', icon:'fa-skull', name:'Épreuve de combat', description:'Vaincre des ennemis', progress:kills, target:Math.min(2500, 10 + current * 5) },
+    { key:'clicks', icon:'fa-hand-fist', name:'Épreuve de maîtrise', description:'Porter des frappes manuelles', progress:clicks, target:Math.min(2000, 25 + current * 10) },
+    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Épreuve d’entraînement', description:'Acheter des améliorations', progress:upgrades, target:Math.min(100, 2 + Math.ceil(current / 2)) },
+  ];
+  if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Épreuve du gardien', description:'Ouvrir un nouveau coffre de boss', progress:bosses, target:1 });
+  const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));
+  return { level:current, nextLevel, quests, completed:quests.filter((q)=>q.completed).length, total:quests.length, ready:quests.every((q)=>q.completed), sealReward:nextLevel % 5 === 0 ? 2 : 1 };
 }
 
 // ── Stage de combat (vague) — décorrélé du niveau du Dojo : c'est LUI qui
@@ -480,6 +492,7 @@ module.exports = {
   dojoLevelForXp,
   DOJO_LEVEL_BONUS,
   dojoLevelMultiplier,
+  rankQuestSeries,
   STAGE_XP_BASE,
   STAGE_XP_GROWTH,
   stageXpForLevel,
