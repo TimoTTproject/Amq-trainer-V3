@@ -10,7 +10,7 @@ let idleSyncTicker = null; // resynchronisation périodique légère (cf. openId
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
 let idleParticleTheme = null; // dernier thème pour lequel les particules ambiantes ont été générées
 let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
-let idleActivePanel = 'home'; // onglet courant de la barre du bas (home | team | upgrades)
+let idleActivePanel = 'home'; // page courante de l'Idle
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
 let idleBurstReadyAt = 0;
@@ -97,14 +97,17 @@ async function idleBackgroundSync() {
   }
 }
 
-// Onglets de la barre du bas (façon appli mobile) : home = scène, team =
-// emplacements, upgrades = améliorations + prestige.
+// Navigation latérale sur ordinateur et barre compacte sur mobile.
 function idleShowPanel(name) {
   idleActivePanel = name;
-  for (const p of ['home', 'team', 'upgrades']) {
+  for (const p of ['home', 'progression', 'team', 'upgrades', 'activities']) {
     document.getElementById('idle-panel-' + p)?.classList.toggle('hidden', p !== name);
   }
-  document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => t.classList.toggle('active', t.dataset.idleTab === name));
+  document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => {
+    const active = t.dataset.idleTab === name;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-current', active ? 'page' : 'false');
+  });
 }
 
 // Nombre flottant dans la scène (+essence, façon dégâts/gains d'un jeu mobile).

@@ -6271,3 +6271,26 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-challenges-panel{border-color:#f59e0b38;background:linear-gradient(120deg,#211506,#0d1119)}
 #view-idle .idle-collapsible>.idle-collapse-title{min-height:45px}
 @media(max-width:700px){#view-idle .idle-content{padding-top:6px}#view-idle .idle-currency-panel{padding:8px}#view-idle .idle-currency-panel>h3{display:none}#view-idle .idle-currency-grid{grid-template-columns:1fr 1fr}#view-idle .idle-currency-item{min-height:42px}#view-idle .idle-combat-panel{padding:7px}#view-idle .idle-rank-heading{gap:8px}#view-idle .idle-rank-levels{padding:7px 8px}#view-idle .idle-rank-quest{grid-template-columns:31px minmax(0,1fr) auto}#view-idle .idle-combat-log{display:none}}
+
+/* Navigation Idle par pages : rail latéral sur ordinateur, barre mobile. */
+#view-idle .idle-page-head{display:flex;align-items:center;gap:12px;margin:2px 0 14px;padding:4px 2px}
+#view-idle .idle-page-head>i{display:grid;width:42px;height:42px;place-items:center;border:1px solid color-mix(in srgb,var(--accent) 42%,var(--border));border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,var(--bg-2));color:var(--accent);font-size:17px}
+#view-idle .idle-page-head>div{display:flex;flex-direction:column}
+#view-idle .idle-page-head small{color:var(--text-2);font-size:8px;font-weight:900;letter-spacing:.16em}
+#view-idle .idle-page-head h2{margin:1px 0 0;color:var(--text);font-size:20px;line-height:1.1}
+
+@media(min-width:901px){
+  #view-idle .idle-content{width:min(1180px,calc(100% - 220px));max-width:none;margin:0 auto;padding-bottom:34px;transform:translateX(90px)}
+  #view-idle .idle-tabs{left:16px;right:auto;top:76px;bottom:auto;width:164px;transform:none;flex-direction:column;align-items:stretch;gap:5px;padding:8px;border-radius:16px}
+  #view-idle .idle-tab{width:100%;min-height:44px;flex:none;flex-direction:row;justify-content:flex-start;gap:11px;padding:10px 12px;border-radius:10px;font-size:11px;text-align:left}
+  #view-idle .idle-tab i{width:18px;text-align:center;font-size:14px}
+  #view-idle .idle-tab span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #view-idle .idle-tab.active{box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 25%,transparent)}
+}
+
+@media(max-width:900px){
+  #view-idle .idle-content{width:auto;max-width:1180px;transform:none;padding-bottom:82px}
+  #view-idle .idle-tabs{left:50%;bottom:6px;width:calc(100% - 12px);max-width:560px;padding:4px;gap:2px}
+  #view-idle .idle-tab{min-width:0;flex-direction:column;gap:2px;padding:7px 2px;font-size:8px;line-height:1}
+  #view-idle .idle-tab i{font-size:13px}
+}
