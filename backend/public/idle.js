@@ -465,7 +465,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
   const modifierEl=document.getElementById('idle-world-modifier');
-  if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b> · ${escapeHtml(modifier.description)}`:'';modifierEl.title='Règle spéciale appliquée dans ce monde';}
+  if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
   if(objective){const remainingWaves=boss?0:10-wave;objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-flag-checkered'}"></i><span><b>${boss?'Boss en cours':`Boss dans ${remainingWaves} vague${remainingWaves>1?'s':''}`}</b><small>${boss?'Brise sa mécanique pour ouvrir le coffre':`Prochaine victoire : +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>Monde ${battle?.world?.index||zone}/10</strong>`;}
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10`}`;
@@ -672,8 +672,8 @@ function renderIdleRank(rank) {
   document.getElementById('idle-rank-next').textContent = `Niv. ${idleFormatNumber(rank.nextLevel)}`;
   const summary = document.getElementById('idle-rank-summary');
   if (summary) summary.textContent = rank.ready
-    ? 'La série est complète. Valide ton ascension quand tu es prêt.'
-    : `${rank.completed}/${rank.total} épreuves terminées · la progression est conservée jusqu’à la validation.`;
+    ? 'Ascension prête.'
+    : `${rank.completed}/${rank.total} épreuves terminées`;
   box.innerHTML = (rank.quests || []).map((quest) => {
     const progress = Math.min(100, Math.round((quest.progress / Math.max(1, quest.target)) * 100));
     return `<article class="idle-rank-quest ${quest.completed ? 'done' : ''}">
@@ -683,7 +683,7 @@ function renderIdleRank(rank) {
     </article>`;
   }).join('');
   const reward = document.getElementById('idle-rank-reward');
-  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> Récompense : ${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
+  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
   const button = document.getElementById('idle-rank-advance');
   if (button) {
     button.disabled = !rank.ready;
