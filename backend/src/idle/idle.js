@@ -238,21 +238,17 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
   let essence = 0;
   let kills = 0;
   let bossFailed = false;
-  let farming = mode === 'farm';
+  const farming = mode === 'farm';
   const maxHp = () => enemyUnitMaxHp(currentStage, currentWaveKills);
   if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
   if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
 
   while (seconds > 0 && kills < maxKills) {
     const timeToKill = currentHp / damagePerSecond;
-    if (isBossStage(currentStage) && timeToKill > BOSS_TIMER_SECONDS) {
-      bossFailed = true;
-      currentStage = Math.max(1, currentStage - 1);
-      currentWaveKills = 0;
-      currentHp = enemyUnitMaxHp(currentStage, currentWaveKills);
-      farming = true;
-      continue;
-    }
+    // Un boss trop long s'enrage, mais ne renvoie jamais silencieusement le
+    // joueur à la vague précédente. L'ancien recul recréait la vague 9 à
+    // chaque synchronisation et donnait l'impression que son dixième ennemi
+    // n'était jamais validé. Le boss reste maintenant attaquable au clic.
     // Une fois en farm, tous les ennemis ont les mêmes PV : calcul fermé
     // plutôt qu'une boucle par kill, indispensable pour plusieurs heures
     // hors-ligne à haut niveau.

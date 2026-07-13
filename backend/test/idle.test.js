@@ -66,14 +66,23 @@ test('campagne : 10 mondes par acte, boss tous les 10 stages et élite au milieu
   assert.equal(campaignForStage(201).difficulty.name,'Cauchemar');
 });
 
-test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans boucle coûteuse', () => {
+test('simulateCombat : progresse et ne rétrograde plus devant un boss trop fort', () => {
   const push = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:10,elapsedSeconds:30,mode:'progress'});
   assert.ok(push.stage > 1);
-  const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:3600,mode:'progress'});
-  assert.equal(wall.stage,9);
-  assert.equal(wall.bossFailed,true);
-  assert.ok(wall.kills > 50);
-  assert.ok(wall.essence>wall.kills*enemyUnitReward(9));
+  const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:1,mode:'progress'});
+  assert.equal(wall.stage,10);
+  assert.equal(wall.bossFailed,false);
+  assert.ok(wall.hp<enemyMaxHp(10));
+});
+
+test('le dixième ennemi de la vague 9 ouvre le boss même avec un DPS insuffisant', () => {
+  const dps=10;
+  const captainHp=enemyUnitMaxHp(9,9);
+  const result=simulateCombat({stage:9,waveKills:9,hp:captainHp,dps,elapsedSeconds:captainHp/dps+1,mode:'progress'});
+  assert.equal(result.stage,10);
+  assert.equal(result.waveKills,0);
+  assert.equal(result.bossFailed,false);
+  assert.ok(result.hp<enemyUnitMaxHp(10,0));
 });
 
 test('chaque vague normale demande 10 ennemis et le boss reste un combat unique', () => {
