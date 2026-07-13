@@ -522,10 +522,18 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const titleEl = document.getElementById('idle-enemy-title');
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
+  const waveTrack = document.getElementById('idle-wave-track');
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
   if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${boss?'Vaincs-le pour passer au monde suivant':`Ennemi ${enemyNumber}/${enemiesRequired} · +${idleFormatNumber(battle?.reward||0)} Essence par victoire`}</small></span><strong>${boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
+  if (waveTrack) {
+    waveTrack.classList.toggle('is-boss', boss);
+    waveTrack.setAttribute('aria-label', boss ? 'Boss final de la vague' : `${battle?.enemiesDefeated||0} ennemis vaincus sur ${enemiesRequired}`);
+    waveTrack.innerHTML = boss
+      ? `<span class="idle-wave-boss"><i class="fas fa-crown"></i> BOSS FINAL</span>`
+      : Array.from({length:enemiesRequired},(_,index)=>`<span class="${index<(battle?.enemiesDefeated||0)?'done':index===enemyNumber-1?'current':''}"><i class="fas ${index<(battle?.enemiesDefeated||0)?'fa-check':'fa-skull'}"></i><b>${index+1}</b></span>`).join('');
+  }
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
@@ -535,7 +543,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
   if (prevBattle && (battle?.kills || 0) > (prevBattle?.kills || 0)) {
-    idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0));
+    idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0), stage > Math.max(1, prevBattle.stage || 1));
   }
 }
 
@@ -721,7 +729,7 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = world.flavor || dojo.decor.flavor || '';
   idleRenderBackdrop(world.backgroundUrl||dojo.decor.backgroundUrl);
-  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':'normal',battle?.world?.enemyName);
+  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':'normal',battle?.world?.enemyName,battle?.enemyNumber||1);
   // La barre #idle-xp-fill est la barre de PV du combat (cf. renderIdleBattle,
   // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
@@ -800,15 +808,18 @@ async function advanceIdleRank() {
 // (cf. renderIdleBattle), une célébration à chaque fois serait fatigante.
 // `count` = nombre de stages franchis d'un coup (rattrapage après une pause
 // ou grosse récolte) : un seul impact, pas une rafale qui spammerait l'écran.
-function idleKillBurst(count) {
+function idleKillBurst(count, waveComplete=false) {
   const scene = document.getElementById('idle-scene');
+  const fighter = document.getElementById('idle-decor-boss');
   if (scene) {
     scene.classList.remove('idle-kill-flash');
+    scene.classList.remove('idle-wave-cleared');
     void scene.offsetWidth;
-    scene.classList.add('idle-kill-flash');
+    scene.classList.add(waveComplete?'idle-wave-cleared':'idle-kill-flash');
   }
-  idleSpawnFloat(count > 1 ? `×${count} ENNEMIS VAINCUS` : 'ENNEMI VAINCU !', 'kill');
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if(fighter){fighter.classList.remove('idle-enemy-arrival');void fighter.offsetWidth;fighter.classList.add('idle-enemy-arrival');}
+  idleSpawnFloat(count > 1 ? `×${count} ENNEMIS VAINCUS` : waveComplete?'VAGUE TERMINÉE !':'ENNEMI VAINCU !', waveComplete?'crit':'kill');
+  if (typeof sfx !== 'undefined') { if(waveComplete&&sfx.levelup)sfx.levelup();else if(sfx.tick)sfx.tick(); }
 }
 
 // Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique
@@ -979,7 +990,7 @@ function idleRenderBackdrop(url) {
 
 // Le « gardien » mythique du palier trône au centre de la scène — vrai
 // personnage AniList, pas une illustration générique.
-function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversaire') {
+function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversaire', enemyNumber=1) {
   const el = document.getElementById('idle-decor-boss');
   if (!el) return;
   if (!boss && !['wood', 'garden', 'temple', 'gold', 'celestial', 'hueco', 'ua', 'shibuya', 'aincrad', 'void'].includes(theme)) {
@@ -994,7 +1005,7 @@ function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversair
   const enemyAtlases = Object.fromEntries(['wood','garden','temple','gold','celestial','hueco','ua','shibuya','aincrad','void'].map((key)=>[key,`/assets/idle/enemies/world-${key}-v1.webp`]));
   const atlas = enemyAtlases[theme];
   if (atlas) {
-    const spriteIndex = kind === 'boss' ? 5 : kind === 'elite' ? 4 : (Math.max(1,wave)-1)%4;
+    const spriteIndex = kind === 'boss' ? 5 : kind === 'elite' ? 4 : (Math.max(1,wave)+Math.max(1,enemyNumber)-2)%4;
     const x = [0,50,100,0,50,100][spriteIndex];
     const y = spriteIndex < 3 ? 0 : 100;
     el.classList.add('idle-scene-fighter');
