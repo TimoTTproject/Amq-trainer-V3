@@ -244,6 +244,17 @@ test('GET /state : le stage de run et le décompte de vague sont indépendants d
   assert.equal(res.json.battle.enemyNumber, 5);
 });
 
+test('GET /state : un boss expose un décompte serveur avant son enrage', async () => {
+  const startedAt=new Date(Date.now()-10000);
+  const user=dbUser({idleStage:10,idleWaveKills:0,idleEnemyHp:enemyMaxHp(10),idleBossStartedAt:startedAt,idleLastCollectAt:new Date()});
+  prisma.user.findUnique=async()=>user;
+  const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(res.status,200);
+  assert.equal(res.json.battle.isBoss,true);
+  assert.ok(res.json.battle.timerRemainingMs<=21000&&res.json.battle.timerRemainingMs>=18000);
+  assert.equal(res.json.battle.enraged,false);
+});
+
 test('GET /state : la production hors-ligne est plafonnée et reflétée dans pendingEssence', async () => {
   const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
   const user = dbUser({ idleLastCollectAt: twoHoursAgo });

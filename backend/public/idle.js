@@ -31,6 +31,7 @@ let idleItemSort = 'power';
 let idleSelectedItems = new Set();
 let idleRosterCharacters = new Map();
 let idleLastAnnouncement = '';
+let idleWaveTransitionTimers = [];
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -195,6 +196,7 @@ function idleTick() {
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
   idleTickInterpolateBattle(elapsed);
+  idleUpdateBossTimer();
   idleRenderSkillCooldown();
   // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
   // purement cosmétique, ça montre la production "vivre" comme dans un vrai
@@ -205,6 +207,14 @@ function idleTick() {
     idleSpawnFloat(`−${idleFormatNumber(passiveGain)}`, 'damage passive');
     idleCombatMotion('team');
   }
+}
+
+function idleUpdateBossTimer(){
+  const box=document.getElementById('idle-boss-timer');const fill=document.getElementById('idle-boss-timer-fill');const label=document.getElementById('idle-boss-timer-label');
+  if(!box||!fill||!label||box.classList.contains('hidden'))return;
+  const total=Math.max(1,Number(box.dataset.total)||30000);const deadline=Number(box.dataset.deadline)||Date.now();const remaining=Math.max(0,deadline-Date.now());
+  fill.style.width=`${Math.max(0,Math.min(100,remaining/total*100))}%`;box.classList.toggle('enraged',remaining<=0);
+  label.textContent=remaining>0?`${Math.ceil(remaining/1000)}s avant enrage`:'ENRAGÉ · clics affaiblis';
 }
 
 // Fait baisser la barre de PV du gardien en continu entre deux synchros
@@ -565,6 +575,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
   const waveTrack = document.getElementById('idle-wave-track');
+  const bossTimer=document.getElementById('idle-boss-timer');
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
@@ -576,6 +587,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
       ? `<span class="idle-wave-boss"><i class="fas fa-crown"></i> BOSS FINAL</span>`
       : Array.from({length:enemiesRequired},(_,index)=>`<span class="${index<(battle?.enemiesDefeated||0)?'done':index===enemyNumber-1?'current':''}"><i class="fas ${index<(battle?.enemiesDefeated||0)?'fa-check':'fa-skull'}"></i><b>${index+1}</b></span>`).join('');
   }
+  if(bossTimer){const total=Math.max(1,(battle?.timerSeconds||30)*1000);const remaining=Math.max(0,battle?.timerRemainingMs??total);bossTimer.classList.toggle('hidden',!boss);bossTimer.dataset.total=String(total);bossTimer.dataset.deadline=String(Date.now()+remaining);if(boss)idleUpdateBossTimer();}
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · ${battle?.world?.difficulty?.name?.toUpperCase()||'NORMAL'} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
   if (titleEl) titleEl.textContent = guardianName;
@@ -585,9 +597,11 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
   if (prevBattle && (battle?.kills || 0) > (prevBattle?.kills || 0)) {
-    idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0), stage > Math.max(1, prevBattle.stage || 1));
-    const farmRestart=farming&&stage===Math.max(1,prevBattle.stage||1)&&(battle?.enemiesDefeated||0)<(prevBattle?.enemiesDefeated||0);
-    idleAnnounce(farmRestart?`Mode Farm. La vague ${wave} recommence.`:stage>Math.max(1,prevBattle.stage||1)?`Vague terminée. Vague ${wave} commencée.`:`Ennemi vaincu. ${enemiesRemaining} restant${enemiesRemaining>1?'s':''}.`);
+    const previousStage=Math.max(1,prevBattle.stage||1);const skippedStages=stage>previousStage+1;
+    if(skippedStages)idleShowWaveSequence(previousStage,stage);
+    idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0), stage > previousStage);
+    const farmRestart=farming&&stage===previousStage&&(battle?.enemiesDefeated||0)<(prevBattle?.enemiesDefeated||0);
+    if(!skippedStages)idleAnnounce(farmRestart?`Mode Farm. La vague ${wave} recommence.`:stage>previousStage?`Vague terminée. Vague ${wave} commencée.`:`Ennemi vaincu. ${enemiesRemaining} restant${enemiesRemaining>1?'s':''}.`);
   }
 }
 
@@ -873,6 +887,22 @@ function idleKillBurst(count, waveComplete=false) {
   if(fighter){fighter.classList.remove('idle-enemy-arrival');void fighter.offsetWidth;fighter.classList.add('idle-enemy-arrival');}
   idleSpawnFloat(count > 1 ? `×${count} ENNEMIS VAINCUS` : waveComplete?'VAGUE TERMINÉE !':'ENNEMI VAINCU !', waveComplete?'crit':'kill');
   if (typeof sfx !== 'undefined') { if(waveComplete&&sfx.idleWave)sfx.idleWave();else if(sfx.idleKill)sfx.idleKill(); }
+}
+
+// Une synchronisation peut solder plusieurs vagues si l'équipe est largement
+// plus forte que les ennemis. L'état serveur final reste autoritaire, mais on
+// restitue chaque transition dans l'ordre pour ne plus donner l'impression
+// que la numérotation saute (par exemple directement de 6 à 8).
+function idleShowWaveSequence(fromStage,toStage){
+  idleWaveTransitionTimers.forEach(clearTimeout);idleWaveTransitionTimers=[];
+  const crossed=[];for(let stage=fromStage+1;stage<=toStage&&crossed.length<10;stage++)crossed.push(stage);
+  if(crossed.length<2)return;
+  idleAddCombatLog(`Progression auto : ${crossed.map((stage)=>`vague ${((stage-1)%10)+1}`).join(' → ')}`,'fa-forward-step');
+  crossed.forEach((stage,index)=>{
+    const timer=setTimeout(()=>idleSpawnFloat(`VAGUE ${((stage-1)%10)+1}/10`,'xp'),index*420);
+    idleWaveTransitionTimers.push(timer);
+  });
+  idleAnnounce(`${crossed.length} vagues franchies automatiquement : ${crossed.map((stage)=>((stage-1)%10)+1).join(', puis ')}.`);
 }
 
 // Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique

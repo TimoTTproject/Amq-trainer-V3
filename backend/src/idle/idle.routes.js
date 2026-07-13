@@ -586,6 +586,7 @@ async function withSettle(userId, mutate) {
           idleEnemyHp: hp,
           idleWaveKills: combat.waveKills,
           idleBossProgress:stage!==(user.idleStage||1)?0:user.idleBossProgress,
+          idleBossStartedAt:isBossStage(stage)?(isBossStage(user.idleStage||1)&&user.idleBossStartedAt?user.idleBossStartedAt:new Date()):null,
           idleLastCollectAt: new Date(),
         },
       });
@@ -720,6 +721,8 @@ async function buildState(userId) {
   Object.assign(combatWorld,{backgroundUrl:combatArt?.backgroundUrl||null,boss:combatArt?{characterId:combatArt.characterId,name:combatArt.name,imageUrl:combatArt.imageUrl,generatedImageUrl:combatArt.generatedImageUrl}:null});
   const xpIntoStage = maxEnemyHp - enemyHp;
   const xpForNextStage = maxEnemyHp;
+  const bossStartedAt=isBossStage(stage)?(user.idleBossStartedAt?new Date(user.idleBossStartedAt).getTime():Date.now()):null;
+  const bossTimerRemainingMs=bossStartedAt===null?null:Math.max(0,BOSS_TIMER_SECONDS*1000-(Date.now()-bossStartedAt));
   const defeatedBosses = Math.floor(Math.max(0, stage - 1) / 10);
   const nextBossChest = user.idleBossClaimed + 1;
   const nextChestRewards=bossChestRewards(nextBossChest);
@@ -818,9 +821,10 @@ async function buildState(userId) {
       enemy,
       isBoss: isBossStage(stage),
       phase:isBossStage(stage)?(hpRatio<=.5?2:1):null,
-      enraged:isBossStage(stage)&&!!user.idleBossStartedAt&&(Date.now()-new Date(user.idleBossStartedAt).getTime()>=BOSS_TIMER_SECONDS*1000),
+      enraged:isBossStage(stage)&&bossTimerRemainingMs<=0,
       bestTimeMs:user.idleBestBossMs||null,
       timerSeconds: isBossStage(stage) ? BOSS_TIMER_SECONDS : null,
+      timerRemainingMs:bossTimerRemainingMs,
       bossFailed: combatPreview.bossFailed,
       world:combatWorld,
       kills: enemiesDefeatedBeforeStage(stage) + waveKills,
