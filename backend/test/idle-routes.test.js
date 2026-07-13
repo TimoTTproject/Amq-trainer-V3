@@ -594,6 +594,26 @@ test('chef d’équipe : mémorise un personnage actif sans modifier ses bonus',
   assert.equal(res.status, 200);
   assert.equal(user.idleLeaderCharacterId, 7);
   assert.equal(res.json.strategy.leaderCharacterId, 7);
+  const milestones=res.json.slots.find((item)=>item.character?.id===7).character.milestones;
+  assert.match(milestones[0].effect,/passif/i);
+  assert.equal(milestones[1].cumulativeMultiplier,4);
+});
+
+test('navigation : revient sur un niveau débloqué en mode Farm puis reprend au maximum', async () => {
+  let user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12)});
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async({data})=>{user={...user,...data};return user;};
+  const previous=await app.request('/api/idle/stage',{method:'POST',cookie:app.authCookie('u1'),body:{stage:5}});
+  assert.equal(previous.status,200);
+  assert.equal(user.idleStage,5);
+  assert.equal(user.idleBattleMode,'farm');
+  assert.equal(previous.json.battle.stage,5);
+  assert.equal(previous.json.battle.mode,'farm');
+
+  const maximum=await app.request('/api/idle/stage',{method:'POST',cookie:app.authCookie('u1'),body:{stage:12}});
+  assert.equal(maximum.status,200);
+  assert.equal(user.idleBattleMode,'progress');
+  assert.equal(maximum.json.battle.stage,12);
 });
 
 test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé remet le niveau à 1 (sinon héritage gratuit de puissance)", async () => {
