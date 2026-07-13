@@ -40,6 +40,8 @@ let idleVisualMaxHp = null;
 let idleVisualStage = null;
 let idleVisualEnemyNumber = null;
 let idleVisualRespawnTimer = null;
+let idleCoachAction = null;
+let idleForceHpSync = false;
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -317,7 +319,8 @@ function renderIdleState(state) {
   const essenceEl = document.getElementById('idle-essence-val');
   essenceEl.textContent = idleFormatNumber(state.essence + state.pendingEssence);
   if (prev && state.essence > prev.essence) idleBump(essenceEl);
-  document.getElementById('idle-rate-val').textContent = idleFormatNumber(state.totalRate);
+  const rateVal = document.getElementById('idle-rate-val');
+  if (rateVal) rateVal.textContent = idleFormatNumber(state.totalRate);
   document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `+${idleFormatNumber(state.pendingEssence)}` : '0';
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-rotate"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en synchronisation.</b> Elle sera créditée automatiquement.` : '<i class="fas fa-check"></i> Les gains sont crédités automatiquement. Ton équipe continue à produire hors ligne.';
@@ -658,7 +661,16 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · ${battle?.world?.difficulty?.name?.toUpperCase()||'NORMAL'} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
   if (titleEl) titleEl.textContent = guardianName;
-  idleResetVisualHp({ ...battle, hp: remaining, maxHp: total });
+  const sameVisualEnemy = idleVisualStage === stage && idleVisualEnemyNumber === enemyNumber && idleVisualHp !== null;
+  if (!sameVisualEnemy || idleForceHpSync) {
+    idleResetVisualHp({ ...battle, hp: remaining, maxHp: total });
+    idleForceHpSync = false;
+  }
+  else {
+    idleVisualMaxHp = total;
+    idleVisualHp = Math.min(idleVisualHp, remaining);
+    idlePaintVisualHp(idleVisualHp, idleVisualMaxHp, true);
+  }
   // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
@@ -799,6 +811,20 @@ function renderIdleRecruit(recruit) {
   const pity=document.getElementById('idle-summon-pity');if(pity)pity.textContent=`Épique dans ${recruit.guaranteedEpicIn||10} invocation(s) max.`;
   const entry=document.getElementById('idle-summon-entry-summary');if(entry)entry.textContent=`${idleFormatNumber(recruit.balance)} Sceau${recruit.balance>1?'x':''} · ${idleFormatNumber(recruit.essenceBalance)} Essence · Épique dans ${recruit.guaranteedEpicIn||10}`;
   const navPrice=document.getElementById('idle-nav-summon-price');if(navPrice)navPrice.textContent=`1 Sceau ou ${idleFormatNumber(recruit.essenceCost)} Essence`;
+  const pullsDone=Math.max(0,10-(recruit.guaranteedEpicIn||10));
+  const pityProgress=document.getElementById('idle-summon-pity-progress');if(pityProgress)pityProgress.textContent=`${pullsDone} / 10 tirages`;
+  const pityFill=document.getElementById('idle-summon-pity-fill');if(pityFill)pityFill.style.width=`${pullsDone*10}%`;
+  const odds=document.getElementById('idle-summon-odds');if(odds){const labels={rare:'Rare',epic:'Épique',legendary:'Légendaire',mythic:'Mythique'};const values=recruit.odds||{};odds.innerHTML=Object.entries(labels).map(([key,label])=>`<span class="r-${key}"><small>${label}</small><b>${Number(values[key]||0).toFixed(Number(values[key]||0)%1?1:0)}%</b></span>`).join('');}
+}
+
+function renderIdleCoach(guide){
+  const coach=document.getElementById('idle-coach');if(!coach||!guide?.next){coach?.classList.add('hidden');return;}
+  const step=guide.next;const key=`idle-coach:${step.title}`;
+  if(sessionStorage.getItem(key)==='hidden'){coach.classList.add('hidden');return;}
+  document.getElementById('idle-coach-title').textContent=step.title;
+  document.getElementById('idle-coach-text').textContent=step.description;
+  idleCoachAction=()=>{coach.classList.add('hidden');idleShowPanel(step.tab||'home');};
+  coach.dataset.key=key;coach.classList.remove('hidden');
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
@@ -833,7 +859,7 @@ function renderIdleAchievements(items) {
   const box = document.getElementById('idle-achievements'); if (!box) return;
   box.innerHTML = items.map((a) => `<div class="idle-achievement ${a.completed ? 'completed' : ''}"><i class="fas ${a.icon}"></i><div><b>${escapeHtml(a.title)}</b><span>${escapeHtml(a.description)} · ${idleFormatNumber(a.progress)}/${idleFormatNumber(a.target)}</span><em style="--progress:${a.progress/a.target*100}%"></em></div><button class="btn-secondary" data-achievement="${a.key}" ${!a.completed || a.claimed ? 'disabled' : ''}>${a.claimed ? '<i class="fas fa-check"></i>' : idleRewardLabel(a)}</button></div>`).join('');
 }
-function renderIdleGuide(guide){if(!guide)return;const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
+function renderIdleGuide(guide){if(!guide)return;renderIdleCoach(guide);const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
 function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box)return;box.classList.toggle('hidden',!season?.enabled);if(!season?.enabled)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());const next=season.tiers.find((t)=>!t.completed);box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>PARCOURS MENSUEL · SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Joue de plusieurs façons pour gagner de l’activité. Chaque source est plafonnée : aucune action ne suffit seule.</span><strong>${idleFormatNumber(season.level)}${next?` / ${idleFormatNumber(next.level)}`:''} activité · ${Math.ceil(left/86400000)} jour(s) restants</strong></div></div><div class="idle-season-breakdown">${(season.breakdown||[]).map((x)=>`<span><small>${escapeHtml(x.label)}</small><b>+${idleFormatNumber(x.score)}</b><em>${idleFormatNumber(x.value)}/${idleFormatNumber(x.cap)}</em></span>`).join('')}</div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>PALIER ${t.tier}<b>${idleFormatNumber(t.level)}</b></span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)} Sceau${t.reward>1?'x':''}${t.essence?` · ${idleFormatNumber(t.essence)} Essence`:''}`}</button></div>`).join('')}</div>`;}
 function renderIdleRift(rift){const box=document.getElementById('idle-rift-card');if(!box||!rift)return;const canImprove=rift.unlocked&&rift.projectedFloor>rift.bestFloor;box.innerHTML=`<header><i class="fas fa-dungeon"></i><div><small>DÉFI HEBDOMADAIRE · 20 SALLES</small><b>Faille dimensionnelle</b><span>${escapeHtml(rift.variant.name)} · ${escapeHtml(rift.variant.description)}</span></div><strong>${rift.bestFloor}/${rift.maxFloor}</strong></header><div class="idle-rift-track">${Array.from({length:rift.maxFloor},(_,i)=>`<span class="${i<rift.bestFloor?'done':i<rift.projectedFloor?'projected':''}">${i+1}</span>`).join('')}</div><footer><span>${rift.unlocked?`Puissance estimée : salle ${rift.projectedFloor} · objectif suivant ${idleFormatNumber(rift.nextTarget)} PV`:`Débloquée au niveau ${rift.unlockLevel}`}</span><button class="btn-primary" id="idle-rift-attempt" ${!canImprove?'disabled':''}>${!rift.unlocked?'<i class="fas fa-lock"></i> Verrouillée':canImprove?`Lancer · +${idleFormatNumber(rift.reward.essence)} Essence${rift.reward.seals?` · ${rift.reward.seals} Sceau${rift.reward.seals>1?'x':''}`:''}`:'Renforce ton équipe'}</button></footer>`;}
 async function attemptIdleRift(){try{const result=await api('/api/idle/rift/attempt',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`FAILLE ${result.floor}/20`,'crit huge');sfx?.idleChest?.();renderIdleState(result.state);}catch(e){idleNotify(e.message,'error');}}
@@ -1356,7 +1382,7 @@ async function collectIdle() {
 async function clickIdle() {
   const now=Date.now();if(now<idleNextClickAt)return;idleNextClickAt=now+45;
   const predicted=idleState?.click?.damage||idleState?.click?.yield||1;
-  idleClickFeedback(predicted);idleApplyVisualDamage(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',idleFloatTier(predicted)].filter(Boolean).join(' '));
+  idleClickFeedback(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',idleFloatTier(predicted)].filter(Boolean).join(' '));
   idleClickPending=Math.min(10,idleClickPending+1);
   if(!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,160);
 }
@@ -1374,6 +1400,7 @@ async function flushIdleClicks(){
   if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);idleCombatMotion('hero');}
   if(r.passiveKills)idleSpawnFloat(`ÉQUIPE AUTO · ${r.passiveKills} élimination${r.passiveKills>1?'s':''}`,'xp');
   idleRecordStrikeBatch(count, r.damage || 0, r.kills || 0, r.passiveKills || 0);
+  idleForceHpSync=true;
   await refreshIdleState();
   if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
 }
@@ -1565,6 +1592,8 @@ function showIdleRecruitReveal(character) {
   if (!modal || !body) return;
   const rarity = (typeof RARITY_LABELS !== 'undefined' && RARITY_LABELS[character.rarity]) || character.rarity;
   const img = character.imageUrl ? `style="background-image:url('${escapeHtml(character.imageUrl)}')"` : '';
+  const role=idleRoleFor(character);
+  modal.className=`modal-overlay idle-recruit-reveal-modal reveal-${character.rarity}`;
   body.innerHTML = `<div class="idle-recruit-reveal-art r-${character.rarity}">
       <div class="idle-recruit-reveal-img" ${img}></div>
       <div class="idle-recruit-reveal-glow"></div>
@@ -1572,6 +1601,7 @@ function showIdleRecruitReveal(character) {
     <strong class="idle-recruit-reveal-name">${escapeHtml(character.name)}</strong>
     <span class="idle-recruit-reveal-series">${escapeHtml(character.series || 'Univers inconnu')}</span>
     <span class="idle-recruit-reveal-rarity r-${character.rarity}">${escapeHtml(rarity)}</span>
+    <span class="idle-recruit-reveal-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><b>${escapeHtml(role.name)}</b> · ${escapeHtml(role.description)}</span>
     ${character.talent ? `<div class="idle-reveal-talent"><i class="fas fa-fingerprint"></i><div><b>Talent · ${escapeHtml(character.talent.name)}</b><span>${escapeHtml(character.talent.description)}</span></div></div>` : ''}`;
   const rates=(idleState?.slots||[]).filter((s)=>s.character).map((s)=>s.character.rate); const weakest=rates.length?Math.min(...rates):0;
   body.insertAdjacentHTML('beforeend',`<div class="idle-recruit-comparison"><span><small>PRODUCTION DE BASE</small><b>+${idleFormatNumber(character.baseRate||0)}/s</b></span><span><small>COMPARAISON ÉQUIPE</small><b class="${(character.baseRate||0)>weakest?'better':''}">${!rates.length?'Premier héros':(character.baseRate||0)>weakest?'Plus forte que le plus faible':'À entraîner'}</b></span></div>`);
@@ -1581,12 +1611,13 @@ function showIdleRecruitReveal(character) {
     ? '<i class="fas fa-user-plus"></i> Ajouter à l’équipe'
     : '<i class="fas fa-users"></i> Voir mon équipe';
   modal.classList.remove('hidden');
+  requestAnimationFrame(()=>modal.classList.add('is-revealed'));
 }
 
 function renderIdleRecruitHistory(items){const box=document.getElementById('idle-recruit-history');if(!box)return;box.innerHTML=items.length?items.map((c)=>`<div class="idle-history-row"><i class="fas fa-user-plus"></i><div><b>${escapeHtml(c.name||'Personnage')}</b><span>${escapeHtml(c.series||'Univers inconnu')} · ${escapeHtml(c.talent?.name||'')}</span></div><small>${c.recruitedAt?new Date(c.recruitedAt).toLocaleDateString('fr-FR'):''}</small></div>`).join(''):'<p class="hint">Aucun recrutement pour le moment.</p>';}
 
 function closeIdleRecruitReveal() {
-  document.getElementById('idle-recruit-reveal')?.classList.add('hidden');
+  const modal=document.getElementById('idle-recruit-reveal');modal?.classList.add('hidden');modal?.classList.remove('is-revealed');
 }
 
 async function assignIdleLastRecruit() {
@@ -1718,6 +1749,10 @@ function initIdleUI() {
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
   document.getElementById('idle-open-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
+  document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
+  document.getElementById('idle-spend-wisdom')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-ancients')?.closest('.idle-collapsible')?.querySelector('[data-idle-collapse]')?.click(),80);});
+  document.getElementById('idle-coach-action')?.addEventListener('click',()=>idleCoachAction?.());
+  document.getElementById('idle-coach-close')?.addEventListener('click',()=>{const coach=document.getElementById('idle-coach');if(coach?.dataset.key)sessionStorage.setItem(coach.dataset.key,'hidden');coach?.classList.add('hidden');});
   document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));
   document.getElementById('idle-summon')?.addEventListener('click',(e)=>{if(e.target.id==='idle-summon')e.currentTarget.classList.add('hidden');});
   document.getElementById('idle-roster-sort')?.addEventListener('change',(e)=>{idleRosterSort=e.target.value;renderIdleRosterList();});
