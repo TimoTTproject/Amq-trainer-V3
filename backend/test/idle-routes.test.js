@@ -534,6 +534,16 @@ test('click : accepte une cadence de clicker sans 429 immédiat', async () => {
   }
 });
 
+test('click : regroupe plusieurs frappes dans une seule requête autoritaire', async () => {
+  let user=dbUser({idleClickLevel:2,idleStage:3,idleEnemyHp:enemyMaxHp(3)});
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')user={...user,idleEnemyHp:data.idleEnemyHp,idleStage:data.idleStage};return user;};
+  const res=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:5}});
+  assert.equal(res.status,200);
+  assert.equal(res.json.count,5);
+  assert.ok(res.json.damage>=5);
+});
+
 test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {
   const noneYet = dbUser({ essenceEarnedTotal: 0 }); // niveau 1, aucun palier atteint
   prisma.user.findUnique = async () => noneYet;

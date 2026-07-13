@@ -17,7 +17,6 @@ const {
   clickYield,
   clickUpgradeCost,
   CLICK_LEVEL_MAX,
-  CLICK_COOLDOWN_MS,
   slotUpgradeCost,
   OFFLINE_CAP_MS,
   simulateCombat,
@@ -32,6 +31,7 @@ const {
   RARITY_RATE,
   RARITY_LEVEL_BONUS,
   RARITY_PASSIVE,
+  RECRUIT_WEIGHTS,
   HERO_MILESTONES,
   dojoLevelForXp,
   dojoXpForLevel,
@@ -514,7 +514,8 @@ async function buildState(userId) {
   const enemyHp = Math.max(0, Math.min(maxEnemyHp, combatPreview.hp));
   const hpRatio=enemyHp/Math.max(1,maxEnemyHp);
   const mechanicMultiplier=!clickMechanic?1:clickMechanic.key==='shield'&&(user.idleBossProgress||0)<8?.25:clickMechanic.key==='rage'&&hpRatio<=.3?.5:clickMechanic.key==='regen'&&(user.idleBossProgress||0)<1?.65:1;
-  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * mechanicMultiplier));
+  const worldClick=campaignForStage(stage).modifier?.click||1;
+  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * mechanicMultiplier));
   const combatWorld=campaignForStage(stage);
   const combatArt=await decorArtForTheme(combatWorld.theme);
   Object.assign(combatWorld,{backgroundUrl:combatArt?.backgroundUrl||null,boss:combatArt?{characterId:combatArt.characterId,name:combatArt.name,imageUrl:combatArt.imageUrl,generatedImageUrl:combatArt.generatedImageUrl}:null});
@@ -582,7 +583,7 @@ async function buildState(userId) {
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),currency:'seals',balance:user.idleSeals,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)) },
+    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),nextCostAfter:recruitCost(recruitCount+1,recruitDiscountBonus),currency:'seals',balance:user.idleSeals,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
     recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character) })),
     battle: {
       stage,
@@ -618,6 +619,7 @@ async function buildState(userId) {
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
+      nextMultiplier: user.idleProdLevel < PROD_LEVEL_MAX ? prodMultiplier(user.idleProdLevel+1,prodAncientBonus) : null,
       nextCost: user.idleProdLevel < PROD_LEVEL_MAX ? prodUpgradeCost(user.idleProdLevel) : null,
       maxed: user.idleProdLevel >= PROD_LEVEL_MAX,
     },
@@ -625,6 +627,7 @@ async function buildState(userId) {
       level: user.idleClickLevel,
       yield: clickBase,
       damage: clickDamage,
+      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round(clickYield(user.idleClickLevel+1,clickAncientBonus)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*mechanicMultiplier)) : null,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
     },
@@ -1030,32 +1033,36 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
 // solde de `pending` ici, juste un ajout — évite de perdre de l'essence à
 // l'arrondi si le clic est spammé, cf. commentaire de withSettle). Compte
 // aussi pour l'XP du Dojo (essenceEarnedTotal).
-router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, max: Math.ceil(1000 / CLICK_COOLDOWN_MS), name: 'idle-click' }), async (req, res) => {
+router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, max: 8, name: 'idle-click' }), async (req, res) => {
+  const count=Math.min(10,Math.max(1,Number.isInteger(Number(req.body?.count))?Number(req.body.count):1));
   let result;
   await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
-    const mechanic = bossMechanicForStage(liveUser.idleStage || 1);
-    const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click * (heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1) * currentIdleEvent().click;
-    const hp = liveUser.idleEnemyHp > 0 ? liveUser.idleEnemyHp : enemyMaxHp(liveUser.idleStage || 1);
-    const hpRatio=hp/Math.max(1,enemyMaxHp(liveUser.idleStage||1));
-    let multiplier=1;let progress=liveUser.idleBossProgress||0;
-    if(mechanic?.key==='shield'&&progress<8){multiplier=.25;progress++;}
-    if(mechanic?.key==='rage'&&hpRatio<=.3)multiplier=.5;
-    if(mechanic?.key==='regen'&&progress<1)multiplier=.65;
-    if(mechanic?.key==='counter'){if(progress===1)multiplier=.35;progress=1;}
-    if(mechanic)await tx.user.update({where:{id:liveUser.id},data:{idleBossProgress:progress}});
-    if(heroClass(liveUser.idleHeroClass).execute&&hpRatio<=.2)multiplier*=heroClass(liveUser.idleHeroClass).execute;
-    const critical=Math.random()<(heroClass(liveUser.idleHeroClass).crit||.12); const damage = Math.max(1, Math.round(raw * multiplier * (critical?2:1)));
-    const updated = await applyActiveDamage(tx, liveUser, damage);
-    result = { essence: updated.essence, gained: damage, damage, killed: damage >= hp, critical, mechanic: mechanic?.key || null,mechanicProgress:progress };
+    let stage=Math.max(1,liveUser.idleStage||1);let hp=liveUser.idleEnemyHp>0?liveUser.idleEnemyHp:enemyMaxHp(stage);let progress=liveUser.idleBossProgress||0;
+    let damageTotal=0,rewardTotal=0,kills=0,criticals=0,lastMechanic=null;
+    const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click;
+    for(let i=0;i<count;i++){
+      const world=campaignForStage(stage);const mechanic=bossMechanicForStage(stage);lastMechanic=mechanic?.key||null;
+      const hpRatio=hp/Math.max(1,enemyMaxHp(stage));let multiplier=world.modifier?.click||1;
+      if(mechanic?.key==='shield'&&progress<8){multiplier*=.25;progress++;}
+      if(mechanic?.key==='rage'&&hpRatio<=.3)multiplier*=.5;
+      if(mechanic?.key==='regen'&&progress<1)multiplier*=.65;
+      if(mechanic?.key==='counter'){if(progress===1)multiplier*=.35;progress=1;}
+      const executeAt=world.modifier?.executeAt||.2;if(heroClass(liveUser.idleHeroClass).execute&&hpRatio<=executeAt)multiplier*=heroClass(liveUser.idleHeroClass).execute;
+      const critical=Math.random()<((heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0));if(critical)criticals++;
+      const damage=Math.max(1,Math.round(base*multiplier*(critical?2:1)));damageTotal+=damage;
+      if(damage>=hp){rewardTotal+=enemyReward(stage);kills++;stage=liveUser.idleBattleMode==='farm'?stage:stage+1;hp=enemyMaxHp(stage);progress=0;}else hp-=damage;
+    }
+    const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleBossProgress:progress,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
+    result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
   });
-  void incrementIdleCounter(req.user.id,'click',1);
-  if(result?.killed)void recordIdleEvent(req.user.id,'active_kill',{value:result.damage});
+  void incrementIdleCounter(req.user.id,'click',count);
+  if(result?.kills)void recordIdleEvent(req.user.id,'active_kill',{value:result.damage,count:result.kills});
   res.json(result);
 });
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
   let gained=0;let readyAt;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier=.35;progress=2;}readyAt=new Date(Date.now()+30000);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier);await applyActiveDamage(tx,user,gained);});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+30000);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier);await applyActiveDamage(tx,user,gained);});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void incrementIdleCounter(req.user.id,'skill',1);
   res.json({ ok: true, gained, damage:gained, cooldownMs: 30000,readyAt:readyAt.toISOString() });
 });
@@ -1073,7 +1080,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
       await tx.user.update({where:{id:user.id},data:{idleTeamReadyAt:new Date(Date.now()+60000),idleBossProgress:progress}});
-      gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*multiplier));
+      gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(campaignForStage(user.idleStage||1).modifier?.team||1)*multiplier));
       await applyActiveDamage(tx,user,gained);
     });
   } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message}); throw e; }

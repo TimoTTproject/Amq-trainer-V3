@@ -324,6 +324,18 @@ const CAMPAIGN_ENEMIES = [
   ['Monstre du palier','Chevalier rouge','Bête numérique','Joueur corrompu'],
   ['Guerrier du Néant','Combattant divin','Destructeur cosmique','Ange déchu'],
 ];
+const WORLD_MODIFIERS = [
+  { key:'training', name:'Terrain d’entraînement', description:'Dégâts de frappe normaux.', click:1 },
+  { key:'gravity', name:'Gravité renforcée', description:'Frappes −20%, Ultimes conseillés.', click:.8 },
+  { key:'freedom', name:'Vent de liberté', description:'Frappes +20%.', click:1.2 },
+  { key:'demons', name:'Nuit démoniaque', description:'Frappes −10%, critiques renforcés.', click:.9, critBonus:.08 },
+  { key:'siege', name:'Champ de siège', description:'Frappes −15%, exécution sous 30% PV.', click:.85, executeAt:.3 },
+  { key:'spirit', name:'Pression spirituelle', description:'Frappes +10%.', click:1.1 },
+  { key:'academy', name:'Exercice tactique', description:'Combo d’équipe +25%.', click:1, team:1.25 },
+  { key:'curse', name:'Zone maudite', description:'Frappes −25%, Ultime +40%.', click:.75, burst:1.4 },
+  { key:'virtual', name:'Accélération virtuelle', description:'Frappes +30%.', click:1.3 },
+  { key:'void', name:'Instabilité du vide', description:'Frappes et Combo +15%.', click:1.15, team:1.15 },
+];
 function campaignForStage(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
   const worldIndex = Math.floor((s - 1) / BOSS_INTERVAL) % DOJO_DECOR.length;
@@ -331,10 +343,12 @@ function campaignForStage(stage) {
   const wave = ((s - 1) % BOSS_INTERVAL) + 1;
   const world = DOJO_DECOR[worldIndex];
   const enemyPool = CAMPAIGN_ENEMIES[worldIndex];
+  const modifier = WORLD_MODIFIERS[worldIndex];
   return {
     index: worldIndex + 1, act, wave, startStage: s - wave + 1, endStage: s - wave + BOSS_INTERVAL,
     name: world.name, theme: world.theme, flavor: world.flavor,
     enemyName: isBossStage(s) ? `Boss de ${world.name.split(' · ')[0]}` : isEliteStage(s) ? `Élite · ${enemyPool[(act + worldIndex) % enemyPool.length]}` : enemyPool[(wave - 1) % enemyPool.length],
+    modifier,
   };
 }
 function decorForLevel(level) {
@@ -475,6 +489,7 @@ module.exports = {
   stageForXp,
   DOJO_DECOR,
   CAMPAIGN_ENEMIES,
+  WORLD_MODIFIERS,
   campaignForStage,
   decorForLevel,
   MILESTONE_INTERVAL,
