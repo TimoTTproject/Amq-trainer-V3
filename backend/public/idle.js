@@ -197,14 +197,29 @@ function idleTick() {
 function idleTickInterpolateBattle(elapsed) {
   if (!idleState?.battle || idleActivePanel !== 'home') return;
   const gained = elapsed * (idleState.totalRate || 0);
-  const total = Math.max(1, idleState.battle.xpForNextStage || 1);
-  const xpIntoStage = Math.min(total, (idleState.battle.xpIntoStage || 0) + gained);
-  const remaining = Math.max(0, total - xpIntoStage);
-  const hpPct = Math.max(0, Math.min(100, (remaining / total) * 100));
+  const total = Math.max(1, idleState.battle.maxHp || idleState.battle.xpForNextStage || 1);
+  const remaining = Math.max(0, (idleState.battle.hp ?? total) - gained);
   const hpEl = document.getElementById('idle-enemy-hp-text');
-  const fill = document.getElementById('idle-xp-fill');
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
-  if (fill) fill.style.width = `${hpPct}%`;
+}
+
+// Anime réellement la barre entre deux états serveur. Le serveur reste la
+// source de vérité (stage, kill, boss), mais la largeur ne paraît plus figée
+// jusqu'au prochain clic ou à la synchronisation des 6 secondes.
+function idleAnimateEnemyHp(fill,remaining,total,stage) {
+  if (!fill) return;
+  const hpPct=Math.max(0,Math.min(100,remaining/Math.max(1,total)*100));
+  const dps=Math.max(0,idleState?.totalRate||0);
+  fill.style.transition='none';
+  fill.style.width=`${hpPct}%`;
+  void fill.offsetWidth;
+  if(dps<=0||remaining<=0)return;
+  const duration=Math.max(.2,remaining/dps);
+  requestAnimationFrame(()=>{
+    if(idleState?.battle?.stage!==stage)return;
+    fill.style.transition=`width ${duration}s linear`;
+    fill.style.width='0%';
+  });
 }
 
 async function refreshIdleState() {
@@ -237,7 +252,7 @@ function renderIdleState(state) {
   document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleRank(state.rank);
-  renderIdleMissions(state.missions || []);
+  renderIdleMissions(state.missions || [],state.rank);
   renderIdleChallenges(state.challenges||[]);
   renderIdleEvent(state.event);
   renderIdleAchievements(state.achievements || []);
@@ -498,7 +513,6 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if (mechanicEl) { const mechanic=battle?.mechanic;mechanicEl.classList.toggle('hidden', !boss); mechanicEl.innerHTML = boss&&mechanic ? `<i class="fas fa-shield-halved"></i> <b>${escapeHtml(mechanic.name)}</b> · ${escapeHtml(mechanic.description)}${mechanic.required?` <strong>${Math.min(mechanic.progress,mechanic.required)}/${mechanic.required}</strong>`:''}` : ''; }
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
   const total = Math.max(1, battle?.xpForNextStage || 1);
-  const hpPct = Math.max(0, Math.min(100, remaining / total * 100));
   const guardianName = battle?.world?.enemyName || (boss ? `Boss de la zone ${zone}` : 'Gardien ennemi');
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
@@ -508,12 +522,12 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
-  if(objective){const remainingWaves=boss?0:10-wave;objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-flag-checkered'}"></i><span><b>${boss?'Boss en cours':`Boss dans ${remainingWaves} vague${remainingWaves>1?'s':''}`}</b><small>${boss?'Brise sa mécanique pour ouvrir le coffre':`Prochaine victoire : +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>Monde ${battle?.world?.index||zone}/10</strong>`;}
-  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10`}`;
+  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss vaincu → monde suivant':`Vague ${wave}/10 · ennemi vaincu → vague ${wave+1}`}</b><small>${boss?'Ouvre ensuite son coffre de gardien':`Chaque vague contient un ennemi · +${idleFormatNumber(battle?.reward||0)} Essence à la victoire`}</small></span><strong>Avance automatique</strong>`;}
+  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · 1 ENNEMI`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
-  if (fill) fill.style.width = `${hpPct}%`;
+  idleAnimateEnemyHp(fill,remaining,total,stage);
   // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
@@ -629,20 +643,24 @@ function renderIdleRecruit(recruit) {
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
-function renderIdleMissions(missions) {
+function renderIdleMissions(missions,rank) {
   const box = document.getElementById('idle-missions'); if (!box) return;
   box.innerHTML = missions.map((m) => `<div class="idle-mission ${m.completed ? 'done' : ''}"><span class="idle-mission-icon"><i class="fas ${m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i></span><div><small>${m.cadence}</small><b>${escapeHtml(m.title)}</b><span>${escapeHtml(m.description)} · ${idleFormatNumber(m.progress)} / ${idleFormatNumber(m.target)}</span><em style="--progress:${Math.min(100, m.progress / m.target * 100)}%"></em></div><button class="btn-secondary" data-idle-mission="${m.key}" ${!m.completed || m.claimed ? 'disabled' : ''}>${m.claimed ? 'Réclamée' : idleRewardLabel(m)}</button></div>`).join('');
-  renderIdleCombatQuests(missions);
+  renderIdleCombatQuests(missions,rank);
 }
 
-function renderIdleCombatQuests(missions) {
+function renderIdleCombatQuests(missions,rank) {
   const box = document.getElementById('idle-combat-quests'); if (!box) return;
-  const active = missions.filter((m) => !m.claimed).sort((a, b) => Number(b.completed) - Number(a.completed)).slice(0, 3);
-  const cards = active.length ? active.map((m) => {
+  const active = missions.filter((m) => !m.claimed).sort((a, b) => Number(b.completed) - Number(a.completed)).slice(0, 2);
+  const missionCards = active.map((m) => {
     const progress = Math.min(100, m.progress / Math.max(1, m.target) * 100);
     return `<article class="idle-combat-quest ${m.completed ? 'ready' : ''}"><i class="fas ${m.completed ? 'fa-gift' : m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i><div><b>${escapeHtml(m.title)}</b><span>${idleFormatNumber(m.progress)}/${idleFormatNumber(m.target)}</span><em style="--progress:${progress}%"></em></div>${m.completed ? `<button data-idle-mini-mission="${m.key}">Réclamer</button>` : ''}</article>`;
-  }).join('') : '<p><i class="fas fa-circle-check"></i> Toutes les quêtes disponibles sont terminées.</p>';
-  box.innerHTML = `<header><span><i class="fas fa-list-check"></i><b>Quêtes actives</b></span><button data-idle-open-activities>Tout voir <i class="fas fa-arrow-right"></i></button></header><div>${cards}</div>`;
+  }).join('');
+  const nextObjective=rank?.quests?.find((quest)=>!quest.completed)||rank?.quests?.at(-1);
+  const objectiveProgress=nextObjective?Math.min(100,nextObjective.progress/Math.max(1,nextObjective.target)*100):100;
+  const levelCard=rank?`<article class="idle-combat-quest ${rank.ready?'ready':''}"><i class="fas ${rank.ready?'fa-arrow-up':'fa-bullseye'}"></i><div><b>${rank.ready?`Niveau ${idleFormatNumber(rank.nextLevel)} prêt`:escapeHtml(nextObjective?.name||'Objectifs du niveau')}</b><span>${rank.ready?`+${Math.round((rank.powerReward||.01)*100)}% DPS permanent · +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward>1?'x':''}`:`${idleFormatNumber(nextObjective?.progress||0)}/${idleFormatNumber(nextObjective?.target||0)} · niveau ${idleFormatNumber(rank.nextLevel)}`}</span><em style="--progress:${rank.ready?100:objectiveProgress}%"></em></div><button ${rank.ready?'data-idle-rank-advance':'data-idle-open-levels'}>${rank.ready?'Valider':'Voir'}</button></article>`:'';
+  const cards=levelCard+missionCards||'<p><i class="fas fa-circle-check"></i> Tous les objectifs disponibles sont terminés.</p>';
+  box.innerHTML = `<header><span><i class="fas fa-list-check"></i><b>Niveau et quêtes</b></span><button data-idle-open-levels>Niveau ${idleFormatNumber(rank?.level||1)} <i class="fas fa-arrow-right"></i></button></header><div>${cards}</div>`;
 }
 
 function renderIdleEvent(event) {
@@ -706,11 +724,11 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const base = dojo.xpIntoLevel >= dojo.xpForNextLevel
-      ? 'Objectifs terminés · passage de niveau disponible'
-      : `Niveau : ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} objectifs terminés`;
+      ? 'objectifs terminés · validation disponible dans Niveaux'
+      : `${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} objectifs terminés · indépendant des vagues`;
     const text = dojo.nextDecor
-      ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
-      : base;
+      ? `NIVEAU JOUEUR ${idleFormatNumber(dojo.level)} · ${base} · décor suivant dans ${dojo.nextDecor.levelsRemaining} niv.`
+      : `NIVEAU JOUEUR ${idleFormatNumber(dojo.level)} · ${base}`;
     // Icône dédiée : la barre de PV juste au-dessus est le combat (stage),
     // cette ligne est une mesure différente (niveau de Dojo/décor) — sans ce
     // repère visuel les deux se lisaient comme une seule et même barre.
@@ -747,7 +765,7 @@ function renderIdleRank(rank) {
     </article>`;
   }).join('');
   const reward = document.getElementById('idle-rank-reward');
-  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> Récompense : +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
+  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> Récompense : +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''} · +${Math.round((rank.powerReward||.01)*100)}% DPS permanent`;
   const button = document.getElementById('idle-rank-advance');
   if (button) {
     button.disabled = !rank.ready;
@@ -1420,6 +1438,8 @@ function initIdleUI() {
   document.getElementById('idle-combat-quests')?.addEventListener('click', (e) => {
     const claim = e.target.closest('[data-idle-mini-mission]');
     if (claim) return claimIdleMission(claim.dataset.idleMiniMission);
+    if (e.target.closest('[data-idle-rank-advance]')) return advanceIdleRank();
+    if (e.target.closest('[data-idle-open-levels]')) return idleShowPanel('progression');
     if (e.target.closest('[data-idle-open-activities]')) idleShowPanel('activities');
   });
   document.getElementById('idle-rank-advance')?.addEventListener('click', advanceIdleRank);

@@ -191,6 +191,7 @@ test('rankQuestSeries : impose combat, clics et améliorations avant le niveau s
   assert.equal(ready.completed, 3);
   assert.equal(ready.ready, true);
   assert.equal(ready.sealReward, 1);
+  assert.equal(ready.powerReward,.01);
 });
 
 test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de boss et double les Sceaux', () => {
