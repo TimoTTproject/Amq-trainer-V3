@@ -1,6 +1,6 @@
 // Tests de routes : /api/idle (Dojo idle/clicker) — sans BDD.
-// Le Dojo est indépendant du gacha : aucun test ici ne touche UserCard,
-// CardInstance ou les tokens — seul DojoRecruit fait foi de la possession.
+// Le roster du Dojo reste indépendant du gacha. Les Golds peuvent uniquement
+// servir d'alternative de paiement lors d'une invocation.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { fakePrisma, createApp } = require('./helpers/api');
@@ -10,7 +10,7 @@ const idleRoutes = require('../src/idle/idle.routes');
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
-  ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
+  ANCIENTS, ancientCost, recruitCost, recruitGoldCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -21,7 +21,7 @@ function dbUser(over = {}) {
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
-    wisdomPoints: 0,idleSeals:2,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
+    wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
 
@@ -296,6 +296,42 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
   assert.equal(created.userId, 'u1');
   assert.equal(created.characterId, 5);
   assert.equal(okRes.json.recruited.name, 'Nouvelle Recrue');
+});
+
+test('recruit : accepte les Golds, débite atomiquement et journalise la dépense', async () => {
+  const cost = recruitGoldCost(0);
+  let user = dbUser({ idleSeals: 0, tokens: cost });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.dojoRecruit.findMany = async () => [];
+  prisma.character.findMany = async () => [{ id: 6, name: 'Invocation Gold', imageUrl: null, rarity: 'rare' }];
+  prisma.dojoRecruit.create = async () => ({});
+  let debit = null;
+  prisma.user.updateMany = async ({ data }) => {
+    debit = data;
+    user = { ...user, tokens: user.tokens - cost };
+    return { count: 1 };
+  };
+  let transaction = null;
+  prisma.tokenTransaction.create = async ({ data }) => { transaction = data; return data; };
+
+  const res = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: { currency: 'gold' } });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.payment.currency, 'gold');
+  assert.equal(res.json.payment.cost, cost);
+  assert.deepEqual(debit.tokens, { decrement: cost });
+  assert.deepEqual(transaction, { userId: 'u1', amount: -cost, reason: 'idle_recruit' });
+  assert.equal(res.json.recruit.goldBalance, 0);
+});
+
+test('recruit : refuse les Golds insuffisants sans consommer de Sceau', async () => {
+  const user = dbUser({ idleSeals: 99, tokens: recruitGoldCost(0) - 1 });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  const res = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: { currency: 'gold' } });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /Golds insuffisants/);
+  assert.equal(user.idleSeals, 99);
 });
 
 test('recruit : exclut les personnages déjà recrutés et retombe sur une autre rareté si celle tirée est épuisée', async () => {

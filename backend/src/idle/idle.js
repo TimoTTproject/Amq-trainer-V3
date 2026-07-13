@@ -1,9 +1,8 @@
 // Dojo (idle/clicker) — configuration et calculs purs (pas d'accès DB ici).
 // Jeu à PART ENTIÈRE, indépendant de la collection gacha : les personnages du
-// roster sont RECRUTÉS contre de l'essence (voir RECRUIT_*/recruitCost plus
-// bas), pas tirés au gacha — seule la table Character (nom/portrait/rareté)
-// est partagée, comme référentiel de contenu, jamais UserCard/CardInstance/
-// tokens. Un personnage assigné à un emplacement produit de l'essence en
+// roster sont RECRUTÉS avec des Sceaux ou des Golds, pas tirés au gacha —
+// seule la table Character (nom/portrait/rareté) est partagée comme référentiel
+// de contenu ; UserCard/CardInstance restent indépendants. Un personnage assigné à un emplacement produit de l'essence en
 // continu, proportionnellement à sa rareté et à son niveau d'entraînement
 // PROPRE à l'emplacement (illimité). Le Dojo lui-même a un niveau (dérivé de
 // l'essence gagnée à vie) qui fait évoluer son décor et son bonus global.
@@ -109,6 +108,15 @@ function recruitCost(count, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
   const base = Math.min(12, RECRUIT_BASE_COST + Math.floor(Math.max(0, (count || 0) - 1) / 2));
   return Math.max(1, Math.round(finiteIdleNumber(base * (1 - discount), 1)));
+}
+
+// Alternative en Golds (monnaie globale). Le prix progresse avec le roster :
+// elle dépanne quand les Sceaux manquent sans permettre de recruter toute la
+// collection à bas coût. L'Ancient Marché Facile s'applique aux deux devises.
+function recruitGoldCost(count, discountBonus) {
+  const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
+  const base = Math.min(1500, Math.round(40 * Math.pow(1.16, Math.max(0, count || 0))));
+  return Math.max(20, Math.round(finiteIdleNumber(base * (1 - discount), 40)));
 }
 
 // Amélioration « Discipline » : multiplicateur de production globale.
@@ -450,6 +458,7 @@ module.exports = {
   RECRUIT_BASE_COST,
   RECRUIT_GROWTH,
   recruitCost,
+  recruitGoldCost,
   PROD_LEVEL_BONUS,
   PROD_LEVEL_MAX,
   prodMultiplier,

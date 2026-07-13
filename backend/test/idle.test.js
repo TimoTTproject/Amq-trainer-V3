@@ -35,6 +35,7 @@ const {
   RECRUIT_WEIGHTS,
   rollRecruitRarity,
   recruitCost,
+  recruitGoldCost,
   simulateCombat,
   enemyMaxHp,
   enemyReward,
@@ -129,6 +130,13 @@ test('recruitCost : croît avec le nombre déjà recruté, jamais nul ; la remis
   assert.ok(recruitCost(20) > recruitCost(0));
   assert.ok(recruitCost(5, 0.5) < recruitCost(5));
   assert.ok(recruitCost(0, 999) >= 1); // plancher, jamais gratuit même avec un bonus aberrant
+});
+
+test('recruitGoldCost : démarre à 40 Golds, progresse et respecte la remise', () => {
+  assert.equal(recruitGoldCost(0), 40);
+  assert.ok(recruitGoldCost(10) > recruitGoldCost(0));
+  assert.ok(recruitGoldCost(10, 0.25) < recruitGoldCost(10));
+  assert.ok(recruitGoldCost(999) <= 1500);
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {
