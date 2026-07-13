@@ -16,20 +16,20 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model User {
-  id              String  @id @default(cuid())
+  id              String    @id @default(cuid())
   // Modération : compte suspendu (connexion refusée, HTTP + socket) et
   // sourdine du chat multi (jusqu'à cette date). Posés par l'admin.
   bannedAt        DateTime?
   mutedUntil      DateTime?
   // Auth email/mot de passe (optionnels si compte créé via AniList OAuth)
-  email           String? @unique
+  email           String?   @unique
   passwordHash    String?
   // Auth AniList OAuth (optionnels si compte email)
-  anilistId       Int?    @unique
+  anilistId       Int?      @unique
   anilistName     String?
   anilistToken    String? // access token AniList (chiffré idéalement plus tard)
   // Auth Google OAuth
-  googleId        String? @unique
+  googleId        String?   @unique
   // Pseudo AniList dont la liste est chargée dans « Ma liste »
   anilistListName String?
 
@@ -104,92 +104,100 @@ model User {
   // ne sert qu'aux améliorations du Dojo (voir src/idle/idle.js).
   // 20 de départ (au lieu de 0) : évite ~10 clics à vide avant le premier
   // recrutement pour un joueur qui vient d'ouvrir le Dojo pour la première fois.
-  essence           Float    @default(20)
-  idleLastCollectAt DateTime @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
-  idleSlotsUnlocked Int      @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
-  idleProdLevel     Int      @default(0) // amélioration « Discipline » : multiplicateur de production globale
-  idleClickLevel    Int      @default(0) // amélioration « Concentration » : puissance du clic manuel
+  essence                Float     @default(20)
+  idleLastCollectAt      DateTime  @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
+  idleSlotsUnlocked      Int       @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
+  idleProdLevel          Int       @default(0) // amélioration « Discipline » : multiplicateur de production globale
+  idleClickLevel         Int       @default(0) // amélioration « Concentration » : puissance du clic manuel
   // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
   // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
   // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
-  essenceEarnedTotal Float @default(0)
+  essenceEarnedTotal     Float     @default(0)
   // Progression explicite de la run. Le stage ne dépend plus du total gagné
   // à vie : les boss peuvent donc constituer de vrais murs et le Prestige ne
   // peut plus être répété sans reconstruire une run.
-  idleRunEssenceEarned Float @default(0)
-  idleStage             Int   @default(1)
-  idleRunBestStage      Int   @default(1)
-  idleBestStage         Int   @default(1)
-  idleEnemyHp           Float @default(0)
+  idleRunEssenceEarned   Float     @default(0)
+  idleStage              Int       @default(1)
+  idleRunBestStage       Int       @default(1)
+  idleBestStage          Int       @default(1)
+  idleEnemyHp            Float     @default(0)
   // Plus haut palier de jalon (tous les MILESTONE_INTERVAL niveaux de Dojo)
   // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
   // du Dojo qui les débloque est lui aussi permanent).
-  idleMilestoneClaimed Int @default(0)
-  idleBossClaimed      Int @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
-  idleHeroClass        String @default("warrior")
+  idleMilestoneClaimed   Int       @default(0)
+  idleBossClaimed        Int       @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
+  idleHeroClass          String    @default("warrior")
   idleHeroClassChangedAt DateTime?
-  idleHeroAura         String @default("none")
-  idleHeroStance       String @default("balanced")
-  idleHeroTitle        String @default("rookie")
-  idleHeroHair         String @default("short")
-  idleHeroOutfit       String @default("dojo")
-  idleHeroColor        String @default("red")
-  idleHeroSpec         String @default("none")
-  idleBattleSpeed      Int @default(1)
-  idleBattleMode       String @default("progress")
-  idleAutoSkills       Boolean @default(false)
-  idleRecruitPity      Int @default(0)
-  idleOnboardingComplete Boolean @default(false)
+  idleHeroAura           String    @default("none")
+  idleHeroStance         String    @default("balanced")
+  idleHeroTitle          String    @default("rookie")
+  idleHeroHair           String    @default("short")
+  idleHeroOutfit         String    @default("dojo")
+  idleHeroColor          String    @default("red")
+  idleHeroSpec           String    @default("none")
+  idleBattleSpeed        Int       @default(1)
+  idleBattleMode         String    @default("progress")
+  idleAutoSkills         Boolean   @default(false)
+  idleRecruitPity        Int       @default(0)
+  idleOnboardingComplete Boolean   @default(false)
+  // Sceaux permanents gagnés sur les boss et missions. Ils financent le
+  // recrutement, afin que les recrues permanentes ne concurrencent plus les
+  // améliorations temporaires payées en Essence.
+  idleSeals              Int       @default(2)
+  idleBurstReadyAt       DateTime?
+  idleTeamReadyAt        DateTime?
+  idleBossProgress       Int       @default(0)
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
   // prestigeLevel est un simple compteur (achievement) : il n'a plus d'effet
   // automatique depuis l'introduction des Ancients ci-dessous, qui l'ont
   // remplacé par des choix (voir src/idle/idle.js).
-  prestigeLevel Int @default(0)
+  prestigeLevel          Int       @default(0)
   // Sagesse : monnaie PERMANENTE gagnée à chaque Prestige (jamais remise à
   // zéro, contrairement à `essence`), dépensée dans les Ancients — l'arbre
   // d'améliorations permanentes qui remplace l'ancien multiplicateur plat de
   // Prestige par de vrais choix stratégiques.
-  wisdomPoints Int @default(0)
+  wisdomPoints           Int       @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   lastSeenAt DateTime? // dernière connexion socket (présence) — pour l'annuaire des joueurs
 
-  songStats       UserSongStat[]
-  catalogEntries  UserCatalogEntry[]
-  cards           UserCard[]
-  cardInstances   CardInstance[]
-  transactions    TokenTransaction[]
-  towerRuns       TowerRun[]
-  mpResults       MpResult[]
-  dailyRuns       DailyRun[]
-  pushSubs        PushSubscription[]
-  seasonClaims    SeasonClaim[]
-  featuredVotes   FeaturedVote[]
-  promotionVotes  PromotionVote[]
-  wishlist        Wishlist[]
-  quests          Quest[]
-  idleMissionClaims IdleMissionClaim[]
-  idleTelemetry IdleTelemetry[]
-  dailyStats      DailyStat[]
-  coopWeekly      CoopWeeklyScore[]
-  cosmetics       UserCosmetic[]
-  tradesSent      Trade[]              @relation("TradeFrom")
-  tradesReceived  Trade[]              @relation("TradeTo")
-  marketListings  MarketListing[]      @relation("MarketSeller")
-  marketPurchases MarketListing[]      @relation("MarketBuyer")
-  friendsSent     Friendship[]         @relation("FriendReq")
-  friendsReceived Friendship[]         @relation("FriendAdr")
-  passwordResets  PasswordResetToken[]
-  playlists       Playlist[]
-  cardAlbums      CardAlbum[]
-  songsAdded      Song[]
-  idleSlots       IdleSlot[]
-  dojoRecruits    DojoRecruit[]
-  ancientLevels   AncientLevel[]
-  songReports     SongReport[]
+  songStats            UserSongStat[]
+  catalogEntries       UserCatalogEntry[]
+  cards                UserCard[]
+  cardInstances        CardInstance[]
+  transactions         TokenTransaction[]
+  towerRuns            TowerRun[]
+  mpResults            MpResult[]
+  dailyRuns            DailyRun[]
+  pushSubs             PushSubscription[]
+  seasonClaims         SeasonClaim[]
+  featuredVotes        FeaturedVote[]
+  promotionVotes       PromotionVote[]
+  wishlist             Wishlist[]
+  quests               Quest[]
+  idleMissionClaims    IdleMissionClaim[]
+  idleTelemetry        IdleTelemetry[]
+  idleProgressCounters IdleProgressCounter[]
+  dailyStats           DailyStat[]
+  coopWeekly           CoopWeeklyScore[]
+  cosmetics            UserCosmetic[]
+  tradesSent           Trade[]               @relation("TradeFrom")
+  tradesReceived       Trade[]               @relation("TradeTo")
+  marketListings       MarketListing[]       @relation("MarketSeller")
+  marketPurchases      MarketListing[]       @relation("MarketBuyer")
+  friendsSent          Friendship[]          @relation("FriendReq")
+  friendsReceived      Friendship[]          @relation("FriendAdr")
+  passwordResets       PasswordResetToken[]
+  playlists            Playlist[]
+  cardAlbums           CardAlbum[]
+  songsAdded           Song[]
+  idleSlots            IdleSlot[]
+  dojoRecruits         DojoRecruit[]
+  ancientLevels        AncientLevel[]
+  songReports          SongReport[]
 }
 
 model PasswordResetToken {
@@ -427,36 +435,36 @@ model PushSubscription {
 // ─────────────────────────────────────────────
 
 model Song {
-  id         Int      @id @default(autoincrement())
-  anilistId  Int // id AniList de l'anime source
-  animeTitle String
+  id            Int      @id @default(autoincrement())
+  anilistId     Int // id AniList de l'anime source
+  animeTitle    String
   // Genres AniList (Action, Romance…) — filtre par genre du quiz.
   // `genresFetched` distingue « pas encore récupérés » (backfill au démarrage)
   // de « récupérés mais vides » (rare, mais possible côté AniList).
   genres        String[] @default([])
   genresFetched Boolean  @default(false)
-  type       String // "OP" | "ED"
-  number     Int // séquence (OP1, OP2…)
-  title      String
-  artist     String?
-  videoUrl   String?
-  audioUrl   String?
-  format     String? // format AniList : TV, TV_SHORT, MOVIE, OVA, ONA, SPECIAL, MUSIC (null = inconnu)
-  coverUrl   String? // jaquette AniList (coverImage.medium) ; null = pas encore récupérée, '' = introuvable
-  popularity Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
-  altTitles  String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
-  seasonNumber Int? // position dans la chaîne PREQUEL/SEQUEL AniList (0 = hors chaîne, null = pas encore calculé)
-  seasonYear   Int? // année de diffusion AniList (seasonYear sinon startDate.year) — filtre par période du quiz (0 = inconnue, null = pas encore récupérée)
-  guessCount   Int  @default(0) // nb total de réponses tous joueurs (solo + multi) — difficulté réelle
-  guessCorrect Int  @default(0) // dont bonnes réponses
-  guessRate    Int? // % de bonnes réponses (0-100), null tant que l'échantillon est trop petit (cf. song-stats.js)
+  type          String // "OP" | "ED"
+  number        Int // séquence (OP1, OP2…)
+  title         String
+  artist        String?
+  videoUrl      String?
+  audioUrl      String?
+  format        String? // format AniList : TV, TV_SHORT, MOVIE, OVA, ONA, SPECIAL, MUSIC (null = inconnu)
+  coverUrl      String? // jaquette AniList (coverImage.medium) ; null = pas encore récupérée, '' = introuvable
+  popularity    Int      @default(0) // popularité AniList de l'anime (pour pondérer plus tard)
+  altTitles     String[] @default([]) // titres acceptés en réponse (romaji, anglais, natif, synonymes)
+  seasonNumber  Int? // position dans la chaîne PREQUEL/SEQUEL AniList (0 = hors chaîne, null = pas encore calculé)
+  seasonYear    Int? // année de diffusion AniList (seasonYear sinon startDate.year) — filtre par période du quiz (0 = inconnue, null = pas encore récupérée)
+  guessCount    Int      @default(0) // nb total de réponses tous joueurs (solo + multi) — difficulté réelle
+  guessCorrect  Int      @default(0) // dont bonnes réponses
+  guessRate     Int? // % de bonnes réponses (0-100), null tant que l'échantillon est trop petit (cf. song-stats.js)
   addedByUserId String? // joueur dont l'import a fait entrer ce son dans le catalogue global (null = antérieur à cette fonctionnalité)
-  addedBy       User?   @relation(fields: [addedByUserId], references: [id])
+  addedBy       User?    @relation(fields: [addedByUserId], references: [id])
 
   createdAt DateTime @default(now())
 
-  stats          UserSongStat[]
-  catalogEntries UserCatalogEntry[]
+  stats           UserSongStat[]
+  catalogEntries  UserCatalogEntry[]
   playlistEntries PlaylistSong[]
   reports         SongReport[]
 
@@ -547,23 +555,23 @@ model ScannedAnime {
 
 // Stats par utilisateur × musique (remplace localStorage)
 model UserSongStat {
-  id           Int       @id @default(autoincrement())
-  userId       String
-  songId       Int
-  easyCount    Int       @default(0)
-  hardCount    Int       @default(0)
-  againCount   Int       @default(0)
-  playCount    Int       @default(0)
-  correctCount Int       @default(0)
-  rankedCorrectCount Int @default(0) // bonnes réponses en mode classé (jetons en jeu) uniquement — l'entraînement ne doit pas déclencher le gain réduit anti-farm
-  rating       Int? // note 1-5 donnée par l'utilisateur
-  liked        Boolean   @default(false) // ajouté à la playlist perso
-  recHidden    Boolean   @default(false) // « pas intéressé » : exclu des recommandations
-  recShownAt   DateTime? // dernière fois recommandé (anti-répétition à court terme, cf. recommendations.js)
+  id                 Int       @id @default(autoincrement())
+  userId             String
+  songId             Int
+  easyCount          Int       @default(0)
+  hardCount          Int       @default(0)
+  againCount         Int       @default(0)
+  playCount          Int       @default(0)
+  correctCount       Int       @default(0)
+  rankedCorrectCount Int       @default(0) // bonnes réponses en mode classé (jetons en jeu) uniquement — l'entraînement ne doit pas déclencher le gain réduit anti-farm
+  rating             Int? // note 1-5 donnée par l'utilisateur
+  liked              Boolean   @default(false) // ajouté à la playlist perso
+  recHidden          Boolean   @default(false) // « pas intéressé » : exclu des recommandations
+  recShownAt         DateTime? // dernière fois recommandé (anti-répétition à court terme, cf. recommendations.js)
   // Répétition espacée (SRS)
-  srsStreak    Int       @default(0) // bonnes réponses consécutives
-  srsInterval  Int       @default(0) // jours jusqu'à la prochaine révision
-  srsDueAt     DateTime? // prochaine échéance de révision
+  srsStreak          Int       @default(0) // bonnes réponses consécutives
+  srsInterval        Int       @default(0) // jours jusqu'à la prochaine révision
+  srsDueAt           DateTime? // prochaine échéance de révision
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
@@ -577,7 +585,7 @@ model UserCatalogEntry {
   userId      String
   songId      Int
   mediaStatus String? // statut AniList au moment de l'import : CURRENT | COMPLETED | DROPPED...
-  mediaScore  Float?  // note AniList du joueur pour cet anime (si renseignee)
+  mediaScore  Float? // note AniList du joueur pour cet anime (si renseignee)
   addedAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -682,8 +690,8 @@ model CardInstance {
   // et des échanges) tant qu'une annonce active existe pour lui.
   listed      Boolean  @default(false)
 
-  character Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character       @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Un exemplaire accumule des annonces au fil du temps (annulées, vendues…) ;
   // au plus UNE est active à la fois (flag `listed` + index unique partiel en
   // base, cf. migration fix_market_relist).
@@ -824,8 +832,8 @@ model IdleSlot {
   level       Int       @default(1)
   ascension   Int       @default(0)
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character  Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
   equipments IdleEquipment[]
 
   @@unique([userId, slotIndex])
@@ -839,7 +847,8 @@ model IdleEquipment {
   rarity     String
   bonus      Float
   obtainedAt DateTime @default(now())
-  idleSlot IdleSlot @relation(fields: [idleSlotId], references: [id], onDelete: Cascade)
+  idleSlot   IdleSlot @relation(fields: [idleSlotId], references: [id], onDelete: Cascade)
+
   @@unique([idleSlotId, kind])
   @@index([idleSlotId])
 }
@@ -850,7 +859,8 @@ model IdleMissionClaim {
   missionKey String
   period     String
   claimedAt  DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, missionKey, period])
   @@index([userId, period])
 }
@@ -862,9 +872,23 @@ model IdleTelemetry {
   value     Float?
   stage     Int?
   createdAt DateTime @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([event, createdAt])
   @@index([userId, createdAt])
+}
+
+model IdleProgressCounter {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  key       String
+  period    String
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key, period])
+  @@index([userId, period])
 }
 
 // Roster du Dojo : personnages RECRUTÉS via l'essence (voir POST
@@ -875,12 +899,12 @@ model IdleTelemetry {
 // de vente ou de fusion pour un DojoRecruit, donc pas de perte possible une
 // fois recruté (contrairement aux CardInstance du gacha).
 model DojoRecruit {
-  id          Int      @id @default(autoincrement())
-  userId      String
-  characterId Int
-  recruitedAt DateTime @default(now())
-  trainingLevel Int @default(1)
-  idleAscension Int @default(0)
+  id            Int      @id @default(autoincrement())
+  userId        String
+  characterId   Int
+  recruitedAt   DateTime @default(now())
+  trainingLevel Int      @default(1)
+  idleAscension Int      @default(0)
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)

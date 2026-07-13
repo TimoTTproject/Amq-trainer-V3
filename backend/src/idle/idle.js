@@ -41,7 +41,7 @@ const RARITY_RATE = {
 // effet perceptible. Le coût (CHAR_LEVEL_GROWTH) ne change pas : la courbe
 // ralentit toujours autant à long terme, seul le gain immédiat est plus net.
 const CHAR_LEVEL_BONUS = 0.12;
-const RARITY_LEVEL_BONUS = { common: .03, rare: .035, epic: .04, legendary: .045, mythic: .05 };
+const RARITY_LEVEL_BONUS = { common: .03, rare: .04, epic: .055, legendary: .07, mythic: .085 };
 const RARITY_PASSIVE = {
   common: 'Apprenti · progression économique', rare: 'Endurance · +5% de production personnelle au niveau 10',
   epic: 'Aura · +3% de production à toute l’équipe au niveau 10', legendary: 'Domination · +8% de production à toute l’équipe au niveau 10',
@@ -51,14 +51,14 @@ const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
-const CHAR_LEVEL_BASE_COST = { common: 4, rare: 12, epic: 40, legendary: 140, mythic: 500 };
+const CHAR_LEVEL_BASE_COST = { common: 4, rare: 12, epic: 28, legendary: 70, mythic: 180 };
 const CHAR_LEVEL_GROWTH = 1.10;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
   return Math.round(finiteIdleNumber(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1), 1));
 }
 function charLevelBulkCost(rarity, level, amount) {
-  const count = Math.max(1, Math.min(100, Math.floor(amount || 1)));
+  const count = Math.max(1, Math.min(1000, Math.floor(amount || 1)));
   let total = 0; for (let i = 0; i < count; i++) total += charLevelUpCost(rarity, (level || 1) + i);
   return finiteIdleNumber(total, 1);
 }
@@ -102,14 +102,14 @@ function rollRecruitRarity(luckBonus) {
   }
   return 'rare';
 }
-const RECRUIT_BASE_COST = 10;
-const RECRUIT_GROWTH = 1.1;
+const RECRUIT_BASE_COST = 1;
+const RECRUIT_GROWTH = 1;
 // `count` = nombre de personnages déjà recrutés par le joueur. `discountBonus`
 // (0-0.6, cf. Ancient « Marché Facile ») réduit le coût multiplicativement —
 // plancher à 1 essence, jamais gratuit.
 function recruitCost(count, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
-  const base = RECRUIT_BASE_COST * Math.pow(RECRUIT_GROWTH, Math.max(0, count || 0));
+  const base = Math.min(12, RECRUIT_BASE_COST + Math.floor(Math.max(0, (count || 0) - 1) / 2));
   return Math.max(1, Math.round(finiteIdleNumber(base * (1 - discount), 1)));
 }
 
@@ -158,19 +158,26 @@ const ENEMY_HP_BASE = 10;
 const ENEMY_HP_GROWTH = 1.10;
 const BOSS_INTERVAL = 10;
 const BOSS_HP_MULTIPLIER = 8;
+const ELITE_WAVE = 5;
+const ELITE_HP_MULTIPLIER = 2.5;
 const BOSS_TIMER_SECONDS = 30;
 const ENEMY_REWARD_BASE = 2;
 const ENEMY_REWARD_GROWTH = 1.11;
 function isBossStage(stage) {
   return Math.max(1, Math.floor(stage || 1)) % BOSS_INTERVAL === 0;
 }
+function isEliteStage(stage) {
+  return ((Math.max(1, Math.floor(stage || 1)) - 1) % BOSS_INTERVAL) + 1 === ELITE_WAVE;
+}
 function enemyMaxHp(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
-  return finiteIdleNumber(ENEMY_HP_BASE * Math.pow(ENEMY_HP_GROWTH, s - 1) * (isBossStage(s) ? BOSS_HP_MULTIPLIER : 1), 1);
+  const special = isBossStage(s) ? BOSS_HP_MULTIPLIER : isEliteStage(s) ? ELITE_HP_MULTIPLIER : 1;
+  return finiteIdleNumber(ENEMY_HP_BASE * Math.pow(ENEMY_HP_GROWTH, s - 1) * special, 1);
 }
 function enemyReward(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
-  return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * (isBossStage(s) ? 4 : 1), 1)));
+  const special = isBossStage(s) ? 4 : isEliteStage(s) ? 2 : 1;
+  return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special, 1)));
 }
 function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
   let currentStage = Math.max(1, Math.floor(stage || 1));
@@ -305,6 +312,31 @@ const DOJO_DECOR = [
   { level: 650, name: 'Aincrad · Centième palier', theme: 'aincrad', flavor: "Le château flottant révèle enfin son sommet. Une dernière porte sépare les survivants de la liberté." },
   { level: 1000, name: 'Monde du Néant · Tournoi du Pouvoir', theme: 'void', flavor: "Au-delà des univers, l'arène ultime flotte dans le vide. Il ne peut rester qu'un seul combattant." },
 ];
+const CAMPAIGN_ENEMIES = [
+  ['Ninja déserteur','Marionnette de guerre','Bête scellée','Jônin corrompu'],
+  ['Soldat galactique','Bio-guerrier','Mercenaire spatial','Créature de Namek'],
+  ['Pirate renégat','Pacifista endommagé','Officier de la Marine','Géant des mers'],
+  ['Démon des couloirs','Lame de sang','Gardien lunaire','Ombre supérieure'],
+  ['Titan errant','Soldat renégat','Titan cuirassé','Éclaireur ennemi'],
+  ['Hollow affamé','Arrancar rebelle','Gardien de Las Noches','Menos ancien'],
+  ['Vilain déchaîné','Nomu expérimental','Rival masqué','Robot de combat'],
+  ['Fléau mineur','Utilisateur maudit','Esprit vengeur','Gardien du voile'],
+  ['Monstre du palier','Chevalier rouge','Bête numérique','Joueur corrompu'],
+  ['Guerrier du Néant','Combattant divin','Destructeur cosmique','Ange déchu'],
+];
+function campaignForStage(stage) {
+  const s = Math.max(1, Math.floor(stage || 1));
+  const worldIndex = Math.floor((s - 1) / BOSS_INTERVAL) % DOJO_DECOR.length;
+  const act = Math.floor((s - 1) / (BOSS_INTERVAL * DOJO_DECOR.length)) + 1;
+  const wave = ((s - 1) % BOSS_INTERVAL) + 1;
+  const world = DOJO_DECOR[worldIndex];
+  const enemyPool = CAMPAIGN_ENEMIES[worldIndex];
+  return {
+    index: worldIndex + 1, act, wave, startStage: s - wave + 1, endStage: s - wave + BOSS_INTERVAL,
+    name: world.name, theme: world.theme, flavor: world.flavor,
+    enemyName: isBossStage(s) ? `Boss de ${world.name.split(' · ')[0]}` : isEliteStage(s) ? `Élite · ${enemyPool[(act + worldIndex) % enemyPool.length]}` : enemyPool[(wave - 1) % enemyPool.length],
+  };
+}
 function decorForLevel(level) {
   let current = DOJO_DECOR[0];
   let next = null;
@@ -359,7 +391,7 @@ function wisdomForRunStage(stage) {
 // OPTIONNEL sur une fonction pure déjà existante (`prodMultiplier`,
 // `clickYield`, `pendingEssence`, `rollRecruitRarity`, `recruitCost`) — pas
 // de nouvelle couche de calcul, juste un bonus de plus par-dessus.
-const ANCIENT_BASE_COST = 1;
+const ANCIENT_BASE_COST = 2;
 const ANCIENT_COST_GROWTH = 1.3; // pas de plafond : puits de Sagesse à très long terme
 function ancientCost(level) {
   return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)), 1));
@@ -412,10 +444,13 @@ module.exports = {
   ENEMY_HP_GROWTH,
   BOSS_INTERVAL,
   BOSS_HP_MULTIPLIER,
+  ELITE_WAVE,
+  ELITE_HP_MULTIPLIER,
   BOSS_TIMER_SECONDS,
   ENEMY_REWARD_BASE,
   ENEMY_REWARD_GROWTH,
   isBossStage,
+  isEliteStage,
   enemyMaxHp,
   enemyReward,
   simulateCombat,
@@ -439,6 +474,8 @@ module.exports = {
   stageXpForLevel,
   stageForXp,
   DOJO_DECOR,
+  CAMPAIGN_ENEMIES,
+  campaignForStage,
   decorForLevel,
   MILESTONE_INTERVAL,
   MILESTONE_BASE_REWARD,
