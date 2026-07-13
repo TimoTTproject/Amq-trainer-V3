@@ -346,7 +346,8 @@ function idleRoleFor(character) { return IDLE_ROLES[character?.role]||IDLE_ROLES
 function renderIdleTeamStrategy(state) {
   const active = (state.slots || []).filter((s) => s.character).map((s) => s.character);
   const stage = document.getElementById('idle-stage-team');
-  if (stage) stage.innerHTML = active.slice(0, 4).map((c) => {
+  // Le premier personnage est le chef affiché en grand dans la scène.
+  if (stage) stage.innerHTML = active.slice(1, 5).map((c) => {
     const role = idleRoleFor(c); const img = c.imageUrl ? `style="background-image:url('${escapeHtml(c.imageUrl)}')"` : '';
     return `<span class="idle-stage-ally" ${img} title="Membre de l'équipe · ${role.name}"><i class="fas ${role.icon}" style="--role:${role.color}"></i></span>`;
   }).join('');
@@ -394,9 +395,14 @@ function renderIdleMainHero(state) {
   const hero = document.getElementById('idle-main-hero');
   if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'} hair-${state.heroStyle?.hair || 'short'} outfit-${state.heroStyle?.outfit || 'dojo'} energy-${state.heroStyle?.color || 'red'}`; }
   const avatar = document.getElementById('idle-main-hero-avatar');
-  if (avatar && currentUser) renderAvatar(avatar, currentUser);
+  const leader = (state.slots || []).find((slot)=>slot.character)?.character;
+  if (avatar) {
+    avatar.className='idle-main-hero-avatar';
+    avatar.innerHTML=leader?.imageUrl?'':`<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i>`;
+    avatar.style.backgroundImage=leader?.imageUrl?`url('${leader.imageUrl}')`:'none';
+  }
   const name = document.getElementById('idle-main-hero-name');
-  if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
+  if (name) name.textContent = leader?.name || currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
   if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance`;
@@ -434,7 +440,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const titleEl = document.getElementById('idle-enemy-title');
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
-  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · ${battle?.world?.name || `ZONE ${zone}`} · ${boss ? `BOSS · ${battle.timerSeconds || 30}s` : `VAGUE ${wave}/10`}`;
+  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · ${battle.timerSeconds || 30}s` : `VAGUE ${wave}/10`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
@@ -587,10 +593,9 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   // idleParticleTheme (pas l'attribut DOM, déjà présent par défaut dans le HTML
   // statique pour "wood") sert de source de vérité pour savoir si les effets
   // ambiants de CE thème ont déjà été générés une fois.
-  if (idleParticleTheme !== world.theme) {
-    idleSpawnParticles(world.theme);
-    idleSetScenery(world.theme);
-  }
+  if (idleParticleTheme !== world.theme) idleSpawnParticles(world.theme);
+  // Le décor suit toujours le monde de combat, jamais l'ancien palier du Dojo.
+  idleSetScenery(world.theme);
   document.getElementById('idle-decor-name').textContent = `${world.name} · Acte ${world.act||1}`;
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = world.flavor || dojo.decor.flavor || '';
@@ -788,6 +793,8 @@ function idleSetScenery(theme) {
     aincrad: '/assets/idle/dojo-aincrad.webp',
     void: '/assets/idle/dojo-void.webp',
   };
+  if(box.dataset.theme===theme)return;
+  box.dataset.theme=theme;
   box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
   box.style.backgroundImage = `url('${art[theme] || art.wood}')`;
 }

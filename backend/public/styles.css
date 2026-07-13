@@ -6202,3 +6202,13 @@ body.idle-fullscreen #app { padding-top: 0; }
   .idle-hud-logo .hub-badge { display: none; }
   .idle-prestige-card { flex-direction: column; align-items: stretch; }
 }
+
+/* Chef d'équipe : portrait vertical intégré à la scène. L'ancien
+   médaillon de profil et son faux torse donnaient un assemblage artificiel. */
+#view-idle .idle-main-hero{left:24%;top:52%;gap:4px}
+#view-idle .idle-main-hero:after{display:none}
+#view-idle .idle-main-hero:before{inset:-12px 3px 34px;border-radius:42% 42% 22% 22%}
+#view-idle .idle-main-hero-avatar{display:grid;width:92px;height:142px;place-items:center;border:2px solid var(--energy)!important;border-radius:42px 42px 18px 18px!important;background-color:#111827;background-position:center 18%;background-size:cover;clip-path:none!important;box-shadow:0 13px 24px #000b,0 0 18px color-mix(in srgb,var(--energy) 55%,transparent)!important;font-size:34px;color:var(--energy);animation:idleHeroReady 2.8s ease-in-out infinite}
+#view-idle .idle-main-hero-name{min-width:150px;margin-top:-9px;border-color:color-mix(in srgb,var(--energy) 65%,transparent);background:linear-gradient(180deg,#101827f2,#070b12f2);box-shadow:0 7px 16px #0008}
+#view-idle .idle-main-hero>button{top:4px;right:-3px}
+@media(max-width:700px){#view-idle .idle-main-hero{left:24%;transform:translate(-50%,-42%) scale(.78)}}
