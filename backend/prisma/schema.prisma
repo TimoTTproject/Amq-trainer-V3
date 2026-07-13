@@ -121,6 +121,9 @@ model User {
   idleRunBestStage       Int       @default(1)
   idleBestStage          Int       @default(1)
   idleEnemyHp            Float     @default(0)
+  // Nombre d'ennemis déjà vaincus dans la vague courante. Une vague
+  // normale contient plusieurs ennemis ; le boss final reste un combat unique.
+  idleWaveKills          Int       @default(0)
   // Plus haut palier de jalon (tous les MILESTONE_INTERVAL niveaux de Dojo)
   // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
   // du Dojo qui les débloque est lui aussi permanent).
