@@ -4,7 +4,12 @@ const sfx = (function () {
   let ctx = null;
   let muted = localStorage.getItem('amq_muted') === '1';
   let idleVolume = Math.max(0, Math.min(1, Number(localStorage.getItem('amq_idle_volume') ?? .65)));
-  let idleEffectsReduced = localStorage.getItem('amq_idle_effects_reduced') === '1';
+  // L'ancien interrupteur « Effets réduits » était compris à l'envers.
+  // Le nouveau réglage est positif : coché = animations actives. Au premier
+  // chargement de cette version, on restaure donc les animations pour tous.
+  const storedAnimationsEnabled = localStorage.getItem('amq_idle_animations_enabled');
+  let idleEffectsReduced = storedAnimationsEnabled === null ? false : storedAnimationsEnabled !== '1';
+  if (storedAnimationsEnabled === null) localStorage.setItem('amq_idle_animations_enabled','1');
 
   function ac() {
     if (!ctx) {
@@ -66,7 +71,7 @@ const sfx = (function () {
     getIdleVolume() { return idleVolume; },
     setIdleVolume(value) { idleVolume=Math.max(0,Math.min(1,Number(value)||0));localStorage.setItem('amq_idle_volume',String(idleVolume));if(idleVolume>0)tone(660,0,.08,'sine',.08*idleVolume);return idleVolume; },
     isIdleEffectsReduced() { return idleEffectsReduced; },
-    setIdleEffectsReduced(value) { idleEffectsReduced=!!value;localStorage.setItem('amq_idle_effects_reduced',idleEffectsReduced?'1':'0');return idleEffectsReduced; },
+    setIdleEffectsReduced(value) { idleEffectsReduced=!!value;localStorage.setItem('amq_idle_effects_reduced',idleEffectsReduced?'1':'0');localStorage.setItem('amq_idle_animations_enabled',idleEffectsReduced?'0':'1');return idleEffectsReduced; },
     isMuted() { return muted; },
     toggleMute() {
       muted = !muted;
