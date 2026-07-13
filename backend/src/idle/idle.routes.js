@@ -660,7 +660,7 @@ async function buildState(userId) {
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleOnboardingComplete:true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleEssenceRecruitCount:true,idleOnboardingComplete:true,
       idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idlePrestigePath:true,idlePrestigeMilestone:true,
       idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankStartedAt:true,
     },
@@ -852,7 +852,7 @@ async function buildState(userId) {
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost:recruitCost(),nextCostAfter:recruitCost(),currency:'seals',balance:user.idleSeals,essenceCost:recruitEssenceCost(recruitCount,recruitDiscountBonus),essenceCostAfter:recruitEssenceCost(recruitCount+1,recruitDiscountBonus),essenceBalance:user.essence,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
+    recruit: { count: recruitCount, nextCost:recruitCost(),nextCostAfter:recruitCost(),currency:'seals',balance:user.idleSeals,essenceCost:recruitEssenceCost(user.idleEssenceRecruitCount,recruitDiscountBonus),essenceCostAfter:recruitEssenceCost((user.idleEssenceRecruitCount||0)+1,recruitDiscountBonus),essenceRecruitCount:user.idleEssenceRecruitCount||0,essenceBalance:user.essence,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
     recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character) })),
     battle: {
       stage,
@@ -1063,9 +1063,8 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
   let paymentCost = 0;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
-      const count = await tx.dojoRecruit.count({ where: { userId: user.id } });
       const discount = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
-      const cost = currency === 'essence' ? recruitEssenceCost(count, discount) : recruitCost();
+      const cost = currency === 'essence' ? recruitEssenceCost(user.idleEssenceRecruitCount, discount) : recruitCost();
       paymentCost = cost;
       if (currency === 'essence' ? (user.essence||0) < cost : (user.idleSeals||0) < cost) {
         throw new IdleError(400, currency === 'essence' ? 'Essence insuffisante' : 'Sceaux insuffisants');
@@ -1087,7 +1086,7 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
       const picked = pool[Math.floor(Math.random() * pool.length)];
       const pityUpdate = ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 };
       if (currency === 'essence') {
-        const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost }, idleRecruitPity: pityUpdate } });
+        const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost }, idleRecruitPity: pityUpdate, idleEssenceRecruitCount:{increment:1} } });
         if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
       } else {
         await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });

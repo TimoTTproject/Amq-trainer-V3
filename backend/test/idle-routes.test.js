@@ -21,7 +21,7 @@ function dbUser(over = {}) {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
-    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
+    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
@@ -409,7 +409,8 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
 
   const rich = dbUser({ idleSeals: cost });
   prisma.user.findUnique = async () => rich;
-  prisma.user.update = async () => rich;
+  let sealDebit=null;
+  prisma.user.update = async (args) => { sealDebit=args.data;return rich; };
   prisma.dojoRecruit.findMany = async () => [];
   prisma.character.findMany = async () => [{ id: 5, name: 'Nouvelle Recrue', imageUrl: null, rarity: 'common' }];
   let created = null;
@@ -419,6 +420,7 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
   assert.equal(created.userId, 'u1');
   assert.equal(created.characterId, 5);
   assert.equal(okRes.json.recruited.name, 'Nouvelle Recrue');
+  assert.equal(sealDebit.idleEssenceRecruitCount,undefined);
 });
 
 test('recruit : accepte l Essence et la débite atomiquement', async () => {
@@ -441,7 +443,22 @@ test('recruit : accepte l Essence et la débite atomiquement', async () => {
   assert.equal(res.json.payment.currency,'essence');
   assert.equal(res.json.payment.cost, cost);
   assert.deepEqual(debit.essence,{decrement:cost});
+  assert.deepEqual(debit.idleEssenceRecruitCount,{increment:1});
   assert.equal(res.json.recruit.essenceBalance,0);
+});
+
+test('recruit : les Sceaux ne font jamais augmenter le prochain prix en Essence', async () => {
+  const user=dbUser({idleSeals:1,idleEssenceRecruitCount:4});
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async()=>user;
+  prisma.dojoRecruit.findMany=async()=>[];
+  prisma.character.findMany=async()=>[{id:7,name:'Invocation Sceau',imageUrl:null,rarity:'rare'}];
+  prisma.dojoRecruit.create=async()=>({});
+  const before=recruitEssenceCost(user.idleEssenceRecruitCount);
+  const res=await app.request('/api/idle/recruit',{method:'POST',cookie:app.authCookie('u1'),body:{currency:'seals'}});
+  assert.equal(res.status,200);
+  assert.equal(res.json.recruit.essenceCost,before);
+  assert.equal(res.json.recruit.essenceRecruitCount,4);
 });
 
 test('recruit : refuse l Essence insuffisante sans consommer de Sceau', async () => {
