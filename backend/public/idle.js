@@ -894,13 +894,13 @@ function renderIdleAncients(ancients) {
 function idleSlotHTML(slot) {
   if (slot.locked) {
     return `<div class="idle-hero idle-hero-locked">
-      <i class="fas fa-lock"></i>
-      <button class="btn-secondary idle-unlock-btn" data-slot="${slot.index}">${idleFormatNumber(slot.unlockCost)} <i class="fas fa-mortar-pestle"></i></button>
+      <div class="idle-slot-state"><i class="fas fa-lock"></i><span><b>Emplacement ${slot.index + 1}</b><small>Débloque une place dans ton équipe</small></span></div>
+      <button class="btn-secondary idle-unlock-btn" data-slot="${slot.index}"><span>Débloquer</span><strong>${idleFormatNumber(slot.unlockCost)} <i class="fas fa-mortar-pestle"></i></strong></button>
     </div>`;
   }
   if (!slot.character) {
     return `<button class="idle-hero idle-hero-empty" data-slot="${slot.index}" data-action="pick">
-      <i class="fas fa-plus"></i><span>Assigner</span>
+      <div class="idle-slot-state"><i class="fas fa-plus"></i><span><b>Emplacement ${slot.index + 1}</b><small>Aucun personnage assigné</small></span></div><strong>Choisir un personnage <i class="fas fa-chevron-right"></i></strong>
     </button>`;
   }
   const c = slot.character;
@@ -918,8 +918,8 @@ function idleSlotHTML(slot) {
       <span class="idle-hero-rate">+${idleFormatNumber(c.rate)}/s</span>
       ${c.ascension ? `<span class="idle-ascension-rank"><i class="fas fa-sun"></i> A${c.ascension} · ×${c.ascensionMultiplier}</span>` : ''}
     </div>
-    <div class="idle-hero-stats"><span>Base <b>${idleFormatNumber(c.baseRate)}/s</b></span><span>Scaling <b>+${Math.round(c.scaling * 100)}%/niv.</b></span></div>
-    <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i> ${escapeHtml(c.passive)} ${c.passiveUnlocked ? '· ACTIF' : '· débloqué niv. 10'}</div>
+    <div class="idle-hero-stats"><span><small>Production de base</small><b>${idleFormatNumber(c.baseRate)}/s</b></span><span><small>Gain par niveau</small><b>+${Math.round(c.scaling * 100)}%</b></span></div>
+    <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i><span><b>Passif</b><small>${escapeHtml(c.passive)}</small></span><em>${c.passiveUnlocked ? 'Actif' : 'Niv. 10'}</em></div>
     <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
     <div class="idle-equipment">${c.equipments.map((e) => e.empty?`<span class="empty" title="Emplacement vide"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><small>Vide</small></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><span><b>+${Math.round(e.bonus*100)}%</b><small>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</small></span></button>`).join('')}</div>
