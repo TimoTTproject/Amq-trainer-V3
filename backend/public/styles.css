@@ -6443,3 +6443,54 @@ body.idle-fullscreen #app { padding-top: 0; }
 #feedback-message { margin-top: 10px; }
 #feedback-status { min-height: 1.2em; margin-top: 8px; }
 @media (max-width: 760px) { .feedback-fab { right: 12px; bottom: 76px; } }
+
+/* Lisibilité grand écran : la zone jouable utilise réellement la largeur
+   disponible et les informations critiques ne descendent plus sous 10 px. */
+@media(min-width:901px){
+  #view-idle .idle-content{width:min(1600px,calc(100% - 230px));max-width:none;transform:translateX(90px)}
+  #view-idle .idle-scene{min-height:390px}
+  #view-idle .idle-tab{font-size:13px}
+  #view-idle .idle-combat-controls .idle-click-btn b{font-size:16px}
+  #view-idle .idle-combat-controls .idle-click-btn small{font-size:11px}
+  #view-idle .idle-skill b{font-size:14px}
+  #view-idle .idle-skill small{font-size:11px}
+}
+#view-idle .idle-panel{font-size:15px}
+#view-idle .idle-battle-kicker{font-size:13px}
+#view-idle .idle-combat-stats{font-size:13px}
+#view-idle .idle-boss-name b{max-width:230px;font-size:13px}
+#view-idle .idle-boss-name small{font-size:10px}
+#view-idle .idle-next-objective b{font-size:13px}
+#view-idle .idle-next-objective small,#view-idle .idle-next-objective>strong{font-size:11px}
+#view-idle .idle-wave-track>span,#view-idle .idle-wave-track>span i{font-size:9px}
+#view-idle .idle-combat-quests>header>span{font-size:12px}
+#view-idle .idle-combat-quests>header>button{font-size:11px}
+#view-idle .idle-combat-quest b{font-size:11px}
+#view-idle .idle-combat-quest span{font-size:10px}
+#view-idle .idle-combat-quest>button{font-size:10px}
+#view-idle .idle-panel .hint{font-size:11px;line-height:1.45}
+
+/* Ressources : barre de statut plate. L'Essence disponible reste dans le HUD
+   supérieur ; ici on évite le doublon et les cartes imbriquées. */
+#view-idle .idle-currency-panel{margin:0 0 12px;padding:0;border:0;border-bottom:1px solid #2a303b;border-radius:0;background:transparent;box-shadow:none}
+#view-idle .idle-currency-grid{display:grid;grid-template-columns:1.35fr repeat(3,1fr);gap:0}
+#view-idle .idle-currency-item{position:relative;display:flex;min-width:0;min-height:64px;align-items:center;gap:10px;padding:9px 16px;border:0;border-radius:0;background:transparent!important}
+#view-idle .idle-currency-item+.idle-currency-item:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:1px;background:#2a303b}
+#view-idle .idle-currency-ico{width:34px;height:34px;border-radius:50%;font-size:14px}
+#view-idle .idle-currency-item>div{display:flex;min-width:0;flex-direction:column-reverse;gap:2px}
+#view-idle .idle-currency-item b{overflow:hidden;font-size:18px;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}
+#view-idle .idle-currency-item.primary b{font-size:22px}
+#view-idle .idle-currency-item b em{margin-left:3px;color:#67e8f9;font-size:12px;font-style:normal;font-weight:800}
+#view-idle .idle-currency-item small{overflow:hidden;color:#9ca6b5;font-size:10px;font-weight:800;letter-spacing:.05em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
+@media(max-width:700px){
+  #view-idle .idle-currency-panel{margin-bottom:8px}
+  #view-idle .idle-currency-grid{grid-template-columns:1fr 1fr}
+  #view-idle .idle-currency-item{min-height:52px;padding:7px 9px}
+  #view-idle .idle-currency-item:nth-child(3):before{display:none}
+  #view-idle .idle-currency-item:nth-child(n+3){border-top:1px solid #202630}
+  #view-idle .idle-currency-item.primary b,#view-idle .idle-currency-item b{font-size:15px}
+  #view-idle .idle-currency-item small{font-size:8px}
+  #view-idle .idle-currency-ico{width:29px;height:29px;font-size:12px}
+  #view-idle .idle-scene{min-height:245px}
+  #view-idle .idle-combat-stats{font-size:11px}
+}
