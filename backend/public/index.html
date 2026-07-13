@@ -1652,6 +1652,12 @@
                ligne de stats façon "Pokémon Attack / Click Attack". -->
           <div class="profile-section idle-combat-panel">
             <h3 class="idle-combat-title"><i class="fas fa-khanda"></i> Combat</h3>
+            <nav class="idle-stage-nav" id="idle-stage-nav" aria-label="Choisir un niveau de combat">
+              <button type="button" id="idle-stage-prev" title="Revenir au niveau précédent"><i class="fas fa-chevron-left"></i><span>Niveau précédent</span></button>
+              <div><small>NIVEAU DE COMBAT</small><b id="idle-stage-current">1</b><em id="idle-stage-location">Monde 1 · Vague 1/10</em></div>
+              <button type="button" id="idle-stage-next" title="Aller au niveau suivant déjà débloqué"><span>Niveau suivant</span><i class="fas fa-chevron-right"></i></button>
+              <button type="button" class="idle-stage-best" id="idle-stage-best"><i class="fas fa-forward-step"></i> Niveau maximum <b id="idle-stage-best-value">1</b></button>
+            </nav>
             <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
               <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
               <div class="idle-scene-head">
