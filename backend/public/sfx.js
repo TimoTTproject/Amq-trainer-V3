@@ -59,6 +59,8 @@ const sfx = (function () {
     idleKill() { if (muted) return; seq([330,440,660],{step:.045,dur:.11,type:'triangle',peak:.09*idleVolume}); },
     idleWave() { if (muted) return; seq([392,523,659,784],{step:.065,dur:.16,type:'triangle',peak:.12*idleVolume}); },
     idleBoss() { if (muted) return; seq([196,196,294],{step:.11,dur:.2,type:'sawtooth',peak:.09*idleVolume}); },
+    idleUltimate() { if (muted || idleEffectsReduced) return; tone(110,0,.45,'sawtooth',.12*idleVolume); seq([330,494,659,988],{step:.055,dur:.2,type:'square',peak:.1*idleVolume}); },
+    idleCombo() { if (muted || idleEffectsReduced) return; seq([392,523,659,784,1047],{step:.04,dur:.13,type:'triangle',peak:.09*idleVolume}); },
     idleChest() { if (muted) return; seq([659,988,1319,1568],{step:.07,dur:.2,type:'sine',peak:.12*idleVolume}); },
     idleUpgrade() { if (muted) return; seq([523,698,880],{step:.055,dur:.12,type:'triangle',peak:.08*idleVolume}); },
     getIdleVolume() { return idleVolume; },

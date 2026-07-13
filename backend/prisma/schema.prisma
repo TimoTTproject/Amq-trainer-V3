@@ -156,6 +156,9 @@ model User {
   idleBossStartedAt      DateTime?
   idleBestBossMs         Int?
   idleFormation          String    @default("balanced")
+  // Chef affiché dans la scène. Choix purement visuel : les bonus viennent des
+  // rôles/talents et restent indépendants de l'ordre de l'équipe.
+  idleLeaderCharacterId  Int?
   idlePrestigePath       String    @default("balanced")
   idlePrestigeMilestone  Int       @default(0)
   idleRankLevel          Int       @default(1)

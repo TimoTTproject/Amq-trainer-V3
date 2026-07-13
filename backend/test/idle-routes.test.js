@@ -22,7 +22,7 @@ function dbUser(over = {}) {
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
-    wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
+    wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
 
@@ -215,6 +215,8 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(res.json.permanentProgress.prestige, 0);
   assert.equal(res.json.click.yield, 5);
   assert.equal(res.json.click.damage, 8); // Guerrier : 5 × 1,5, arrondi
+  assert.ok(res.json.battle.skills.burstDamage > res.json.click.damage);
+  assert.equal(res.json.battle.skills.teamDamage, 0);
   assert.equal(res.json.battle.stage, 1);
   assert.equal(res.json.battle.kills, 0); // stage 1 = aucun kill encore
   assert.equal(res.json.battle.xpIntoStage, 0);
@@ -571,6 +573,27 @@ test('assign : succès → déplace le personnage hors de son ancien emplacement
   assert.equal(writes[1][0], 'upsert');
   assert.equal(writes[1][1].create.characterId, 7);
   assert.equal(writes[1][1].create.slotIndex, 1);
+});
+
+test('chef d’équipe : mémorise un personnage actif sans modifier ses bonus', async () => {
+  let user = dbUser();
+  const character = { id:7, name:'Dova', series:'JoJo', rarity:'epic', imageUrl:null };
+  const slot = { id:9, userId:'u1', slotIndex:1, characterId:7, level:12, ascension:0, assignedAt:new Date(), character, equipments:[], items:[] };
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findFirst = async ({ where }) => where.characterId===7 ? { id:slot.id } : null;
+  prisma.idleSlot.findMany = async () => [slot];
+  prisma.dojoRecruit.count = async () => 1;
+  prisma.dojoRecruit.findMany = async () => [];
+  prisma.user.update = async ({ data }) => {
+    if (data.idleLeaderCharacterId !== undefined) user = { ...user, idleLeaderCharacterId:data.idleLeaderCharacterId };
+    return user;
+  };
+  const res = await app.request('/api/idle/team-leader', {
+    method:'POST', cookie:app.authCookie('u1'), body:{ characterId:7 },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(user.idleLeaderCharacterId, 7);
+  assert.equal(res.json.strategy.leaderCharacterId, 7);
 });
 
 test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé remet le niveau à 1 (sinon héritage gratuit de puissance)", async () => {

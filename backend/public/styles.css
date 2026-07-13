@@ -5898,7 +5898,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-xp-bar { height: 8px; border-radius: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.16); overflow: hidden; }
 .idle-xp-fill { height: 100%; background: linear-gradient(90deg, var(--orange), #ffd54a); transition: width .4s ease; }
 .idle-enemy-hp { height: 13px; border-color: rgba(255,255,255,.4); box-shadow: inset 0 1px 4px #000, 0 1px 4px #0008; }
-.idle-enemy-hp .idle-xp-fill { margin-left: auto; background: linear-gradient(180deg, #7ee34c, #2ba729); box-shadow: inset 0 1px rgba(255,255,255,.45); }
+.idle-enemy-hp .idle-xp-fill { background: linear-gradient(180deg, #7ee34c, #2ba729); box-shadow: inset 0 1px rgba(255,255,255,.45); transform-origin: left center; }
 /* Distinct de la barre de PV juste au-dessus (combat) : c'est la progression
    du NIVEAU DE DOJO (décor), une mesure différente — marge + icône dédiée
    pour ne pas laisser croire que ce texte appartient à la barre verte. */
@@ -6497,3 +6497,28 @@ body.idle-fullscreen #app { padding-top: 0; }
   #view-idle .idle-scene{min-height:245px}
   #view-idle .idle-combat-stats{font-size:11px}
 }
+
+/* Combat lisible : PV par impacts, actifs spectaculaires et méta explicite. */
+#view-idle .idle-enemy-hp .idle-xp-fill{min-width:0;will-change:width}
+#view-idle .idle-skill{position:relative;overflow:hidden;border:1px solid #ffffff2b;background:#171b25;box-shadow:none}
+#view-idle #idle-skill-burst:not(:disabled){border-color:#f59e0b;background:#2a170d;box-shadow:inset 4px 0 #f59e0b,0 0 18px #f59e0b24}
+#view-idle #idle-skill-team:not(:disabled){border-color:#38bdf8;background:#0b2030;box-shadow:inset 4px 0 #38bdf8,0 0 18px #38bdf824}
+#view-idle .idle-skill:not(:disabled):after{content:"PRÊT";position:absolute;right:8px;top:6px;color:#fde68a;font-size:8px;font-weight:1000;letter-spacing:.1em}
+#view-idle #idle-skill-team:not(:disabled):after{color:#7dd3fc}
+.idle-scene.skill-burst{animation:idleUltimateScene 1.05s cubic-bezier(.2,.8,.2,1)}
+.idle-scene.skill-team{animation:idleComboScene .8s ease-out}
+.idle-scene.skill-burst:after,.idle-scene.skill-team:after{content:"";position:absolute;z-index:3;inset:0;pointer-events:none}
+.idle-scene.skill-burst:after{background:radial-gradient(circle at 70% 44%,#fff 0 2%,#fbbf24aa 8%,#ef444455 24%,transparent 55%);animation:idleUltimateFlash 1s ease-out forwards}
+.idle-scene.skill-team:after{background:repeating-linear-gradient(115deg,transparent 0 12%,#38bdf833 13%,transparent 15%);animation:idleComboFlash .75s ease-out forwards}
+.idle-skill-impact{position:absolute;z-index:8;left:50%;top:42%;display:flex;align-items:center;gap:13px;min-width:300px;padding:14px 20px;border:1px solid #fbbf24;border-radius:12px;background:#120d08e8;color:#fff;box-shadow:0 0 50px #f9731680;pointer-events:none;animation:idleSkillImpact 1.3s cubic-bezier(.15,.75,.2,1) forwards}
+.idle-skill-impact>i{color:#fde047;font-size:38px;filter:drop-shadow(0 0 10px #f97316)}.idle-skill-impact>span{display:flex;flex-direction:column}.idle-skill-impact small{color:#fbbf24;font-size:10px;font-weight:1000;letter-spacing:.16em}.idle-skill-impact b{font-size:25px;line-height:1.1}.idle-skill-impact em{color:#fed7aa;font-size:10px;font-style:normal;font-weight:900}.idle-skill-impact.combo{border-color:#38bdf8;background:#071824e8;box-shadow:0 0 50px #0ea5e980}.idle-skill-impact.combo>i,.idle-skill-impact.combo small{color:#7dd3fc}.idle-skill-impact.combo em{color:#bae6fd}
+@keyframes idleUltimateScene{25%{transform:translateX(-3px) scale(1.008);filter:contrast(1.35) saturate(1.6)}35%{transform:translateX(4px) scale(1.012)}48%{transform:translateX(-2px)}100%{transform:none;filter:none}}
+@keyframes idleComboScene{35%{filter:brightness(1.35) saturate(1.4)}100%{filter:none}}
+@keyframes idleUltimateFlash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+@keyframes idleComboFlash{0%{opacity:0;transform:translateX(-20%)}25%{opacity:1}100%{opacity:0;transform:translateX(20%)}}
+@keyframes idleSkillImpact{0%{opacity:0;transform:translate(-50%,20px) scale(.6)}18%{opacity:1;transform:translate(-50%,0) scale(1.08)}72%{opacity:1;transform:translate(-50%,-8px) scale(1)}100%{opacity:0;transform:translate(-50%,-35px) scale(.95)}}
+
+#view-idle .idle-formations{gap:8px}.idle-formation-state{display:flex;align-items:center;gap:9px;padding:10px;border-left:3px solid var(--green);background:color-mix(in srgb,var(--green) 8%,transparent)}.idle-formation-state.inactive{border-color:#f59e0b;background:#f59e0b0c}.idle-formation-state>i{color:var(--green)}.idle-formation-state.inactive>i{color:#f59e0b}.idle-formation-state>span{display:flex;flex-direction:column}.idle-formation-state small{color:var(--text-2);font-size:9px;font-weight:900;letter-spacing:.09em}.idle-formation-state b{font-size:12px}.idle-formations button{display:grid;grid-template-columns:auto minmax(0,1fr) auto!important}.idle-formations button>span{display:flex;min-width:0;flex-direction:column}.idle-formations button>span small{color:var(--text-2);font-size:10px}.idle-formations button>strong{color:var(--text-2);font-size:9px}.idle-formations button.active>strong{color:var(--green)}
+#view-idle .idle-hero.is-leader{border-color:#fbbf2466;box-shadow:inset 0 3px #fbbf24}
+#view-idle .idle-hero-leader{position:absolute;z-index:3;left:20px;top:132px;display:flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid #fbbf2466;border-radius:99px;background:#171006e8;color:#fde68a;font-size:9px;font-weight:900;cursor:pointer}.idle-hero-leader:not(:disabled):hover{background:#f59e0b;color:#111}.idle-hero-leader:disabled{opacity:1;cursor:default}
+@media(max-width:620px){#view-idle .idle-hero-leader{left:14px;top:102px;padding:4px 6px}.idle-hero-leader span{display:none}.idle-skill-impact{min-width:250px;padding:11px 14px}.idle-skill-impact b{font-size:20px}}
