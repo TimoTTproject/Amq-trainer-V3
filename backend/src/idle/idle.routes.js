@@ -55,6 +55,13 @@ const {
   rollRecruitRarity,
   recruitCost,
   recruitEssenceCost,
+  achievementProdMultiplier,
+  ACHIEVEMENT_PROD_BONUS,
+  AWAKENED_CHANCE,
+  AWAKENED_BONUS,
+  ORB_COOLDOWN_SECONDS,
+  ORB_SEAL_CHANCE,
+  orbReward,
 } = require('./idle');
 
 const router = express.Router();
@@ -304,6 +311,23 @@ function idleAchievementDefs({ stage, recruits, teamLevels, worlds, prestige }) 
 // ne pas taper la base à chaque GET /state.
 const DECOR_ART_TTL_MS = 30 * 60 * 1000;
 const decorArtCache = new Map(); // theme -> { data, at }
+
+// Totaux du catalogue par licence (pour la collection façon Pokédex) : le
+// catalogue Character n'évolue qu'aux imports admin, un cache mémoire de 30
+// minutes évite un groupBy à chaque GET /state. try/catch : doubles de tests
+// et anciens schémas répondent simplement « collection vide ».
+const SERIES_TOTALS_TTL_MS = 30 * 60 * 1000;
+let seriesTotalsCache = null; // { at, data: Map(series -> total) }
+async function loadSeriesTotals() {
+  if (seriesTotalsCache && Date.now() - seriesTotalsCache.at < SERIES_TOTALS_TTL_MS) return seriesTotalsCache.data;
+  let data = new Map();
+  try {
+    const rows = await prisma.character.groupBy({ by: ['series'], _count: { _all: true }, where: { series: { not: null } } });
+    data = new Map(rows.map((r) => [r.series, r._count._all]));
+  } catch { return data; } // échec non mis en cache : nouvel essai à la prochaine requête
+  seriesTotalsCache = { at: Date.now(), data };
+  return data;
+}
 async function decorArtForTheme(theme) {
   const cached = decorArtCache.get(theme);
   if (cached && Date.now() - cached.at < DECOR_ART_TTL_MS) return cached.data;
@@ -371,10 +395,18 @@ async function fetchDecorArt(theme) {
 // automatiquement via la contrainte FK (onDelete: SetNull), pas besoin d'un
 // garde-fou applicatif en plus.
 async function loadSlots(tx, userId) {
-  return tx.idleSlot.findMany({
+  const slots = await tx.idleSlot.findMany({
     where: { userId },
     include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } }, equipments: true,items:true },
   });
+  // Marque les héros « Éveillés » (shiny, +10% de production personnelle) —
+  // l'information vit sur DojoRecruit, pas sur l'emplacement. try/catch : la
+  // colonne peut manquer pendant la fenêtre de migration (et dans les tests
+  // qui ne stubbent pas cette requête), auquel cas personne n'est éveillé.
+  let awakenedRows = [];
+  try { awakenedRows = await tx.dojoRecruit.findMany({ where: { userId, awakened: true }, select: { characterId: true } }); } catch { /* migration/tests */ }
+  const awakened = new Set(awakenedRows.map((r) => r.characterId));
+  return slots.map((s) => ({ ...s, awakened: !!s.characterId && awakened.has(s.characterId) }));
 }
 
 const HERO_CLASSES = {
@@ -456,7 +488,12 @@ function currentIdleEvent(now = new Date()) {
   return { ...event, endsAt: end.toISOString() };
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null) {
+// `extras` (optionnel) : bonus transverses calculés par l'appelant —
+// `achievementsCompleted` (succès complétés → +1% production chacun, cf.
+// achievementProdMultiplier) et `autoClickDps` (Ancient « Frappe Fantôme »,
+// ajouté APRÈS les multiplicateurs d'équipe : c'est le joueur qui frappe,
+// pas l'équipe qui produit).
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null,extras={}) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
@@ -465,7 +502,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if(!s.characterId||!s.character)return sum;
     const equipped=(s.items?.length?s.items:s.equipments)||[];
     const gearMultiplier=(1+equipped.reduce((v,e)=>v+itemProductionBonus(e),0))*equipmentSetMultiplier(equipped);
-    return sum+slotRate(s.character.rarity,s.level)*(1+characterTalent(s.character).self)*Math.pow(2,s.ascension||0)*gearMultiplier*(1+masteryBonus(s.character.series));
+    return sum+slotRate(s.character.rarity,s.level)*(1+characterTalent(s.character).self)*Math.pow(2,s.ascension||0)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1);
   },0);
   const teamPassive = slots.reduce((mult, s) => {
     if (!s.character || (s.level || 1) < 10) return mult;
@@ -476,7 +513,35 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
   const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
   const roleMultiplier=1+roles.filter((role)=>role==='attaquant').length*.08+roles.filter((role)=>role==='producteur').length*.05;
-  return safeIdleNumber(base * roleMultiplier * reserveBonus * (autoSkills?1.15:1) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier * (FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles) * (PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod * leaderSkillForSlots(slots,leaderCharacterId).prod);
+  const teamRate = base * roleMultiplier * reserveBonus * (autoSkills?1.15:1) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier * (FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles) * (PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod * leaderSkillForSlots(slots,leaderCharacterId).prod * achievementProdMultiplier(extras.achievementsCompleted||0);
+  return safeIdleNumber(teamRate + Math.max(0, extras.autoClickDps || 0));
+}
+
+// Nombre de succès complétés (cf. idleAchievementDefs) — utilisé pour le
+// multiplicateur permanent de production. Calculé à partir de données déjà
+// chargées par tous les appelants (user + slots + roster), aucune requête.
+function achievementsCompletedFor(user, slots, recruitCount) {
+  const best = Math.max(user.idleBestStage || 1, user.idleStage || 1);
+  const teamLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
+  const worlds = Math.min(DOJO_DECOR.length, Math.floor((best - 1) / 10) + 1);
+  return idleAchievementDefs({ stage: best, recruits: recruitCount, teamLevels, worlds, prestige: user.prestigeLevel || 0 })
+    .filter((a) => a.progress >= a.target).length;
+}
+
+// DPS passif de l'Ancient « Frappe Fantôme » : N frappes automatiques/s au
+// rendement du clic de base (bonus de clic des Ancients inclus, pas les
+// multiplicateurs situationnels de boss/monde — c'est un plancher stable).
+function autoClickDpsFor(user, ancientLevelsByKey) {
+  const rate = ancientBonus(ancientLevelsByKey, 'autoClickRate');
+  if (!rate) return 0;
+  return rate * clickYield(user.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult'));
+}
+
+function rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey) {
+  return {
+    achievementsCompleted: achievementsCompletedFor(user, slots, recruitCount),
+    autoClickDps: autoClickDpsFor(user, ancientLevelsByKey),
+  };
 }
 
 async function applyActiveDamage(tx, user, damage) {
@@ -601,7 +666,7 @@ async function withSettle(userId, mutate) {
     const [slots,recruitCount] = await Promise.all([loadSlots(prisma, userId),prisma.dojoRecruit.count({where:{userId}})]);
     const ancientLevelsByKey = await loadAncientLevels(prisma, userId);
     const dojoLevel = user.idleRankLevel || 1;
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,ancientLevelsByKey));
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
     const elapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
     const combat = simulateCombat({
@@ -697,7 +762,8 @@ async function buildState(userId) {
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
   const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = user.idleRankLevel || 1;
-  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
+  const rateExtras = rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey);
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtras);
   const strategy = synergyForSlots(slots);
   const previewElapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
   const combatPreview = simulateCombat({
@@ -725,7 +791,7 @@ async function buildState(userId) {
         rarity: row.character.rarity,
         series: row.character.series,
         level,
-        rate: slotRate(row.character.rarity, level) * Math.pow(2, row.ascension || 0),
+        rate: slotRate(row.character.rarity, level) * Math.pow(2, row.ascension || 0) * (row.awakened ? AWAKENED_BONUS : 1),
         levelUpCost: charLevelUpCost(row.character.rarity, level),
         levelCosts: Object.fromEntries([1, 5, 10, 100].map((n) => [n, charLevelBulkCost(row.character.rarity, level, n)])),
         baseRate: RARITY_RATE[row.character.rarity] || 0,
@@ -749,6 +815,7 @@ async function buildState(userId) {
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
         leaderSkill: characterLeaderSkill(row.character),
+        awakened: !!row.awakened,
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -817,6 +884,32 @@ async function buildState(userId) {
   let achievementClaims = []; try { achievementClaims = await prisma.idleMissionClaim.findMany({ where: { userId, period: 'lifetime', missionKey: { in: achievementDefs.map((a) => `achievement_${a.key}`) } }, select: { missionKey: true } }); } catch (e) { if (e?.code) throw e; }
   const claimedAchievements = new Set(achievementClaims.map((c) => c.missionKey));
   const achievements = achievementDefs.map((a) => ({ ...a, completed: a.progress >= a.target, claimed: claimedAchievements.has(`achievement_${a.key}`) }));
+  // Bonus permanent des succès (déjà appliqué au totalRate via rateExtras) —
+  // exposé pour que l'interface montre POURQUOI compléter les succès rapporte.
+  const achievementsBonus = {
+    completed: rateExtras.achievementsCompleted,
+    total: achievementDefs.length,
+    perAchievement: ACHIEVEMENT_PROD_BONUS,
+    multiplier: achievementProdMultiplier(rateExtras.achievementsCompleted),
+  };
+  // Collection par licence (façon Pokédex) : total du catalogue par série
+  // (cache mémoire 30 min, le catalogue ne bouge presque jamais) croisé avec
+  // les recrues du joueur. Seules les séries où il possède au moins un héros
+  // sont listées — le reste se découvre en invoquant.
+  const seriesTotals = await loadSeriesTotals();
+  const ownedBySeries = new Map();
+  for (const r of recruits) {
+    if (!r.character?.series) continue;
+    const entry = ownedBySeries.get(r.character.series) || { owned: 0, awakened: 0 };
+    entry.owned++;
+    if (r.awakened) entry.awakened++;
+    ownedBySeries.set(r.character.series, entry);
+  }
+  const seriesCollection = [...ownedBySeries.entries()].map(([series, entry]) => {
+    const total = Math.max(entry.owned, seriesTotals.get(series) || entry.owned);
+    return { series, owned: entry.owned, awakened: entry.awakened, total, percent: Math.round((entry.owned / total) * 100), complete: entry.owned >= total };
+  }).sort((a, b) => b.percent - a.percent || b.owned - a.owned);
+  const catalogTotal = [...seriesTotals.values()].reduce((sum, n) => sum + n, 0);
   const now=new Date();const seasonPeriod=periods.month;const seasonName=['Hiver Éternel','Floraison des héros','Brasier des mondes','Crépuscule dimensionnel'][Math.floor(now.getUTCMonth()/3)];
   const seasonActivity=seasonActivityScore(missionCounters,seasonPeriod);
   let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
@@ -880,7 +973,7 @@ async function buildState(userId) {
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
     recruit: { count: recruitCount, nextCost:recruitCost(),nextCostAfter:recruitCost(),currency:'seals',balance:user.idleSeals,essenceCost:recruitEssenceCost(user.idleEssenceRecruitCount,recruitDiscountBonus),essenceCostAfter:recruitEssenceCost((user.idleEssenceRecruitCount||0)+1,recruitDiscountBonus),essenceRecruitCount:user.idleEssenceRecruitCount||0,essenceBalance:user.essence,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
-    recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character) })),
+    recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character),awakened:!!r.awakened })),
     battle: {
       stage,
       bestStage: Math.max(user.idleBestStage || 1, stage),
@@ -914,10 +1007,11 @@ async function buildState(userId) {
       skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000)},
     },
     missions,
-    codex: { discovered: recruitCount, masteries, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
+    codex: { discovered: recruitCount, masteries, collection: seriesCollection, catalogTotal, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
     event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
     rift,
     achievements,
+    achievementsBonus,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     // La première vraie saison utilisera une progression dédiée. L'ancien
     // pass mensuel fondé sur le niveau à vie est volontairement masqué.
@@ -1064,7 +1158,7 @@ router.get('/roster', requireAuth, requireIdleBeta, async (req, res) => {
   res.json({
     recruits: recruits.map((r) => ({
       id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt,
-      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:RARITY_PASSIVE[r.character.rarity]||'',passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),leaderSkill:characterLeaderSkill(r.character),
+      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1)*(r.awakened?AWAKENED_BONUS:1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:RARITY_PASSIVE[r.character.rarity]||'',passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),leaderSkill:characterLeaderSkill(r.character),awakened:!!r.awakened,
     })),
   });
 });
@@ -1111,6 +1205,8 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
       }
       if (!pool.length) throw new IdleError(400, 'Tu as déjà recruté tout le roster disponible !');
       const picked = pool[Math.floor(Math.random() * pool.length)];
+      // Recrue « Éveillée » (shiny) : rare, dorée, +10% de production personnelle.
+      const awakened = Math.random() < AWAKENED_CHANCE;
       const pityUpdate = ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 };
       if (currency === 'essence') {
         const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost }, idleRecruitPity: pityUpdate, idleEssenceRecruitCount:{increment:1} } });
@@ -1118,8 +1214,15 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
       } else {
         await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });
       }
-      await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id } });
-      result = picked;
+      try {
+        await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id, awakened } });
+      } catch (e) {
+        // Fenêtre de migration (colonne absente) : on ne perd pas le paiement,
+        // la recrue est créée sans éveil.
+        if (e?.code !== 'P2002') await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id } });
+        else throw e;
+      }
+      result = { ...picked, awakened };
     });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
@@ -1280,7 +1383,7 @@ router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10,
       if(!recruits.length)throw new IdleError(400,'Aucun héros recruté');
       const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
       const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,equipments:[],items:[]});
-      const rateFor=(picks)=>computeTotalRate(slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}:{...slot,characterId:null,character:null,level:1,ascension:0};}),user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
+      const rateFor=(picks)=>{const mapped=slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened}:{...slot,characterId:null,character:null,level:1,ascension:0,awakened:false};});return computeTotalRate(mapped,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,mapped,recruits.length,levels));};
       const currentPicks=slots.map((slot)=>recruits.find((recruit)=>recruit.characterId===slot.characterId)||null);
       const beforeRate=rateFor(currentPicks);const teamSize=Math.min(unlocked,recruits.length);
       let beam=[{picks:[],used:new Set(),score:0}];
@@ -1380,13 +1483,18 @@ router.post('/claim-milestone', requireAuth, requireIdleBeta, rateLimit({ max: 1
 router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   let prestigeReward=0,prestigeStage=0,milestoneSeals=0;
   try {
-    await withSettle(req.user.id, async (tx, user) => {
+    await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const runBestStage = user.idleRunBestStage || 1;
       if (runBestStage < PRESTIGE_MIN_STAGE) {
         throw new IdleError(400, `Atteins le stage ${PRESTIGE_MIN_STAGE} pendant cette run avant de prestiger`);
       }
       prestigeStage=runBestStage;prestigeReward=wisdomForRunStage(runBestStage);
       const nextPrestige=(user.prestigeLevel||0)+1;const reached=[{level:1,reward:1},{level:3,reward:2},{level:5,reward:3},{level:10,reward:5}].filter((m)=>m.level>(user.idlePrestigeMilestone||0)&&m.level<=nextPrestige);milestoneSeals=reached.reduce((n,m)=>n+m.reward,0);const lastMilestone=reached.length?reached[reached.length-1].level:(user.idlePrestigeMilestone||0);
+      // Ancient « Pas du Conquérant » : la nouvelle run démarre plus loin,
+      // borné au meilleur stage jamais atteint (jamais de contenu sauté) et
+      // jamais directement sur un boss (stage suivant le cas échéant).
+      let startStage = Math.max(1, Math.min(1 + Math.floor(ancientBonus(ancientLevelsByKey, 'startStage')), user.idleBestStage || 1));
+      if (isBossStage(startStage)) startStage += 1;
       await tx.idleSlot.updateMany({ where: { userId: user.id }, data: { characterId: null, assignedAt: null, level: 1 } });
       await tx.dojoRecruit.updateMany({where:{userId:user.id},data:{trainingLevel:1}});
       await tx.user.update({
@@ -1397,10 +1505,10 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleProdLevel: 0,
           idleClickLevel: 0,
           idleRunEssenceEarned: 0,
-          idleStage: 1,
+          idleStage: startStage,
           idleWaveKills: 0,
-          idleRunBestStage: 1,
-          idleEnemyHp: enemyMaxHp(1),
+          idleRunBestStage: startStage,
+          idleEnemyHp: enemyUnitMaxHp(startStage, 0),
           idleBossProgress: 0,
           idleBossStartedAt: null,
           idleBurstReadyAt: null,
@@ -1464,7 +1572,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
   let gained=0;let readyAt;let cooldownMs=ULTIMATE_COOLDOWN_MS;let killed=false,bossKilled=false;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount);const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst'));({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,null,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount);const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst'));({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void incrementIdleCounter(req.user.id,'skill',1);
   if(killed)await incrementIdleCounter(req.user.id,'kill',1);
   if(bossKilled)await incrementIdleCounter(req.user.id,'boss_kill',1);
@@ -1480,7 +1588,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
       if(roles.length<2)throw new IdleError(400,'Équipe insuffisante');
       const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});
-      const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
+      const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
       cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length);
@@ -1628,7 +1736,11 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const defeated = Math.floor(Math.max(0, (user.idleBestStage || user.idleStage || 1) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
       if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
-      const {reward:amount,sealReward,bonusEssence,lootRarity}=bossChestRewards(tier);const totalEssence=amount+bonusEssence;
+      // Ancient « Fortune des Gardiens » : multiplie l'Essence des coffres.
+      let bossFortune = 1;
+      try { bossFortune = 1 + ancientBonus(await loadAncientLevels(tx, user.id), 'bossRewardMult'); } catch { /* tests/migration */ }
+      const {reward:baseAmount,sealReward,bonusEssence:baseBonus,lootRarity}=bossChestRewards(tier);
+      const amount=Math.round(baseAmount*bossFortune);const bonusEssence=Math.round(baseBonus*bossFortune);const totalEssence=amount+bonusEssence;
       const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward}, essence: { increment: totalEssence }, essenceEarnedTotal: { increment: totalEssence } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
       const kinds=['weapon','relic','accessory'];const kind=kinds[(tier-1)%kinds.length];const rarity=lootRarity;
@@ -1641,6 +1753,71 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
     await incrementIdleCounter(req.user.id,'boss_chest',1);
     res.json({ ok: true, ...result });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
+});
+
+// ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un
+// orbe cliquable dans la scène toutes les 2 à 5 minutes ; le cliquer paie
+// ~90 s de production d'un coup (parfois +1 Sceau). Le serveur reste
+// autoritaire sur la fréquence : un jeton anti-rejeu de ORB_COOLDOWN_SECONDS
+// borne le gain, quoi que fasse le client.
+router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-orb' }), async (req, res) => {
+  const fresh = await store.setIfAbsent(`idle:orb:${req.user.id}`, ORB_COOLDOWN_SECONDS);
+  if (!fresh) return res.status(429).json({ error: 'L’orbe s’est déjà dissipé — le prochain arrive bientôt.' });
+  let reward = 0;
+  let seal = false;
+  try {
+    await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
+      const [slots, recruitCount] = await Promise.all([loadSlots(tx, user.id), tx.dojoRecruit.count({ where: { userId: user.id } })]);
+      const rate = computeTotalRate(slots, user.idleProdLevel, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idlePrestigePath, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
+      reward = Math.min(orbReward(rate), ROUTE_NUMBER_CAP - safeIdleNumber(user.essence));
+      seal = Math.random() < ORB_SEAL_CHANCE;
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          essence: { increment: reward },
+          essenceEarnedTotal: { increment: reward },
+          idleRunEssenceEarned: { increment: reward },
+          ...(seal ? { idleSeals: { increment: 1 } } : {}),
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+  void recordIdleEvent(req.user.id, 'bonus_orb', { value: reward });
+  res.json({ ok: true, reward, seal });
+});
+
+// Détail d'une licence pour l'écran collection : personnages possédés en
+// clair, les autres en silhouettes anonymes (nom masqué, façon Pokédex).
+router.get('/collection', requireAuth, requireIdleBeta, rateLimit({ max: 60, name: 'idle-collection' }), async (req, res) => {
+  const series = String(req.query.series || '').slice(0, 160);
+  if (!series) return res.status(400).json({ error: 'Licence requise' });
+  const characters = await prisma.character.findMany({
+    where: { series },
+    select: { id: true, name: true, imageUrl: true, rarity: true },
+    orderBy: [{ rarity: 'desc' }, { name: 'asc' }],
+    take: 150,
+  });
+  if (!characters.length) return res.status(404).json({ error: 'Licence inconnue' });
+  let recruitRows = [];
+  try { recruitRows = await prisma.dojoRecruit.findMany({ where: { userId: req.user.id, characterId: { in: characters.map((c) => c.id) } }, select: { characterId: true, awakened: true } }); }
+  catch { recruitRows = (await prisma.dojoRecruit.findMany({ where: { userId: req.user.id, characterId: { in: characters.map((c) => c.id) } }, select: { characterId: true } })).map((r) => ({ ...r, awakened: false })); }
+  const owned = new Map(recruitRows.map((r) => [r.characterId, r]));
+  res.json({
+    series,
+    owned: owned.size,
+    total: characters.length,
+    characters: characters.map((c) => ({
+      id: c.id,
+      rarity: c.rarity,
+      imageUrl: c.imageUrl,
+      owned: owned.has(c.id),
+      name: owned.has(c.id) ? c.name : null,
+      awakened: owned.get(c.id)?.awakened || false,
+    })),
+  });
 });
 
 // Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse

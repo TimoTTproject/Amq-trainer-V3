@@ -1701,6 +1701,15 @@
               <span><i class="fas fa-hand-fist"></i> Clic <b id="idle-combat-click">+0</b></span>
               <span><i class="fas fa-users"></i> Équipe <b id="idle-combat-team">0/s</b></span>
             </div>
+            <!-- Dock d'achats rapides : monter ses héros SANS quitter le combat
+                 (la boucle cœur d'un Clicker Heroes tient sur un seul écran). -->
+            <section class="idle-quick-buy-box" aria-label="Améliorations rapides des héros">
+              <header class="idle-quick-buy-head">
+                <span><i class="fas fa-arrow-up-right-dots"></i><span><b>Améliorations rapides</b><small>Monte tes héros sans quitter le combat · chaque palier double leur production</small></span></span>
+                <div class="idle-buy-amount" id="idle-buy-amount" role="group" aria-label="Quantité de niveaux par achat"></div>
+              </header>
+              <div class="idle-quick-buy" id="idle-quick-buy"></div>
+            </section>
             <div class="idle-next-objective" id="idle-next-objective"></div>
             <div class="idle-combat-quests" id="idle-combat-quests" aria-label="Quêtes actives"></div>
             <div class="idle-combat-log" id="idle-combat-log" aria-live="polite"></div>
@@ -1737,6 +1746,15 @@
           <div class="profile-section idle-roadmap-panel">
             <h3><i class="fas fa-route"></i> Parcours des mondes</h3>
             <div class="idle-roadmap" id="idle-roadmap"></div>
+          </div>
+
+          <!-- Collection façon Pokédex : complétion par licence, silhouettes
+               des personnages pas encore recrutés dans la modale de détail. -->
+          <div class="profile-section idle-collection-panel">
+            <h3><i class="fas fa-book-open"></i> Collection par licence</h3>
+            <p class="hint">Chaque licence complétée à 100% témoigne de ta maîtrise — les personnages manquants restent des silhouettes jusqu’à leur invocation.</p>
+            <div class="idle-collection-summary" id="idle-collection-summary"></div>
+            <div class="idle-collection" id="idle-collection"></div>
           </div>
         </section>
 
@@ -1850,6 +1868,7 @@
     <div id="idle-ranking-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Classement Anime Ascension"><div class="modal-card idle-ranking-card"><button class="modal-close" id="idle-ranking-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-ranking-star"></i> Classement Anime Ascension</h3><p class="hint">Les joueurs sont classés selon leur progression totale.</p><div class="idle-ranking-head"><span>#</span><span>Joueur</span><span>Vague</span><span>Niveau</span><span>Prestige</span></div><div id="idle-ranking-list"><p class="hint">Chargement…</p></div></div></div>
     <div id="idle-settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-settings-title"><div class="modal-card idle-settings-card"><button class="modal-close" id="idle-settings-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-settings-title"><i class="fas fa-sliders"></i> Confort de jeu</h3><label class="idle-setting-row" for="idle-volume"><span><b>Volume de l’Idle</b><small>Impacts, victoires et récompenses</small></span><input id="idle-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label class="idle-setting-toggle" for="idle-effects-reduced"><span><b>Animations et effets visuels</b><small>Affiche les impacts, mouvements, particules et célébrations</small></span><input id="idle-effects-reduced" type="checkbox" checked></label></div></div>
     <div id="idle-character-sheet" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-character-sheet-title"><div class="modal-card wide idle-character-sheet-card"><button class="modal-close" id="idle-character-sheet-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-character-sheet-body"></div></div></div>
+    <div id="idle-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-collection-title"><div class="modal-card wide idle-collection-card"><button class="modal-close" id="idle-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-collection-title"><i class="fas fa-book-open"></i> Collection</h3><p class="hint" id="idle-collection-hint"></p><div class="idle-collection-grid" id="idle-collection-grid"></div></div></div>
     <div class="idle-toasts" id="idle-toasts" aria-live="polite" aria-atomic="false"></div>
     <div id="idle-boss-reveal" class="modal-overlay hidden idle-boss-reveal" role="dialog" aria-modal="true" aria-labelledby="idle-boss-reveal-title"><div class="modal-card idle-boss-reveal-card"><button class="modal-close" id="idle-boss-reveal-close"><i class="fas fa-times"></i></button><small>VICTOIRE SUR UN GARDIEN</small><h2 id="idle-boss-reveal-title"><i class="fas fa-box-open"></i> Coffre de boss</h2><div id="idle-boss-reveal-body"></div><button class="btn-primary" id="idle-boss-reveal-continue">Continuer l’ascension</button></div></div>
     <div id="idle-class-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Personnaliser le chef d'équipe"><div class="modal-card idle-class-card"><button class="modal-close" id="idle-class-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-wand-magic-sparkles"></i> Style du chef d'équipe</h3><p class="hint">Le personnage placé dans le premier emplacement est ton chef. Personnalise son énergie, sa classe et son titre.</p><h4>Couleur d’énergie</h4><div class="idle-style-grid" id="idle-color-grid"></div><h4>Classe de combat</h4><div class="idle-class-grid" id="idle-class-grid"></div><h4>Spécialisation</h4><div class="idle-style-grid" id="idle-spec-grid"></div><h4>Aura</h4><div class="idle-style-grid" id="idle-aura-grid"></div><h4>Posture</h4><div class="idle-style-grid" id="idle-stance-grid"></div><h4>Titre</h4><div class="idle-style-grid" id="idle-title-grid"></div><div class="hidden" id="idle-hair-grid"></div><div class="hidden" id="idle-outfit-grid"></div></div></div>

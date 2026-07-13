@@ -6796,3 +6796,101 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-mission-resets{display:flex;align-items:stretch;gap:1px;background:#2a303b}.idle-mission-resets>span{display:grid;grid-template-columns:20px auto;grid-template-rows:auto auto;align-items:center;min-width:150px;padding:7px 10px;background:#10141b;text-align:left}.idle-mission-resets i{grid-row:1/3;color:#fb7185}.idle-mission-resets small{color:#8f99a7;font-size:7px;font-weight:900;letter-spacing:.08em}.idle-mission-resets b{font-size:10px;font-variant-numeric:tabular-nums}.idle-objective-title .idle-mission-resets{margin-left:auto}
 @media(max-width:760px){.idle-objective-title .idle-mission-resets{width:100%;margin:7px 0 0}.idle-mission-resets>span{min-width:0;flex:1;padding:7px}.idle-mission-resets b{font-size:9px}}
 @media(max-width:620px){.idle-stage-nav .idle-stage-current-choice{min-width:0}.idle-stage-current-choice>span{grid-template-columns:auto}.idle-stage-current-choice small{display:none}.idle-stage-current-choice em{font-size:8px!important}.idle-stage-current-choice b{font-size:16px!important}.idle-prestige-quick{padding:9px 11px}}
+
+/* ── UX idle v34 : dock d'achats rapides, orbes bonus, combo, collection, Éveillés ── */
+/* Dock d'achats rapides (écran Combat) — la boucle "tuer → monter un héros" sur un seul écran. */
+.idle-quick-buy-box{margin-top:10px;padding:11px;border:1px solid #2a303b;border-radius:13px;background:#0d1118}
+.idle-quick-buy-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.idle-quick-buy-head>span{display:flex;align-items:center;gap:9px;min-width:0}
+.idle-quick-buy-head>span>i{color:#a78bfa}
+.idle-quick-buy-head b{display:block;font-size:12px}
+.idle-quick-buy-head small{display:block;color:#8f99a7;font-size:9px}
+.idle-buy-amount{display:flex;gap:3px;padding:3px;border:1px solid #2a303b;border-radius:9px;background:#10141b}
+.idle-buy-amount button{min-height:30px!important;padding:4px 10px;border:0;border-radius:7px;background:transparent;color:#9da7b5;font-size:10px;font-weight:900;cursor:pointer}
+.idle-buy-amount button.active{background:#7c3aed;color:#fff}
+.idle-quick-buy{display:flex;flex-direction:column;gap:6px}
+.idle-quick-hero{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;padding:7px 9px;border:1px solid #232a35;border-radius:11px;background:#10141b}
+.idle-quick-hero.is-awakened{border-color:#b4830f;box-shadow:inset 0 0 18px #f59e0b14}
+.idle-quick-portrait{position:relative;width:44px;height:44px;border-radius:10px;background:#1b2230 center/cover}
+.idle-quick-portrait i{position:absolute;top:-5px;right:-5px;color:#fbbf24;font-style:normal;font-size:11px;text-shadow:0 0 8px #f59e0b}
+.idle-quick-info{min-width:0}
+.idle-quick-info b{display:block;overflow:hidden;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}
+.idle-quick-info small{display:block;color:#8f99a7;font-size:9px;font-variant-numeric:tabular-nums}
+.idle-quick-milestone{display:block;position:relative;margin-top:4px;font-style:normal}
+.idle-quick-milestone>i{display:block;height:3px;border-radius:2px;background:#232a35;overflow:hidden}
+.idle-quick-milestone>i::after{content:'';display:block;width:var(--progress,0%);height:100%;background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.idle-quick-milestone>span{display:block;margin-top:3px;color:#c9a227;font-size:8px;font-weight:800;letter-spacing:.03em}
+.idle-quick-level{display:grid;justify-items:center;min-width:76px;min-height:44px;padding:5px 10px;border:1px solid #2a303b;border-radius:10px;background:#161c26;color:#e5e9f0;cursor:pointer}
+.idle-quick-level b{font-size:12px}
+.idle-quick-level small{color:#8f99a7;font-size:9px;font-variant-numeric:tabular-nums}
+.idle-quick-level:disabled{opacity:.45;cursor:not-allowed}
+.idle-quick-more{display:flex;align-items:center;gap:10px;min-height:40px;padding:7px 11px;border:1px dashed #39424f;border-radius:11px;background:transparent;color:#9da7b5;font-size:10px;cursor:pointer}
+.idle-quick-more span{flex:1;text-align:left;font-weight:800}
+.idle-quick-more small{display:block;color:#7f8997;font-weight:600}
+/* Signal "achetable maintenant" : halo doux et vivant, façon héros levelable de Clicker Heroes. */
+.idle-affordable{border-color:#3ec98a!important;animation:idleAffordablePulse 1.9s ease-in-out infinite}
+@keyframes idleAffordablePulse{0%,100%{box-shadow:0 0 0 0 #3ec98a33}50%{box-shadow:0 0 14px 2px #3ec98a55}}
+.idle-effects-reduced .idle-affordable{animation:none;box-shadow:0 0 0 1px #3ec98a55}
+/* Pastilles d'onglets : quelque chose d'achetable / à réclamer dans cet onglet. */
+#view-idle .idle-tab{position:relative}
+.idle-tab-badge{position:absolute;top:4px;right:8px;display:grid;place-items:center;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:#e34b35;color:#fff;font-size:9px;font-weight:900;line-height:1;box-shadow:0 0 0 2px #0f1420}
+/* Orbe bonus (golden cookie) : traverse la scène, disparaît s'il n'est pas attrapé. */
+.idle-bonus-orb{position:absolute;top:var(--orb-top,30%);left:-60px;z-index:6;display:grid;place-items:center;width:52px;height:52px;border:2px solid #fbbf24;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fde68a,#f59e0b 62%,#92400e);color:#fff7e0;font-size:19px;cursor:pointer;box-shadow:0 0 18px #f59e0baa,inset 0 0 12px #fff3;animation:idleOrbTravel var(--orb-duration,12s) linear forwards,idleOrbBob 1.6s ease-in-out infinite}
+.idle-bonus-orb.is-chest{border-color:#67e8f9;background:radial-gradient(circle at 32% 30%,#a5f3fc,#0891b2 62%,#164e63);box-shadow:0 0 18px #22d3eeaa,inset 0 0 12px #fff3}
+.idle-bonus-orb:hover{filter:brightness(1.15)}
+@keyframes idleOrbTravel{from{left:-60px}to{left:calc(100% + 60px)}}
+@keyframes idleOrbBob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-14px) rotate(6deg)}}
+.idle-effects-reduced .idle-bonus-orb{animation:idleOrbTravel var(--orb-duration,12s) linear forwards}
+/* Compteur de frénésie (combo de clic, purement visuel). */
+.idle-combo-meter{position:absolute;top:12px;right:12px;z-index:5;display:grid;justify-items:center;padding:6px 12px;border:1px solid #f59e0b66;border-radius:11px;background:#180f04ee;color:#fbbf24;pointer-events:none}
+.idle-combo-meter small{font-size:7px;font-weight:900;letter-spacing:.14em}
+.idle-combo-meter b{font-size:16px;font-variant-numeric:tabular-nums}
+.idle-combo-meter[data-tier="2"]{border-color:#fb7185;color:#fda4af;background:#1c0710ee}
+.idle-combo-meter[data-tier="3"]{border-color:#c084fc;color:#e9d5ff;background:#150720ee;text-shadow:0 0 12px #a855f7}
+.idle-combo-meter.pop{animation:idleComboPop .18s ease-out}
+@keyframes idleComboPop{0%{transform:scale(1.22)}100%{transform:scale(1)}}
+/* Collection par licence (Pokédex). */
+.idle-collection-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.idle-collection-summary>span{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;align-items:center;column-gap:8px;padding:8px 12px;border:1px solid #2a303b;border-radius:11px;background:#10141b}
+.idle-collection-summary i{grid-row:1/3;color:#a78bfa}
+.idle-collection-summary b{font-size:14px;font-variant-numeric:tabular-nums}
+.idle-collection-summary small{color:#8f99a7;font-size:8px;font-weight:800;letter-spacing:.05em}
+.idle-collection{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:7px}
+.idle-collection-series{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 10px;padding:9px 12px;border:1px solid #232a35;border-radius:11px;background:#10141b;color:inherit;text-align:left;cursor:pointer}
+.idle-collection-series:hover{background:#141a24}
+.idle-collection-series.complete{border-color:#b4830f}
+.idle-collection-name b{display:block;overflow:hidden;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}
+.idle-collection-name small{color:#8f99a7;font-size:9px}
+.idle-collection-series>em{grid-column:1/3;display:block;height:4px;border-radius:2px;background:#232a35;overflow:hidden}
+.idle-collection-series>em::after{content:'';display:block;width:var(--progress,0%);height:100%;background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+.idle-collection-series.complete>em::after{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.idle-collection-series>strong{color:#a78bfa;font-size:12px;font-variant-numeric:tabular-nums}
+.idle-collection-series.complete>strong{color:#fbbf24}
+.idle-collection-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:min(58vh,520px);overflow-y:auto}
+.idle-collection-char{margin:0}
+.idle-collection-char>span{display:block;aspect-ratio:3/4;border:1px solid #2a303b;border-radius:10px;background:#151b26 center/cover}
+.idle-collection-char.missing>span{filter:grayscale(1) brightness(.22)}
+.idle-collection-char.is-awakened>span{border-color:#b4830f;box-shadow:0 0 10px #f59e0b44}
+.idle-collection-char figcaption{overflow:hidden;margin-top:4px;color:#9da7b5;font-size:8.5px;font-weight:700;text-align:center;text-overflow:ellipsis;white-space:nowrap}
+.idle-collection-char.missing figcaption{color:#57616e;letter-spacing:.2em}
+.idle-collection-char.is-awakened figcaption{color:#fbbf24}
+/* Héros Éveillés (shiny) : liseré doré partout où le héros apparaît. */
+.idle-hero.is-awakened{border-color:#b4830f!important;box-shadow:inset 0 0 26px #f59e0b12,0 0 12px #f59e0b22}
+.idle-awakened-badge{position:absolute;top:6px;left:6px;z-index:2;padding:3px 7px;border-radius:7px;background:#1c1303ee;color:#fbbf24;font-size:8px;font-weight:900;letter-spacing:.08em;text-shadow:0 0 8px #f59e0b88}
+.idle-hero-portrait{position:relative}
+.idle-roster-card.is-awakened{border-color:#b4830f}
+.idle-recruit-reveal-art.is-awakened{box-shadow:0 0 34px #f59e0b66}
+.idle-recruit-reveal-awakened{display:inline-block;margin:7px 0 2px;padding:6px 13px;border:1px solid #b4830f;border-radius:9px;background:#1c1303;color:#fbbf24;font-size:10px;font-weight:900;letter-spacing:.06em;animation:idleAffordablePulse 1.6s ease-in-out infinite}
+.reveal-awakened .idle-recruit-reveal-glow{background:radial-gradient(circle,#f59e0b55,transparent 68%)}
+/* Succès permanents : bannière du bonus cumulé. */
+.idle-achievement-bonus{display:flex;align-items:center;gap:11px;margin-bottom:8px;padding:10px 13px;border:1px solid #b4830f55;border-radius:12px;background:linear-gradient(135deg,#1c1303,#10141b)}
+.idle-achievement-bonus>i{color:#fbbf24;font-size:17px}
+.idle-achievement-bonus span{flex:1;min-width:0}
+.idle-achievement-bonus b{display:block;font-size:12px}
+.idle-achievement-bonus small{display:block;color:#9da7b5;font-size:9px}
+.idle-achievement-bonus strong{color:#fbbf24;font-size:14px;font-variant-numeric:tabular-nums}
+/* Ascension prête : le raccourci pulse pour appeler le regard. */
+.idle-prestige-quick.available{border-color:#a78bfa;animation:idlePrestigeReady 2.2s ease-in-out infinite}
+@keyframes idlePrestigeReady{0%,100%{box-shadow:0 0 0 0 #a78bfa33}50%{box-shadow:0 0 16px 3px #a78bfa55}}
+.idle-effects-reduced .idle-prestige-quick.available{animation:none;box-shadow:0 0 0 1px #a78bfa66}
+@media(max-width:700px){.idle-quick-buy-head{align-items:flex-start;flex-direction:column}.idle-buy-amount{width:100%;justify-content:space-between}.idle-quick-hero{grid-template-columns:38px 1fr auto}.idle-quick-portrait{width:38px;height:38px}.idle-collection{grid-template-columns:1fr}}

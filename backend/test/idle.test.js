@@ -133,10 +133,23 @@ test('équilibrage : les murs croissent plus vite que les récompenses et les ac
   assert.ok(slotRate('rare', 25) / slotRate('rare', 24) < 2.25);
 });
 
-test('wisdomForRunStage : exige une nouvelle run au stage 100 et récompense le push',()=>{
+test('wisdomForRunStage : exige une nouvelle run au seuil de Prestige et récompense le push',()=>{
+  assert.equal(PRESTIGE_MIN_STAGE,60); // première Retraite volontairement précoce (UX idle)
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE-1),0);
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),5);
   assert.ok(wisdomForRunStage(200)>wisdomForRunStage(100));
+});
+
+test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gardiens exposés',()=>{
+  const {achievementProdMultiplier,orbReward,AWAKENED_BONUS,AWAKENED_CHANCE}=require('../src/idle/idle');
+  assert.ok(ANCIENTS.some((a)=>a.kind==='autoClickRate'));
+  assert.ok(ANCIENTS.some((a)=>a.kind==='startStage'));
+  assert.ok(ANCIENTS.some((a)=>a.kind==='bossRewardMult'));
+  assert.equal(achievementProdMultiplier(0),1);
+  assert.equal(achievementProdMultiplier(10),1.10);
+  assert.ok(orbReward(0)>=40); // plancher : un orbe rapporte toujours quelque chose
+  assert.equal(orbReward(100),9000); // 90 s de production
+  assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 
 test('les courbes restent finies aux niveaux extrêmes', () => {

@@ -450,7 +450,12 @@ function milestoneReward(tier) {
 // multiplicateur automatique : depuis la refonte, c'est aux Ancients de
 // convertir cette Sagesse en puissance, avec de vrais choix à faire.
 const PRESTIGE_MIN_DOJO_LEVEL = 10; // conservé pour compatibilité d'affichage historique
-const PRESTIGE_MIN_STAGE = 100;
+// Abaissé de 100 à 60 : la première Retraite arrivait trop tard (plusieurs
+// jours de jeu passif) alors qu'elle est LE moment où le jeu change de nature
+// (Sagesse → Ancients). Façon Clicker Heroes : première ascension rapide,
+// les suivantes se méritent — wisdomForRunStage garde sa courbe superlinéaire,
+// simplement recalée sur ce nouveau seuil.
+const PRESTIGE_MIN_STAGE = 60;
 // Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
 // généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
 // rapporter de nul (toujours au moins 1 point).
@@ -479,6 +484,16 @@ const ANCIENTS = [
   { key: 'bourse_profonde', name: 'Bourse Profonde', icon: 'fa-vault', kind: 'offlineCapMs', effectPerLevel: 20 * 60 * 1000 },
   { key: 'oeil_recruteur', name: 'Œil du Recruteur', icon: 'fa-eye', kind: 'recruitLuck', effectPerLevel: 0.015 },
   { key: 'marche_facile', name: 'Marché Facile', icon: 'fa-hand-holding-dollar', kind: 'recruitDiscount', effectPerLevel: 0.015 },
+  // « Game-changers » façon Clicker Heroes : ils changent la façon de jouer,
+  // pas seulement un pourcentage — c'est ce qui donne envie de re-prestiger.
+  // Frappe Fantôme : `effectPerLevel` frappes automatiques/s, converties en
+  // DPS via clickYield au moment du calcul (voir autoClickDps côté routes).
+  { key: 'frappe_fantome', name: 'Frappe Fantôme', icon: 'fa-hand-sparkles', kind: 'autoClickRate', effectPerLevel: 1 },
+  // Pas du Conquérant : chaque run après Prestige démarre 5 stages plus loin
+  // (borné au meilleur stage jamais atteint — jamais de contenu sauté).
+  { key: 'pas_conquerant', name: 'Pas du Conquérant', icon: 'fa-person-hiking', kind: 'startStage', effectPerLevel: 5 },
+  // Fortune des Gardiens : +25% d'Essence sur les coffres de boss par niveau.
+  { key: 'fortune_gardiens', name: 'Fortune des Gardiens', icon: 'fa-coins', kind: 'bossRewardMult', effectPerLevel: 0.25 },
 ];
 function ancientByKey(key) {
   return ANCIENTS.find((a) => a.key === key) || null;
@@ -489,6 +504,31 @@ function ancientBonus(levelsByKey, kind) {
   return ANCIENTS
     .filter((a) => a.kind === kind)
     .reduce((sum, a) => sum + a.effectPerLevel * Math.max(0, levelsByKey.get(a.key) || 0), 0);
+}
+
+// ── Succès permanents : chaque succès COMPLÉTÉ (pas besoin de réclamer le
+// Sceau) accorde +1% de production totale, pour toujours — même mécanique que
+// Clicker Heroes, où les achievements sont un moteur de rétention discret
+// mais constant. Le multiplicateur s'applique dans computeTotalRate.
+const ACHIEVEMENT_PROD_BONUS = 0.01;
+function achievementProdMultiplier(completedCount) {
+  return 1 + Math.max(0, Math.floor(completedCount || 0)) * ACHIEVEMENT_PROD_BONUS;
+}
+
+// ── Recrues « Éveillées » (équivalent shiny) : ~2,5% des invocations sortent
+// une version dorée du héros, +10% de production personnelle permanente.
+const AWAKENED_CHANCE = 0.025;
+const AWAKENED_BONUS = 1.10;
+
+// ── Orbes bonus : un orbe cliquable traverse la scène toutes les quelques
+// minutes (équivalent golden cookie). Le serveur borne la fréquence
+// (ORB_COOLDOWN_SECONDS) et paie ORB_PRODUCTION_SECONDS de production.
+const ORB_COOLDOWN_SECONDS = 70;
+const ORB_PRODUCTION_SECONDS = 90;
+const ORB_MIN_REWARD = 40;
+const ORB_SEAL_CHANCE = 0.12;
+function orbReward(totalRate) {
+  return Math.max(ORB_MIN_REWARD, Math.round(finiteIdleNumber(Math.max(0, totalRate) * ORB_PRODUCTION_SECONDS)));
 }
 
 module.exports = {
@@ -578,4 +618,12 @@ module.exports = {
   ANCIENTS,
   ancientByKey,
   ancientBonus,
+  ACHIEVEMENT_PROD_BONUS,
+  achievementProdMultiplier,
+  AWAKENED_CHANCE,
+  AWAKENED_BONUS,
+  ORB_COOLDOWN_SECONDS,
+  ORB_PRODUCTION_SECONDS,
+  ORB_SEAL_CHANCE,
+  orbReward,
 };
