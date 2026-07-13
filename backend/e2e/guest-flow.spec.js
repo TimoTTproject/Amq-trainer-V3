@@ -1,5 +1,17 @@
 const { test, expect } = require('@playwright/test');
 
+test('le choix animations complètes prime sur la réduction de mouvement du navigateur', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const view = page.locator('#view-idle');
+  await view.evaluate((element) => element.classList.add('idle-effects-full'));
+  const fullDuration = await page.locator('.idle-summon-orb').evaluate((element) => getComputedStyle(element, '::before').animationDuration);
+  expect(fullDuration).not.toBe('0.00001s');
+  await view.evaluate((element) => element.classList.remove('idle-effects-full'));
+  const reducedDuration = await page.locator('.idle-summon-orb').evaluate((element) => getComputedStyle(element, '::before').animationDuration);
+  expect(Number.parseFloat(reducedDuration)).toBeLessThan(0.001);
+});
+
 test('la page publique expose une entrée rapide et des règles progressives', async ({ page }) => {
   await page.goto('/');
 

@@ -50,7 +50,7 @@ function idleNotify(message,type='info'){
   toast.querySelector('button').addEventListener('click',()=>toast.remove());box.appendChild(toast);setTimeout(()=>toast.remove(),4200);
 }
 function idleAnnounce(message){if(!message||message===idleLastAnnouncement)return;idleLastAnnouncement=message;const live=document.getElementById('idle-live-status');if(live)live.textContent=message;}
-function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggle=document.getElementById('idle-effects-reduced');if(toggle)toggle.checked=!!reduced;}
+function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);view?.classList.toggle('idle-effects-full',!reduced);const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggle=document.getElementById('idle-effects-reduced');if(toggle)toggle.checked=!!reduced;}
 
 function idleAddCombatLog(message,icon='fa-bolt'){
   idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
@@ -402,7 +402,7 @@ async function playIdleOnboardingTransition(state,starter,heroClass) {
   const modal=document.getElementById('idle-onboarding');
   const transition=document.getElementById('idle-onboarding-transition');
   const view=document.getElementById('view-idle');
-  const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const reducedMotion=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();
   document.getElementById('idle-onboarding-transition-image').src=starter.imageUrl||'';
   document.getElementById('idle-onboarding-transition-image').alt=starter.name||'';
   document.getElementById('idle-onboarding-transition-name').textContent=starter.name||'Ton personnage';
