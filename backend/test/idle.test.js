@@ -35,7 +35,7 @@ const {
   RECRUIT_WEIGHTS,
   rollRecruitRarity,
   recruitCost,
-  recruitGoldCost,
+  recruitEssenceCost,
   simulateCombat,
   enemyMaxHp,
   enemyReward,
@@ -125,18 +125,17 @@ test('rollRecruitRarity : aucun Commun et le bonus de chance réduit la part du 
   assert.ok(rareBoosted < rareBase);
 });
 
-test('recruitCost : croît avec le nombre déjà recruté, jamais nul ; la remise (Ancient) réduit sans jamais atteindre 0', () => {
-  assert.ok(recruitCost(0) > 0);
-  assert.ok(recruitCost(20) > recruitCost(0));
-  assert.ok(recruitCost(5, 0.5) < recruitCost(5));
-  assert.ok(recruitCost(0, 999) >= 1); // plancher, jamais gratuit même avec un bonus aberrant
+test('recruitCost : un Sceau vaut toujours exactement une invocation', () => {
+  assert.equal(recruitCost(0),1);
+  assert.equal(recruitCost(20),1);
+  assert.equal(recruitCost(999,999),1);
 });
 
-test('recruitGoldCost : démarre à 40 Golds, progresse et respecte la remise', () => {
-  assert.equal(recruitGoldCost(0), 40);
-  assert.ok(recruitGoldCost(10) > recruitGoldCost(0));
-  assert.ok(recruitGoldCost(10, 0.25) < recruitGoldCost(10));
-  assert.ok(recruitGoldCost(999) <= 1500);
+test('recruitEssenceCost : progresse avec le roster et respecte la remise', () => {
+  assert.equal(recruitEssenceCost(0),1500);
+  assert.ok(recruitEssenceCost(10)>recruitEssenceCost(0));
+  assert.ok(recruitEssenceCost(10,.25)<recruitEssenceCost(10));
+  assert.ok(recruitEssenceCost(999)<=25000000);
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {
@@ -186,6 +185,8 @@ test('rankQuestSeries : impose combat, clics et améliorations avant le niveau s
   assert.equal(started.nextLevel, 2);
   assert.equal(started.ready, false);
   assert.deepEqual(started.quests.map((q) => q.target), [23, 55, 4]);
+  assert.equal(started.quests.find((quest)=>quest.key==='clicks').name,'Frappes manuelles');
+  assert.match(started.quests.find((quest)=>quest.key==='clicks').description,/bouton Attaquer/);
   const ready = rankQuestSeries({ level:1, kills:23, clicks:55, upgrades:4 });
   assert.equal(ready.completed, 3);
   assert.equal(ready.ready, true);

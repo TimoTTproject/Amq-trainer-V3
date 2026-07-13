@@ -1,6 +1,6 @@
 // Tests de routes : /api/idle (Dojo idle/clicker) — sans BDD.
-// Le roster du Dojo reste indépendant du gacha. Les Golds peuvent uniquement
-// servir d'alternative de paiement lors d'une invocation.
+// Le roster du Dojo reste indépendant du gacha. L'Essence peut servir
+// d'alternative de paiement lors d'une invocation.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { fakePrisma, createApp } = require('./helpers/api');
@@ -11,7 +11,7 @@ const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,p
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
-  ANCIENTS, ancientCost, recruitCost, recruitGoldCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
+  ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -75,9 +75,9 @@ test('défi hebdomadaire : toutes les familles d actions sont obligatoires', () 
   assert.equal(weeklyConvergence(full,periods).completed,true);
 });
 
-test('coffres : les paliers majeurs ajoutent Golds et rareté garantie', () => {
+test('coffres : les paliers majeurs ajoutent de l Essence et une rareté garantie', () => {
   assert.equal(bossChestRewards(5).lootRarity,'legendary');
-  assert.ok(bossChestRewards(5).goldReward>0);
+  assert.ok(bossChestRewards(5).bonusEssence>0);
   assert.equal(bossChestRewards(10).lootRarity,'mythic');
 });
 
@@ -246,7 +246,7 @@ test('passage de niveau : refuse une série incomplète puis valide atomiquement
   prisma.user.findUnique = async () => user;
   let res = await app.request('/api/idle/rank/advance', { method:'POST', cookie:app.authCookie('u1'), body:{} });
   assert.equal(res.status, 400);
-  assert.match(res.json.error, /épreuves/);
+  assert.match(res.json.error, /objectifs/);
 
   user = dbUser({ idleRankLevel:1, idleRankKills:23, idleRankClicks:55, idleRankUpgrades:4, idleSeals:2 });
   prisma.user.updateMany = async ({ where, data }) => {
@@ -361,39 +361,36 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
   assert.equal(okRes.json.recruited.name, 'Nouvelle Recrue');
 });
 
-test('recruit : accepte les Golds, débite atomiquement et journalise la dépense', async () => {
-  const cost = recruitGoldCost(0);
-  let user = dbUser({ idleSeals: 0, tokens: cost });
+test('recruit : accepte l Essence et la débite atomiquement', async () => {
+  const cost = recruitEssenceCost(0);
+  let user = dbUser({ idleSeals:0,essence:cost });
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.dojoRecruit.findMany = async () => [];
-  prisma.character.findMany = async () => [{ id: 6, name: 'Invocation Gold', imageUrl: null, rarity: 'rare' }];
+  prisma.character.findMany = async () => [{ id:6,name:'Invocation Essence',imageUrl:null,rarity:'rare' }];
   prisma.dojoRecruit.create = async () => ({});
   let debit = null;
   prisma.user.updateMany = async ({ data }) => {
     debit = data;
-    user = { ...user, tokens: user.tokens - cost };
+    user = { ...user, essence:user.essence-cost };
     return { count: 1 };
   };
-  let transaction = null;
-  prisma.tokenTransaction.create = async ({ data }) => { transaction = data; return data; };
 
-  const res = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: { currency: 'gold' } });
+  const res = await app.request('/api/idle/recruit', { method:'POST',cookie:app.authCookie('u1'),body:{currency:'essence'} });
   assert.equal(res.status, 200);
-  assert.equal(res.json.payment.currency, 'gold');
+  assert.equal(res.json.payment.currency,'essence');
   assert.equal(res.json.payment.cost, cost);
-  assert.deepEqual(debit.tokens, { decrement: cost });
-  assert.deepEqual(transaction, { userId: 'u1', amount: -cost, reason: 'idle_recruit' });
-  assert.equal(res.json.recruit.goldBalance, 0);
+  assert.deepEqual(debit.essence,{decrement:cost});
+  assert.equal(res.json.recruit.essenceBalance,0);
 });
 
-test('recruit : refuse les Golds insuffisants sans consommer de Sceau', async () => {
-  const user = dbUser({ idleSeals: 99, tokens: recruitGoldCost(0) - 1 });
+test('recruit : refuse l Essence insuffisante sans consommer de Sceau', async () => {
+  const user = dbUser({idleSeals:99,essence:recruitEssenceCost(0)-1});
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
-  const res = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: { currency: 'gold' } });
+  const res = await app.request('/api/idle/recruit', {method:'POST',cookie:app.authCookie('u1'),body:{currency:'essence'}});
   assert.equal(res.status, 400);
-  assert.match(res.json.error, /Golds insuffisants/);
+  assert.match(res.json.error,/Essence insuffisante/);
   assert.equal(user.idleSeals, 99);
 });
 
