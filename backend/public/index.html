@@ -1653,12 +1653,13 @@
             <h3 class="idle-combat-title"><i class="fas fa-khanda"></i> Combat</h3>
             <nav class="idle-stage-nav" id="idle-stage-nav" aria-label="Choisir un niveau de combat">
               <button type="button" id="idle-stage-prev" title="Revenir au niveau précédent"><i class="fas fa-chevron-left"></i><span>Niveau précédent</span></button>
-              <div><small>NIVEAU DE COMBAT</small><b id="idle-stage-current">1</b><em id="idle-stage-location">Monde 1 · Vague 1/10</em></div>
+              <button type="button" class="idle-stage-current-choice" id="idle-world-current" title="Choisir rapidement un autre monde"><span><small>NIVEAU DE COMBAT</small><b id="idle-stage-current">1</b><em id="idle-stage-location">Monde 1 · Vague 1/10</em></span><i class="fas fa-chevron-down"></i></button>
               <button type="button" id="idle-stage-next" title="Aller au niveau suivant déjà débloqué"><span>Niveau suivant</span><i class="fas fa-chevron-right"></i></button>
               <button type="button" class="idle-world-open" id="idle-world-open" aria-expanded="false" aria-controls="idle-world-jump"><i class="fas fa-earth-asia"></i><span>Changer de monde</span></button>
               <button type="button" class="idle-stage-best" id="idle-stage-best"><i class="fas fa-forward-step"></i> Niveau maximum <b id="idle-stage-best-value">1</b></button>
             </nav>
             <div class="idle-world-jump hidden" id="idle-world-jump"><header><span><small>VOYAGE RAPIDE</small><b>Choisir un monde</b></span><button type="button" id="idle-world-close" aria-label="Fermer la liste des mondes"><i class="fas fa-times"></i></button></header><p>Retourne au début d’un monde découvert. Les anciens mondes passent automatiquement en mode Farm.</p><div id="idle-world-jump-list"></div></div>
+            <button type="button" class="idle-prestige-quick" id="idle-prestige-quick"><i class="fas fa-brain"></i><span><small>PROCHAINE ASCENSION</small><b>+0 Sagesse</b><em>Voir les conditions</em></span><i class="fas fa-arrow-right"></i></button>
             <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
               <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
               <div class="idle-scene-head">
