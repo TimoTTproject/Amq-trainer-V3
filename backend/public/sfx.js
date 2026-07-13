@@ -3,6 +3,8 @@
 const sfx = (function () {
   let ctx = null;
   let muted = localStorage.getItem('amq_muted') === '1';
+  let idleVolume = Math.max(0, Math.min(1, Number(localStorage.getItem('amq_idle_volume') ?? .65)));
+  let idleEffectsReduced = localStorage.getItem('amq_idle_effects_reduced') === '1';
 
   function ac() {
     if (!ctx) {
@@ -53,6 +55,16 @@ const sfx = (function () {
     lose() { seq([392, 329.63, 261.63], { type: 'triangle', step: 0.14, dur: 0.3, peak: 0.2 }); },
     levelup() { seq([523.25, 659.25, 783.99, 1046.5, 1318.5], { type: 'square', step: 0.07, dur: 0.16, peak: 0.16 }); },
     tick() { if (muted) return; tone(880, 0, 0.06, 'sine', 0.14); },
+    idleHit(critical=false) { if (muted || idleEffectsReduced) return; tone(critical?310:220,0,.055,'square',(critical?.11:.065)*idleVolume); tone(critical?820:560,.025,.07,'triangle',(critical?.08:.04)*idleVolume); },
+    idleKill() { if (muted) return; seq([330,440,660],{step:.045,dur:.11,type:'triangle',peak:.09*idleVolume}); },
+    idleWave() { if (muted) return; seq([392,523,659,784],{step:.065,dur:.16,type:'triangle',peak:.12*idleVolume}); },
+    idleBoss() { if (muted) return; seq([196,196,294],{step:.11,dur:.2,type:'sawtooth',peak:.09*idleVolume}); },
+    idleChest() { if (muted) return; seq([659,988,1319,1568],{step:.07,dur:.2,type:'sine',peak:.12*idleVolume}); },
+    idleUpgrade() { if (muted) return; seq([523,698,880],{step:.055,dur:.12,type:'triangle',peak:.08*idleVolume}); },
+    getIdleVolume() { return idleVolume; },
+    setIdleVolume(value) { idleVolume=Math.max(0,Math.min(1,Number(value)||0));localStorage.setItem('amq_idle_volume',String(idleVolume));if(idleVolume>0)tone(660,0,.08,'sine',.08*idleVolume);return idleVolume; },
+    isIdleEffectsReduced() { return idleEffectsReduced; },
+    setIdleEffectsReduced(value) { idleEffectsReduced=!!value;localStorage.setItem('amq_idle_effects_reduced',idleEffectsReduced?'1':'0');return idleEffectsReduced; },
     isMuted() { return muted; },
     toggleMute() {
       muted = !muted;

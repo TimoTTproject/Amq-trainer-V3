@@ -29,6 +29,14 @@ let idleCombatEntries = [];
 let idleItemFilter = 'all';
 let idleItemSort = 'power';
 
+function idleNotify(message,type='info'){
+  const box=document.getElementById('idle-toasts');if(!box)return;
+  const toast=document.createElement('div');toast.className=`idle-toast ${type}`;toast.setAttribute('role',type==='error'?'alert':'status');
+  toast.innerHTML=`<i class="fas ${type==='error'?'fa-triangle-exclamation':type==='success'?'fa-circle-check':'fa-circle-info'}"></i><span>${escapeHtml(String(message||''))}</span><button type="button" aria-label="Fermer"><i class="fas fa-times"></i></button>`;
+  toast.querySelector('button').addEventListener('click',()=>toast.remove());box.appendChild(toast);setTimeout(()=>toast.remove(),4200);
+}
+function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggle=document.getElementById('idle-effects-reduced');if(toggle)toggle.checked=!!reduced;}
+
 function idleAddCombatLog(message,icon='fa-bolt'){
   idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
   const box=document.getElementById('idle-combat-log');if(!box)return;
@@ -68,6 +76,7 @@ function idleFormatDuration(seconds) {
 async function openIdle() {
   showView('idle');
   document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
+  applyIdleComfortSettings();
   idleShowPanel('home');
   idleStopTicker();
   idleWelcomeChecked = false;
@@ -429,9 +438,9 @@ function renderIdleInventory(state){
   items=[...items].sort((a,b)=>idleItemSort==='recent'?new Date(b.obtainedAt)-new Date(a.obtainedAt):idleItemSort==='rarity'?(IDLE_RARITY_ORDER[b.rarity]-IDLE_RARITY_ORDER[a.rarity]):((b.effectiveBonus||b.bonus)-(a.effectiveBonus||a.bonus)));
   grid.innerHTML=items.length?items.map((item)=>{const meta=IDLE_ITEM_META[item.kind]||IDLE_ITEM_META.weapon;const equipped=item.equippedSlotIndex!==null;const defaultSlot=equipped?item.equippedSlotIndex:active[0]?.index;return `<article class="idle-item-card r-${item.rarity} ${equipped?'equipped':''}" data-item-id="${item.id}"><header>${idleItemArt(item)}<div><small>${escapeHtml(item.rarity)} · ${meta.label} · ${escapeHtml(item.sourceWorld)}</small><b>${escapeHtml(item.name)}</b></div><button data-item-lock="${item.id}" title="${item.locked?'Déverrouiller':'Verrouiller'}"><i class="fas ${item.locked?'fa-lock':'fa-lock-open'}"></i></button></header><div class="idle-item-stats"><span><small>PUISSANCE</small><b>+${Math.round(item.bonus*100)}%</b></span><span><small>${escapeHtml(item.effectLabel)}</small><b>${escapeHtml(idleItemEffect(item))}</b><em>${escapeHtml(item.effectDescription||'')}</em></span></div>${equipped?`<p class="idle-item-equipped"><i class="fas fa-user-shield"></i> Équipé sur <b>${escapeHtml(item.equippedCharacter||`héros ${item.equippedSlotIndex+1}`)}</b></p>`:active.length?`<label class="idle-item-target">Comparer avec <select data-item-target>${active.map((slot)=>`<option value="${slot.index}" ${slot.index===defaultSlot?'selected':''}>${escapeHtml(slot.character.name)}</option>`).join('')}</select></label><div data-item-comparison>${idleItemComparison(item,defaultSlot)}</div>`:'<p class="idle-item-equipped">Aucun héros actif</p>'}<footer>${equipped?`<button class="btn-secondary" data-item-unequip="${item.id}"><i class="fas fa-arrow-right-from-bracket"></i> Retirer</button>`:active.length?`<button class="btn-primary" data-item-equip="${item.id}"><i class="fas fa-shield-halved"></i> Équiper</button>`:''}<button class="btn-secondary danger" data-item-salvage="${item.id}" ${item.locked||equipped?'disabled':''}><i class="fas fa-recycle"></i> ${idleFormatNumber(item.salvageValue)}</button></footer></article>`;}).join(''):'<div class="idle-inventory-empty"><i class="fas fa-box-open"></i><b>Aucun objet dans cette catégorie</b><span>Vaincs un gardien puis ouvre son coffre pour obtenir une pièce.</span></div>';
 }
-async function equipIdleItem(itemId,slotIndex){try{renderIdleState(await api('/api/idle/equipment/equip',{method:'POST',body:JSON.stringify({itemId,slotIndex})}));idleSpawnFloat('ÉQUIPEMENT MODIFIÉ','xp');}catch(e){alert(e.message);}}
-async function unequipIdleItem(itemId){try{renderIdleState(await api('/api/idle/equipment/unequip',{method:'POST',body:JSON.stringify({itemId})}));}catch(e){alert(e.message);}}
-async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){alert(e.message);}}
+async function equipIdleItem(itemId,slotIndex){try{renderIdleState(await api('/api/idle/equipment/equip',{method:'POST',body:JSON.stringify({itemId,slotIndex})}));idleSpawnFloat('ÉQUIPEMENT MODIFIÉ','xp');}catch(e){idleNotify(e.message,'error');}}
+async function unequipIdleItem(itemId){try{renderIdleState(await api('/api/idle/equipment/unequip',{method:'POST',body:JSON.stringify({itemId})}));}catch(e){idleNotify(e.message,'error');}}
+async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){idleNotify(e.message,'error');}}
 async function salvageIdleItem(itemId){const item=idleState?.inventory?.items?.find((x)=>x.id===itemId);if(!item||!confirm(`Recycler ${item.name} contre ${idleFormatNumber(item.salvageValue)} Essence ?`))return;try{const r=await api('/api/idle/equipment/salvage',{method:'POST',body:JSON.stringify({itemId})});renderIdleState(r.state);idleSpawnFloat(`RECYCLAGE +${idleFormatNumber(r.gained)}`,'xp');}catch(e){alert(e.message);}}
 
 function renderIdleChallenges(items){const box=document.getElementById('idle-challenges');if(!box)return;box.innerHTML=items.map((c)=>`<article class="idle-challenge ${c.completed?'done':''}"><header><i class="fas ${c.icon}"></i><div><span>${escapeHtml(c.cadence)} · ${escapeHtml(c.difficulty)}</span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.description)}</small></div><strong>${c.progress}%</strong></header><div class="idle-challenge-requirements">${(c.requirements||[]).map((r)=>`<span class="${r.progress>=r.target?'done':''}"><i class="fas ${r.progress>=r.target?'fa-check':'fa-circle'}"></i><b>${escapeHtml(r.label)}</b><em>${idleFormatNumber(Math.min(r.progress,r.target))}/${idleFormatNumber(r.target)}</em></span>`).join('')}</div><div class="idle-challenge-footer"><em style="--progress:${Math.min(100,c.progress)}%"></em><button data-challenge-claim="${c.key}" ${!c.completed||c.claimed?'disabled':''}>${c.claimed?'<i class="fas fa-check"></i> Réclamé':`Réclamer +${c.reward} <i class="fas fa-ticket"></i>`}</button></div></article>`).join('');}
@@ -569,14 +578,14 @@ async function idleUseBurst(event) {
     idleSpawnFloat(`ULTIME −${idleFormatNumber(result.gained)}`, 'damage crit huge');
     idleCombatMotion('hero');
     await refreshIdleState();
-  } catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
+  } catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
   idleRenderSkillCooldown();
 }
 
 async function idleUseTeamSkill(event) {
   event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt) return;
   try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO −${idleFormatNumber(r.gained)}`, 'damage crit huge'); idleCombatMotion('team'); await refreshIdleState(); }
-  catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
+  catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
   idleRenderSkillCooldown();
 }
 
@@ -589,9 +598,9 @@ function renderIdleBossChest(chest) {
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
 function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>b.classList.toggle('active',b.dataset.battleMode===mode));}
 function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto-skills');const label=document.getElementById('idle-auto-skills-label');if(!btn||!auto)return;btn.disabled=!auto.unlocked;btn.classList.toggle('active',auto.enabled);btn.dataset.enabled=auto.enabled?'1':'0';btn.querySelector(':scope > i:last-child').className=`fas ${auto.enabled?'fa-toggle-on':'fa-toggle-off'}`;label.textContent=!auto.unlocked?`Débloquées au niveau ${auto.level}`:auto.enabled?`Simulation active · rendement moyen +${Math.round(auto.bonus*100)}%`:'Simulation inactive · cliquer pour activer';}
-async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){alert(e.message);}}
-async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){alert(e.message);}}
-async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){alert(e.message);}}
+async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
+async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
+async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));}catch(e){alert(e.message);}}
 async function saveIdlePreset(){const name=document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} sauvegardé`,'fa-floppy-disk');}catch(e){alert(e.message);}}
 async function loadIdlePreset(name){try{renderIdleState(await api('/api/idle/team-preset/load',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} chargé`,'fa-users-gear');}catch(e){alert(e.message);}}
@@ -617,8 +626,8 @@ async function chooseIdleHeroStyle(type,key) { try { const state=await api('/api
 async function chooseIdleHeroSpec(key) { try { const state=await api('/api/idle/hero-specialization',{method:'POST',body:JSON.stringify({key})}); idleState=state; openIdleClassPicker(); renderIdleState(state); } catch(e){alert(e.message);} }
 
 async function claimIdleBossChest() {
-  try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); showIdleBossReward(r); if (typeof burstConfetti === 'function') burstConfetti(55); await refreshIdleState(); }
-  catch (e) { alert(e.message); }
+  try { const r = await api('/api/idle/boss-chest', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`COFFRE +${idleFormatNumber(r.reward)}`, 'crit'); showIdleBossReward(r); if (typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();if (typeof burstConfetti === 'function') burstConfetti(55); await refreshIdleState(); }
+  catch (e) { idleNotify(e.message,'error'); }
 }
 
 function showIdleBossReward(reward) {
@@ -687,7 +696,7 @@ function renderIdleAchievements(items) {
 }
 function renderIdleGuide(guide){if(!guide)return;const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
 function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box)return;box.classList.toggle('hidden',!season?.enabled);if(!season?.enabled)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());const next=season.tiers.find((t)=>!t.completed);box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>PARCOURS MENSUEL · SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Joue de plusieurs façons pour gagner de l’activité. Chaque source est plafonnée : aucune action ne suffit seule.</span><strong>${idleFormatNumber(season.level)}${next?` / ${idleFormatNumber(next.level)}`:''} activité · ${Math.ceil(left/86400000)} jour(s) restants</strong></div></div><div class="idle-season-breakdown">${(season.breakdown||[]).map((x)=>`<span><small>${escapeHtml(x.label)}</small><b>+${idleFormatNumber(x.score)}</b><em>${idleFormatNumber(x.value)}/${idleFormatNumber(x.cap)}</em></span>`).join('')}</div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>PALIER ${t.tier}<b>${idleFormatNumber(t.level)}</b></span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)} Sceau${t.reward>1?'x':''}${t.essence?` · ${idleFormatNumber(t.essence)} Essence`:''}`}</button></div>`).join('')}</div>`;}
-async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');await refreshIdleState();}catch(e){alert(e.message);}}
+async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');await refreshIdleState();}catch(e){idleNotify(e.message,'error');}}
 function openIdleGuide(){document.getElementById('idle-guide-modal')?.classList.remove('hidden');}
 async function openIdleRanking(){const modal=document.getElementById('idle-ranking-modal');const list=document.getElementById('idle-ranking-list');modal?.classList.remove('hidden');if(list)list.innerHTML='<p class="hint">Chargement…</p>';try{const data=await api('/api/idle/leaderboard');if(list)list.innerHTML=data.players.map((p)=>`<div class="idle-ranking-row ${p.isMe?'me':''}"><strong>${p.rank<=3?['🥇','🥈','🥉'][p.rank-1]:p.rank}</strong><span class="idle-ranking-player"><span class="avatar" ${p.avatarUrl?`style="background-image:url('${escapeHtml(p.avatarUrl)}')"`:''}></span><span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.className)}</small></span></span><b>${idleFormatNumber(p.stage)}</b><b>${idleFormatNumber(p.level)}</b><b>${p.prestige}</b></div>`).join('')||'<p class="hint">Aucun joueur classé.</p>';}catch(e){if(list)list.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}}
 async function claimIdleAchievement(key) { try { const r = await api('/api/idle/achievement/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`SUCCÈS +${idleFormatNumber(r.reward)}`, 'crit'); if (typeof burstConfetti === 'function') burstConfetti(25); await refreshIdleState(); } catch (e) { alert(e.message); } }
@@ -819,7 +828,7 @@ function idleKillBurst(count, waveComplete=false) {
   }
   if(fighter){fighter.classList.remove('idle-enemy-arrival');void fighter.offsetWidth;fighter.classList.add('idle-enemy-arrival');}
   idleSpawnFloat(count > 1 ? `×${count} ENNEMIS VAINCUS` : waveComplete?'VAGUE TERMINÉE !':'ENNEMI VAINCU !', waveComplete?'crit':'kill');
-  if (typeof sfx !== 'undefined') { if(waveComplete&&sfx.levelup)sfx.levelup();else if(sfx.tick)sfx.tick(); }
+  if (typeof sfx !== 'undefined') { if(waveComplete&&sfx.idleWave)sfx.idleWave();else if(sfx.idleKill)sfx.idleKill(); }
 }
 
 // Particules ambiantes (feuilles/braises/étoiles selon le thème) — cosmétique
@@ -1170,7 +1179,7 @@ async function collectIdle() {
   // Le nombre affiché inclut déjà le pending (cf. idleTick) : sans ce petit
   // retour, cliquer « Récolter » ne « faisait » visiblement rien.
   if (pending > 0) idleSpawnFloat(`+${idleFormatNumber(pending)}`, ['xp', idleFloatTier(pending)].filter(Boolean).join(' '));
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (typeof sfx !== 'undefined' && sfx.idleHit) sfx.idleHit(false);
   const essenceEl = document.getElementById('idle-essence-val');
   if (essenceEl) idleBump(essenceEl);
 }
@@ -1193,7 +1202,7 @@ async function flushIdleClicks(){
   if(r.duplicate){await refreshIdleState();if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);return;}
   const count=r.count||batch.count;
   if(idleState)idleState.essence=r.essence;
-  if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');idleCombatMotion('hero');}
+  if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);idleCombatMotion('hero');}
   idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · ${r.kills} victoire${r.kills>1?'s':''}`:''}`,r.kills?'fa-skull':'fa-hand-fist');
   await refreshIdleState();
   if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
@@ -1216,7 +1225,7 @@ function idleClickFeedback(gained) {
     btn.appendChild(coin);
     setTimeout(() => coin.remove(), 650);
   }
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (typeof sfx !== 'undefined' && sfx.idleHit) sfx.idleHit(false);
   idleCombatMotion('hero');
 }
 
@@ -1256,7 +1265,7 @@ async function levelUpIdleSlot(slotIndex, slotEl, amount = 1) {
   }
   // Action la plus répétée du jeu (niveauter son équipe) : sans retour, chaque
   // achat passait totalement inaperçu — seul le chiffre changeait en silence.
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (typeof sfx !== 'undefined' && sfx.idleUpgrade) sfx.idleUpgrade();
   if (slotEl) idleCardBump(slotEl);
   refreshIdleState();
 }
@@ -1265,8 +1274,8 @@ async function ascendIdleSlot(slotIndex) {
   try { const state = await api('/api/idle/slot-ascend', { method: 'POST', body: JSON.stringify({ slotIndex }) }); if (typeof burstConfetti === 'function') burstConfetti(60); idleSpawnFloat('ASCENSION · PUISSANCE DOUBLÉE', 'crit'); renderIdleState(state); }
   catch (e) { alert(e.message); }
 }
-async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');idleAddCombatLog(`Optimisation : ${state.optimization.bought} niveaux achetés`,'fa-wand-magic-sparkles');if(typeof sfx!=='undefined'&&sfx.win)sfx.win();renderIdleState(state);}catch(e){alert(e.message);}finally{if(btn)btn.disabled=false;}}
-async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){alert(e.message);}}
+async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');idleAddCombatLog(`Optimisation : ${state.optimization.bought} niveaux achetés`,'fa-wand-magic-sparkles');if(typeof sfx!=='undefined'&&sfx.idleUpgrade)sfx.idleUpgrade();renderIdleState(state);}catch(e){idleNotify(e.message,'error');}finally{if(btn)btn.disabled=false;}}
+async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 
 async function buyIdleUpgrade(type, cardEl) {
   try {
@@ -1275,7 +1284,7 @@ async function buyIdleUpgrade(type, cardEl) {
     alert(e.message);
     return;
   }
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (typeof sfx !== 'undefined' && sfx.idleUpgrade) sfx.idleUpgrade();
   idleAddCombatLog(`${type==='click'?'Concentration':type==='prod'?'Discipline':'Emplacement'} amélioré`,'fa-arrow-trend-up');
   if (cardEl) idleCardBump(cardEl);
   refreshIdleState();
@@ -1290,7 +1299,7 @@ async function buyIdleAncient(key, cardEl) {
     alert(e.message);
     return;
   }
-  if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  if (typeof sfx !== 'undefined' && sfx.idleUpgrade) sfx.idleUpgrade();
   if (cardEl) idleCardBump(cardEl);
   refreshIdleState();
 }
@@ -1470,6 +1479,7 @@ function initIdleUI() {
   document.getElementById('idle-feedback-form')?.addEventListener('submit',sendIdleFeedback);
   document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-ranking-btn')?.addEventListener('click',openIdleRanking);document.getElementById('idle-ranking-close')?.addEventListener('click',()=>document.getElementById('idle-ranking-modal')?.classList.add('hidden'));document.getElementById('idle-ranking-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-ranking-modal')e.currentTarget.classList.add('hidden');});
+  const settingsModal=document.getElementById('idle-settings-modal');document.getElementById('idle-settings-btn')?.addEventListener('click',()=>{applyIdleComfortSettings();settingsModal?.classList.remove('hidden');document.getElementById('idle-volume')?.focus();});document.getElementById('idle-settings-close')?.addEventListener('click',()=>settingsModal?.classList.add('hidden'));settingsModal?.addEventListener('click',(e)=>{if(e.target===settingsModal)settingsModal.classList.add('hidden');});document.getElementById('idle-volume')?.addEventListener('input',(e)=>sfx?.setIdleVolume?.(e.target.value));document.getElementById('idle-effects-reduced')?.addEventListener('change',(e)=>{sfx?.setIdleEffectsReduced?.(e.target.checked);applyIdleComfortSettings();});
   document.getElementById('idle-season-card')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-season-tier]');if(b&&!b.disabled)claimIdleSeason(Number(b.dataset.seasonTier));});
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
   const closeBossReward=()=>document.getElementById('idle-boss-reveal')?.classList.add('hidden');
