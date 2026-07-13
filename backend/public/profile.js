@@ -10,7 +10,9 @@ let pendingAvatar; // undefined = inchangé, null = retiré, string = nouvelle d
 function setupProfileUI() {
   document.getElementById('profile-btn').addEventListener('click', openProfile);
   document.getElementById('profile-share').addEventListener('click', shareProfile);
-  // Section Compte (email / mot de passe / suppression)
+  document.getElementById('profile-edit-name-shortcut')?.addEventListener('click', focusProfileNameEditor);
+  // Section Compte (pseudo / email / mot de passe / suppression)
+  document.getElementById('account-name-btn')?.addEventListener('click', accountChangeName);
   document.getElementById('account-email-btn')?.addEventListener('click', accountChangeEmail);
   document.getElementById('account-pass-btn')?.addEventListener('click', accountChangePassword);
   document.getElementById('account-delete-btn')?.addEventListener('click', accountDelete);
@@ -52,6 +54,13 @@ function setupProfileUI() {
 }
 
 function setProfileError(msg) { document.getElementById('profile-error').textContent = msg || ''; }
+
+function focusProfileNameEditor() {
+  const editor = document.getElementById('profile-edit');
+  if (editor) editor.open = true;
+  document.getElementById('profile-name')?.focus({ preventScroll: true });
+  editor?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
 function effectiveAvatar() {
   return pendingAvatar !== undefined ? pendingAvatar : currentUser.avatarUrl;
@@ -135,6 +144,7 @@ function renderProfile(d, isSelf = true) {
   document.body.classList.toggle('profile-public', !isSelf);
   document.getElementById('profile-back').classList.toggle('hidden', isSelf);
   document.getElementById('profile-hero-name').textContent = d.user.displayName;
+  document.getElementById('profile-edit-name-shortcut')?.classList.toggle('hidden', !isSelf);
   // Avatar : en public, depuis les données du joueur consulté (avec cadre).
   if (!isSelf) {
     const av = document.getElementById('profile-avatar');
@@ -240,12 +250,35 @@ function renderAccountSection(isSelf) {
   const show = isSelf && currentUser && !currentUser.isGuest;
   box.classList.toggle('hidden', !show);
   if (!show) return;
+  document.getElementById('account-name-new').value = currentUser.displayName || '';
   document.getElementById('account-email-current').textContent = currentUser.email || '— (compte OAuth sans email)';
   document.getElementById('account-msg').textContent = '';
 }
 function accountMsg(text, ok) {
   const el = document.getElementById('account-msg');
   if (el) { el.textContent = text; el.style.color = ok ? 'var(--green)' : 'var(--red)'; }
+}
+async function accountChangeName() {
+  const input = document.getElementById('account-name-new');
+  const displayName = input.value.trim();
+  if (displayName.length < 2 || displayName.length > 30) {
+    return accountMsg('Le pseudo doit faire entre 2 et 30 caractères.', false);
+  }
+  const btn = document.getElementById('account-name-btn');
+  btn.disabled = true;
+  try {
+    const { user } = await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ displayName }) });
+    currentUser = { ...currentUser, ...user };
+    document.getElementById('profile-name').value = currentUser.displayName;
+    document.getElementById('profile-hero-name').textContent = currentUser.displayName;
+    renderHeaderUser();
+    renderProfileAvatar();
+    accountMsg('Pseudo mis à jour ✓', true);
+  } catch (e) {
+    accountMsg(e.message, false);
+  } finally {
+    btn.disabled = false;
+  }
 }
 async function accountChangeEmail() {
   const email = document.getElementById('account-email-new').value.trim();

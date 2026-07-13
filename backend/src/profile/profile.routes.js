@@ -2,6 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
+const { rateLimit } = require('../util/ratelimit');
 const { publicUser } = require('../auth/auth.routes');
 const { tierFromMmr } = require('../mp/rank');
 const { isOnline } = require('../mp/mp');
@@ -22,7 +23,7 @@ function isValidAvatar(value) {
 }
 
 // Met à jour le profil de l'utilisateur connecté
-router.patch('/', requireAuth, async (req, res) => {
+router.patch('/', requireAuth, rateLimit({ windowMs: 15 * 60 * 1000, max: 20, name: 'profile-update' }), async (req, res) => {
   const { displayName, bio, avatar } = req.body || {};
   const data = {};
 
@@ -31,6 +32,14 @@ router.patch('/', requireAuth, async (req, res) => {
     if (name.length < 2 || name.length > 30) {
       return res.status(400).json({ error: 'Le pseudo doit faire entre 2 et 30 caractères' });
     }
+    const used = await prisma.user.findFirst({
+      where: {
+        id: { not: req.user.id },
+        displayName: { equals: name, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (used) return res.status(409).json({ error: 'Ce pseudo est déjà utilisé' });
     data.displayName = name;
   }
 

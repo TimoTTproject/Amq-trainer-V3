@@ -467,6 +467,7 @@
           </div>
         </div>
         <div class="profile-banner-actions">
+          <button class="btn-secondary" id="profile-edit-name-shortcut"><i class="fas fa-pen"></i> Modifier mon pseudo</button>
           <button class="btn-primary level-claim hidden" id="profile-claim"><i class="fas fa-gift"></i> Réclamer</button>
           <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
           <button class="btn-primary hidden" id="profile-trade-btn"><i class="fas fa-right-left"></i> Proposer un échange</button>
@@ -543,6 +544,14 @@
                suppression — thème/langue/volume restent dans le menu ⋮ du header. -->
           <div class="profile-section hidden" id="profile-account">
             <h3><i class="fas fa-user-gear"></i> Compte</h3>
+            <div class="account-block account-name-block">
+              <b>Pseudo public</b>
+              <p class="hint">Visible dans les classements, le chat et sur ton profil.</p>
+              <div class="account-form">
+                <input type="text" id="account-name-new" maxlength="30" placeholder="Nouveau pseudo" autocomplete="nickname" />
+                <button class="btn-secondary" id="account-name-btn"><i class="fas fa-pen"></i> Changer le pseudo</button>
+              </div>
+            </div>
             <div class="account-block">
               <b>Adresse email</b>
               <p class="hint">Actuelle : <span id="account-email-current">—</span></p>
@@ -571,8 +580,8 @@
         </div>
       </div>
 
-      <details class="profile-edit">
-        <summary><i class="fas fa-pen"></i> Modifier mon profil</summary>
+      <details class="profile-edit" id="profile-edit">
+        <summary><i class="fas fa-pen"></i> Modifier mon pseudo, ma photo ou ma bio</summary>
         <div class="profile-avatar-edit">
           <div class="avatar-actions">
             <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>
@@ -1616,27 +1625,25 @@
       <div class="idle-content">
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel" role="tabpanel" aria-labelledby="idle-tab-home" tabindex="0">
-          <!-- Panneau Essence : theme-aware (.profile-section), regroupe les
-               tuiles de stats + la Sagesse (auparavant visible seulement
-               dans l'onglet Améliorer). -->
-          <div class="profile-section idle-currency-panel">
-            <h3><i class="fas fa-gem"></i> Ressources</h3>
+          <!-- HUD économique plat : l'Essence disponible est déjà dans
+               l'en-tête global. Cette ligne évite les cartes imbriquées. -->
+          <div class="idle-currency-panel" aria-label="Ressources et production">
             <div class="idle-currency-grid">
-              <div class="idle-currency-item">
+              <div class="idle-currency-item primary">
                 <i class="fas fa-bolt idle-currency-ico"></i>
-                <div><b><span id="idle-rate-val">0</span>/s</b><small>Équipe</small></div>
+                <div><small>Production équipe</small><b><span id="idle-rate-val">0</span><em>/s</em></b></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-fire idle-currency-ico fire"></i>
-                <div><b id="idle-xptotal-val">0</b><small>Historique</small></div>
+                <div><small>Essence totale</small><b id="idle-xptotal-val">0</b></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-brain idle-currency-ico wisdom"></i>
-                <div><b id="idle-wisdom-val">0</b><small>Sagesse</small></div>
+                <div><small>Sagesse permanente</small><b id="idle-wisdom-val">0</b></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-ticket idle-currency-ico seals"></i>
-                <div><b id="idle-seals-val">0</b><small>Sceaux</small></div>
+                <div><small>Sceaux d’invocation</small><b id="idle-seals-val">0</b></div>
               </div>
             </div>
           </div>
