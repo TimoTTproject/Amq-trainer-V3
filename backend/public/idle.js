@@ -19,6 +19,7 @@ let idleNextClickAt = 0;
 let idleSyncInFlight = false;
 let idleOnboardingClass = 'warrior';
 let idleOnboardingCharacterId = null;
+let idleOnboardingSubmitting = false;
 
 function idleFormatNumber(n) {
   n = Number(n || 0);
@@ -258,26 +259,75 @@ function renderIdleState(state) {
 function renderIdleOnboarding(onboarding) {
   const modal=document.getElementById('idle-onboarding');
   if(!modal)return;
+  if(idleOnboardingSubmitting&&!onboarding?.required)return;
   modal.classList.toggle('hidden',!onboarding?.required);
   if(!onboarding?.required)return;
+  modal.classList.remove('is-completing','is-leaving');
+  document.getElementById('idle-onboarding-selection')?.classList.remove('hidden');
+  document.getElementById('idle-onboarding-transition')?.classList.add('hidden');
   const classes=onboarding.classes||[];
   if(!classes.some((item)=>item.key===idleOnboardingClass))idleOnboardingClass=classes[0]?.key||'warrior';
   const starters=onboarding.starters||[];
   if(!starters.some((item)=>item.id===idleOnboardingCharacterId))idleOnboardingCharacterId=null;
   document.getElementById('idle-onboarding-classes').innerHTML=classes.map((item)=>`<button type="button" data-onboarding-class="${item.key}" class="${item.key===idleOnboardingClass?'selected':''}"><i class="fas ${item.icon}"></i><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.description)}</small></button>`).join('');
   document.getElementById('idle-onboarding-starters').innerHTML=starters.map((item)=>`<button type="button" data-onboarding-character="${item.id}" class="${item.id===idleOnboardingCharacterId?'selected':''}"><img src="${escapeHtml(item.imageUrl)}" alt=""><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.series||'Univers inconnu')}</small><em>${escapeHtml(item.talent?.name||'Talent unique')}</em></span></button>`).join('')||'<p class="hint">Aucun personnage Rare disponible. Contacte un administrateur.</p>';
-  document.getElementById('idle-onboarding-start').disabled=!idleOnboardingCharacterId;
+  document.getElementById('idle-onboarding-start').disabled=!idleOnboardingCharacterId||idleOnboardingSubmitting;
+}
+
+function idleOnboardingDelay(ms) {
+  return new Promise((resolve)=>setTimeout(resolve,ms));
+}
+
+async function playIdleOnboardingTransition(state,starter,heroClass) {
+  const modal=document.getElementById('idle-onboarding');
+  const transition=document.getElementById('idle-onboarding-transition');
+  const view=document.getElementById('view-idle');
+  const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById('idle-onboarding-transition-image').src=starter.imageUrl||'';
+  document.getElementById('idle-onboarding-transition-image').alt=starter.name||'';
+  document.getElementById('idle-onboarding-transition-name').textContent=starter.name||'Ton personnage';
+  document.getElementById('idle-onboarding-transition-class').textContent=heroClass.name||'Héros';
+  document.getElementById('idle-onboarding-transition-icon').className=`fas ${heroClass.icon||'fa-shield-halved'}`;
+  transition.classList.remove('hidden');
+  modal.classList.add('is-completing');
+  renderIdleState(state);
+  await idleOnboardingDelay(reducedMotion?40:1350);
+  view?.classList.add('idle-entering');
+  modal.classList.add('is-leaving');
+  await idleOnboardingDelay(reducedMotion?40:420);
+  modal.classList.add('hidden');
+  modal.classList.remove('is-completing','is-leaving');
+  transition.classList.add('hidden');
+  idleOnboardingSubmitting=false;
+  window.setTimeout(()=>view?.classList.remove('idle-entering'),reducedMotion?20:650);
+  window.setTimeout(()=>{
+    idleCombatMotion('team');
+    idleSpawnFloat(`${starter.name} rejoint l’équipe !`,'crit');
+  },reducedMotion?30:220);
 }
 
 async function completeIdleOnboarding() {
-  if(!idleOnboardingCharacterId)return;
+  if(!idleOnboardingCharacterId||idleOnboardingSubmitting)return;
   const button=document.getElementById('idle-onboarding-start');
   const error=document.getElementById('idle-onboarding-error');
-  button.disabled=true; error.textContent='Création de ton équipe…';
+  const onboarding=idleState?.onboarding;
+  const starter=onboarding?.starters?.find((item)=>item.id===idleOnboardingCharacterId);
+  const heroClass=onboarding?.classes?.find((item)=>item.key===idleOnboardingClass);
+  if(!starter||!heroClass)return;
+  idleOnboardingSubmitting=true;
+  button.disabled=true;
+  button.innerHTML='<i class="fas fa-spinner fa-spin"></i> Création de l’équipe…';
+  error.textContent='Sauvegarde de tes choix…';
   try{
     const state=await api('/api/idle/onboarding',{method:'POST',body:JSON.stringify({classKey:idleOnboardingClass,characterId:idleOnboardingCharacterId})});
-    error.textContent=''; renderIdleState(state);
-  }catch(e){error.textContent=e.message;button.disabled=false;}
+    error.textContent='';
+    await playIdleOnboardingTransition(state,starter,heroClass);
+  }catch(e){
+    idleOnboardingSubmitting=false;
+    error.textContent=e.message;
+    button.disabled=false;
+    button.innerHTML='<i class="fas fa-play"></i> Réessayer';
+  }
 }
 
 const IDLE_ROLES = [
@@ -1240,6 +1290,7 @@ function initIdleUI() {
     if (card) pickIdleCharacter(Number(card.dataset.cid));
   });
   document.getElementById('idle-onboarding')?.addEventListener('click',(e)=>{
+    if(idleOnboardingSubmitting)return;
     const classButton=e.target.closest('[data-onboarding-class]');
     if(classButton){idleOnboardingClass=classButton.dataset.onboardingClass;return renderIdleOnboarding(idleState?.onboarding);}
     const characterButton=e.target.closest('[data-onboarding-character]');
