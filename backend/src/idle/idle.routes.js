@@ -1259,29 +1259,31 @@ router.post('/slot-ascend', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 });
 
 router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
-  let bought=0, spent=0;
+  let optimization={changed:0,beforeRate:0,afterRate:0,gainPercent:0,selected:[]};
   try {
     await withSettle(req.user.id,async(tx,user,levels)=>{
-      const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});let prodLevel=user.idleProdLevel||0;let prodBought=0;
-      if(!slots.some((slot)=>slot.character))throw new IdleError(400,'Aucun héros actif');
-      let balance=user.essence;
-      for(let step=0;step<500;step++){
-        let best=null;const current=computeTotalRate(slots,prodLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);
-        for(const slot of slots){
-          if(!slot.character)continue;const level=slot.level||1;const cost=charLevelUpCost(slot.character.rarity,level);slot.level=level+1;const gain=computeTotalRate(slots,prodLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath)-current;slot.level=level;
-          const roi=gain/Math.max(1,cost);
-          if(!best||roi>best.roi)best={kind:'hero',slot,cost,roi};
-        }
-        if(prodLevel<PROD_LEVEL_MAX){const cost=prodUpgradeCost(prodLevel);const gain=computeTotalRate(slots,prodLevel+1,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath)-current;const roi=gain/Math.max(1,cost);if(!best||roi>best.roi)best={kind:'prod',cost,roi};}
-        if(!best||best.cost>balance)break;
-        balance-=best.cost;spent+=best.cost;bought++;
-        if(best.kind==='prod'){prodLevel++;prodBought++;}else{best.slot.level=(best.slot.level||1)+1;await tx.idleSlot.update({where:{id:best.slot.id},data:{level:{increment:1}}});await tx.dojoRecruit.update({where:{userId_characterId:{userId:user.id,characterId:best.slot.characterId}},data:{trainingLevel:{increment:1}}});}
+      const [loadedSlots,recruits]=await Promise.all([loadSlots(tx,user.id),tx.dojoRecruit.findMany({where:{userId:user.id},include:{character:{select:{id:true,name:true,imageUrl:true,rarity:true,series:true}}}})]);
+      if(!recruits.length)throw new IdleError(400,'Aucun héros recruté');
+      const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
+      const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,equipments:[],items:[]});
+      const rateFor=(picks)=>computeTotalRate(slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}:{...slot,characterId:null,character:null,level:1,ascension:0};}),user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath);
+      const currentPicks=slots.map((slot)=>recruits.find((recruit)=>recruit.characterId===slot.characterId)||null);
+      const beforeRate=rateFor(currentPicks);const teamSize=Math.min(unlocked,recruits.length);
+      let beam=[{picks:[],used:new Set(),score:0}];
+      for(let index=0;index<teamSize;index++){
+        const next=[];
+        for(const state of beam)for(const recruit of recruits){if(state.used.has(recruit.characterId))continue;const picks=[...state.picks,recruit];next.push({picks,used:new Set([...state.used,recruit.characterId]),score:rateFor(picks)});}
+        next.sort((a,b)=>b.score-a.score);beam=next.slice(0,40);
       }
-      if(!bought)throw new IdleError(400,'Essence insuffisante pour un niveau');
-      await tx.user.update({where:{id:user.id},data:{essence:{decrement:spent},...(prodBought?{idleProdLevel:{increment:prodBought}}:{})}});
+      const selected=beam[0]?.picks;if(!selected)throw new IdleError(400,'Composition impossible');
+      const changed=slots.reduce((total,slot,index)=>total+(slot.characterId!==(selected[index]?.characterId||null)?1:0),0);
+      await tx.idleSlot.updateMany({where:{userId:user.id,slotIndex:{lt:unlocked}},data:{characterId:null,assignedAt:null}});
+      for(let slotIndex=0;slotIndex<selected.length;slotIndex++){const recruit=selected[slotIndex];await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0},create:{userId:user.id,slotIndex,characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}});}
+      const selectedIds=new Set(selected.map((recruit)=>recruit.characterId));if(!selectedIds.has(user.idleLeaderCharacterId))await tx.user.update({where:{id:user.id},data:{idleLeaderCharacterId:selected[0]?.characterId||null}});
+      const afterRate=rateFor(selected);optimization={changed,beforeRate,afterRate,gainPercent:beforeRate>0?Math.max(0,Math.round((afterRate/beforeRate-1)*1000)/10):0,selected:selected.map((recruit)=>recruit.character.name)};
     });
-    await incrementIdleCounter(req.user.id,'upgrade',bought);
-    res.json({...(await buildState(req.user.id)),optimization:{bought,spent}});
+    void recordIdleEvent(req.user.id,'team_optimize',{changed:optimization.changed,gainPercent:optimization.gainPercent});
+    res.json({...(await buildState(req.user.id)),optimization});
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
