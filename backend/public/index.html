@@ -1717,6 +1717,19 @@
         </div>
       </div>
     </div>
+    <div id="idle-onboarding" class="modal-overlay hidden idle-onboarding" role="dialog" aria-modal="true" aria-labelledby="idle-onboarding-title">
+      <div class="modal-card wide idle-onboarding-card">
+        <div class="idle-onboarding-kicker">NOUVELLE AVENTURE</div>
+        <h2 id="idle-onboarding-title">Crée ton équipe de départ</h2>
+        <p>Choisis le style de ton héros puis ton premier compagnon. Ce personnage Rare est offert et rejoint immédiatement ton équipe.</p>
+        <h3>1. Ta classe</h3>
+        <div id="idle-onboarding-classes" class="idle-onboarding-classes"></div>
+        <h3>2. Ton personnage de départ</h3>
+        <div id="idle-onboarding-starters" class="idle-onboarding-starters"></div>
+        <p id="idle-onboarding-error" class="gacha-msg"></p>
+        <button id="idle-onboarding-start" class="btn-primary btn-lg" disabled><i class="fas fa-play"></i> Commencer l’aventure</button>
+      </div>
+    </div>
     <div id="idle-guide-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Guide Anime Ascension"><div class="modal-card idle-guide-card"><button class="modal-close" id="idle-guide-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-compass"></i> Guide Anime Ascension</h3><p class="hint">Suis ces étapes pour comprendre les systèmes essentiels.</p><div class="idle-guide-progress"><span id="idle-guide-progress-text">0/6</span><em id="idle-guide-progress-bar"></em></div><div id="idle-guide-list"></div></div></div>
     <div id="idle-ranking-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Classement Anime Ascension"><div class="modal-card idle-ranking-card"><button class="modal-close" id="idle-ranking-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-ranking-star"></i> Classement Anime Ascension</h3><p class="hint">Les joueurs sont classés selon leur progression totale.</p><div class="idle-ranking-head"><span>#</span><span>Joueur</span><span>Vague</span><span>Niveau</span><span>Prestige</span></div><div id="idle-ranking-list"><p class="hint">Chargement…</p></div></div></div>
     <div id="idle-class-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Personnaliser le héros"><div class="modal-card idle-class-card"><button class="modal-close" id="idle-class-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-wand-sparkles"></i> Personnaliser mon héros</h3><p class="hint">Crée ton apparence puis choisis ta classe. De nouveaux éléments se débloquent avec le niveau d’Anime Ascension.</p><h4>Coiffure</h4><div class="idle-style-grid" id="idle-hair-grid"></div><h4>Tenue</h4><div class="idle-style-grid" id="idle-outfit-grid"></div><h4>Couleur d’énergie</h4><div class="idle-style-grid" id="idle-color-grid"></div><h4>Classe de combat</h4><div class="idle-class-grid" id="idle-class-grid"></div><h4>Spécialisation</h4><div class="idle-style-grid" id="idle-spec-grid"></div><h4>Aura</h4><div class="idle-style-grid" id="idle-aura-grid"></div><h4>Posture</h4><div class="idle-style-grid" id="idle-stance-grid"></div><h4>Titre</h4><div class="idle-style-grid" id="idle-title-grid"></div></div></div>

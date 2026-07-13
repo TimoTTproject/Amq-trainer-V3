@@ -1188,6 +1188,23 @@ select.album-form-control {
   }
 }
 
+.idle-onboarding{z-index:12000;background:rgba(5,7,14,.94);backdrop-filter:blur(12px)}
+.idle-onboarding-card{max-width:920px;text-align:center;border:1px solid rgba(255,184,77,.35)}
+.idle-onboarding-kicker{font:800 12px/1 Manrope,sans-serif;letter-spacing:.18em;color:#ffb84d}
+.idle-onboarding-card>p{color:var(--muted);max-width:680px;margin:8px auto 22px}
+.idle-onboarding-card h3{text-align:left;margin:20px 0 10px}
+.idle-onboarding-classes{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+.idle-onboarding-classes button,.idle-onboarding-starters button{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:14px;cursor:pointer;transition:.16s ease}
+.idle-onboarding-classes button{padding:14px 8px;display:grid;gap:6px;place-items:center}
+.idle-onboarding-classes i{font-size:24px;color:#ffb84d}.idle-onboarding-classes small{font-size:11px;color:var(--muted)}
+.idle-onboarding-starters{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.idle-onboarding-starters button{padding:8px;display:flex;align-items:center;text-align:left;gap:10px}
+.idle-onboarding-starters img{width:58px;height:74px;object-fit:cover;border-radius:9px}
+.idle-onboarding-starters span{display:grid;gap:2px}.idle-onboarding-starters small{color:var(--muted);font-size:11px}.idle-onboarding-starters em{color:#ffb84d;font-size:11px;font-style:normal}
+.idle-onboarding-classes button.selected,.idle-onboarding-starters button.selected{border-color:#ffb84d;background:rgba(255,184,77,.12);box-shadow:0 0 0 2px rgba(255,184,77,.16)}
+.idle-onboarding-card>.btn-primary{margin-top:18px;min-width:260px}
+@media(max-width:700px){.idle-onboarding-card{max-height:92vh;overflow:auto}.idle-onboarding-classes{grid-template-columns:repeat(2,1fr)}.idle-onboarding-starters{grid-template-columns:1fr}.idle-onboarding-starters img{width:52px;height:64px}}
+
 /* ── Profil : section Compte ── */
 .account-block { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .account-block:last-of-type { border-bottom: none; }

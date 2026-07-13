@@ -17,6 +17,8 @@ let idleBurstReadyAt = 0;
 let idleTeamSkillReadyAt = 0;
 let idleNextClickAt = 0;
 let idleSyncInFlight = false;
+let idleOnboardingClass = 'warrior';
+let idleOnboardingCharacterId = null;
 
 function idleFormatNumber(n) {
   n = Number(n || 0);
@@ -202,6 +204,7 @@ function renderIdleState(state) {
   const prev = idleState;
   idleState = state;
   idleFetchedAt = Date.now();
+  renderIdleOnboarding(state.onboarding);
   const essenceEl = document.getElementById('idle-essence-val');
   essenceEl.textContent = idleFormatNumber(state.essence + state.pendingEssence);
   if (prev && state.essence > prev.essence) idleBump(essenceEl);
@@ -209,7 +212,7 @@ function renderIdleState(state) {
   document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `+${idleFormatNumber(state.pendingEssence)}` : '0';
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-coins"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en attente.</b> Encaisse-la maintenant dans ton solde.` : '<i class="fas fa-check"></i> Tous les gains automatiques sont encaissés. Ton équipe continue à produire.';
-  document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.yield)} dégâts`;
+  document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.damage ?? state.click.yield)} dégâts`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleMissions(state.missions || []);
@@ -232,7 +235,7 @@ function renderIdleState(state) {
   const killsEl = document.getElementById('idle-kills-val');
   if (killsEl) killsEl.textContent = idleFormatNumber(state.battle.kills);
   const combatClick = document.getElementById('idle-combat-click');
-  if (combatClick) combatClick.textContent = `+${idleFormatNumber(state.click.yield)}`;
+  if (combatClick) combatClick.textContent = `+${idleFormatNumber(state.click.damage ?? state.click.yield)}`;
   const combatTeam = document.getElementById('idle-combat-team');
   if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
   renderIdleDecor(state.dojo, prev?.dojo);
@@ -250,6 +253,31 @@ function renderIdleState(state) {
   renderIdleAncients(state.ancients);
   renderIdleRecruit(state.recruit, state.essence);
   renderIdleRecruitHistory(state.recruitHistory || []);
+}
+
+function renderIdleOnboarding(onboarding) {
+  const modal=document.getElementById('idle-onboarding');
+  if(!modal)return;
+  modal.classList.toggle('hidden',!onboarding?.required);
+  if(!onboarding?.required)return;
+  const classes=onboarding.classes||[];
+  if(!classes.some((item)=>item.key===idleOnboardingClass))idleOnboardingClass=classes[0]?.key||'warrior';
+  const starters=onboarding.starters||[];
+  if(!starters.some((item)=>item.id===idleOnboardingCharacterId))idleOnboardingCharacterId=null;
+  document.getElementById('idle-onboarding-classes').innerHTML=classes.map((item)=>`<button type="button" data-onboarding-class="${item.key}" class="${item.key===idleOnboardingClass?'selected':''}"><i class="fas ${item.icon}"></i><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.description)}</small></button>`).join('');
+  document.getElementById('idle-onboarding-starters').innerHTML=starters.map((item)=>`<button type="button" data-onboarding-character="${item.id}" class="${item.id===idleOnboardingCharacterId?'selected':''}"><img src="${escapeHtml(item.imageUrl)}" alt=""><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.series||'Univers inconnu')}</small><em>${escapeHtml(item.talent?.name||'Talent unique')}</em></span></button>`).join('')||'<p class="hint">Aucun personnage Rare disponible. Contacte un administrateur.</p>';
+  document.getElementById('idle-onboarding-start').disabled=!idleOnboardingCharacterId;
+}
+
+async function completeIdleOnboarding() {
+  if(!idleOnboardingCharacterId)return;
+  const button=document.getElementById('idle-onboarding-start');
+  const error=document.getElementById('idle-onboarding-error');
+  button.disabled=true; error.textContent='Création de ton équipe…';
+  try{
+    const state=await api('/api/idle/onboarding',{method:'POST',body:JSON.stringify({classKey:idleOnboardingClass,characterId:idleOnboardingCharacterId})});
+    error.textContent=''; renderIdleState(state);
+  }catch(e){error.textContent=e.message;button.disabled=false;}
 }
 
 const IDLE_ROLES = [
@@ -316,7 +344,7 @@ function renderIdleMainHero(state) {
   if (name) name.textContent = currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
-  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.yield)} puissance`;
+  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance`;
 }
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
@@ -859,7 +887,7 @@ function renderIdleUpgrades(state) {
     },
     {
       type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost,
-      desc: `Clic manuel : +${state.click.yield} essence`,
+      desc: `Dégâts réels par clic : ${state.click.damage ?? state.click.yield}`,
     },
     {
       type: 'slot', icon: 'fa-square-plus', title: 'Nouvel emplacement', level: state.slotsUnlocked, maxed: state.slotsUnlocked >= state.maxSlots, cost: nextSlotCost,
@@ -906,7 +934,7 @@ async function clickIdle() {
   idleNextClickAt = now + 110;
   // Retour immédiat : l'animation part au pointer-down, sans attendre le
   // réseau. Le serveur reste autoritaire pour le solde et l'anti-spam.
-  const predicted = idleState?.click?.yield || 1;
+  const predicted = idleState?.click?.damage || idleState?.click?.yield || 1;
   idleClickFeedback(predicted);
   idleSpawnFloat(`-${idleFormatNumber(predicted)} PV`, idleFloatTier(predicted));
   let r;
@@ -1210,6 +1238,13 @@ function initIdleUI() {
   document.getElementById('idle-picker-list')?.addEventListener('click', (e) => {
     const card = e.target.closest('[data-cid]');
     if (card) pickIdleCharacter(Number(card.dataset.cid));
+  });
+  document.getElementById('idle-onboarding')?.addEventListener('click',(e)=>{
+    const classButton=e.target.closest('[data-onboarding-class]');
+    if(classButton){idleOnboardingClass=classButton.dataset.onboardingClass;return renderIdleOnboarding(idleState?.onboarding);}
+    const characterButton=e.target.closest('[data-onboarding-character]');
+    if(characterButton){idleOnboardingCharacterId=Number(characterButton.dataset.onboardingCharacter);return renderIdleOnboarding(idleState?.onboarding);}
+    if(e.target.closest('#idle-onboarding-start'))completeIdleOnboarding();
   });
   document.getElementById('idle-top-recruit-btn')?.addEventListener('click', recruitIdle);
   document.getElementById('idle-recruit-btn')?.addEventListener('click', recruitIdle);

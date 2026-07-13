@@ -382,10 +382,16 @@ async function buildState(userId) {
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleOnboardingComplete:true,
     },
   });
   if (!user) return null;
+  const starterChoices = user.idleOnboardingComplete ? [] : await prisma.character.findMany({
+    where: { rarity: 'rare', imageUrl: { not: null } },
+    select: { id:true, name:true, imageUrl:true, rarity:true, series:true },
+    orderBy: { id:'asc' },
+    take: 6,
+  });
   const [slots, recruitCount, ancientLevelsByKey] = await Promise.all([
     loadSlots(prisma, userId),
     prisma.dojoRecruit.count({ where: { userId } }),
@@ -456,6 +462,9 @@ async function buildState(userId) {
   // gagnée à vie) mais avec une courbe bien plus douce, pour des kills toutes
   // les quelques secondes façon Clicker Heroes (cf. commentaire dans idle.js).
   const stage = combatPreview.stage;
+  const clickBase = clickYield(user.idleClickLevel, clickAncientBonus);
+  const clickMechanic = bossMechanicForStage(stage);
+  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * (clickMechanic?.clickMultiplier||1)));
   const worldIndex=Math.min(DOJO_DECOR.length-1,Math.floor((stage-1)/100));
   const combatWorld={index:worldIndex+1,name:DOJO_DECOR[worldIndex].name,theme:DOJO_DECOR[worldIndex].theme,startStage:worldIndex*100+1,endStage:(worldIndex+1)*100};
   const maxEnemyHp = enemyMaxHp(stage);
@@ -506,6 +515,11 @@ async function buildState(userId) {
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     collection:{recruits:recruitCount,masteries,worldsDiscovered:DOJO_DECOR.filter((_,i)=>(user.idleBestStage||1)>=i*100+1).length},
     automation:{speed:user.idleBattleSpeed||1,mode:user.idleBattleMode||'progress',autoSkills:!!user.idleAutoSkills},
+    onboarding:{
+      required:!user.idleOnboardingComplete,
+      classes:Object.entries(HERO_CLASSES).map(([key,value])=>({key,name:value.name,icon:value.icon,description:value.description})),
+      starters:starterChoices.map((character)=>({...character,talent:characterTalent(character.id),baseRate:slotRate(character.rarity,1)})),
+    },
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
@@ -555,7 +569,8 @@ async function buildState(userId) {
     },
     click: {
       level: user.idleClickLevel,
-      yield: clickYield(user.idleClickLevel, clickAncientBonus),
+      yield: clickBase,
+      damage: clickDamage,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
     },
@@ -611,6 +626,31 @@ router.get('/state', requireAuth, requireIdleBeta, async (req, res) => {
   const state = await buildState(req.user.id);
   if (!state) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(state);
+});
+
+router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, name:'idle-onboarding' }), async(req,res)=>{
+  const classKey=String(req.body?.classKey||'');
+  const characterId=Number(req.body?.characterId);
+  if(!HERO_CLASSES[classKey])return res.status(400).json({error:'Classe invalide'});
+  if(!Number.isInteger(characterId))return res.status(400).json({error:'Personnage invalide'});
+  const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleOnboardingComplete:true}});
+  if(!user)return res.status(404).json({error:'Compte introuvable'});
+  if(user.idleOnboardingComplete)return res.status(409).json({error:'Ton aventure a déjà commencé'});
+  const character=await prisma.character.findFirst({where:{id:characterId,rarity:'rare',imageUrl:{not:null}},select:{id:true}});
+  if(!character)return res.status(400).json({error:'Ce personnage de départ n’est pas disponible'});
+  // Opérations idempotentes : le marqueur est écrit en dernier. Une coupure
+  // réseau peut donc être rejouée sans doublon ni perte de starter.
+  await prisma.dojoRecruit.upsert({
+    where:{userId_characterId:{userId:req.user.id,characterId}},
+    update:{},create:{userId:req.user.id,characterId},
+  });
+  await prisma.idleSlot.upsert({
+    where:{userId_slotIndex:{userId:req.user.id,slotIndex:0}},
+    update:{characterId,assignedAt:new Date(),level:1,ascension:0},
+    create:{userId:req.user.id,slotIndex:0,characterId,assignedAt:new Date(),level:1,ascension:0},
+  });
+  await prisma.user.update({where:{id:req.user.id},data:{idleHeroClass:classKey,idleHeroSpec:'none',idleHeroClassChangedAt:null,idleOnboardingComplete:true}});
+  res.json(await buildState(req.user.id));
 });
 
 router.get('/leaderboard', requireAuth, requireIdleBeta, async(req,res)=>{
