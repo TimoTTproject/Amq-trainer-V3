@@ -400,9 +400,13 @@ function renderIdleRoadmap(codex,battle) {
       <span class="idle-roadmap-level">Vague ${idleFormatNumber(tier.level)}</span>
     </div>`;
   }).join('');
-  // Centre la frise sur le palier courant plutôt que de la laisser au début.
+  // Centre uniquement le défilement HORIZONTAL de la frise. scrollIntoView()
+  // déplaçait aussi la page entière vers le bas après chaque achat/rendu.
   const current = box.querySelector('.idle-roadmap-step.current');
-  if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
+  if (current && box.dataset.centeredWorld !== String(currentIndex)) {
+    box.scrollLeft = Math.max(0, current.offsetLeft - (box.clientWidth - current.clientWidth) / 2);
+    box.dataset.centeredWorld = String(currentIndex);
+  }
 }
 
 // Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),
