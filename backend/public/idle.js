@@ -355,6 +355,8 @@ function renderIdleState(state) {
   if (combatClick) combatClick.textContent = `+${idleFormatNumber(state.click.damage ?? state.click.yield)}`;
   const combatTeam = document.getElementById('idle-combat-team');
   if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
+  const primaryDps = document.getElementById('idle-primary-dps');
+  if (primaryDps) primaryDps.textContent = idleFormatNumber(state.totalRate);
   renderIdleDecor(state.dojo, prev?.dojo, state.battle, prev?.battle);
   renderIdleBattle(state.battle, state.dojo, prev?.battle);
   renderIdleBattleSpeed(state.battle?.speed);
