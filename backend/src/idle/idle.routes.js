@@ -424,6 +424,9 @@ const FORMATIONS={
   fortress:{name:'Forteresse',description:'Associe une ligne de défense et un soutien.',bonusPercent:20,requirements:[{roles:['tank'],count:1,label:'Tank'},{roles:['support'],count:1,label:'Support'}],bonus:(roles)=>roles.includes('tank')&&roles.includes('support')?1.2:1},
   industry:{name:'Logistique',description:'Associe production et soutien.',bonusPercent:18,requirements:[{roles:['producteur'],count:1,label:'Producteur'},{roles:['support'],count:1,label:'Support'}],bonus:(roles)=>roles.includes('producteur')&&roles.includes('support')?1.18:1},
 };
+const ULTIMATE_COOLDOWN_MS=90000;
+const TEAM_COMBO_COOLDOWN_MS=150000;
+function activeSkillCooldown(baseMs,supportCount){return Math.round(baseMs*(1-Math.min(.3,supportCount*.1)));}
 const PRESTIGE_PATHS={balanced:{name:'Voie de l’Équilibre',prod:1,click:1},fist:{name:'Voie du Poing',prod:1,click:1.25},army:{name:'Voie de l’Armée',prod:1.2,click:1},time:{name:'Voie du Temps',prod:1.1,click:1.1}};
 function characterCombatSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Ruée',description:'Renforce les formations d’assaut.'},support:{name:'Ralliement',description:'Active les formations combinées.'},tank:{name:'Rempart',description:'Stabilise les combats de boss.'},assassin:{name:'Exécution',description:'Excellent contre les ennemis affaiblis.'},producteur:{name:'Logistique',description:'Améliore le rendement hors combat.'}}[role];}
 const HERO_STYLES = {
@@ -894,7 +897,7 @@ async function buildState(userId) {
       speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
       mode: user.idleBattleMode||'progress',
       autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=50,level:50,bonus:.15},
-      skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5},
+      skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000)},
     },
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w,i) => ({ name: w.name, level:i*10+1, discovered:Math.max(user.idleBestStage||1,stage)>=i*10+1 })) },
@@ -1444,8 +1447,8 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
 });
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
-  let gained=0;let readyAt;let cooldownMs=30000;let killed=false,bossKilled=false;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=Math.round(30000*(1-Math.min(.3,supportCount*.1)));const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst'));({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  let gained=0;let readyAt;let cooldownMs=ULTIMATE_COOLDOWN_MS;let killed=false,bossKilled=false;
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount);const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst'));({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void incrementIdleCounter(req.user.id,'skill',1);
   if(killed)await incrementIdleCounter(req.user.id,'kill',1);
   if(bossKilled)await incrementIdleCounter(req.user.id,'boss_kill',1);
@@ -1453,7 +1456,7 @@ router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 
 });
 
 router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
-  let gained=0,uniqueRoles=0,cooldownMs=60000,killed=false,bossKilled=false;
+  let gained=0,uniqueRoles=0,cooldownMs=TEAM_COMBO_COOLDOWN_MS,killed=false,bossKilled=false;
   try {
     await withSettle(req.user.id,async(tx,user,levels)=>{
       if(user.idleTeamReadyAt&&new Date(user.idleTeamReadyAt)>new Date())throw new IdleError(429,'Combo encore en recharge');
@@ -1464,7 +1467,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
-      cooldownMs=Math.round(60000*(1-Math.min(.3,roles.filter((role)=>role==='support').length*.1)));
+      cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length);
       await tx.user.update({where:{id:user.id},data:{idleTeamReadyAt:new Date(Date.now()+cooldownMs),idleBossProgress:progress}});
       gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(campaignForStage(user.idleStage||1).modifier?.team||1)*multiplier*itemActionBonus(slots,'team')));
       ({killed,bossKilled}=await applyActiveDamage(tx,user,gained));
