@@ -114,8 +114,11 @@ function idleSpawnFloat(text, cls) {
   const f = document.createElement('span');
   f.className = 'idle-float' + (cls ? ' ' + cls : '');
   f.textContent = text;
-  f.style.left = `${Math.round(12 + Math.random() * 60)}%`;
-  f.style.top = `${Math.round(35 + Math.random() * 30)}%`;
+  const floatClasses = String(cls || '').split(' ');
+  const isDamage = floatClasses.includes('damage') || floatClasses.includes('kill');
+  // Les dégâts apparaissent sur l'ennemi, pas aléatoirement dans tout le décor.
+  f.style.left = isDamage ? `${Math.round(66 + Math.random() * 12)}%` : `${Math.round(12 + Math.random() * 60)}%`;
+  f.style.top = isDamage ? `${Math.round(36 + Math.random() * 18)}%` : `${Math.round(35 + Math.random() * 30)}%`;
   box.appendChild(f);
   setTimeout(() => f.remove(), 1400);
 }
@@ -174,7 +177,7 @@ function idleTick() {
   idleTickCount++;
   const passiveGain = idleState.totalRate * 3.2;
   if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
-    idleSpawnFloat(`-${idleFormatNumber(passiveGain)} PV`, 'xp');
+    idleSpawnFloat(`−${idleFormatNumber(passiveGain)}`, 'damage passive');
     idleCombatMotion('team');
   }
 }
@@ -497,7 +500,7 @@ async function idleUseBurst(event) {
     idleBurstReadyAt = result.readyAt ? new Date(result.readyAt).getTime() : Date.now() + result.cooldownMs;
     const scene = document.getElementById('idle-scene');
     scene?.classList.add('skill-burst'); setTimeout(() => scene?.classList.remove('skill-burst'), 600);
-    idleSpawnFloat(`ULTIME +${idleFormatNumber(result.gained)}`, 'crit');
+    idleSpawnFloat(`ULTIME −${idleFormatNumber(result.gained)}`, 'damage crit huge');
     idleCombatMotion('hero');
     await refreshIdleState();
   } catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
@@ -506,7 +509,7 @@ async function idleUseBurst(event) {
 
 async function idleUseTeamSkill(event) {
   event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt) return;
-  try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO ${r.uniqueRoles} RÔLES +${idleFormatNumber(r.gained)}`, 'crit'); idleCombatMotion('team'); await refreshIdleState(); }
+  try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO −${idleFormatNumber(r.gained)}`, 'damage crit huge'); idleCombatMotion('team'); await refreshIdleState(); }
   catch (e) { if (!String(e.message).includes('Trop')) alert(e.message); }
   idleRenderSkillCooldown();
 }
@@ -719,7 +722,7 @@ function idleKillBurst(count) {
     void scene.offsetWidth;
     scene.classList.add('idle-kill-flash');
   }
-  idleSpawnFloat(count > 1 ? `×${count} vaincus !` : 'Vaincu !', 'kill');
+  idleSpawnFloat(count > 1 ? `×${count} ENNEMIS VAINCUS` : 'ENNEMI VAINCU !', 'kill');
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
 }
 
@@ -1079,7 +1082,7 @@ async function collectIdle() {
 async function clickIdle() {
   const now=Date.now();if(now<idleNextClickAt)return;idleNextClickAt=now+45;
   const predicted=idleState?.click?.damage||idleState?.click?.yield||1;
-  idleClickFeedback(predicted);idleSpawnFloat(`-${idleFormatNumber(predicted)} PV`,idleFloatTier(predicted));
+  idleClickFeedback(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',idleFloatTier(predicted)].filter(Boolean).join(' '));
   idleClickPending=Math.min(10,idleClickPending+1);
   if(!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,160);
 }
@@ -1094,7 +1097,7 @@ async function flushIdleClicks(){
   if(r.duplicate){await refreshIdleState();if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);return;}
   const count=r.count||batch.count;
   if(idleState)idleState.essence=r.essence;
-  if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)} PV`,'crit');idleCombatMotion('hero');}
+  if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');idleCombatMotion('hero');}
   idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · ${r.kills} victoire${r.kills>1?'s':''}`:''}`,r.kills?'fa-skull':'fa-hand-fist');
   await refreshIdleState();
   if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
@@ -1139,6 +1142,7 @@ function idleCombatMotion(source) {
   if (source === 'hero') restart(hero, 'idle-hero-attacking');
   if (source === 'team') document.querySelectorAll('.idle-stage-ally').forEach((ally, i) => setTimeout(() => restart(ally, 'idle-ally-attacking'), i * 45));
   restart(boss, source === 'hero' ? 'idle-fighter-hit' : 'idle-fighter-team-hit');
+  restart(document.getElementById('idle-xp-fill'), 'idle-hp-hit');
   if (!scene) return;
   const impact = document.createElement('span');
   impact.className = `idle-combat-impact ${source}`;

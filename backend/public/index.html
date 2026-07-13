@@ -1646,6 +1646,10 @@
               </div>
             </div>
             <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
+            <div class="idle-combat-controls" aria-label="Commandes de combat">
+              <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige des dégâts ; l’Essence tombe quand le gardien est vaincu"><i class="fas fa-hand-fist"></i><span><b>Attaquer</b><small id="idle-click-yield">5 dégâts par frappe</small></span></button>
+              <div class="idle-skills" id="idle-skills"><button class="idle-skill" id="idle-skill-burst" title="Déchaîne une attaque surpuissante"><i class="fas fa-burst"></i><span><b>Ultime</b><small id="idle-skill-status">Prêt · ×25</small></span></button><button class="idle-skill idle-skill-team" id="idle-skill-team" title="Attaque combinée de l'équipe"><i class="fas fa-people-group"></i><span><b>Combo</b><small id="idle-team-skill-status">2 héros requis</small></span></button><span class="idle-boss-mechanic hidden" id="idle-boss-mechanic"></span></div>
+            </div>
             <div class="idle-combat-stats" id="idle-combat-stats">
               <span><i class="fas fa-skull"></i> <b id="idle-kills-val">0</b> vaincus</span>
               <span><i class="fas fa-hand-fist"></i> Clic <b id="idle-combat-click">+0</b></span>
@@ -1659,10 +1663,8 @@
             <button class="idle-boss-chest hidden" id="idle-boss-chest"><i class="fas fa-box-open"></i><span><b>Coffre de boss disponible</b><small id="idle-boss-chest-label">Récompense</small></span><i class="fas fa-chevron-right"></i></button>
 
             <div class="idle-actions">
-              <div class="idle-skills" id="idle-skills"><button class="idle-skill" id="idle-skill-burst" title="Déchaîne une attaque surpuissante"><i class="fas fa-burst"></i><span><b>Ultime</b><small id="idle-skill-status">Prêt · ×25</small></span></button><button class="idle-skill idle-skill-team" id="idle-skill-team" title="Attaque combinée de l'équipe"><i class="fas fa-people-group"></i><span><b>Combo</b><small id="idle-team-skill-status">2 héros requis</small></span></button><span class="idle-boss-mechanic hidden" id="idle-boss-mechanic"></span></div>
               <button class="btn-secondary" id="idle-collect-btn" title="Ajoute au solde les gains produits automatiquement par ton équipe"><i class="fas fa-coins"></i> Encaisser <span id="idle-pending-val"></span></button>
               <button class="btn-secondary" id="idle-top-recruit-btn" title="Obtiens définitivement un nouveau personnage Rare ou supérieur"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
-              <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige des dégâts ; l’Essence tombe quand le gardien est vaincu"><i class="fas fa-hand-fist"></i> Attaquer <span id="idle-click-yield"></span></button>
             </div>
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
             <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
