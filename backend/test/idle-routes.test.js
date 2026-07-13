@@ -20,7 +20,7 @@ function dbUser(over = {}) {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
-    wisdomPoints: 0, ...over,
+    wisdomPoints: 0,idleSeals:2,idleBossProgress:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
 
@@ -246,16 +246,16 @@ test('GET /roster : liste les personnages recrutés (pas la collection gacha)', 
   assert.equal(res.json.recruits[0].name, 'Roy');
 });
 
-test('recruit : refuse si essence insuffisante, sinon débite selon recruitCost et crée une ligne DojoRecruit', async () => {
+test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost et crée une ligne DojoRecruit', async () => {
   const cost = recruitCost(0);
-  const poor = dbUser({ essence: cost - 1 });
+  const poor = dbUser({ idleSeals: cost - 1 });
   prisma.user.findUnique = async () => poor;
   prisma.user.update = async () => poor;
   const poorRes = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(poorRes.status, 400);
-  assert.match(poorRes.json.error, /insuffisante/);
+  assert.match(poorRes.json.error, /insuffisants?/);
 
-  const rich = dbUser({ essence: cost });
+  const rich = dbUser({ idleSeals: cost });
   prisma.user.findUnique = async () => rich;
   prisma.user.update = async () => rich;
   prisma.dojoRecruit.findMany = async () => [];
@@ -270,7 +270,7 @@ test('recruit : refuse si essence insuffisante, sinon débite selon recruitCost 
 });
 
 test('recruit : exclut les personnages déjà recrutés et retombe sur une autre rareté si celle tirée est épuisée', async () => {
-  const user = dbUser({ essence: recruitCost(0) });
+  const user = dbUser({ idleSeals: recruitCost(0) });
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.dojoRecruit.findMany = async () => [{ characterId: 1 }]; // déjà tout recruté dans la rareté tirée
@@ -290,7 +290,7 @@ test('recruit : exclut les personnages déjà recrutés et retombe sur une autre
 });
 
 test('recruit : refuse proprement si tout le pool est déjà recruté', async () => {
-  const user = dbUser({ essence: recruitCost(0) });
+  const user = dbUser({ idleSeals: recruitCost(0) });
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.dojoRecruit.findMany = async () => [{ characterId: 1 }];

@@ -39,7 +39,20 @@ const {
   enemyReward,
   PRESTIGE_MIN_STAGE,
   wisdomForRunStage,
+  campaignForStage,
+  isEliteStage,
 } = require('../src/idle/idle');
+
+test('campagne : 10 mondes par acte, boss tous les 10 stages et élite au milieu', () => {
+  assert.deepEqual([campaignForStage(1).index,campaignForStage(1).wave,campaignForStage(1).act],[1,1,1]);
+  assert.deepEqual([campaignForStage(10).index,campaignForStage(10).wave],[1,10]);
+  assert.deepEqual([campaignForStage(11).index,campaignForStage(11).wave],[2,1]);
+  assert.deepEqual([campaignForStage(91).index,campaignForStage(91).wave],[10,1]);
+  assert.deepEqual([campaignForStage(101).index,campaignForStage(101).act],[1,2]);
+  assert.equal(isEliteStage(5),true);
+  assert.equal(isEliteStage(15),true);
+  assert.equal(isEliteStage(10),false);
+});
 
 test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans boucle coûteuse', () => {
   const push = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:10,elapsedSeconds:30,mode:'progress'});
@@ -99,7 +112,7 @@ test('rollRecruitRarity : aucun Commun et le bonus de chance réduit la part du 
 test('recruitCost : croît avec le nombre déjà recruté, jamais nul ; la remise (Ancient) réduit sans jamais atteindre 0', () => {
   assert.ok(recruitCost(0) > 0);
   assert.ok(recruitCost(20) > recruitCost(0));
-  assert.ok(recruitCost(0, 0.5) < recruitCost(0));
+  assert.ok(recruitCost(5, 0.5) < recruitCost(5));
   assert.ok(recruitCost(0, 999) >= 1); // plancher, jamais gratuit même avec un bonus aberrant
 });
 
