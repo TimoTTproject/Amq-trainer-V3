@@ -49,8 +49,8 @@ const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
-const CHAR_LEVEL_BASE_COST = { common: 8, rare: 20, epic: 45, legendary: 110, mythic: 280 };
-const CHAR_LEVEL_GROWTH = 1.13;
+const CHAR_LEVEL_BASE_COST = { common: 12, rare: 28, epic: 65, legendary: 155, mythic: 400 };
+const CHAR_LEVEL_GROWTH = 1.16;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
   return Math.round(finiteIdleNumber(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1), 1));
@@ -68,9 +68,9 @@ function slotRate(rarity, charLevel) {
   const endurance = rarity === 'rare' && charLevel >= 10 ? 1.05 : 1;
   const level = Math.max(1, charLevel || 1);
   const reached = HERO_MILESTONES.filter((target) => target <= level).length;
-  // Multiplicateurs de palier façon Clicker Heroes : ils créent des pics
-  // d'objectif lisibles et permettent au DPS de suivre les PV exponentiels.
-  const milestoneMultiplier = Math.pow(4, reached);
+  // Les paliers restent de vrais objectifs, sans quadrupler brutalement le
+  // rendement d'un achat unique ni court-circuiter l'économie de la run.
+  const milestoneMultiplier = Math.pow(2, reached);
   return finiteIdleNumber((RARITY_RATE[rarity] || 0) * Math.pow(1 + scaling, level - 1) * milestoneMultiplier * endurance);
 }
 

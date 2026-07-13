@@ -73,6 +73,9 @@ test('équilibrage : les murs croissent plus vite que les récompenses et les ac
   assert.equal(prodUpgradeCost(0), 75);
   assert.equal(slotUpgradeCost(START_SLOTS), 400);
   assert.ok(charLevelUpCost('rare', 25) > charLevelUpCost('rare', 10) * 5);
+  assert.equal(charLevelUpCost('rare', 1), 28);
+  assert.ok(slotRate('rare', 10) / slotRate('rare', 9) < 2.25);
+  assert.ok(slotRate('rare', 25) / slotRate('rare', 24) < 2.25);
 });
 
 test('wisdomForRunStage : exige une nouvelle run au stage 100 et récompense le push',()=>{
