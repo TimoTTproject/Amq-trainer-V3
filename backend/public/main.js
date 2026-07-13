@@ -818,6 +818,13 @@ function showView(name, options = {}) {
   if (name !== 'daily' && typeof stopDailyMedia === 'function') stopDailyMedia();
   if (name !== 'mp' && typeof mpHandleLeaveView === 'function') mpHandleLeaveView(); // quitter la vue = quitter la salle
   if (name !== 'mp' && typeof stopMpMedia === 'function') stopMpMedia();
+  // Sortir d'Anime Ascension par un autre chemin que son bouton retour (navbar,
+  // raccourci épinglé...) sans passer par closeIdle() laissait idle-fullscreen
+  // collé au body : la navbar restait masquée sur TOUTES les vues suivantes.
+  if (name !== 'idle' && document.body.classList.contains('idle-fullscreen')) {
+    if (typeof idleStopTicker === 'function') idleStopTicker();
+    document.body.classList.remove('idle-fullscreen');
+  }
   if (name !== 'playlist' && typeof stopPlaylistAudio === 'function') stopPlaylistAudio();
   if (name !== 'playlist-detail' && typeof stopPlaylistDetailAudio === 'function') stopPlaylistDetailAudio();
   if (name !== 'quiz') {
