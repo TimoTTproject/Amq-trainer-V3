@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -67,18 +67,20 @@ test('difficulté longue durée : missions tournantes et hebdomadaires renforcé
   assert.ok(missions.filter((m)=>m.cadence==='Hebdomadaire').every((m)=>m.target>=30));
 });
 
-test('méta transparente : Producteur, Leader et Logistique reprennent les multiplicateurs réels', () => {
+test('méta transparente : Producteur, Leader, Lead Skill et Logistique reprennent les multiplicateurs réels', () => {
   const slots=[
     {characterId:1,level:10,character:{name:'Bulma',series:'Dragon Ball',rarity:'epic'}},
     {characterId:2,level:10,character:{name:'Sakura',series:'Naruto',rarity:'legendary'}},
   ];
-  const meta=teamMetaBreakdown(slots,5,'industry',false);
+  const meta=teamMetaBreakdown(slots,5,'industry',false,1);
   assert.equal(meta.roleDetails.find((role)=>role.key==='producteur').bonus,.05);
   assert.equal(meta.talents.find((talent)=>talent.character==='Bulma').name,'Stratège');
   assert.equal(meta.talents.find((talent)=>talent.character==='Sakura').name,'Leader');
   assert.equal(meta.multipliers.find((item)=>item.key==='talents').multiplier,1.11);
   assert.equal(meta.multipliers.find((item)=>item.key==='formation').multiplier,1.18);
-  assert.match(meta.leaderExplanation,/aucun bonus caché/i);
+  assert.equal(meta.leaderSkill.prod,1.15);
+  assert.match(meta.leaderExplanation,/Maître logisticien/i);
+  assert.equal(characterLeaderSkill(slots[1].character).prod,1.10);
 });
 
 test('saison : huit paliers et aucune action unique ne termine le parcours', () => {

@@ -432,6 +432,8 @@ function activeSkillCooldown(baseMs,supportCount){return Math.round(baseMs*(1-Ma
 function ultimateBaseDamage(clickDamage,teamRate){return Math.max(clickDamage*ULTIMATE_CLICK_MULTIPLIER,teamRate*ULTIMATE_TEAM_SECONDS);}
 const PRESTIGE_PATHS={balanced:{name:'Voie de l’Équilibre',prod:1,click:1},fist:{name:'Voie du Poing',prod:1,click:1.25},army:{name:'Voie de l’Armée',prod:1.2,click:1},time:{name:'Voie du Temps',prod:1.1,click:1.1}};
 function characterCombatSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Ruée',description:'Renforce les formations d’assaut.'},support:{name:'Ralliement',description:'Active les formations combinées.'},tank:{name:'Rempart',description:'Stabilise les combats de boss.'},assassin:{name:'Exécution',description:'Excellent contre les ennemis affaiblis.'},producteur:{name:'Logistique',description:'Améliore le rendement hors combat.'}}[role];}
+function characterLeaderSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Avant-garde',description:'+12% de DPS d’équipe lorsque ce héros est chef.',prod:1.12},support:{name:'Inspiration',description:'+10% de DPS d’équipe lorsque ce héros est chef.',prod:1.10},tank:{name:'Commandement défensif',description:'+10% de DPS d’équipe lorsque ce héros est chef.',prod:1.10},assassin:{name:'Chasse coordonnée',description:'+12% de DPS d’équipe lorsque ce héros est chef.',prod:1.12},producteur:{name:'Maître logisticien',description:'+15% de DPS d’équipe lorsque ce héros est chef.',prod:1.15}}[role];}
+function leaderSkillForSlots(slots,leaderCharacterId){const leader=slots.find((slot)=>slot.character&&slot.characterId===leaderCharacterId)||slots.find((slot)=>slot.character);return leader?characterLeaderSkill(leader.character):{name:'Aucun chef',description:'Désigne un chef pour activer un Lead Skill.',prod:1};}
 const HERO_STYLES = {
   auras: [{ key:'none',name:'Sans aura',level:1 },{key:'flame',name:'Flammes',level:10},{key:'lightning',name:'Éclairs',level:25},{key:'void',name:'Énergie obscure',level:50},{key:'divine',name:'Aura divine',level:100}],
   stances: [{key:'balanced',name:'Équilibrée',level:1},{key:'power',name:'Puissance',level:20},{key:'speed',name:'Vitesse',level:40},{key:'master',name:'Maître',level:75}],
@@ -454,7 +456,7 @@ function currentIdleEvent(now = new Date()) {
   return { ...event, endsAt: end.toISOString() };
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced') {
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
@@ -474,7 +476,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
   const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
   const roleMultiplier=1+roles.filter((role)=>role==='attaquant').length*.08+roles.filter((role)=>role==='producteur').length*.05;
-  return safeIdleNumber(base * roleMultiplier * reserveBonus * (autoSkills?1.15:1) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier * (FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles) * (PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod);
+  return safeIdleNumber(base * roleMultiplier * reserveBonus * (autoSkills?1.15:1) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier * (FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles) * (PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod * leaderSkillForSlots(slots,leaderCharacterId).prod);
 }
 
 async function applyActiveDamage(tx, user, damage) {
@@ -534,7 +536,7 @@ function synergyForSlots(slots) {
 // Décomposition pédagogique de la production d'équipe. Cette structure est
 // calculée avec les mêmes règles que computeTotalRate afin que l'interface
 // n'affiche jamais une « méta » approximative ou un bonus caché.
-function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkills=false) {
+function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkills=false,leaderCharacterId=null) {
   const active=slots.filter((slot)=>slot.characterId&&slot.character);
   const roles=active.map((slot)=>roleForCharacter(slot.character));
   const count=(role)=>roles.filter((value)=>value===role).length;
@@ -545,6 +547,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const synergy=synergyForSlots(slots);
   const selectedFormation=FORMATIONS[formation]||FORMATIONS.balanced;
   const formationMultiplier=selectedFormation.bonus(roles);
+  const leaderSkill=leaderSkillForSlots(slots,leaderCharacterId);
   const multipliers=[
     {key:'roles',label:'Rôles offensifs',multiplier:1+roleBonus,detail:`${count('attaquant')} Attaquant(s), ${count('producteur')} Producteur(s)`},
     {key:'talents',label:'Talents d’équipe',multiplier:1+teamTalentBonus,detail:'Mentor, Leader et Stratège actifs'},
@@ -552,6 +555,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
     {key:'reserve',label:'Réserve',multiplier:1+reserveBonus,detail:`${Math.max(0,recruitCount-active.length)} recrue(s) non assignée(s), plafond +20%`},
     {key:'synergy',label:'Synergie',multiplier:synergy.multiplier,detail:synergy.name},
     {key:'formation',label:`Formation ${selectedFormation.name}`,multiplier:formationMultiplier,detail:formationMultiplier>1?'Condition remplie':'Condition non remplie ou formation neutre'},
+    {key:'leader',label:`Lead Skill · ${leaderSkill.name}`,multiplier:leaderSkill.prod,detail:leaderSkill.description},
     {key:'auto',label:'Compétences automatiques',multiplier:autoSkills?1.15:1,detail:autoSkills?'Activées':'Inactives'},
   ];
   const roleDetails=[
@@ -570,7 +574,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   return {
     roleDetails,talents,multipliers,recommendation,
     visibleMultiplier:multipliers.reduce((value,item)=>value*item.multiplier,1),
-    leaderExplanation:'Le premier emplacement choisit seulement le portrait du chef. Il ne donne aucun bonus caché. Le talent Leader donne +6% à toute l’équipe depuis n’importe quel emplacement.',
+    leaderSkill,leaderExplanation:`Le chef active ${leaderSkill.name} : ${leaderSkill.description}`,
   };
 }
 
@@ -597,7 +601,7 @@ async function withSettle(userId, mutate) {
     const [slots,recruitCount] = await Promise.all([loadSlots(prisma, userId),prisma.dojoRecruit.count({where:{userId}})]);
     const ancientLevelsByKey = await loadAncientLevels(prisma, userId);
     const dojoLevel = user.idleRankLevel || 1;
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
     const elapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
     const combat = simulateCombat({
@@ -693,7 +697,7 @@ async function buildState(userId) {
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
   const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = user.idleRankLevel || 1;
-  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
   const strategy = synergyForSlots(slots);
   const previewElapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
   const combatPreview = simulateCombat({
@@ -744,6 +748,7 @@ async function buildState(userId) {
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
+        leaderSkill: characterLeaderSkill(row.character),
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -860,7 +865,7 @@ async function buildState(userId) {
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
-    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',leaderCharacterId:(slots.some((s)=>s.characterId===user.idleLeaderCharacterId)?user.idleLeaderCharacterId:slots.find((s)=>s.character)?.characterId)||null,formations:Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier,bonusPercent:f.bonusPercent,conditionMet:key==='balanced'||multiplier>1,requirements};}),presets,meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills) },
+    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',leaderCharacterId:(slots.some((s)=>s.characterId===user.idleLeaderCharacterId)?user.idleLeaderCharacterId:slots.find((s)=>s.character)?.characterId)||null,formations:Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier,bonusPercent:f.bonusPercent,conditionMet:key==='balanced'||multiplier>1,requirements};}),presets,meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills,user.idleLeaderCharacterId),leaderSkill:leaderSkillForSlots(slots,user.idleLeaderCharacterId) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
     offlineSummary:{awayMs:previewElapsedMs,essence:pending,kills:combatPreview.kills,waves:Math.max(0,combatPreview.stage-(user.idleStage||1)),bossBlocked:combatPreview.bossFailed,capped:Date.now()-new Date(user.idleLastCollectAt).getTime()>=offlineCapMs},
@@ -903,7 +908,7 @@ async function buildState(userId) {
       skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length)/1000)},
     },
     missions,
-    codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w,i) => ({ name: w.name, level:i*10+1, discovered:Math.max(user.idleBestStage||1,stage)>=i*10+1 })) },
+    codex: { discovered: recruitCount, masteries, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
     event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
     rift,
     achievements,
@@ -1053,7 +1058,7 @@ router.get('/roster', requireAuth, requireIdleBeta, async (req, res) => {
   res.json({
     recruits: recruits.map((r) => ({
       id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt,
-      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:RARITY_PASSIVE[r.character.rarity]||'',passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),
+      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:RARITY_PASSIVE[r.character.rarity]||'',passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),leaderSkill:characterLeaderSkill(r.character),
     })),
   });
 });
@@ -1118,7 +1123,7 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
   // (compteur/coût du prochain) déjà renvoyé par buildState() — le spread
   // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
   // même nom.
-  res.json({ ...(await buildState(req.user.id)), payment:{currency,cost:paymentCost}, recruited: { ...result, talent: characterTalent(result), role:roleForCharacter(result),baseRate:slotRate(result.rarity,1) } });
+  res.json({ ...(await buildState(req.user.id)), payment:{currency,cost:paymentCost}, recruited: { ...result, talent: characterTalent(result), role:roleForCharacter(result),leaderSkill:characterLeaderSkill(result),baseRate:slotRate(result.rarity,1) } });
   void recordIdleEvent(req.user.id,'recruit',{value:1});
   void incrementIdleCounter(req.user.id,'recruit',1);
 });
@@ -1269,7 +1274,7 @@ router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10,
       if(!recruits.length)throw new IdleError(400,'Aucun héros recruté');
       const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
       const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,equipments:[],items:[]});
-      const rateFor=(picks)=>computeTotalRate(slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}:{...slot,characterId:null,character:null,level:1,ascension:0};}),user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath);
+      const rateFor=(picks)=>computeTotalRate(slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}:{...slot,characterId:null,character:null,level:1,ascension:0};}),user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
       const currentPicks=slots.map((slot)=>recruits.find((recruit)=>recruit.characterId===slot.characterId)||null);
       const beforeRate=rateFor(currentPicks);const teamSize=Math.min(unlocked,recruits.length);
       let beam=[{picks:[],used:new Set(),score:0}];
@@ -1469,7 +1474,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
       if(roles.length<2)throw new IdleError(400,'Équipe insuffisante');
       const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});
-      const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath);
+      const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId);
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
       cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length);
@@ -1680,6 +1685,7 @@ module.exports = {
   itemSalvageValue,
   progressionBossesCrossed,
   teamMetaBreakdown,
+  characterLeaderSkill,
   ultimateBaseDamage,
   ULTIMATE_CLICK_MULTIPLIER,
   ULTIMATE_TEAM_SECONDS,

@@ -367,6 +367,7 @@ function renderIdleState(state) {
   idleRenderSkillCooldown();
   renderIdleBossChest(state.battle?.bossChest);
   renderIdleRoadmap(state.codex,state.battle);
+  renderIdleWorldJump(state.codex,state.battle);
   renderIdleMainHero(state);
   renderIdleTeamStrategy(state);
   renderIdleInventory(state);
@@ -472,7 +473,8 @@ function openIdleCharacterSheet(character){
   const rate=c.rate||c.baseRate||0;const teamRate=idleState?.totalRate||0;const share=activeSlot&&teamRate?Math.min(100,Math.round(rate/teamRate*100)):0;
   const formation=(idleState?.strategy?.formations||[]).find((item)=>item.active);const synergy=idleState?.strategy?.name||'Aucune synergie';const isLeader=idleState?.strategy?.leaderCharacterId===c.id;
   body.innerHTML=`<header class="idle-character-sheet-head r-${escapeHtml(c.rarity)}"><span class="idle-character-sheet-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}></span><div class="idle-character-sheet-identity"><span class="idle-character-sheet-kicker">${escapeHtml(idleRarityLabel(c.rarity))} · ${escapeHtml(c.series||'Univers inconnu')}</span><h2 id="idle-character-sheet-title">${escapeHtml(c.name)}</h2><span class="idle-character-sheet-status">${activeSlot?`<i class="fas fa-circle-check"></i> Équipe active · emplacement ${activeSlot.index+1}${isLeader?' · Chef':''}`:'<i class="fas fa-box-archive"></i> Réserve'}</span><span class="idle-character-sheet-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><span><b>${role.name}</b><small>${escapeHtml(role.description)}</small></span></span></div><div class="idle-character-sheet-power"><small>PRODUCTION</small><b>${idleFormatNumber(rate)}<em>/s</em></b><span>${activeSlot?`${share}% du DPS brut de l’équipe`:'Assigne-le pour produire'}</span></div></header><div class="idle-character-sheet-summary"><span><i class="fas fa-arrow-up"></i><small>NIVEAU</small><b>${idleFormatNumber(c.level||1)}</b></span><span><i class="fas fa-seedling"></i><small>BASE</small><b>${idleFormatNumber(c.baseRate||0)}/s</b></span><span><i class="fas fa-chart-line"></i><small>PAR NIVEAU</small><b>+${Math.round((c.scaling||0)*100)}%</b></span><span><i class="fas ${c.passiveUnlocked?'fa-wand-sparkles':'fa-lock'}"></i><small>PASSIF</small><b>${c.passiveUnlocked?'Actif':'Niv. 10'}</b></span></div><div class="idle-character-sheet-fit"><div><small>PLACE DANS L’ÉQUIPE</small><b><i class="fas ${role.icon}"></i> ${role.name}</b><p>${escapeHtml(role.description)}. ${activeSlot?`Formation ${escapeHtml(formation?.name||'Équilibrée')} · ${escapeHtml(synergy)}.`:'Compare-le avec tes héros actifs avant de l’assigner.'}</p></div><div><small>PASSIF DE RARETÉ</small><b><i class="fas ${c.passiveUnlocked?'fa-circle-check':'fa-lock'}"></i> ${c.passiveUnlocked?'Débloqué':'Encore verrouillé'}</b><p>${escapeHtml(passive)}</p></div></div><div class="idle-character-sheet-skills"><article><i class="fas fa-fingerprint"></i><span><small>TALENT PERMANENT</small><b>${escapeHtml(c.talent?.name||'Talent inconnu')}</b><p>${escapeHtml(c.talent?.description||'Aucun effet détaillé.')}</p></span></article><article><i class="fas fa-bolt"></i><span><small>TECHNIQUE DE COMBAT</small><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><p>${escapeHtml(c.combatSkill?.description||'Compétence utilisée pendant les combats.')}</p></span></article></div><section class="idle-character-sheet-gear"><header><span><small>ARSENAL</small><h3><i class="fas fa-shield-halved"></i> Équipement</h3></span><em>${activeSlot?`Emplacement ${activeSlot.index+1}`:'Personnage non assigné'}</em></header><div class="idle-character-sheet-equipment">${equipment||'<p class="hint">Assigne ce personnage à l’équipe pour lui équiper des objets.</p>'}</div></section><div class="idle-character-sheet-actions">${activeSlot?'<button class="btn-secondary" data-sheet-team><i class="fas fa-users"></i> Voir dans l’équipe</button><button class="btn-primary" data-sheet-equipment><i class="fas fa-shield-halved"></i> Gérer son équipement</button>':'<button class="btn-primary" data-sheet-team><i class="fas fa-user-plus"></i> Ajouter à mon équipe</button>'}</div>`;
-  body.querySelector('.idle-character-sheet-summary')?.insertAdjacentHTML('afterend',idleHeroMilestonesHTML(c,true));
+  const leaderSkill=c.leaderSkill||{name:'Lead Skill',description:'Désigne ce héros comme chef pour activer son bonus d’équipe.'};
+  body.querySelector('.idle-character-sheet-summary')?.insertAdjacentHTML('afterend',`<section class="idle-character-sheet-lead ${isLeader?'active':''}"><i class="fas fa-crown"></i><span><small>LEAD SKILL ${isLeader?'· ACTIF':'· INACTIF'}</small><b>${escapeHtml(leaderSkill.name)}</b><p>${escapeHtml(leaderSkill.description)}</p></span>${activeSlot&&!isLeader?`<button class="btn-secondary" data-sheet-leader="${c.id}">Définir comme chef</button>`:isLeader?'<strong>BONUS APPLIQUÉ</strong>':'<em>Place ce héros dans l’équipe pour l’activer.</em>'}</section>${idleHeroMilestonesHTML(c,true)}`);
   modal.classList.remove('hidden');
   modal.querySelector('.modal-close')?.focus();
 }
@@ -502,7 +504,7 @@ function renderIdleTeamStrategy(state) {
       <div class="idle-meta-focus">
         <article><i class="fas fa-gears"></i><div><b>Producteur · ${producer?.count||0} actif(s)</b><span>+5% DPS d’équipe chacun. Son talent Stratège ajoute encore +5% d’équipe.</span></div><strong>+${Math.round((producer?.bonus||0)*100)}%</strong></article>
         <article><i class="fas fa-crown"></i><div><b>Talent Leader · ${leaders.length} actif(s)</b><span>${leaders.length?leaders.map((talent)=>escapeHtml(talent.character)).join(', '):'Aucun héros actif ne possède ce talent.'} · +6% d’équipe chacun.</span></div><strong>+${leaders.length*6}%</strong></article>
-        <article><i class="fas fa-user-shield"></i><div><b>Chef d’équipe</b><span>${escapeHtml(meta.leaderExplanation)}</span></div><strong>VISUEL</strong></article>
+        <article class="leader-active"><i class="fas fa-crown"></i><div><b>Lead Skill · ${escapeHtml(meta.leaderSkill?.name||'Chef')}</b><span>${escapeHtml(meta.leaderExplanation)}</span></div><strong>×${Number(meta.leaderSkill?.prod||1).toFixed(2)}</strong></article>
       </div>
       <p class="idle-meta-recommendation"><i class="fas fa-lightbulb"></i><span><b>Conseil actuel</b>${escapeHtml(meta.recommendation)}</span></p>
       <details><summary><span><i class="fas fa-calculator"></i> Voir tous les multiplicateurs et rôles</span><i class="fas fa-chevron-down"></i></summary><div class="idle-meta-details"><section><h4>Multiplicateurs actuels</h4>${(meta.multipliers||[]).map((item)=>`<span class="${item.multiplier>1?'active':''}"><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small><strong>×${Number(item.multiplier).toFixed(2)}</strong></span>`).join('')}</section><section><h4>Effet exact de chaque rôle</h4>${(meta.roleDetails||[]).map((role)=>`<span class="${role.count?'active':''}"><b>${escapeHtml(role.name)} · ${role.count}</b><small>${escapeHtml(role.effect)}${role.situational?' · situationnel':''}</small></span>`).join('')}</section></div></details>`;
@@ -569,7 +571,7 @@ function renderIdleMasteries(codex) {
 function renderIdleRoadmap(codex,battle) {
   const box = document.getElementById('idle-roadmap');
   if (!box || !Array.isArray(codex?.worlds)) return;
-  const currentIndex=Math.max(0,(battle?.world?.index||1)-1);
+  const currentIndex=Math.max(0,Math.floor(((battle?.world?.startStage||battle?.stage||1)-1)/10));
   box.innerHTML = codex.worlds.map((tier, i) => {
     const isCurrent = i === currentIndex;
     const isDone = currentIndex >= 0 && i < currentIndex;
@@ -578,7 +580,7 @@ function renderIdleRoadmap(codex,battle) {
     return `<div class="idle-roadmap-step ${cls}">
       <span class="idle-roadmap-dot">${dotContent}</span>
       <span class="idle-roadmap-name">${escapeHtml(tier.name.split(' · ')[0])}</span>
-      <span class="idle-roadmap-level">Vague ${idleFormatNumber(tier.level)}</span>
+      <span class="idle-roadmap-level">Acte ${tier.act||1} · Niveau ${idleFormatNumber(tier.level)}</span>
     </div>`;
   }).join('');
   // Centre uniquement le défilement HORIZONTAL de la frise. scrollIntoView()
@@ -588,6 +590,12 @@ function renderIdleRoadmap(codex,battle) {
     box.scrollLeft = Math.max(0, current.offsetLeft - (box.clientWidth - current.clientWidth) / 2);
     box.dataset.centeredWorld = String(currentIndex);
   }
+}
+
+function renderIdleWorldJump(codex,battle){
+  const list=document.getElementById('idle-world-jump-list');if(!list||!Array.isArray(codex?.worlds))return;
+  const currentIndex=Math.max(0,Math.floor(((battle?.world?.startStage||battle?.stage||1)-1)/10));const bestStage=Math.max(1,battle?.runBestStage||battle?.bestStage||battle?.stage||1);
+  list.innerHTML=codex.worlds.map((world,index)=>{const unlocked=world.discovered&&world.level<=bestStage;const current=index===currentIndex;return `<button type="button" class="${current?'current':''}" data-world-stage="${world.level}" ${!unlocked?'disabled':''}><span class="idle-world-number">${unlocked?index+1:'<i class="fas fa-lock"></i>'}</span><span><small>ACTE ${world.act||1} · NIVEAUX ${world.level}–${world.level+9}</small><b>${escapeHtml(world.name.split(' · ')[0])}</b><em>${current?'Monde actuel':unlocked?`${escapeHtml(world.difficulty||'Normal')} · voyager au niveau ${world.level}`:'Pas encore découvert'}</em></span>${current?'<i class="fas fa-location-dot"></i>':'<i class="fas fa-arrow-right"></i>'}</button>`;}).join('');
 }
 
 // Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),
@@ -757,7 +765,7 @@ async function chooseIdleBattleMode(mode){
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));}catch(e){alert(e.message);}}
 async function chooseIdleStage(stage){if(!Number.isInteger(stage)||stage<1||stage===idleState?.battle?.stage)return;try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}}
-async function chooseIdleLeader(characterId){try{const state=await api('/api/idle/team-leader',{method:'POST',body:JSON.stringify({characterId})});renderIdleState(state);idleNotify('Chef d’équipe modifié. Ce choix est visuel : les bonus viennent des rôles et talents.','success');}catch(e){idleNotify(e.message,'error');}}
+async function chooseIdleLeader(characterId){try{const state=await api('/api/idle/team-leader',{method:'POST',body:JSON.stringify({characterId})});renderIdleState(state);idleNotify(`Lead Skill actif : ${state.strategy?.leaderSkill?.name||'bonus du chef'} · ${state.strategy?.leaderSkill?.description||'bonus appliqué au DPS.'}`,'success');document.getElementById('idle-character-sheet')?.classList.add('hidden');}catch(e){idleNotify(e.message,'error');}}
 async function saveIdlePreset(){const name=document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} sauvegardé`,'fa-floppy-disk');}catch(e){alert(e.message);}}
 async function loadIdlePreset(name){try{renderIdleState(await api('/api/idle/team-preset/load',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} chargé`,'fa-users-gear');}catch(e){alert(e.message);}}
 async function chooseIdlePrestigePath(path){try{renderIdleState(await api('/api/idle/prestige-path',{method:'POST',body:JSON.stringify({path})}));}catch(e){alert(e.message);}}
@@ -1321,6 +1329,7 @@ function idleSlotHTML(slot) {
     </div>
     <div class="idle-hero-stats"><span><small>Production de base</small><b>${idleFormatNumber(c.baseRate)}/s</b></span><span><small>Gain par niveau</small><b>+${Math.round(c.scaling * 100)}%</b></span></div>
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i><span><b>Passif</b><small>${escapeHtml(c.passive)}</small></span><em>${c.passiveUnlocked ? 'Actif' : 'Niv. 10'}</em></div>
+    <div class="idle-leader-skill ${isLeader?'active':''}"><i class="fas fa-crown"></i><span><small>LEAD SKILL ${isLeader?'ACTIF':'INACTIF'}</small><b>${escapeHtml(c.leaderSkill?.name||'Commandement')}</b><em>${escapeHtml(c.leaderSkill?.description||'Désigne ce héros comme chef pour activer son bonus.')}</em></span><strong>${isLeader?'APPLIQUÉ':'CHOISIR'}</strong></div>
     <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
     <div class="idle-character-talent combat"><i class="fas fa-bolt"></i><span><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'Compétence de combat')}</small></span></div>
     ${idleHeroMilestonesHTML(c)}
@@ -1723,6 +1732,9 @@ function initIdleUI() {
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
   document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-stage-nav')?.addEventListener('click',(e)=>{const button=e.target.closest('button[data-stage]');if(button&&!button.disabled)chooseIdleStage(Number(button.dataset.stage));});
+  document.getElementById('idle-world-open')?.addEventListener('click',()=>{const panel=document.getElementById('idle-world-jump');const open=panel?.classList.toggle('hidden')===false;document.getElementById('idle-world-open')?.setAttribute('aria-expanded',String(open));});
+  document.getElementById('idle-world-close')?.addEventListener('click',()=>{document.getElementById('idle-world-jump')?.classList.add('hidden');document.getElementById('idle-world-open')?.setAttribute('aria-expanded','false');});
+  document.getElementById('idle-world-jump-list')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-world-stage]');if(!button||button.disabled)return;document.getElementById('idle-world-jump')?.classList.add('hidden');document.getElementById('idle-world-open')?.setAttribute('aria-expanded','false');chooseIdleStage(Number(button.dataset.worldStage));});
   document.getElementById('idle-auto-skills')?.addEventListener('click',toggleIdleAutoSkills);
   document.getElementById('idle-formations')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-idle-formation]');if(b)chooseIdleFormation(b.dataset.idleFormation);});
   document.getElementById('idle-presets')?.addEventListener('click',(e)=>{const save=e.target.closest('[data-preset-save]');if(save)return saveIdlePreset();const load=e.target.closest('[data-preset-load]');if(load)return loadIdlePreset(load.dataset.presetLoad);});
@@ -1733,7 +1745,7 @@ function initIdleUI() {
   document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-ranking-btn')?.addEventListener('click',openIdleRanking);document.getElementById('idle-ranking-close')?.addEventListener('click',()=>document.getElementById('idle-ranking-modal')?.classList.add('hidden'));document.getElementById('idle-ranking-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-ranking-modal')e.currentTarget.classList.add('hidden');});
   const settingsModal=document.getElementById('idle-settings-modal');document.getElementById('idle-settings-btn')?.addEventListener('click',()=>{applyIdleComfortSettings();settingsModal?.classList.remove('hidden');document.getElementById('idle-volume')?.focus();});document.getElementById('idle-settings-close')?.addEventListener('click',()=>settingsModal?.classList.add('hidden'));settingsModal?.addEventListener('click',(e)=>{if(e.target===settingsModal)settingsModal.classList.add('hidden');});document.getElementById('idle-volume')?.addEventListener('input',(e)=>sfx?.setIdleVolume?.(e.target.value));document.getElementById('idle-effects-reduced')?.addEventListener('change',(e)=>{sfx?.setIdleEffectsReduced?.(!e.target.checked);applyIdleComfortSettings();});
-  const characterSheet=document.getElementById('idle-character-sheet');document.getElementById('idle-character-sheet-close')?.addEventListener('click',()=>characterSheet?.classList.add('hidden'));characterSheet?.addEventListener('click',(e)=>{if(e.target===characterSheet)e.currentTarget.classList.add('hidden');if(e.target.closest('[data-sheet-equipment]')){e.currentTarget.classList.add('hidden');idleShowPanel('equipment');}if(e.target.closest('[data-sheet-team]')){e.currentTarget.classList.add('hidden');idleShowPanel('team');}});
+  const characterSheet=document.getElementById('idle-character-sheet');document.getElementById('idle-character-sheet-close')?.addEventListener('click',()=>characterSheet?.classList.add('hidden'));characterSheet?.addEventListener('click',(e)=>{if(e.target===characterSheet)e.currentTarget.classList.add('hidden');const leader=e.target.closest('[data-sheet-leader]');if(leader)return chooseIdleLeader(Number(leader.dataset.sheetLeader));if(e.target.closest('[data-sheet-equipment]')){e.currentTarget.classList.add('hidden');idleShowPanel('equipment');}if(e.target.closest('[data-sheet-team]')){e.currentTarget.classList.add('hidden');idleShowPanel('team');}});
   document.getElementById('idle-season-card')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-season-tier]');if(b&&!b.disabled)claimIdleSeason(Number(b.dataset.seasonTier));});
   document.getElementById('idle-rift-card')?.addEventListener('click',(e)=>{if(e.target.closest('#idle-rift-attempt'))attemptIdleRift();});
   document.getElementById('idle-boss-chest')?.addEventListener('click', claimIdleBossChest);
