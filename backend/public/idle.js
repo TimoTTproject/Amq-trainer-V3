@@ -550,6 +550,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const wave = ((stage - 1) % 10) + 1;
   const zone = Math.floor((stage - 1) / 10) + 1;
   const boss = wave === 10;
+  const farming = battle?.mode === 'farm';
   const enemiesRequired = Math.max(1, battle?.enemiesRequired || 1);
   const enemiesRemaining = Math.max(1, battle?.enemiesRemaining || enemiesRequired);
   const enemyNumber = Math.max(1, Math.min(enemiesRequired, battle?.enemyNumber || 1));
@@ -567,7 +568,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
-  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${boss?'Vaincs-le pour passer au monde suivant':`${escapeHtml(battle?.enemy?.name||'Standard')} · ${escapeHtml(battle?.enemy?.description||'')} · +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>${boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
+  if(objective){objective.classList.toggle('is-farming',farming);objective.innerHTML=`<i class="fas ${farming?'fa-coins':boss?'fa-crown':'fa-forward-step'}"></i><span><b>${farming?`MODE FARM · la vague ${wave} recommence après le dernier ennemi`:boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${farming?'Choisis Progression pour passer à la vague suivante':boss?'Vaincs-le pour passer au monde suivant':`${escapeHtml(battle?.enemy?.name||'Standard')} · ${escapeHtml(battle?.enemy?.description||'')} · +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>${farming?'Répète':boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
   if (waveTrack) {
     waveTrack.classList.toggle('is-boss', boss);
     waveTrack.setAttribute('aria-label', boss ? 'Boss final de la vague' : `${battle?.enemiesDefeated||0} ennemis vaincus sur ${enemiesRequired}`);
@@ -585,7 +586,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   // vrais niveaux de Dojo.
   if (prevBattle && (battle?.kills || 0) > (prevBattle?.kills || 0)) {
     idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0), stage > Math.max(1, prevBattle.stage || 1));
-    idleAnnounce(stage>Math.max(1,prevBattle.stage||1)?`Vague terminée. Vague ${wave} commencée.`:`Ennemi vaincu. ${enemiesRemaining} restant${enemiesRemaining>1?'s':''}.`);
+    const farmRestart=farming&&stage===Math.max(1,prevBattle.stage||1)&&(battle?.enemiesDefeated||0)<(prevBattle?.enemiesDefeated||0);
+    idleAnnounce(farmRestart?`Mode Farm. La vague ${wave} recommence.`:stage>Math.max(1,prevBattle.stage||1)?`Vague terminée. Vague ${wave} commencée.`:`Ennemi vaincu. ${enemiesRemaining} restant${enemiesRemaining>1?'s':''}.`);
   }
 }
 
@@ -629,7 +631,7 @@ function renderIdleBossChest(chest) {
   if (label && chest) label.textContent = `Coffre ${chest.tier} · objet ${chest.lootRarity||'rare'} · +${idleFormatNumber(chest.reward+(chest.bonusEssence||0))} Essence · +${chest.sealReward||1} Sceau`;
 }
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
-function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>b.classList.toggle('active',b.dataset.battleMode===mode));}
+function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>{const active=b.dataset.battleMode===mode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});}
 function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto-skills');const label=document.getElementById('idle-auto-skills-label');if(!btn||!auto)return;btn.disabled=!auto.unlocked;btn.classList.toggle('active',auto.enabled);btn.dataset.enabled=auto.enabled?'1':'0';btn.querySelector(':scope > i:last-child').className=`fas ${auto.enabled?'fa-toggle-on':'fa-toggle-off'}`;label.textContent=!auto.unlocked?`Débloquées au niveau ${auto.level}`:auto.enabled?`Simulation active · rendement moyen +${Math.round(auto.bonus*100)}%`:'Simulation inactive · cliquer pour activer';}
 async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}

@@ -40,6 +40,7 @@ const {
   enemyMaxHp,
   enemyReward,
   enemiesRequiredForStage,
+  normalizeWaveProgress,
   enemyUnitReward,
   enemyUnitMaxHp,
   enemyArchetype,
@@ -88,6 +89,19 @@ test('chaque vague normale demande 10 ennemis et le boss reste un combat unique'
   const finishBoss = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:enemyMaxHp(10),elapsedSeconds:1,mode:'progress'});
   assert.equal(finishBoss.stage, 11);
   assert.equal(finishBoss.waveKills, 0);
+});
+
+test('un ancien compteur enregistré à 10 est réparé vers la vague suivante',()=>{
+  assert.deepEqual(normalizeWaveProgress(1,10,'progress'),{stage:2,waveKills:0});
+  assert.deepEqual(normalizeWaveProgress(9,10,'progress'),{stage:10,waveKills:0});
+  assert.deepEqual(normalizeWaveProgress(10,1,'progress'),{stage:11,waveKills:0});
+  const repaired=simulateCombat({stage:1,waveKills:10,hp:0,dps:0,elapsedSeconds:0,mode:'progress'});
+  assert.equal(repaired.stage,2);
+  assert.equal(repaired.waveKills,0);
+});
+
+test('le mode Farm répète explicitement la vague après le dixième ennemi',()=>{
+  assert.deepEqual(normalizeWaveProgress(4,10,'farm'),{stage:4,waveKills:0});
 });
 
 test('les archétypes ennemis changent réellement les PV et le butin',()=>{
