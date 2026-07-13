@@ -122,8 +122,10 @@ test('les archétypes ennemis changent réellement les PV et le butin',()=>{
 test('équilibrage : les murs croissent plus vite que les récompenses et les achats restent espacés', () => {
   assert.equal(enemyMaxHp(1), 20);
   assert.ok(enemyMaxHp(50) / enemyMaxHp(10) > enemyReward(50) / enemyReward(10));
-  assert.equal(clickUpgradeCost(0), 60);
-  assert.equal(prodUpgradeCost(0), 75);
+  assert.equal(clickUpgradeCost(0), 21);
+  assert.equal(prodUpgradeCost(0), 26);
+  assert.ok(clickUpgradeCost(5)>clickUpgradeCost(4));
+  assert.ok(prodUpgradeCost(5)>prodUpgradeCost(4));
   assert.equal(slotUpgradeCost(START_SLOTS), 400);
   assert.ok(charLevelUpCost('rare', 25) > charLevelUpCost('rare', 10) * 5);
   assert.equal(charLevelUpCost('rare', 1), 28);

@@ -124,7 +124,8 @@ function prodMultiplier(level, ancientBonus) {
   return base * (1 + Math.max(0, ancientBonus || 0));
 }
 function prodUpgradeCost(level) {
-  return Math.round(finiteIdleNumber(75 * Math.pow(1.75, level), 1));
+  const earlyDiscount=[.35,.45,.60,.75,.90][Math.max(0,level)]??1;
+  return Math.round(finiteIdleNumber(75 * Math.pow(1.75, level)*earlyDiscount, 1));
 }
 
 // Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
@@ -137,7 +138,8 @@ function clickYield(level, ancientBonus) {
   return Math.round(base * (1 + Math.max(0, ancientBonus || 0)));
 }
 function clickUpgradeCost(level) {
-  return Math.round(finiteIdleNumber(60 * Math.pow(1.7, level), 1));
+  const earlyDiscount=[.35,.45,.60,.75,.90][Math.max(0,level)]??1;
+  return Math.round(finiteIdleNumber(60 * Math.pow(1.7, level)*earlyDiscount, 1));
 }
 const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood réseau
 
