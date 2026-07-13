@@ -26,6 +26,8 @@ let idleOnboardingClass = 'warrior';
 let idleOnboardingCharacterId = null;
 let idleOnboardingSubmitting = false;
 let idleCombatEntries = [];
+let idleItemFilter = 'all';
+let idleItemSort = 'power';
 
 function idleAddCombatLog(message,icon='fa-bolt'){
   idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
@@ -101,7 +103,7 @@ async function idleBackgroundSync() {
 // Navigation latérale sur ordinateur et barre compacte sur mobile.
 function idleShowPanel(name) {
   idleActivePanel = name;
-  for (const p of ['home', 'progression', 'team', 'upgrades', 'activities']) {
+  for (const p of ['home', 'progression', 'team', 'equipment', 'upgrades', 'activities']) {
     document.getElementById('idle-panel-' + p)?.classList.toggle('hidden', p !== name);
   }
   document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => {
@@ -273,6 +275,7 @@ function renderIdleState(state) {
   renderIdleRoadmap(state.codex,state.battle);
   renderIdleMainHero(state);
   renderIdleTeamStrategy(state);
+  renderIdleInventory(state);
   renderIdleMasteries(state.codex);
   renderIdleMilestone(state.dojo);
   renderIdlePrestige(state.dojo);
@@ -379,6 +382,25 @@ function renderIdleTeamStrategy(state) {
   const formations=document.getElementById('idle-formations');if(formations)formations.innerHTML=(state.strategy?.formations||[]).map((f)=>`<button data-idle-formation="${f.key}" class="${f.active?'active':''}"><b>${escapeHtml(f.name)}</b><small>${escapeHtml(f.description)}${f.multiplier>1?` · ×${f.multiplier.toFixed(2)}`:''}</small></button>`).join('');
   const presets=document.getElementById('idle-presets');if(presets)presets.innerHTML=`<div class="idle-preset-save"><input id="idle-preset-name" maxlength="24" placeholder="Nom du preset"><button data-preset-save><i class="fas fa-floppy-disk"></i></button></div>${(state.strategy?.presets||[]).map((p)=>`<button data-preset-load="${escapeHtml(p.name)}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.formation)}</small><i class="fas fa-play"></i></button>`).join('')}`;
 }
+
+const IDLE_ITEM_META={weapon:{label:'Arme',icon:'fa-khanda'},relic:{label:'Relique',icon:'fa-gem'},accessory:{label:'Accessoire',icon:'fa-ring'}};
+const IDLE_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
+function idleItemEffect(item){if(item.effectKey==='salvage')return `+${Math.round(item.effectValue*100)}% d’Essence au recyclage`;return `+${Math.round(item.effectValue*100)}% DPS supplémentaire`;}
+function idleEquippedFor(slotIndex,kind){return idleState?.inventory?.items?.find((x)=>x.equippedSlotIndex===slotIndex&&x.kind===kind)||null;}
+function idleItemComparison(item,slotIndex){const current=idleEquippedFor(slotIndex,item.kind);const before=current?.effectiveBonus||0;const after=item.effectiveBonus||item.bonus;const diff=after-before;return `<span class="idle-item-comparison ${diff>=0?'better':'worse'}"><small>${current?escapeHtml(current.name):'Emplacement vide'}</small><b>${Math.round(before*100)}% <i class="fas fa-arrow-right"></i> ${Math.round(after*100)}%</b><em>${diff>=0?'+':''}${Math.round(diff*100)}% DPS</em></span>`;}
+function renderIdleInventory(state){
+  const inventory=state.inventory;const grid=document.getElementById('idle-inventory-grid');if(!inventory||!grid)return;
+  const capacity=document.getElementById('idle-inventory-capacity');if(capacity)capacity.textContent=`${inventory.count} / ${inventory.capacity}`;
+  const active=(state.slots||[]).filter((s)=>s.character);
+  const loadouts=document.getElementById('idle-loadouts');if(loadouts)loadouts.innerHTML=active.length?active.map((slot)=>{const equipped=inventory.items.filter((x)=>x.equippedSlotIndex===slot.index);const complete=new Set(equipped.map((x)=>x.kind)).size===3&&new Set(equipped.map((x)=>x.sourceWorld)).size===1;return `<article class="idle-loadout ${complete?'complete':''}"><img src="${escapeHtml(slot.character.imageUrl||'')}" alt=""><div><b>${escapeHtml(slot.character.name)}</b><small>Emplacement ${slot.index+1}${complete?` · Panoplie ${escapeHtml(equipped[0].sourceWorld)} +10%`:''}</small></div><span>${['weapon','relic','accessory'].map((kind)=>{const item=equipped.find((x)=>x.kind===kind);return `<i class="fas ${IDLE_ITEM_META[kind].icon} ${item?`r-${item.rarity}`:'empty'}" title="${item?escapeHtml(item.name):'Vide'}"></i>`;}).join('')}</span></article>`;}).join(''):'<p class="hint">Assigne un personnage à ton équipe pour pouvoir l’équiper.</p>';
+  let items=inventory.items.filter((x)=>idleItemFilter==='all'||x.kind===idleItemFilter);
+  items=[...items].sort((a,b)=>idleItemSort==='recent'?new Date(b.obtainedAt)-new Date(a.obtainedAt):idleItemSort==='rarity'?(IDLE_RARITY_ORDER[b.rarity]-IDLE_RARITY_ORDER[a.rarity]):((b.effectiveBonus||b.bonus)-(a.effectiveBonus||a.bonus)));
+  grid.innerHTML=items.length?items.map((item)=>{const meta=IDLE_ITEM_META[item.kind]||IDLE_ITEM_META.weapon;const equipped=item.equippedSlotIndex!==null;const defaultSlot=equipped?item.equippedSlotIndex:active[0]?.index;return `<article class="idle-item-card r-${item.rarity} ${equipped?'equipped':''}" data-item-id="${item.id}"><header><i class="fas ${meta.icon}"></i><div><small>${escapeHtml(item.rarity)} · ${meta.label}</small><b>${escapeHtml(item.name)}</b></div><button data-item-lock="${item.id}" title="${item.locked?'Déverrouiller':'Verrouiller'}"><i class="fas ${item.locked?'fa-lock':'fa-lock-open'}"></i></button></header><div class="idle-item-stats"><span><small>PUISSANCE</small><b>+${Math.round(item.bonus*100)}%</b></span><span><small>${escapeHtml(item.effectLabel)}</small><b>${escapeHtml(idleItemEffect(item))}</b></span></div>${equipped?`<p class="idle-item-equipped"><i class="fas fa-user-shield"></i> Équipé sur <b>${escapeHtml(item.equippedCharacter||`héros ${item.equippedSlotIndex+1}`)}</b></p>`:active.length?`<label class="idle-item-target">Comparer avec <select data-item-target>${active.map((slot)=>`<option value="${slot.index}" ${slot.index===defaultSlot?'selected':''}>${escapeHtml(slot.character.name)}</option>`).join('')}</select></label><div data-item-comparison>${idleItemComparison(item,defaultSlot)}</div>`:'<p class="idle-item-equipped">Aucun héros actif</p>'}<footer>${equipped?`<button class="btn-secondary" data-item-unequip="${item.id}"><i class="fas fa-arrow-right-from-bracket"></i> Retirer</button>`:active.length?`<button class="btn-primary" data-item-equip="${item.id}"><i class="fas fa-shield-halved"></i> Équiper</button>`:''}<button class="btn-secondary danger" data-item-salvage="${item.id}" ${item.locked||equipped?'disabled':''}><i class="fas fa-recycle"></i> ${idleFormatNumber(item.salvageValue)}</button></footer></article>`;}).join(''):'<div class="idle-inventory-empty"><i class="fas fa-box-open"></i><b>Aucun objet dans cette catégorie</b><span>Vaincs un gardien puis ouvre son coffre pour obtenir une pièce.</span></div>';
+}
+async function equipIdleItem(itemId,slotIndex){try{renderIdleState(await api('/api/idle/equipment/equip',{method:'POST',body:JSON.stringify({itemId,slotIndex})}));idleSpawnFloat('ÉQUIPEMENT MODIFIÉ','xp');}catch(e){alert(e.message);}}
+async function unequipIdleItem(itemId){try{renderIdleState(await api('/api/idle/equipment/unequip',{method:'POST',body:JSON.stringify({itemId})}));}catch(e){alert(e.message);}}
+async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){alert(e.message);}}
+async function salvageIdleItem(itemId){const item=idleState?.inventory?.items?.find((x)=>x.id===itemId);if(!item||!confirm(`Recycler ${item.name} contre ${idleFormatNumber(item.salvageValue)} Essence ?`))return;try{const r=await api('/api/idle/equipment/salvage',{method:'POST',body:JSON.stringify({itemId})});renderIdleState(r.state);idleSpawnFloat(`RECYCLAGE +${idleFormatNumber(r.gained)}`,'xp');}catch(e){alert(e.message);}}
 
 function renderIdleChallenges(items){const box=document.getElementById('idle-challenges');if(!box)return;box.innerHTML=items.map((c)=>`<article class="idle-challenge ${c.completed?'done':''}"><header><i class="fas ${c.icon}"></i><div><span>${escapeHtml(c.cadence)} · ${escapeHtml(c.difficulty)}</span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.description)}</small></div><strong>${c.progress}%</strong></header><div class="idle-challenge-requirements">${(c.requirements||[]).map((r)=>`<span class="${r.progress>=r.target?'done':''}"><i class="fas ${r.progress>=r.target?'fa-check':'fa-circle'}"></i><b>${escapeHtml(r.label)}</b><em>${idleFormatNumber(Math.min(r.progress,r.target))}/${idleFormatNumber(r.target)}</em></span>`).join('')}</div><div class="idle-challenge-footer"><em style="--progress:${Math.min(100,c.progress)}%"></em><button data-challenge-claim="${c.key}" ${!c.completed||c.claimed?'disabled':''}>${c.claimed?'<i class="fas fa-check"></i> Réclamé':`Réclamer +${c.reward} <i class="fas fa-ticket"></i>`}</button></div></article>`).join('');}
 
@@ -561,7 +583,7 @@ function showIdleBossReward(reward) {
   const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');if(!modal||!body)return;
   const names = { weapon: 'Arme', relic: 'Relique', accessory: 'Accessoire' };
   const loot=reward.loot;
-  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span>${reward.gold?`<span><i class="fas fa-coins"></i><b>+${reward.gold}</b><small>Golds</small></span>`:''}</div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}"><i class="fas ${loot.kind==='weapon'?'fa-khanda':loot.kind==='relic'?'fa-gem':'fa-ring'}"></i><div><small>${escapeHtml(loot.rarity.toUpperCase())}</small><b>${names[loot.kind]}</b><span>${loot.equipped?`Nouvel équipement · +${Math.round(loot.bonus*100)}%`:`Convertie en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.equipped?'ÉQUIPÉ':'RECYCLÉ'}</em></div>`:''}`;
+  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span>${reward.gold?`<span><i class="fas fa-coins"></i><b>+${reward.gold}</b><small>Golds</small></span>`:''}</div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}"><i class="fas ${loot.kind==='weapon'?'fa-khanda':loot.kind==='relic'?'fa-gem':'fa-ring'}"></i><div><small>${escapeHtml(loot.rarity.toUpperCase())}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Ajouté à l’inventaire · +${Math.round(loot.bonus*100)}%`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-shield-halved"></i> Voir et équiper l’objet</button>':''}`:''}`;
   modal.classList.remove('hidden');
 }
 
@@ -1407,6 +1429,11 @@ function initIdleUI() {
   document.getElementById('idle-boss-reveal-close')?.addEventListener('click',closeBossReward);
   document.getElementById('idle-boss-reveal-continue')?.addEventListener('click',closeBossReward);
   document.getElementById('idle-boss-reveal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-boss-reveal')closeBossReward();});
+  document.getElementById('idle-boss-reveal')?.addEventListener('click',(e)=>{if(e.target.closest('[data-open-equipment]')){closeBossReward();idleShowPanel('equipment');}});
+  document.getElementById('idle-item-filters')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-item-filter]');if(!b)return;idleItemFilter=b.dataset.itemFilter;document.querySelectorAll('[data-item-filter]').forEach((x)=>x.classList.toggle('active',x===b));renderIdleInventory(idleState);});
+  document.getElementById('idle-item-sort')?.addEventListener('change',(e)=>{idleItemSort=e.target.value;renderIdleInventory(idleState);});
+  document.getElementById('idle-inventory-grid')?.addEventListener('change',(e)=>{const select=e.target.closest('[data-item-target]');if(!select)return;const card=select.closest('[data-item-id]');const item=idleState?.inventory?.items?.find((x)=>x.id===card?.dataset.itemId);const comparison=card?.querySelector('[data-item-comparison]');if(item&&comparison)comparison.innerHTML=idleItemComparison(item,Number(select.value));});
+  document.getElementById('idle-inventory-grid')?.addEventListener('click',(e)=>{const card=e.target.closest('[data-item-id]');if(!card)return;const itemId=card.dataset.itemId;const lock=e.target.closest('[data-item-lock]');if(lock){const item=idleState.inventory.items.find((x)=>x.id===itemId);return lockIdleItem(itemId,!item.locked);}if(e.target.closest('[data-item-equip]'))return equipIdleItem(itemId,Number(card.querySelector('[data-item-target]')?.value));if(e.target.closest('[data-item-unequip]'))return unequipIdleItem(itemId);if(e.target.closest('[data-item-salvage]'))return salvageIdleItem(itemId);});
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('pointerdown', clickIdle);

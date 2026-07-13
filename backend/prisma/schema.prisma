@@ -208,6 +208,7 @@ model User {
   cardAlbums           CardAlbum[]
   songsAdded           Song[]
   idleSlots            IdleSlot[]
+  idleItems            IdleItem[]
   dojoRecruits         DojoRecruit[]
   ancientLevels        AncientLevel[]
   songReports          SongReport[]
@@ -848,6 +849,7 @@ model IdleSlot {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   character  Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
   equipments IdleEquipment[]
+  items      IdleItem[]
 
   @@unique([userId, slotIndex])
   @@index([userId])
@@ -864,6 +866,31 @@ model IdleEquipment {
 
   @@unique([idleSlotId, kind])
   @@index([idleSlotId])
+}
+
+// Inventaire persistant du mode Idle. Un objet peut rester dans le sac ou être
+// équipé sur un héros ; contrairement à l'ancien IdleEquipment, plusieurs
+// objets d'un même type peuvent donc coexister et être comparés.
+model IdleItem {
+  id             String   @id @default(cuid())
+  userId         String
+  equippedSlotId Int?
+  kind           String
+  rarity         String
+  name           String
+  bonus          Float
+  effectKey      String
+  effectValue    Float
+  sourceWorld    String
+  locked         Boolean  @default(false)
+  obtainedAt     DateTime @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equippedSlot IdleSlot? @relation(fields: [equippedSlotId], references: [id], onDelete: SetNull)
+
+  @@unique([equippedSlotId, kind])
+  @@index([userId, obtainedAt])
+  @@index([equippedSlotId])
 }
 
 model IdleMissionClaim {
