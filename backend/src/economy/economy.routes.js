@@ -14,6 +14,7 @@ const REASON_LABELS = {
   quiz_first_correct: 'Bonne réponse (découverte)',
   quiz_correct: 'Bonne réponse',
   pack_open: 'Ouverture de paquet',
+  idle_recruit: 'Invocation Anime Ascension',
   duplicate_refund: 'Doublon remboursé',
   tower_entry: 'Entrée au Château',
   tower_reward: 'Récompense du Château',

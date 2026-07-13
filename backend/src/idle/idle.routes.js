@@ -1,7 +1,6 @@
 // Routes du Dojo (idle/clicker) : état, récolte, recrutement, assignation
-// d'emplacements, clic manuel, améliorations. Monnaie "essence" et roster de
-// personnages ENTIÈREMENT séparés du gacha — ni UserCard/CardInstance/tokens
-// ni TokenTransaction ne sont jamais lus ou écrits ici (cf. src/idle/idle.js).
+// d'emplacements, clic manuel, améliorations. Le roster reste séparé du gacha ;
+// seuls les Golds globaux peuvent servir d'alternative aux Sceaux à l'invocation.
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
@@ -49,6 +48,7 @@ const {
   ancientBonus,
   rollRecruitRarity,
   recruitCost,
+  recruitGoldCost,
 } = require('./idle');
 
 const router = express.Router();
@@ -445,7 +445,7 @@ async function buildState(userId) {
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
       idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleOnboardingComplete:true,
-      idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idlePrestigePath:true,idlePrestigeMilestone:true,
+      idleSeals:true,tokens:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idlePrestigePath:true,idlePrestigeMilestone:true,
       idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankStartedAt:true,
     },
   });
@@ -581,7 +581,7 @@ async function buildState(userId) {
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
   const challenges=challengeDefs.map((c)=>({...c,progress:Math.min(c.progress,c.target),completed:c.progress>=c.target,claimed:claimedChallenges.has(`challenge_${c.key}:${c.period}`)}));
   const guide=[
-    {key:'recruit',title:'Recrute ton premier héros',description:'Utilise ton Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
+    {key:'recruit',title:'Invoque ton premier héros',description:'Utilise des Sceaux ou des Golds pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
     {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
     {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
@@ -592,7 +592,7 @@ async function buildState(userId) {
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
-    economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,offlineCapMs},
+    economy:{essence:user.essence,seals:user.idleSeals,gold:user.tokens,pendingEssence:pending,dps:totalRate,offlineCapMs},
     run:{stage,bestStage:Math.max(user.idleRunBestStage||1,stage),essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress'},
     combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
@@ -614,7 +614,7 @@ async function buildState(userId) {
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),nextCostAfter:recruitCost(recruitCount+1,recruitDiscountBonus),currency:'seals',balance:user.idleSeals,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
+    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),nextCostAfter:recruitCost(recruitCount+1,recruitDiscountBonus),currency:'seals',balance:user.idleSeals,goldCost:recruitGoldCost(recruitCount,recruitDiscountBonus),goldCostAfter:recruitGoldCost(recruitCount+1,recruitDiscountBonus),goldBalance:user.tokens,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
     recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character) })),
     battle: {
       stage,
@@ -807,16 +807,23 @@ router.post('/collect', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
 });
 
 // Recrute un personnage au hasard (pondéré par rareté, cf. RECRUIT_WEIGHTS)
-// contre de l'essence — la SEULE façon d'obtenir un personnage dans le Dojo.
+// avec des Sceaux ou des Golds — la SEULE façon d'obtenir un personnage dans le Dojo.
 // Exclut les personnages déjà recrutés par ce joueur ; si la rareté tirée est
 // épuisée (tout recruté), retombe sur les autres raretés dans l'ordre.
 router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+  const currency = String(req.body?.currency || 'seals');
+  if (!['seals', 'gold'].includes(currency)) return res.status(400).json({ error: 'Devise de recrutement invalide' });
   let result;
+  let paymentCost = 0;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const count = await tx.dojoRecruit.count({ where: { userId: user.id } });
-      const cost = recruitCost(count, ancientBonus(ancientLevelsByKey, 'recruitDiscount'));
-      if ((user.idleSeals||0) < cost) throw new IdleError(400, 'Sceaux insuffisants');
+      const discount = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
+      const cost = currency === 'gold' ? recruitGoldCost(count, discount) : recruitCost(count, discount);
+      paymentCost = cost;
+      if (currency === 'gold' ? (user.tokens||0) < cost : (user.idleSeals||0) < cost) {
+        throw new IdleError(400, currency === 'gold' ? 'Golds insuffisants' : 'Sceaux insuffisants');
+      }
       const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
       const pity = user.idleRecruitPity || 0;
       const rolled = pity >= 9 ? (Math.random() < .06 ? 'mythic' : Math.random() < .32 ? 'legendary' : 'epic') : rollRecruitRarity(ancientBonus(ancientLevelsByKey, 'recruitLuck'));
@@ -832,7 +839,14 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
       }
       if (!pool.length) throw new IdleError(400, 'Tu as déjà recruté tout le roster disponible !');
       const picked = pool[Math.floor(Math.random() * pool.length)];
-      await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 } } });
+      const pityUpdate = ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 };
+      if (currency === 'gold') {
+        const debit = await tx.user.updateMany({ where: { id: user.id, tokens: { gte: cost } }, data: { tokens: { decrement: cost }, idleRecruitPity: pityUpdate } });
+        if (!debit.count) throw new IdleError(400, 'Golds insuffisants');
+        await tx.tokenTransaction.create({ data: { userId: user.id, amount: -cost, reason: 'idle_recruit' } });
+      } else {
+        await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });
+      }
       await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id } });
       result = picked;
     });
@@ -844,7 +858,7 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
   // (compteur/coût du prochain) déjà renvoyé par buildState() — le spread
   // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
   // même nom.
-  res.json({ ...(await buildState(req.user.id)), recruited: { ...result, talent: characterTalent(result), role:roleForCharacter(result),baseRate:slotRate(result.rarity,1) } });
+  res.json({ ...(await buildState(req.user.id)), payment:{currency,cost:paymentCost}, recruited: { ...result, talent: characterTalent(result), role:roleForCharacter(result),baseRate:slotRate(result.rarity,1) } });
   void recordIdleEvent(req.user.id,'recruit',{value:1});
   void incrementIdleCounter(req.user.id,'recruit',1);
 });

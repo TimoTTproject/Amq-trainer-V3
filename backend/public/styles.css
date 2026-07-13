@@ -6294,3 +6294,43 @@ body.idle-fullscreen #app { padding-top: 0; }
   #view-idle .idle-tab{min-width:0;flex-direction:column;gap:2px;padding:7px 2px;font-size:8px;line-height:1}
   #view-idle .idle-tab i{font-size:13px}
 }
+
+/* Invocation : choix clair entre la monnaie d'activité et les Golds globaux. */
+.idle-recruit-payment{display:grid;grid-template-columns:1fr 1fr;gap:6px;min-width:0}
+.idle-recruit-payment button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:7px;padding:8px;border-radius:9px}
+.idle-recruit-payment button>span{display:flex;min-width:0;flex-direction:column;align-items:flex-start}
+.idle-recruit-payment button b{font-size:10px}
+.idle-recruit-payment button small{overflow:hidden;max-width:100%;color:var(--text-2);font-size:8px;text-overflow:ellipsis;white-space:nowrap}
+.idle-recruit-payment .idle-recruit-gold{border-color:#f59e0b66;background:linear-gradient(135deg,#f59e0b18,var(--bg-2))}
+.idle-recruit-payment .idle-recruit-gold>i{color:#fbbf24}
+.idle-recruit-payment-wide{margin:4px 0 10px}
+.idle-recruit-payment-wide button{min-height:52px}
+@media(max-width:560px){.idle-recruit-payment button{padding:7px 5px}.idle-recruit-payment button b{font-size:9px}.idle-recruit-payment button small{font-size:7px}}
+
+/* DA AMQ : fond neutre, rouge de marque et accents cyan réservés aux actions. */
+#view-idle.idle-space,#view-idle.idle-space[data-decor]{background:#080a0f}
+#view-idle.idle-space{border-top:3px solid var(--accent)}
+#view-idle .idle-particles{display:none}
+#view-idle .idle-tabs{background:#11141b;border-color:#2a303b;box-shadow:0 14px 32px #0008}
+#view-idle .idle-tab.active{background:var(--accent);box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 28%,transparent)}
+#view-idle .idle-currency-panel{border-color:#2a303b;background:#101319}
+#view-idle .idle-combat-panel{border-color:#08aee866;background:#0b0e14;box-shadow:0 12px 34px #0008,0 0 0 1px #08aee812}
+#view-idle .idle-recruit-payment .idle-recruit-gold{background:#15130d}
+
+/* Aperçu des quêtes dans Combat : dense, lisible et actionnable. */
+.idle-combat-quests{margin:7px 0;padding:9px;border:1px solid #2a303b;border-radius:10px;background:#0e1117}
+.idle-combat-quests>header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.idle-combat-quests>header>span{display:flex;align-items:center;gap:7px;color:#f4f6f8;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.idle-combat-quests>header>span i{color:var(--accent)}
+.idle-combat-quests>header>button{display:flex;align-items:center;gap:6px;padding:3px;border:0;background:transparent;color:var(--accent-2);font-size:9px;font-weight:800;cursor:pointer}
+.idle-combat-quests>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.idle-combat-quest{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:7px;min-width:0;padding:7px 8px;border:1px solid #222833;border-radius:8px;background:#131720}
+.idle-combat-quest>i{color:#8b95a5;text-align:center}
+.idle-combat-quest>div{display:flex;min-width:0;flex-direction:column}
+.idle-combat-quest b{overflow:hidden;color:#e9edf2;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+.idle-combat-quest span{color:#8b95a5;font-size:8px}
+.idle-combat-quest em{height:3px;margin-top:4px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--progress),#2a303b var(--progress))}
+.idle-combat-quest.ready{border-color:#f59e0b66}.idle-combat-quest.ready>i{color:#fbbf24}
+.idle-combat-quest>button{padding:5px 7px;border:1px solid #f59e0b66;border-radius:6px;background:#211707;color:#fbbf24;font-size:8px;font-weight:900;cursor:pointer}
+.idle-combat-quests>div>p{grid-column:1/-1;margin:0;padding:8px;color:#8b95a5;font-size:9px;text-align:center}.idle-combat-quests>div>p i{color:#22c55e}
+@media(max-width:760px){.idle-combat-quests>div{display:flex;overflow-x:auto}.idle-combat-quest{min-width:210px}.idle-combat-quests{padding:8px}}

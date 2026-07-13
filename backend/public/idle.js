@@ -13,6 +13,7 @@ let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déc
 let idleActivePanel = 'home'; // page courante de l'Idle
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
+let idleLastRecruitCurrency = 'seals';
 let idleBurstReadyAt = 0;
 let idleTeamSkillReadyAt = 0;
 let idleNextClickAt = 0;
@@ -565,23 +566,44 @@ function idleShowLoot(loot) {
 }
 
 function renderIdleRecruit(recruit) {
-  const costLabel = `${idleFormatNumber(recruit.nextCost)} <i class="fas fa-ticket"></i> · ${idleFormatNumber(recruit.balance)} dispo.`;
-  const affordable = recruit.balance >= recruit.nextCost;
+  const sealCostLabel = `${idleFormatNumber(recruit.nextCost)} Sceau${recruit.nextCost > 1 ? 'x' : ''} · ${idleFormatNumber(recruit.balance)} dispo.`;
+  const goldCostLabel = `${idleFormatNumber(recruit.goldCost)} Golds · ${idleFormatNumber(recruit.goldBalance)} dispo.`;
+  const sealAffordable = recruit.balance >= recruit.nextCost;
+  const goldAffordable = recruit.goldBalance >= recruit.goldCost;
   for (const id of ['idle-top-recruit-cost', 'idle-recruit-cost']) {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = costLabel;
+    if (el) el.textContent = sealCostLabel;
   }
   for (const id of ['idle-top-recruit-btn', 'idle-recruit-btn']) {
     const btn = document.getElementById(id);
-    if (btn) { btn.disabled = !affordable; btn.title = `Rare ${recruit.odds?.rare||70}% · Épique ${recruit.odds?.epic||20}% · Légendaire ${recruit.odds?.legendary||8}% · Mythique ${recruit.odds?.mythic||2}% · Épique garanti dans ${recruit.guaranteedEpicIn||10} recrutement(s) · Prochain coût ${recruit.nextCostAfter}`; }
+    if (btn) { btn.disabled = !sealAffordable; btn.title = `Invoquer avec des Sceaux · Épique garanti dans ${recruit.guaranteedEpicIn||10} invocation(s)`; }
   }
-  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>${idleFormatNumber(recruit.balance)} Sceaux</b> · missions : +${recruit.income?.daily||3}/jour · +${recruit.income?.weekly||3}/semaine · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
+  for (const id of ['idle-top-recruit-gold-cost', 'idle-recruit-gold-cost']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = goldCostLabel;
+  }
+  for (const id of ['idle-top-recruit-gold-btn', 'idle-recruit-gold-btn']) {
+    const btn = document.getElementById(id);
+    if (btn) { btn.disabled = !goldAffordable; btn.title = `Invoquer avec des Golds · prochain coût ${idleFormatNumber(recruit.goldCostAfter)} Golds`; }
+  }
+  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>${idleFormatNumber(recruit.balance)} Sceaux</b> · <i class="fas fa-coins"></i> <b>${idleFormatNumber(recruit.goldBalance)} Golds</b> · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
 function renderIdleMissions(missions) {
   const box = document.getElementById('idle-missions'); if (!box) return;
   box.innerHTML = missions.map((m) => `<div class="idle-mission ${m.completed ? 'done' : ''}"><span class="idle-mission-icon"><i class="fas ${m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i></span><div><small>${m.cadence}</small><b>${escapeHtml(m.title)}</b><span>${idleFormatNumber(m.progress)} / ${idleFormatNumber(m.target)}</span><em style="--progress:${Math.min(100, m.progress / m.target * 100)}%"></em></div><button class="btn-secondary" data-idle-mission="${m.key}" ${!m.completed || m.claimed ? 'disabled' : ''}>${m.claimed ? 'Réclamée' : idleRewardLabel(m)}</button></div>`).join('');
+  renderIdleCombatQuests(missions);
+}
+
+function renderIdleCombatQuests(missions) {
+  const box = document.getElementById('idle-combat-quests'); if (!box) return;
+  const active = missions.filter((m) => !m.claimed).sort((a, b) => Number(b.completed) - Number(a.completed)).slice(0, 3);
+  const cards = active.length ? active.map((m) => {
+    const progress = Math.min(100, m.progress / Math.max(1, m.target) * 100);
+    return `<article class="idle-combat-quest ${m.completed ? 'ready' : ''}"><i class="fas ${m.completed ? 'fa-gift' : m.cadence === 'Quotidienne' ? 'fa-sun' : 'fa-calendar-week'}"></i><div><b>${escapeHtml(m.title)}</b><span>${idleFormatNumber(m.progress)}/${idleFormatNumber(m.target)}</span><em style="--progress:${progress}%"></em></div>${m.completed ? `<button data-idle-mini-mission="${m.key}">Réclamer</button>` : ''}</article>`;
+  }).join('') : '<p><i class="fas fa-circle-check"></i> Toutes les quêtes disponibles sont terminées.</p>';
+  box.innerHTML = `<header><span><i class="fas fa-list-check"></i><b>Quêtes actives</b></span><button data-idle-open-activities>Tout voir <i class="fas fa-arrow-right"></i></button></header><div>${cards}</div>`;
 }
 
 function renderIdleEvent(event) {
@@ -1239,13 +1261,18 @@ async function refreshIdlePickerList() {
   document.getElementById('idle-picker-list').innerHTML = available.map((c, i) => cardHTML(c, { index: i })).join('');
 }
 
-async function recruitIdle() {
+async function recruitIdle(currency = 'seals') {
   let r;
   try {
-    r = await api('/api/idle/recruit', { method: 'POST', body: JSON.stringify({}) });
+    r = await api('/api/idle/recruit', { method: 'POST', body: JSON.stringify({ currency }) });
   } catch (e) {
     alert(e.message);
     return;
+  }
+  idleLastRecruitCurrency = r.payment?.currency || currency;
+  if (idleLastRecruitCurrency === 'gold' && typeof currentUser !== 'undefined') {
+    currentUser.tokens = r.recruit.goldBalance;
+    if (typeof renderHeaderUser === 'function') renderHeaderUser();
   }
   if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(r.recruited.rarity);
   if (['epic', 'legendary', 'mythic'].includes(r.recruited.rarity) && typeof burstConfetti === 'function') {
@@ -1355,6 +1382,11 @@ function initIdleUI() {
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
   document.getElementById('idle-skill-team')?.addEventListener('click', idleUseTeamSkill);
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
+  document.getElementById('idle-combat-quests')?.addEventListener('click', (e) => {
+    const claim = e.target.closest('[data-idle-mini-mission]');
+    if (claim) return claimIdleMission(claim.dataset.idleMiniMission);
+    if (e.target.closest('[data-idle-open-activities]')) idleShowPanel('activities');
+  });
   document.getElementById('idle-rank-advance')?.addEventListener('click', advanceIdleRank);
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
@@ -1413,11 +1445,13 @@ function initIdleUI() {
     if(characterButton){idleOnboardingCharacterId=Number(characterButton.dataset.onboardingCharacter);return renderIdleOnboarding(idleState?.onboarding);}
     if(e.target.closest('#idle-onboarding-start'))completeIdleOnboarding();
   });
-  document.getElementById('idle-top-recruit-btn')?.addEventListener('click', recruitIdle);
-  document.getElementById('idle-recruit-btn')?.addEventListener('click', recruitIdle);
+  document.getElementById('idle-top-recruit-btn')?.addEventListener('click', () => recruitIdle('seals'));
+  document.getElementById('idle-recruit-btn')?.addEventListener('click', () => recruitIdle('seals'));
+  document.getElementById('idle-top-recruit-gold-btn')?.addEventListener('click', () => recruitIdle('gold'));
+  document.getElementById('idle-recruit-gold-btn')?.addEventListener('click', () => recruitIdle('gold'));
   document.getElementById('idle-recruit-reveal-close')?.addEventListener('click', closeIdleRecruitReveal);
   document.getElementById('idle-recruit-reveal')?.addEventListener('click', (e) => { if (e.target.id === 'idle-recruit-reveal') closeIdleRecruitReveal(); });
-  document.getElementById('idle-recruit-again')?.addEventListener('click', () => { closeIdleRecruitReveal(); recruitIdle(); });
+  document.getElementById('idle-recruit-again')?.addEventListener('click', () => { closeIdleRecruitReveal(); recruitIdle(idleLastRecruitCurrency); });
   document.getElementById('idle-recruit-assign')?.addEventListener('click', assignIdleLastRecruit);
   document.getElementById('idle-milestone-btn')?.addEventListener('click', claimIdleMilestone);
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
