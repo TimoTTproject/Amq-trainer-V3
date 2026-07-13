@@ -693,6 +693,8 @@ function idleRenderSkillCooldown() {
   btn.disabled = left > 0;
   const teamBtn = document.getElementById('idle-skill-team'); const teamLabel = document.getElementById('idle-team-skill-status');
   const skills=idleState?.battle?.skills||{};
+  const ultimateExplanation=document.getElementById('idle-ultimate-explanation');if(ultimateExplanation)ultimateExplanation.textContent=`${idleFormatNumber(skills.burstDamage||0)} dégâts confirmés · recharge ${skills.burstCooldownSeconds||90}s`;
+  const comboExplanation=document.getElementById('idle-combo-explanation');if(comboExplanation)comboExplanation.textContent=`${idleFormatNumber(skills.teamDamage||0)} dégâts · ${skills.uniqueRoles||1} rôle${(skills.uniqueRoles||1)>1?'s':''} unique${(skills.uniqueRoles||1)>1?'s':''} · recharge ${skills.teamCooldownSeconds||150}s`;
   if (teamBtn && teamLabel) { const teamLeft = Math.max(0, idleTeamSkillReadyAt - Date.now()); const count = idleState?.slots?.filter((s) => s.character).length || 0; teamBtn.disabled = teamLeft > 0 || count < 2; teamLabel.textContent = count < 2 ? '2 héros requis' : (teamLeft > 0 ? `Recharge · ${Math.ceil(teamLeft / 1000)}s` : `Prêt · ${idleFormatNumber(skills.teamDamage)} dégâts · recharge ${skills.teamCooldownSeconds||150}s`); }
   label.textContent = left > 0 ? `Recharge · ${Math.ceil(left / 1000)}s` : `Prêt · ${idleFormatNumber(skills.burstDamage||((idleState?.click?.damage||1)*25))} dégâts · recharge ${skills.burstCooldownSeconds||90}s`;
 }

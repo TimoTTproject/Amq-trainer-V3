@@ -6609,3 +6609,16 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-team-secondary{border-bottom:1px solid #2a303b}
 #view-idle .idle-team-secondary .idle-strategy-tools{margin-bottom:0}
 @media(max-width:760px){#view-idle .idle-team-primary{padding:10px 0 14px}}
+
+/* Explication compacte des actifs, sans ajouter une nouvelle carte. */
+#view-idle .idle-skill-guide{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:-2px 0 10px;border-bottom:1px solid #2a303b}
+#view-idle .idle-skill-guide article{display:grid;grid-template-columns:28px 1fr;align-items:center;gap:8px;padding:9px 10px}
+#view-idle .idle-skill-guide article+article{border-left:1px solid #2a303b}
+#view-idle .idle-skill-guide article>i{display:grid;width:28px;height:28px;place-items:center;color:#f59e0b;font-size:15px}
+#view-idle .idle-skill-guide article:nth-child(2)>i{color:#38bdf8}
+#view-idle .idle-skill-guide article>span{display:flex;min-width:0;flex-direction:column}
+#view-idle .idle-skill-guide b{font-size:11px}
+#view-idle .idle-skill-guide small{margin-top:2px;color:var(--text-2);font-size:9px;line-height:1.35}
+#view-idle .idle-skill-guide>p{grid-column:1/-1;margin:0;padding:6px 10px;border-top:1px solid #202630;color:#8f99a8;font-size:9px}
+#view-idle .idle-skill-guide>p i{margin-right:5px;color:#fb7185}
+@media(max-width:620px){#view-idle .idle-skill-guide{grid-template-columns:1fr}#view-idle .idle-skill-guide article+article{border-left:0;border-top:1px solid #202630}}
