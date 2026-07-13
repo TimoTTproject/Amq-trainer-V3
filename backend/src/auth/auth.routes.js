@@ -125,9 +125,18 @@ router.post(
   }
 );
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  // Une session terminée ne doit jamais continuer à franchir des niveaux en
+  // arrière-plan. Le joueur reste sur sa vague actuelle et y récolte son
+  // Essence hors ligne jusqu'à sa prochaine connexion.
+  if (req.user && !req.user.isGuest) {
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { idleBattleMode: 'farm' },
+    });
+  }
   clearAuthCookie(res);
-  res.json({ success: true });
+  res.json({ success: true, idleBattleMode: 'farm' });
 });
 
 // Change (ou définit) le mot de passe du compte connecté. Un compte créé via

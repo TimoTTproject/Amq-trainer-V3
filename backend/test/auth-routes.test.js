@@ -110,6 +110,21 @@ test('me : 401 sans cookie, profil avec cookie, invité reconnu', async () => {
   assert.equal(guestMe.json.user.tokens, 0);
 });
 
+test('logout : passe l’Idle en mode farm avant de fermer la session', async () => {
+  prisma.user.findUnique = async () => dbUser({ idleBattleMode: 'progress' });
+  let update = null;
+  prisma.user.update = async (query) => { update = query; return dbUser({ idleBattleMode: 'farm' }); };
+
+  const res = await app.request('/api/auth/logout', {
+    method: 'POST', cookie: app.authCookie('u1'),
+  });
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(update, { where: { id: 'u1' }, data: { idleBattleMode: 'farm' } });
+  assert.equal(res.json.idleBattleMode, 'farm');
+  assert.match(res.headers.get('set-cookie') || '', /amq_token=;/);
+});
+
 test('login : bloque les tentatives répétées', async () => {
   prisma.user.findUnique = async () => null;
   const statuses = [];
