@@ -1179,8 +1179,9 @@ select.album-form-control {
    JS). Les barres de temps du quiz restent : ce sont des indicateurs de jeu,
    pas des décorations — les figer fausserait l'information. */
 @media (prefers-reduced-motion: reduce) {
-  *:not(.quiz-timefill):not(.tower-timefill):not(#daily-timefill),
-  *::before, *::after {
+  *:not(.quiz-timefill):not(.tower-timefill):not(#daily-timefill):not(#view-idle.idle-effects-full):not(#view-idle.idle-effects-full *),
+  *:not(#view-idle.idle-effects-full):not(#view-idle.idle-effects-full *)::before,
+  *:not(#view-idle.idle-effects-full):not(#view-idle.idle-effects-full *)::after {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
@@ -4828,8 +4829,8 @@ textarea::placeholder {
 #view-idle button,#view-idle .idle-tab{min-height:44px}
 #view-idle .idle-battle-kicker,#view-idle .idle-chip,#view-idle .idle-combat-stats{font-size:12px}
 @media (prefers-reduced-motion:reduce){
-  #view-idle *,#view-idle *::before,#view-idle *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
-  #view-idle .idle-particles{display:none!important}
+  #view-idle:not(.idle-effects-full) *,#view-idle:not(.idle-effects-full) *::before,#view-idle:not(.idle-effects-full) *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  #view-idle:not(.idle-effects-full) .idle-particles{display:none!important}
 }
 
 @media (max-width: 700px) {
