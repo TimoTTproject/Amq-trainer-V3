@@ -771,7 +771,7 @@ function renderRoom(d) {
   const together = d.gamesPlayed ? ` · ${d.gamesPlayed} partie${d.gamesPlayed > 1 ? 's' : ''} jouée${d.gamesPlayed > 1 ? 's' : ''} ensemble` : '';
   document.getElementById('mp-room-code').innerHTML = (d.code
     ? `Salle privée · <b>${d.code}</b>`
-    : '⚡ Partie rapide') + `<span class="hint">${together}</span>`;
+    : d.ranked ? '🏅 Partie classée' : '⚡ Partie rapide') + `<span class="hint">${together}</span>`;
   // Inviter des amis + lien partageable : seulement en salle privée.
   document.getElementById('mp-invite-friends')?.classList.toggle('hidden', !d.code);
   document.getElementById('mp-copy-link')?.classList.toggle('hidden', !d.code);
