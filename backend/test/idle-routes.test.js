@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -31,6 +31,14 @@ test.before(async () => {
   app = await createApp((a) => a.use('/api/idle', idleRoutes.router));
 });
 test.after(() => app.close());
+
+test('Ultime : reste significatif face au Combo à tous les niveaux de progression', () => {
+  assert.equal(ULTIMATE_CLICK_MULTIPLIER,75);
+  assert.equal(ULTIMATE_TEAM_SECONDS,15);
+  assert.equal(ultimateBaseDamage(10,0),750);
+  assert.equal(ultimateBaseDamage(10,100),1500);
+});
+
 test.beforeEach(() => {
   prisma.idleSlot.findMany = async () => [];
   prisma.dojoRecruit.count = async () => 0;

@@ -705,7 +705,7 @@ function idleShowSkillImpact(kind, damage, killed) {
   const scene=document.getElementById('idle-scene');if(!scene)return;
   const old=scene.querySelector('.idle-skill-impact');old?.remove();
   const impact=document.createElement('div');impact.className=`idle-skill-impact ${kind}`;
-  impact.innerHTML=`<i class="fas ${kind==='ultimate'?'fa-burst':'fa-people-group'}"></i><span><small>${kind==='ultimate'?'ULTIME DÉCHAÎNÉ':'COMBO D’ÉQUIPE'}</small><b>−${idleFormatNumber(damage)} PV</b><em>${killed?'ENNEMI VAINCU':kind==='ultimate'?'Puissance ×25':'Bonus de rôles appliqué'}</em></span>`;
+  impact.innerHTML=`<i class="fas ${kind==='ultimate'?'fa-burst':'fa-people-group'}"></i><span><small>${kind==='ultimate'?'ULTIME DÉCHAÎNÉ':'COMBO D’ÉQUIPE'}</small><b>−${idleFormatNumber(damage)} PV</b><em>${killed?'ENNEMI VAINCU':kind==='ultimate'?'Frappe majeure':'Bonus de rôles appliqué'}</em></span>`;
   scene.appendChild(impact);setTimeout(()=>impact.remove(),1350);
 }
 
