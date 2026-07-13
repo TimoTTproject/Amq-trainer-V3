@@ -1182,7 +1182,9 @@ function idleSetScenery(theme) {
   };
   if(box.dataset.theme===theme)return;
   box.dataset.theme=theme;
-  box.innerHTML = IDLE_SCENERY_SVG[theme] || IDLE_SCENERY_SVG.wood;
+  // Le fond peint suffit : les silhouettes SVG ajoutaient une maison, un
+  // temple ou des lampadaires dans des mondes auxquels ils n'appartiennent pas.
+  box.replaceChildren();
   box.style.backgroundImage = `url('${art[theme] || art.wood}')`;
 }
 
@@ -1250,6 +1252,11 @@ function renderIdlePrestige(dojo) {
     hint.textContent = dojo.prestige.eligible
       ? `Prestige disponible : +${idleFormatNumber(dojo.prestige.reward)} Sagesse.`
       : `Atteins le stage ${dojo.prestige.minStage} pendant cette run (record : ${dojo.prestige.runBestStage}).`;
+  }
+  const quick=document.getElementById('idle-prestige-quick');
+  if(quick){
+    quick.classList.toggle('available',!!dojo.prestige.eligible);
+    quick.innerHTML=`<i class="fas fa-brain"></i><span><small>${dojo.prestige.eligible?'ASCENSION DISPONIBLE':'PROCHAINE ASCENSION'}</small><b>+${idleFormatNumber(dojo.prestige.reward)} Sagesse</b><em>${dojo.prestige.eligible?'Voir et confirmer':'Record '+idleFormatNumber(dojo.prestige.runBestStage)+' / '+idleFormatNumber(dojo.prestige.minStage)}</em></span><i class="fas fa-arrow-right"></i>`;
   }
   const paths=document.getElementById('idle-prestige-paths');if(paths)paths.innerHTML=(dojo.prestige.paths||[]).map((p)=>`<button data-prestige-path="${p.key}" class="${p.selected?'active':''}" ${dojo.prestige.level<1?'disabled':''}><i class="fas ${p.key==='fist'?'fa-hand-fist':p.key==='army'?'fa-users':p.key==='time'?'fa-clock':'fa-scale-balanced'}"></i><b>${escapeHtml(p.name)}</b><small>Équipe ×${p.prod.toFixed(2)} · Clic ×${p.click.toFixed(2)}</small></button>`).join('');
 }
@@ -1733,6 +1740,7 @@ function initIdleUI() {
   document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-stage-nav')?.addEventListener('click',(e)=>{const button=e.target.closest('button[data-stage]');if(button&&!button.disabled)chooseIdleStage(Number(button.dataset.stage));});
   document.getElementById('idle-world-open')?.addEventListener('click',()=>{const panel=document.getElementById('idle-world-jump');const open=panel?.classList.toggle('hidden')===false;document.getElementById('idle-world-open')?.setAttribute('aria-expanded',String(open));});
+  document.getElementById('idle-world-current')?.addEventListener('click',()=>document.getElementById('idle-world-open')?.click());
   document.getElementById('idle-world-close')?.addEventListener('click',()=>{document.getElementById('idle-world-jump')?.classList.add('hidden');document.getElementById('idle-world-open')?.setAttribute('aria-expanded','false');});
   document.getElementById('idle-world-jump-list')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-world-stage]');if(!button||button.disabled)return;document.getElementById('idle-world-jump')?.classList.add('hidden');document.getElementById('idle-world-open')?.setAttribute('aria-expanded','false');chooseIdleStage(Number(button.dataset.worldStage));});
   document.getElementById('idle-auto-skills')?.addEventListener('click',toggleIdleAutoSkills);
@@ -1787,6 +1795,7 @@ function initIdleUI() {
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-wisdom')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-ancients')?.closest('.idle-collapsible')?.querySelector('[data-idle-collapse]')?.click(),80);});
+  document.getElementById('idle-prestige-quick')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-prestige-btn')?.scrollIntoView({behavior:'smooth',block:'center'}),80);});
   document.getElementById('idle-coach-action')?.addEventListener('click',()=>idleCoachAction?.());
   document.getElementById('idle-coach-close')?.addEventListener('click',()=>{const coach=document.getElementById('idle-coach');if(coach?.dataset.key)sessionStorage.setItem(coach.dataset.key,'hidden');coach?.classList.add('hidden');});
   document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));
