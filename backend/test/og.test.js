@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { injectMeta, esc } = require('../src/share/og');
+const fs = require('node:fs');
+const path = require('node:path');
+const { injectMeta, esc, versionize, BUILD_ID } = require('../src/share/og');
 
 const SAMPLE = `<!doctype html><html><head>
 <title>Anime Music Quiz — Devine l'anime à son opening</title>
@@ -30,4 +32,12 @@ test('injectMeta escapes HTML-dangerous characters in user content', () => {
 test('esc handles quotes and angle brackets', () => {
   assert.equal(esc('a"<>&'), 'a&quot;&lt;&gt;&amp;');
   assert.equal(esc(null), '');
+});
+
+test('versionize injecte le build ID sans script inline interdit par la CSP', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const out = versionize(html);
+  assert.match(out, new RegExp(`data-build-id="${BUILD_ID}"`));
+  assert.match(out, new RegExp(`bootstrap\\.js\\?v=${BUILD_ID}`));
+  assert.doesNotMatch(out, /<script(?![^>]*\bsrc=)[^>]*>/i);
 });

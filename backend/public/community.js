@@ -213,7 +213,8 @@ async function loadPlayers(page) {
           : (p.lastSeenAt ? `<span class="pl-status"><i class="far fa-clock"></i> vu ${timeAgo(p.lastSeenAt)}</span>` : '<span class="pl-status muted">Jamais connecté</span>');
         // Modération + suppression (admin only) — jamais sur soi.
         const del = isAdmin && !p.isMe
-          ? `<button type="button" class="pl-delete pl-mod" data-mute-userid="${p.userId}" data-mod-name="${escapeHtml(p.displayName)}" title="Sourdine du chat (durée au choix, 0 = lever)"><i class="fas fa-comment-slash"></i></button>
+          ? `<button type="button" class="pl-delete pl-mod" data-beta-userid="${p.userId}" data-beta-enabled="${p.idleBetaTester}" data-mod-name="${escapeHtml(p.displayName)}" title="${p.idleBetaTester ? 'Retirer le rôle bêta Anime Ascension' : 'Donner le rôle bêta Anime Ascension'}"><i class="fas fa-flask"></i></button>
+             <button type="button" class="pl-delete pl-mod" data-mute-userid="${p.userId}" data-mod-name="${escapeHtml(p.displayName)}" title="Sourdine du chat (durée au choix, 0 = lever)"><i class="fas fa-comment-slash"></i></button>
              <button type="button" class="pl-delete pl-mod" data-ban-userid="${p.userId}" data-mod-name="${escapeHtml(p.displayName)}" title="Bannir / débannir ce compte"><i class="fas fa-gavel"></i></button>
              <button type="button" class="pl-delete" data-del-userid="${p.userId}" data-del-name="${escapeHtml(p.displayName)}" title="Supprimer ce compte"><i class="fas fa-trash"></i></button>`
           : '';
@@ -264,6 +265,15 @@ async function banPlayer(userId, name) {
   try {
     const r = await api(`/api/admin/user/${userId}/ban`, { method: 'POST', body: JSON.stringify({ banned: ban }) });
     alert(r.banned ? `« ${name} » est banni.` : `« ${name} » est débanni.`);
+  } catch (e) { alert(e.message); }
+}
+
+async function setIdleBetaTester(userId, name, enabled) {
+  const action = enabled ? 'donner' : 'retirer';
+  if (!confirm(`${action[0].toUpperCase()}${action.slice(1)} le rôle bêta Anime Ascension à « ${name} » ?`)) return;
+  try {
+    await api(`/api/admin/user/${userId}/roles/idle-beta`, { method: 'POST', body: JSON.stringify({ enabled }) });
+    await loadPlayers(playersPage);
   } catch (e) { alert(e.message); }
 }
 

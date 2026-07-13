@@ -5,7 +5,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { requireAdmin } = require('../admin/admin');
+const { requireAdmin, requireIdleBeta } = require('../admin/admin');
 const { rateLimit } = require('../util/ratelimit');
 const {
   MAX_SLOTS,
@@ -20,7 +20,11 @@ const {
   CLICK_COOLDOWN_MS,
   slotUpgradeCost,
   OFFLINE_CAP_MS,
-  pendingEssence,
+  simulateCombat,
+  enemyMaxHp,
+  enemyReward,
+  isBossStage,
+  BOSS_TIMER_SECONDS,
   charLevelUpCost,
   charLevelBulkCost,
   RARITY_RATE,
@@ -30,14 +34,13 @@ const {
   dojoLevelForXp,
   dojoXpForLevel,
   dojoLevelMultiplier,
-  stageForXp,
-  stageXpForLevel,
   decorForLevel,
   DOJO_DECOR,
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
-  wisdomForPrestige,
+  PRESTIGE_MIN_STAGE,
+  wisdomForRunStage,
   ANCIENTS,
   ancientByKey,
   ancientCost,
@@ -47,6 +50,18 @@ const {
 } = require('./idle');
 
 const router = express.Router();
+const ROUTE_NUMBER_CAP = 1e300;
+
+function safeIdleNumber(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return number > 0 ? ROUTE_NUMBER_CAP : fallback;
+  return Math.max(0, Math.min(ROUTE_NUMBER_CAP, number));
+}
+
+async function recordIdleEvent(userId,event,{value=null,stage=null}={}) {
+  try { await prisma.idleTelemetry.create({data:{userId,event,value,stage}}); }
+  catch { /* Télémétrie non bloquante, notamment pendant la migration. */ }
+}
 
 class IdleError extends Error {
   constructor(status, message) {
@@ -223,7 +238,7 @@ function currentIdleEvent(now = new Date()) {
   return { ...event, endsAt: end.toISOString() };
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false) {
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
@@ -236,7 +251,34 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if (!s.character || (s.level || 1) < 10) return mult;
     return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
   }, 1);
-  return base * (autoSkills?1.15:1) * Math.max(1,Math.min(4,battleSpeed||1)) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier;
+  // battleSpeed ne modifie volontairement plus l'économie : c'est un réglage
+  // d'animation et non un multiplicateur obligatoire de classement.
+  const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
+  return safeIdleNumber(base * reserveBonus * (autoSkills?1.15:1) * (1+talentTeamBonus) * teamPassive * heroClass(classKey).prod * (heroSpec(classKey,specKey).prod||1) * currentIdleEvent().prod * prodMultiplier(prodLevel, prodAncientBonus) * dojoLevelMultiplier(dojoLevel) * synergyForSlots(slots).multiplier);
+}
+
+function applyActiveDamage(tx, user, damage) {
+  const stage = Math.max(1, user.idleStage || 1);
+  const maxHp = enemyMaxHp(stage);
+  const hp = user.idleEnemyHp > 0 && user.idleEnemyHp <= maxHp ? user.idleEnemyHp : maxHp;
+  const dealt = safeIdleNumber(damage);
+  if (dealt < hp) {
+    return tx.user.update({ where: { id: user.id }, data: { idleEnemyHp: hp - dealt } });
+  }
+  const reward = enemyReward(stage);
+  const nextStage = user.idleBattleMode === 'farm' ? stage : stage + 1;
+  return tx.user.update({
+    where: { id: user.id },
+    data: {
+      essence: { increment: reward },
+      essenceEarnedTotal: { increment: reward },
+      idleRunEssenceEarned: { increment: reward },
+      idleStage: nextStage,
+      idleRunBestStage: Math.max(user.idleRunBestStage || 1, nextStage),
+      idleBestStage: Math.max(user.idleBestStage || 1, nextStage),
+      idleEnemyHp: enemyMaxHp(nextStage),
+    },
+  });
 }
 
 function roleForCharacter(character) {
@@ -262,31 +304,71 @@ async function loadAncientLevels(client, userId) {
 
 // Solde l'essence en attente (production passive depuis idleLastCollectAt,
 // plafonnée) puis laisse `mutate` appliquer son effet — le tout dans UNE
-// transaction, pour que le taux utilisé au calcul soit celui d'avant la
+// écriture optimiste, pour que le taux utilisé au calcul soit celui d'avant la
 // mutation (ex. avant de changer un emplacement) et que rien ne se perde.
 // `essenceEarnedTotal` (jamais décrémentée) suit aussi ce gain : c'est elle qui
 // fait progresser le niveau du Dojo (décor + bonus), indépendamment de ce que
 // le joueur dépense ensuite en améliorations.
 async function withSettle(userId, mutate) {
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } });
+  // Les transactions interactives Prisma sont fragiles derrière certains
+  // poolers PostgreSQL (P2028/connexion expirée). Un compare-and-swap sur
+  // idleLastCollectAt garantit qu'une seule requête encaisse la période, sans
+  // conserver une connexion transactionnelle pendant tous les calculs.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new IdleError(404, 'Compte introuvable');
-    const slots = await loadSlots(tx, userId);
-    const ancientLevelsByKey = await loadAncientLevels(tx, userId);
+    const [slots,recruitCount] = await Promise.all([loadSlots(prisma, userId),prisma.dojoRecruit.count({where:{userId}})]);
+    const ancientLevelsByKey = await loadAncientLevels(prisma, userId);
     const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount);
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
-    const collected = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
-    const settledUser = await tx.user.update({
-      where: { id: userId },
-      data: { essence: { increment: collected }, ...(user.idleBattleMode==='farm'?{}:{essenceEarnedTotal:{increment:collected}}), idleLastCollectAt: new Date() },
+    const elapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
+    const combat = simulateCombat({
+      stage: user.idleStage,
+      hp: user.idleEnemyHp,
+      dps: totalRate,
+      elapsedSeconds: elapsedMs / 1000,
+      mode: user.idleBattleMode,
     });
+    const rawCollected = safeIdleNumber(Math.floor(Number(combat.essence) || 0));
+    // Chaque compteur reste sous le plafond : une addition répétée ne peut pas
+    // dépasser la capacité d'un DOUBLE PRECISION PostgreSQL.
+    const collected = Math.max(0, Math.min(
+      rawCollected,
+      ROUTE_NUMBER_CAP - safeIdleNumber(user.essence),
+      ROUTE_NUMBER_CAP - safeIdleNumber(user.essenceEarnedTotal),
+      ROUTE_NUMBER_CAP - safeIdleNumber(user.idleRunEssenceEarned)
+    ));
+    const stage = Math.max(1, Math.min(1e9, Math.floor(Number(combat.stage) || 1)));
+    const hp = safeIdleNumber(combat.hp, enemyMaxHp(stage));
+    let settledUser;
+    try {
+      settledUser = await prisma.user.update({
+        // `id` conserve l'unicité Prisma ; idleLastCollectAt sert de verrou
+        // optimiste. Si une autre requête a gagné, Prisma renvoie P2025.
+        where: { id: userId, idleLastCollectAt: user.idleLastCollectAt },
+        data: {
+          essence: { increment: collected },
+          essenceEarnedTotal: { increment: collected },
+          idleRunEssenceEarned: { increment: collected },
+          idleStage: stage,
+          idleRunBestStage: Math.max(user.idleRunBestStage || 1, stage),
+          idleBestStage: Math.max(user.idleBestStage || 1, stage),
+          idleEnemyHp: hp,
+          idleLastCollectAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (error?.code === 'P2025') continue;
+      throw error;
+    }
     // `ancientLevelsByKey` passé au mutateur : certaines routes (recrutement)
     // ont besoin d'autres bonus d'Ancients (chance, remise) que celui déjà
     // appliqué ci-dessus à la production.
-    if (mutate) await mutate(tx, settledUser, ancientLevelsByKey);
+    if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey);
     return settledUser;
-  });
+  }
+  throw new IdleError(409, 'Une autre action est déjà en cours, réessaie.');
 }
 
 // État complet pour l'affichage (essence, emplacements 0..MAX_SLOTS-1, coûts,
@@ -296,10 +378,11 @@ async function buildState(userId) {
     where: { id: userId },
     select: {
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
-      essenceEarnedTotal: true, idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
+      essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true,
+      idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
-      idleHeroClass: true,
-      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,
+      idleHeroClass: true, idleHeroClassChangedAt: true,
+      idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,
     },
   });
   if (!user) return null;
@@ -315,9 +398,17 @@ async function buildState(userId) {
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
   const recruitDiscountBonus = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
   const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
+  const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount);
   const strategy = synergyForSlots(slots);
-  const pending = Math.floor(pendingEssence(user.idleLastCollectAt, totalRate, undefined, offlineCapMs));
+  const previewElapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
+  const combatPreview = simulateCombat({
+    stage: user.idleStage,
+    hp: user.idleEnemyHp,
+    dps: totalRate,
+    elapsedSeconds: previewElapsedMs / 1000,
+    mode: user.idleBattleMode,
+  });
+  const pending = Math.floor(combatPreview.essence);
 
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
   const slotsOut = [];
@@ -364,9 +455,13 @@ async function buildState(userId) {
   // pilote le décor/les paliers). Le stage vient de la même source (l'essence
   // gagnée à vie) mais avec une courbe bien plus douce, pour des kills toutes
   // les quelques secondes façon Clicker Heroes (cf. commentaire dans idle.js).
-  const stage = stageForXp(user.essenceEarnedTotal);
-  const xpIntoStage = user.essenceEarnedTotal - stageXpForLevel(stage);
-  const xpForNextStage = stageXpForLevel(stage + 1) - stageXpForLevel(stage);
+  const stage = combatPreview.stage;
+  const worldIndex=Math.min(DOJO_DECOR.length-1,Math.floor((stage-1)/100));
+  const combatWorld={index:worldIndex+1,name:DOJO_DECOR[worldIndex].name,theme:DOJO_DECOR[worldIndex].theme,startStage:worldIndex*100+1,endStage:(worldIndex+1)*100};
+  const maxEnemyHp = enemyMaxHp(stage);
+  const enemyHp = Math.max(0, Math.min(maxEnemyHp, combatPreview.hp));
+  const xpIntoStage = maxEnemyHp - enemyHp;
+  const xpForNextStage = maxEnemyHp;
   const defeatedBosses = Math.floor(Math.max(0, stage - 1) / 10);
   const nextBossChest = user.idleBossClaimed + 1;
   const bossReward = (tier) => Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
@@ -405,20 +500,35 @@ async function buildState(userId) {
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
-    heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
+    economy:{essence:user.essence,pendingEssence:pending,dps:totalRate,offlineCapMs},
+    run:{stage,bestStage:Math.max(user.idleRunBestStage||1,stage),essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress'},
+    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
+    permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
+    collection:{recruits:recruitCount,masteries,worldsDiscovered:DOJO_DECOR.filter((_,i)=>(user.idleBestStage||1)>=i*100+1).length},
+    automation:{speed:user.idleBattleSpeed||1,mode:user.idleBattleMode||'progress',autoSkills:!!user.idleAutoSkills},
+    heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
-    strategy: { ...strategy, roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)) },
+    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
     slots: slotsOut,
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus) },
+    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)) },
     recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.characterId) })),
     battle: {
       stage,
+      bestStage: Math.max(user.idleBestStage || 1, stage),
+      runBestStage: Math.max(user.idleRunBestStage || 1, stage),
+      hp: enemyHp,
+      maxHp: maxEnemyHp,
+      reward: enemyReward(stage),
+      isBoss: isBossStage(stage),
+      timerSeconds: isBossStage(stage) ? BOSS_TIMER_SECONDS : null,
+      bossFailed: combatPreview.bossFailed,
+      world:combatWorld,
       kills: Math.max(0, stage - 1), // les stages commencent à 1 — affichage façon "X ennemis vaincus"
       xpIntoStage,
       xpForNextStage,
@@ -430,11 +540,13 @@ async function buildState(userId) {
       autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=50,level:50,bonus:.15},
     },
     missions,
-    codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w) => ({ name: w.name, level: w.level, discovered: dojoLevel >= w.level })) },
+    codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w,i) => ({ name: w.name, level:i*100+1, discovered:(user.idleBestStage||1)>=i*100+1 })) },
     event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Cumule 100 niveaux dans ton équipe active', progress: Math.min(weeklyLevels, 100), target: 100, reward: 3000, completed: weeklyLevels >= 100, claimed: weeklyClaimed } },
     achievements,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
-    season:{period:seasonPeriod,name:seasonName,level:dojoLevel,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:seasonDefs.map((x)=>({...x,completed:dojoLevel>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
+    // La première vraie saison utilisera une progression dédiée. L'ancien
+    // pass mensuel fondé sur le niveau à vie est volontairement masqué.
+    season:{enabled:false,period:seasonPeriod,name:seasonName,level:dojoLevel,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:seasonDefs.map((x)=>({...x,completed:dojoLevel>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
     prod: {
       level: user.idleProdLevel,
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
@@ -471,7 +583,7 @@ async function buildState(userId) {
         tier: milestoneTier,
         claimed: user.idleMilestoneClaimed,
         available: milestoneTier > user.idleMilestoneClaimed,
-        reward: milestoneTier > user.idleMilestoneClaimed ? milestoneReward(milestoneTier) : null,
+        reward: milestoneTier > user.idleMilestoneClaimed ? Array.from({length:milestoneTier-user.idleMilestoneClaimed},(_,i)=>milestoneReward(user.idleMilestoneClaimed+i+1)).reduce((a,b)=>a+b,0) : null,
       },
       // Le multiplicateur plat automatique a disparu : la Sagesse gagnée au
       // Prestige (cf. bloc `ancients` ci-dessus, `points`) se dépense
@@ -479,28 +591,36 @@ async function buildState(userId) {
       prestige: {
         level: user.prestigeLevel,
         minLevel: PRESTIGE_MIN_DOJO_LEVEL,
-        eligible: dojoLevel >= PRESTIGE_MIN_DOJO_LEVEL,
+        minStage: PRESTIGE_MIN_STAGE,
+        runBestStage: user.idleRunBestStage || 1,
+        reward: wisdomForRunStage(user.idleRunBestStage || 1),
+        eligible: (user.idleRunBestStage || 1) >= PRESTIGE_MIN_STAGE,
       },
     },
   };
 }
 
-// TEMPORAIRE (phase de test) : réservé aux admins tant que le Dojo n'est pas
-// ouvert à tous — retirer `requireAdmin` sur ces routes pour la sortie publique.
-router.get('/state', requireAuth, requireAdmin, async (req, res) => {
+// Le diagnostic reste administrateur ; le jeu est accessible aux admins et aux
+// joueurs portant `idle_beta`. Retirer requireIdleBeta à la sortie publique.
+router.get('/diagnostics/simulation',requireAuth,requireAdmin,(req,res)=>{
+  const bosses=Array.from({length:10},(_,i)=>(i+1)*10).map((stage)=>({stage,hp:enemyMaxHp(stage),requiredDps:enemyMaxHp(stage)/BOSS_TIMER_SECONDS,reward:enemyReward(stage)}));
+  const heroCurves=Object.keys(RARITY_RATE).filter((r)=>r!=='common').map((rarity)=>({rarity,levels:Object.fromEntries([1,10,25,50,100].map((level)=>[level,slotRate(rarity,level)]))}));
+  res.json({bossTimerSeconds:BOSS_TIMER_SECONDS,prestigeStage:PRESTIGE_MIN_STAGE,bosses,heroCurves});
+});
+router.get('/state', requireAuth, requireIdleBeta, async (req, res) => {
   const state = await buildState(req.user.id);
   if (!state) return res.status(404).json({ error: 'Compte introuvable' });
   res.json(state);
 });
 
-router.get('/leaderboard', requireAuth, requireAdmin, async(req,res)=>{
-  const users=await prisma.user.findMany({where:{essenceEarnedTotal:{gt:0}},select:{id:true,displayName:true,avatarUrl:true,essenceEarnedTotal:true,prestigeLevel:true,idleHeroClass:true},orderBy:{essenceEarnedTotal:'desc'},take:50});
-  res.json({players:users.map((u,i)=>({rank:i+1,id:u.id,name:u.displayName,avatarUrl:u.avatarUrl,progression:u.essenceEarnedTotal,stage:stageForXp(u.essenceEarnedTotal),level:dojoLevelForXp(u.essenceEarnedTotal),prestige:u.prestigeLevel,className:heroClass(u.idleHeroClass).name,isMe:u.id===req.user.id}))});
+router.get('/leaderboard', requireAuth, requireIdleBeta, async(req,res)=>{
+  const users=await prisma.user.findMany({where:{idleBestStage:{gt:1}},select:{id:true,displayName:true,avatarUrl:true,essenceEarnedTotal:true,idleBestStage:true,prestigeLevel:true,idleHeroClass:true},orderBy:[{idleBestStage:'desc'},{updatedAt:'asc'}],take:50});
+  res.json({players:users.map((u,i)=>({rank:i+1,id:u.id,name:u.displayName,avatarUrl:u.avatarUrl,progression:u.essenceEarnedTotal,stage:u.idleBestStage,level:dojoLevelForXp(u.essenceEarnedTotal),prestige:u.prestigeLevel,className:heroClass(u.idleHeroClass).name,isMe:u.id===req.user.id}))});
 });
 
 // Roster du joueur (personnages recrutés) — pour le sélecteur d'assignation.
 // Totalement indépendant de /api/gacha/collection.
-router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
+router.get('/roster', requireAuth, requireIdleBeta, async (req, res) => {
   const recruits = await prisma.dojoRecruit.findMany({
     where: { userId: req.user.id },
     include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } } },
@@ -513,7 +633,7 @@ router.get('/roster', requireAuth, requireAdmin, async (req, res) => {
   });
 });
 
-router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/collect', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   try {
     await withSettle(req.user.id, null);
   } catch (e) {
@@ -527,7 +647,7 @@ router.post('/collect', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
 // contre de l'essence — la SEULE façon d'obtenir un personnage dans le Dojo.
 // Exclut les personnages déjà recrutés par ce joueur ; si la rareté tirée est
 // épuisée (tout recruté), retombe sur les autres raretés dans l'ordre.
-router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   let result;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
@@ -535,17 +655,21 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
       const cost = recruitCost(count, ancientBonus(ancientLevelsByKey, 'recruitDiscount'));
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
-      const rolled = rollRecruitRarity(ancientBonus(ancientLevelsByKey, 'recruitLuck'));
+      const pity = user.idleRecruitPity || 0;
+      const rolled = pity >= 9 ? (Math.random() < .06 ? 'mythic' : Math.random() < .32 ? 'legendary' : 'epic') : rollRecruitRarity(ancientBonus(ancientLevelsByKey, 'recruitLuck'));
       let pool = await tx.character.findMany({ where: { rarity: rolled, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
       if (!pool.length) {
-        for (const r of ['rare', 'epic', 'legendary', 'mythic']) {
+        const fallbackRarities = pity >= 9
+          ? ['epic', 'legendary', 'mythic', 'rare']
+          : ['rare', 'epic', 'legendary', 'mythic'];
+        for (const r of fallbackRarities) {
           pool = await tx.character.findMany({ where: { rarity: r, id: { notIn: already } }, select: { id: true, name: true, imageUrl: true, rarity: true, series: true } });
           if (pool.length) break;
         }
       }
       if (!pool.length) throw new IdleError(400, 'Tu as déjà recruté tout le roster disponible !');
       const picked = pool[Math.floor(Math.random() * pool.length)];
-      await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
+      await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost }, idleRecruitPity: ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 } } });
       await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id } });
       result = picked;
     });
@@ -558,9 +682,10 @@ router.post('/recruit', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
   // doit passer EN PREMIER, sinon il écraserait `recruited` s'il portait le
   // même nom.
   res.json({ ...(await buildState(req.user.id)), recruited: { ...result, talent: characterTalent(result.id), baseRate:slotRate(result.rarity,1) } });
+  void recordIdleEvent(req.user.id,'recruit',{value:1});
 });
 
-router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/assign', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   const characterId = Number(req.body?.characterId);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
@@ -573,13 +698,10 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'i
       if (slotIndex >= user.idleSlotsUnlocked) throw new IdleError(400, 'Cet emplacement est verrouillé');
       const recruited = await tx.dojoRecruit.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
       if (!recruited) throw new IdleError(400, "Tu n'as pas recruté ce personnage");
-      // Le niveau d'entraînement appartient à L'EMPLACEMENT, pas au personnage
-      // (cf. IdleSlot.level) : il doit repartir à 1 dès qu'un AUTRE personnage
-      // y prend place — sinon un perso tout juste assigné hériterait gratuitement
-      // du niveau (donc de la production) laissé par l'occupant précédent.
+      // Le niveau d'entraînement appartient au personnage recruté. IdleSlot en
+      // garde une copie active pour les calculs, restaurée depuis DojoRecruit à
+      // chaque réaffectation afin d'éviter tout héritage entre personnages.
       // No-op si c'est déjà le même personnage (évite de punir un clic redondant).
-      const currentSlot = await tx.idleSlot.findUnique({ where: { userId_slotIndex: { userId: user.id, slotIndex } } });
-      const sameCharacter = currentSlot && currentSlot.characterId === characterId;
       // Déplace le personnage s'il était déjà assigné ailleurs (1 seul emplacement à la fois).
       await tx.idleSlot.updateMany({
         where: { userId: user.id, characterId, slotIndex: { not: slotIndex } },
@@ -587,8 +709,8 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'i
       });
       await tx.idleSlot.upsert({
         where: { userId_slotIndex: { userId: user.id, slotIndex } },
-        update: { characterId, assignedAt: new Date(), ...(sameCharacter ? {} : { level: 1 }) },
-        create: { userId: user.id, slotIndex, characterId, assignedAt: new Date() },
+        update: { characterId, assignedAt: new Date(), level:recruited.trainingLevel||1,ascension:recruited.idleAscension||0 },
+        create: { userId: user.id, slotIndex, characterId, assignedAt: new Date(),level:recruited.trainingLevel||1,ascension:recruited.idleAscension||0 },
       });
     });
   } catch (e) {
@@ -598,7 +720,7 @@ router.post('/assign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'i
   res.json(await buildState(req.user.id));
 });
 
-router.post('/unassign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/unassign', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
     return res.status(400).json({ error: 'Emplacement invalide' });
@@ -614,7 +736,7 @@ router.post('/unassign', requireAuth, requireAdmin, rateLimit({ max: 120, name: 
   res.json(await buildState(req.user.id));
 });
 
-router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const type = req.body?.type;
   if (!['prod', 'click', 'slot'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
 
@@ -647,7 +769,7 @@ router.post('/upgrade', requireAuth, requireAdmin, rateLimit({ max: 120, name: '
 // Monte le niveau d'entraînement (illimité) du personnage assigné à un
 // emplacement, remis à 1 si on change de personnage sur cet emplacement
 // (cf. commentaire IdleSlot.level).
-router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/slot-level', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   const amount = Number(req.body?.amount || 1);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) {
@@ -665,6 +787,7 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
       await tx.idleSlot.update({ where: { id: slot.id }, data: { level: { increment: amount } } });
+      await tx.dojoRecruit.update({where:{userId_characterId:{userId:user.id,characterId:slot.characterId}},data:{trainingLevel:{increment:amount}}});
     });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
@@ -673,7 +796,7 @@ router.post('/slot-level', requireAuth, requireAdmin, rateLimit({ max: 120, name
   res.json(await buildState(req.user.id));
 });
 
-router.post('/slot-ascend', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-ascend' }), async (req, res) => {
+router.post('/slot-ascend', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-ascend' }), async (req, res) => {
   const slotIndex = Number(req.body?.slotIndex);
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= MAX_SLOTS) return res.status(400).json({ error: 'Emplacement invalide' });
   try {
@@ -686,12 +809,13 @@ router.post('/slot-ascend', requireAuth, requireAdmin, rateLimit({ max: 20, name
       if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
       await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost } } });
       await tx.idleSlot.update({ where: { id: slot.id }, data: { level: 1, ascension: { increment: 1 } } });
+      await tx.dojoRecruit.update({where:{userId_characterId:{userId:user.id,characterId:slot.characterId}},data:{trainingLevel:1,idleAscension:{increment:1}}});
     });
     res.json(await buildState(req.user.id));
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
-router.post('/optimize-team', requireAuth, requireAdmin, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
+router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
   let bought=0, spent=0;
   try {
     await withSettle(req.user.id,async(tx,user)=>{
@@ -700,7 +824,12 @@ router.post('/optimize-team', requireAuth, requireAdmin, rateLimit({ max: 10, na
       let balance=user.essence;
       for(let step=0;step<500;step++){
         let best=null;
-        for(const slot of slots){const cost=charLevelUpCost(slot.character.rarity,slot.level||1);if(!best||cost<best.cost)best={slot,cost};}
+        for(const slot of slots){
+          const level=slot.level||1;const cost=charLevelUpCost(slot.character.rarity,level);
+          const gain=slotRate(slot.character.rarity,level+1)-slotRate(slot.character.rarity,level);
+          const roi=gain/Math.max(1,cost);
+          if(!best||roi>best.roi)best={slot,cost,roi};
+        }
         if(!best||best.cost>balance)break;
         balance-=best.cost;spent+=best.cost;bought++;best.slot.level=(best.slot.level||1)+1;
         await tx.idleSlot.update({where:{id:best.slot.id},data:{level:{increment:1}}});
@@ -712,28 +841,28 @@ router.post('/optimize-team', requireAuth, requireAdmin, rateLimit({ max: 10, na
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
-router.post('/battle-speed', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-speed' }), async (req,res)=>{
+router.post('/battle-speed', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-speed' }), async (req,res)=>{
   const speed=Number(req.body?.speed);const required={1:1,2:30,4:75}[speed];if(!required)return res.status(400).json({error:'Vitesse invalide'});
   const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<required)return res.status(403).json({error:`Débloqué au niveau ${required}`});
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleSpeed:speed}});});res.json(await buildState(req.user.id));
 });
-router.post('/battle-mode', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-mode' }), async(req,res)=>{const mode=String(req.body?.mode||'');if(!['progress','farm'].includes(mode))return res.status(400).json({error:'Mode invalide'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleMode:mode}});});res.json(await buildState(req.user.id));});
-router.post('/auto-skills', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<50)return res.status(403).json({error:'Compétences automatiques débloquées au niveau 50'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
+router.post('/battle-mode', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-mode' }), async(req,res)=>{const mode=String(req.body?.mode||'');if(!['progress','farm'].includes(mode))return res.status(400).json({error:'Mode invalide'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleMode:mode}});});res.json(await buildState(req.user.id));});
+router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{essenceEarnedTotal:true}});if(dojoLevelForXp(user.essenceEarnedTotal)<50)return res.status(403).json({error:'Compétences automatiques débloquées au niveau 50'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
 
-router.post('/equipment/enhance', requireAuth, requireAdmin, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
+router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const slotIndex=Number(req.body?.slotIndex);const kind=String(req.body?.kind||'');if(!Number.isInteger(slotIndex)||!['weapon','relic','accessory'].includes(kind))return res.status(400).json({error:'Équipement invalide'});
   try{await withSettle(req.user.id,async(tx,user)=>{const slot=await tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}});if(!slot)throw new IdleError(404,'Héros introuvable');const item=await tx.idleEquipment.findUnique({where:{idleSlotId_kind:{idleSlotId:slot.id,kind}}});if(!item)throw new IdleError(400,'Emplacement vide');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleEquipment.update({where:{id:item.id},data:{bonus,rarity}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
 // Dojo). Permanent : n'est jamais remis à zéro, y compris après une Prestige.
-router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/claim-milestone', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   try {
     await withSettle(req.user.id, async (tx, user) => {
       const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
       const tier = milestoneTierForLevel(dojoLevel);
       if (tier <= user.idleMilestoneClaimed) throw new IdleError(400, 'Aucun coffre à réclamer pour l’instant');
-      const reward = milestoneReward(tier);
+      const reward = Array.from({length:tier-user.idleMilestoneClaimed},(_,i)=>milestoneReward(user.idleMilestoneClaimed+i+1)).reduce((a,b)=>a+b,0);
       await tx.user.update({
         where: { id: user.id },
         data: { essence: { increment: reward }, idleMilestoneClaimed: tier },
@@ -755,14 +884,17 @@ router.post('/claim-milestone', requireAuth, requireAdmin, rateLimit({ max: 120,
 // déjà recrutés. Passe par withSettle (comme toutes les autres actions) pour
 // que la production en attente soit soldée AVANT le reset : sinon elle
 // disparaissait sans même compter dans l'XP du Dojo.
-router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
+router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
+  let prestigeReward=0,prestigeStage=0;
   try {
     await withSettle(req.user.id, async (tx, user) => {
-      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal);
-      if (dojoLevel < PRESTIGE_MIN_DOJO_LEVEL) {
-        throw new IdleError(400, `L'Idle doit atteindre le niveau ${PRESTIGE_MIN_DOJO_LEVEL} avant de prestiger`);
+      const runBestStage = user.idleRunBestStage || 1;
+      if (runBestStage < PRESTIGE_MIN_STAGE) {
+        throw new IdleError(400, `Atteins le stage ${PRESTIGE_MIN_STAGE} pendant cette run avant de prestiger`);
       }
+      prestigeStage=runBestStage;prestigeReward=wisdomForRunStage(runBestStage);
       await tx.idleSlot.updateMany({ where: { userId: user.id }, data: { characterId: null, assignedAt: null, level: 1 } });
+      await tx.dojoRecruit.updateMany({where:{userId:user.id},data:{trainingLevel:1}});
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -770,8 +902,12 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
           idleSlotsUnlocked: START_SLOTS,
           idleProdLevel: 0,
           idleClickLevel: 0,
+          idleRunEssenceEarned: 0,
+          idleStage: 1,
+          idleRunBestStage: 1,
+          idleEnemyHp: enemyMaxHp(1),
           prestigeLevel: { increment: 1 },
-          wisdomPoints: { increment: wisdomForPrestige(dojoLevel) },
+          wisdomPoints: { increment: prestigeReward },
         },
       });
     });
@@ -779,6 +915,7 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     throw e;
   }
+  void recordIdleEvent(req.user.id,'prestige',{value:prestigeReward,stage:prestigeStage});
   res.json(await buildState(req.user.id));
 });
 
@@ -786,47 +923,57 @@ router.post('/prestige', requireAuth, requireAdmin, rateLimit({ max: 5, name: 'i
 // solde de `pending` ici, juste un ajout — évite de perdre de l'essence à
 // l'arrondi si le clic est spammé, cf. commentaire de withSettle). Compte
 // aussi pour l'XP du Dojo (essenceEarnedTotal).
-router.post('/click', requireAuth, requireAdmin, rateLimit({ windowMs: CLICK_COOLDOWN_MS, max: 1, name: 'idle-click' }), async (req, res) => {
-  const ancientLevelsByKey = await loadAncientLevels(prisma, req.user.id);
-  const liveUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, essenceEarnedTotal: true, idleHeroClass: true, idleHeroSpec:true, idleBattleMode:true } });
-  const mechanic = bossMechanicForStage(stageForXp(liveUser.essenceEarnedTotal));
-  const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click * (heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1) * currentIdleEvent().click;
-  const critical=Math.random()<.12; const gained = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1) * (critical?2:1)));
-  const user = await prisma.user.update({
-    where: { id: req.user.id },
-    data: { essence: { increment: gained }, ...(liveUser.idleBattleMode==='farm'?{}:{essenceEarnedTotal:{increment:gained}}) },
-    select: { essence: true },
+router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, max: Math.ceil(1000 / CLICK_COOLDOWN_MS), name: 'idle-click' }), async (req, res) => {
+  let result;
+  await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
+    const mechanic = bossMechanicForStage(liveUser.idleStage || 1);
+    const raw = clickYield(liveUser.idleClickLevel || 0, ancientBonus(ancientLevelsByKey, 'clickMult')) * heroClass(liveUser.idleHeroClass).click * (heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1) * currentIdleEvent().click;
+    const critical=Math.random()<.12; const damage = Math.max(1, Math.round(raw * (mechanic?.clickMultiplier || 1) * (critical?2:1)));
+    const hp = liveUser.idleEnemyHp > 0 ? liveUser.idleEnemyHp : enemyMaxHp(liveUser.idleStage || 1);
+    const updated = await applyActiveDamage(tx, liveUser, damage);
+    result = { essence: updated.essence, gained: damage, damage, killed: damage >= hp, critical, mechanic: mechanic?.key || null };
   });
-  res.json({ essence: user.essence, gained, critical, mechanic: mechanic?.key || null });
+  if(result?.killed)void recordIdleEvent(req.user.id,'active_kill',{value:result.damage});
+  res.json(result);
 });
 
-router.post('/skill/burst', requireAuth, requireAdmin, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
-  const levels = await loadAncientLevels(prisma, req.user.id);
-  const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { idleClickLevel: true, idleHeroClass: true, idleHeroSpec:true } });
-  const gained = Math.round(clickYield(user.idleClickLevel || 0, ancientBonus(levels, 'clickMult')) * 25 * heroClass(user.idleHeroClass).burst * (heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1));
-  await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
-  res.json({ ok: true, gained, cooldownMs: 30000 });
+router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
+  let gained=0;
+  await withSettle(req.user.id, async(tx,user,levels)=>{const mechanic=bossMechanicForStage(user.idleStage||1);gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*(mechanic?.clickMultiplier||1));await applyActiveDamage(tx,user,gained);});
+  res.json({ ok: true, gained, damage:gained, cooldownMs: 30000 });
 });
 
-router.post('/skill/team', requireAuth, requireAdmin, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
-  const [user, slots, levels] = await Promise.all([prisma.user.findUnique({ where: { id: req.user.id } }), loadSlots(prisma, req.user.id), loadAncientLevels(prisma, req.user.id)]);
-  const roles = slots.filter((s) => s.character).map((s) => roleForCharacter(s.character));
-  if (roles.length < 2) return res.status(400).json({ error: 'Équipe insuffisante' });
-  const rate = computeTotalRate(slots, user.idleProdLevel, dojoLevelForXp(user.essenceEarnedTotal), ancientBonus(levels, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills);
-  const uniqueRoles = new Set(roles).size;
-  const gained = Math.max(1, Math.floor(rate * (20 + uniqueRoles * 5) * heroClass(user.idleHeroClass).team * (heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)));
-  await prisma.user.update({ where: { id: req.user.id }, data: { essence: { increment: gained }, essenceEarnedTotal: { increment: gained } } });
-  res.json({ ok: true, gained, cooldownMs: 60000, uniqueRoles });
+router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
+  let gained=0,uniqueRoles=0;
+  try {
+    await withSettle(req.user.id,async(tx,user,levels)=>{
+      const slots=await loadSlots(tx,user.id);
+      const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
+      if(roles.length<2)throw new IdleError(400,'Équipe insuffisante');
+      const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});
+      const rate=computeTotalRate(slots,user.idleProdLevel,dojoLevelForXp(user.essenceEarnedTotal),ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount);
+      uniqueRoles=new Set(roles).size;
+      const mechanic=bossMechanicForStage(user.idleStage||1);
+      gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(mechanic?.clickMultiplier||1)));
+      await applyActiveDamage(tx,user,gained);
+    });
+  } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message}); throw e; }
+  res.json({ ok: true, gained, damage:gained, cooldownMs: 60000, uniqueRoles });
 });
 
-router.post('/hero-class', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-hero-class' }), async (req, res) => {
+router.post('/hero-class', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-hero-class' }), async (req, res) => {
   const key = String(req.body?.key || '');
   if (!HERO_CLASSES[key]) return res.status(400).json({ error: 'Classe inconnue' });
-  await withSettle(req.user.id, async (tx, user) => { await tx.user.update({ where: { id: user.id }, data: { idleHeroClass: key, idleHeroSpec:'none' } }); });
+  try { await withSettle(req.user.id, async (tx, user) => {
+      const readyAt=user.idleHeroClassChangedAt?new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000:0;
+      if(key!==user.idleHeroClass&&Date.now()<readyAt)throw new IdleError(429,`Changement de classe disponible dans ${Math.ceil((readyAt-Date.now())/60000)} min`);
+      await tx.user.update({ where: { id: user.id }, data: { idleHeroClass: key, idleHeroSpec:'none',idleHeroClassChangedAt:new Date() } });
+    });
+  } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message}); throw e; }
   res.json(await buildState(req.user.id));
 });
 
-router.post('/hero-style', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-hero-style' }), async (req, res) => {
+router.post('/hero-style', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-hero-style' }), async (req, res) => {
   const type = String(req.body?.type || ''); const key = String(req.body?.key || '');
   const field = { auras:'idleHeroAura', stances:'idleHeroStance', titles:'idleHeroTitle', hairs:'idleHeroHair', outfits:'idleHeroOutfit', colors:'idleHeroColor' }[type];
   const item = HERO_STYLES[type]?.find((x)=>x.key===key);
@@ -837,20 +984,20 @@ router.post('/hero-style', requireAuth, requireAdmin, rateLimit({ max: 30, name:
   res.json(await buildState(req.user.id));
 });
 
-router.post('/hero-specialization', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-hero-spec' }), async (req, res) => {
+router.post('/hero-specialization', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-hero-spec' }), async (req, res) => {
   const key=String(req.body?.key||''); const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleHeroClass:true,essenceEarnedTotal:true}});
   if(dojoLevelForXp(user.essenceEarnedTotal)<25)return res.status(403).json({error:'Spécialisation débloquée au niveau 25'});
   if(!HERO_SPECS[user.idleHeroClass]?.some((s)=>s.key===key))return res.status(400).json({error:'Spécialisation incompatible'});
   await prisma.user.update({where:{id:req.user.id},data:{idleHeroSpec:key}}); res.json(await buildState(req.user.id));
 });
 
-router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, name: 'idle-mission' }), async (req, res) => {
+router.post('/mission/claim', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-mission' }), async (req, res) => {
   const key = String(req.body?.key || '');
   try {
     const reward = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
       const [recruits, slots] = await Promise.all([tx.dojoRecruit.count({ where: { userId: req.user.id } }), tx.idleSlot.count({ where: { userId: req.user.id, characterId: { not: null } } })]);
-      const mission = idleMissionList(user, recruits, slots, stageForXp(user.essenceEarnedTotal)).find((m) => m.key === key);
+      const mission = idleMissionList(user, recruits, slots, user.idleStage || 1).find((m) => m.key === key);
       if (!mission) throw new IdleError(400, 'Mission inconnue');
       if (mission.progress < mission.target) throw new IdleError(400, 'Mission incomplète');
       await tx.idleMissionClaim.create({ data: { userId: req.user.id, missionKey: key, period: mission.period } });
@@ -865,7 +1012,7 @@ router.post('/mission/claim', requireAuth, requireAdmin, rateLimit({ max: 30, na
   }
 });
 
-router.post('/event/claim', requireAuth, requireAdmin, rateLimit({ max: 10, name: 'idle-event' }), async (req, res) => {
+router.post('/event/claim', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-event' }), async (req, res) => {
   const period = idlePeriods().week;
   try {
     await prisma.$transaction(async (tx) => {
@@ -882,13 +1029,13 @@ router.post('/event/claim', requireAuth, requireAdmin, rateLimit({ max: 10, name
   }
 });
 
-router.post('/achievement/claim', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-achievement' }), async (req, res) => {
+router.post('/achievement/claim', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-achievement' }), async (req, res) => {
   const key = String(req.body?.key || '');
   try {
     const reward = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
       const [recruits, slots] = await Promise.all([tx.dojoRecruit.count({ where: { userId: user.id } }), tx.idleSlot.findMany({ where: { userId: user.id, characterId: { not: null } }, select: { level: true } })]);
-      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal); const stage = stageForXp(user.essenceEarnedTotal);
+      const dojoLevel = dojoLevelForXp(user.essenceEarnedTotal); const stage = user.idleBestStage || user.idleStage || 1;
       const defs = idleAchievementDefs({ stage, recruits, teamLevels: slots.reduce((n,s)=>n+(s.level||1),0), worlds: DOJO_DECOR.filter((w)=>dojoLevel>=w.level).length, prestige: user.prestigeLevel });
       const achievement = defs.find((a) => a.key === key);
       if (!achievement) throw new IdleError(400, 'Succès inconnu');
@@ -904,19 +1051,20 @@ router.post('/achievement/claim', requireAuth, requireAdmin, rateLimit({ max: 20
     throw e;
   }
 });
-router.post('/season/claim',requireAuth,requireAdmin,rateLimit({max:20,name:'idle-season'}),async(req,res)=>{const tier=Number(req.body?.tier);const def=[{tier:1,level:10,reward:500},{tier:2,level:25,reward:2000},{tier:3,level:50,reward:5000},{tier:4,level:100,reward:10000}].find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier invalide'});const now=new Date();const period=`season-${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`;try{await prisma.$transaction(async(tx)=>{const user=await tx.user.findUnique({where:{id:req.user.id}});if(dojoLevelForXp(user.essenceEarnedTotal)<def.level)throw new IdleError(400,'Palier saisonnier verrouillé');await tx.idleMissionClaim.create({data:{userId:user.id,missionKey:`season_tier_${tier}`,period}});await tx.user.update({where:{id:user.id},data:{essence:{increment:def.reward},essenceEarnedTotal:{increment:def.reward}}});});res.json({ok:true,reward:def.reward});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}});
+router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-season'}),async(req,res)=>res.status(410).json({error:'Les saisons reviendront avec une progression dédiée.'}));
 
-router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
+router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
   try {
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
-      const defeated = Math.floor(Math.max(0, stageForXp(user.essenceEarnedTotal) - 1) / 10);
+      const defeated = Math.floor(Math.max(0, (user.idleBestStage || user.idleStage || 1) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
       if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
       const amount = Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
       const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 }, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
-      const slot = await tx.idleSlot.findFirst({ where: { userId: user.id, characterId: { not: null } }, orderBy: { slotIndex: 'asc' } });
+       const activeSlots = await tx.idleSlot.findMany({ where: { userId: user.id, characterId: { not: null } }, include:{equipments:true} });
+       const slot = activeSlots.sort((a,b)=>(a.equipments||[]).reduce((n,e)=>n+e.bonus,0)-(b.equipments||[]).reduce((n,e)=>n+e.bonus,0))[0] || null;
       let loot = null;
       if (slot) {
         const kinds = ['weapon', 'relic', 'accessory']; const kind = kinds[(tier - 1) % kinds.length];
@@ -939,7 +1087,7 @@ router.post('/boss-chest', requireAuth, requireAdmin, rateLimit({ max: 20, name:
 // (wisdomPoints — PAS l'essence, monnaie séparée), incrémente son niveau.
 // Indépendant de withSettle : les Ancients ne dépendent ni de la production
 // ni de l'essence, pas besoin de solder quoi que ce soit avant.
-router.post('/ancient', requireAuth, requireAdmin, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
+router.post('/ancient', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const key = String(req.body?.key || '');
   if (!ancientByKey(key)) return res.status(400).json({ error: 'Ancient invalide' });
   try {

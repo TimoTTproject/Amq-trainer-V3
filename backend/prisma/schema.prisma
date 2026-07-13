@@ -96,11 +96,15 @@ model User {
   // cours quand il tire (la bannière elle-même change chaque lundi, imposée).
   bannerBoostEnabled Boolean @default(true)
 
+  // Rôles applicatifs attribués par un administrateur. `idle_beta` ouvre
+  // Anime Ascension sans donner accès aux outils ou routes d'administration.
+  roles String[] @default([])
+
   // Dojo (idle/clicker) — monnaie « essence » entièrement séparée des tokens,
   // ne sert qu'aux améliorations du Dojo (voir src/idle/idle.js).
   // 20 de départ (au lieu de 0) : évite ~10 clics à vide avant le premier
   // recrutement pour un joueur qui vient d'ouvrir le Dojo pour la première fois.
-  essence           Int      @default(20)
+  essence           Float    @default(20)
   idleLastCollectAt DateTime @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
   idleSlotsUnlocked Int      @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
   idleProdLevel     Int      @default(0) // amélioration « Discipline » : multiplicateur de production globale
@@ -108,13 +112,22 @@ model User {
   // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
   // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
   // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
-  essenceEarnedTotal Int @default(0)
+  essenceEarnedTotal Float @default(0)
+  // Progression explicite de la run. Le stage ne dépend plus du total gagné
+  // à vie : les boss peuvent donc constituer de vrais murs et le Prestige ne
+  // peut plus être répété sans reconstruire une run.
+  idleRunEssenceEarned Float @default(0)
+  idleStage             Int   @default(1)
+  idleRunBestStage      Int   @default(1)
+  idleBestStage         Int   @default(1)
+  idleEnemyHp           Float @default(0)
   // Plus haut palier de jalon (tous les MILESTONE_INTERVAL niveaux de Dojo)
   // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
   // du Dojo qui les débloque est lui aussi permanent).
   idleMilestoneClaimed Int @default(0)
   idleBossClaimed      Int @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
   idleHeroClass        String @default("warrior")
+  idleHeroClassChangedAt DateTime?
   idleHeroAura         String @default("none")
   idleHeroStance       String @default("balanced")
   idleHeroTitle        String @default("rookie")
@@ -125,6 +138,7 @@ model User {
   idleBattleSpeed      Int @default(1)
   idleBattleMode       String @default("progress")
   idleAutoSkills       Boolean @default(false)
+  idleRecruitPity      Int @default(0)
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
@@ -157,6 +171,7 @@ model User {
   wishlist        Wishlist[]
   quests          Quest[]
   idleMissionClaims IdleMissionClaim[]
+  idleTelemetry IdleTelemetry[]
   dailyStats      DailyStat[]
   coopWeekly      CoopWeeklyScore[]
   cosmetics       UserCosmetic[]
@@ -839,6 +854,18 @@ model IdleMissionClaim {
   @@index([userId, period])
 }
 
+model IdleTelemetry {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  event     String
+  value     Float?
+  stage     Int?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([event, createdAt])
+  @@index([userId, createdAt])
+}
+
 // Roster du Dojo : personnages RECRUTÉS via l'essence (voir POST
 // /api/idle/recruit), entièrement indépendant de la collection gacha
 // (UserCard/CardInstance/tokens ne sont ni lus ni écrits par le Dojo — même
@@ -851,6 +878,8 @@ model DojoRecruit {
   userId      String
   characterId Int
   recruitedAt DateTime @default(now())
+  trainingLevel Int @default(1)
+  idleAscension Int @default(0)
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)

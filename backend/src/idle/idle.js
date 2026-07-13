@@ -10,6 +10,12 @@
 
 const START_SLOTS = 3; // emplacements gratuits dès le départ
 const MAX_SLOTS = 10; // emplacements max, débloqués un par un contre de l'essence
+const IDLE_NUMBER_CAP = 1e300;
+function finiteIdleNumber(value, minimum = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return IDLE_NUMBER_CAP;
+  return Math.max(minimum, Math.min(IDLE_NUMBER_CAP, n));
+}
 
 // Production d'essence par seconde, par carte assignée, à ★1 et avant
 // multiplicateur global (amélioration « Discipline »).
@@ -19,10 +25,10 @@ const MAX_SLOTS = 10; // emplacements max, débloqués un par un contre de l'ess
 // sentait à l'arrêt. Voir aussi CHAR_LEVEL_BONUS plus bas, relevé de concert.
 const RARITY_RATE = {
   common: 0.3,
-  rare: 1.3,
-  epic: 5,
-  legendary: 18,
-  mythic: 65,
+  rare: 1,
+  epic: 1.8,
+  legendary: 3.2,
+  mythic: 5.5,
 };
 
 // Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité, remis
@@ -35,7 +41,7 @@ const RARITY_RATE = {
 // effet perceptible. Le coût (CHAR_LEVEL_GROWTH) ne change pas : la courbe
 // ralentit toujours autant à long terme, seul le gain immédiat est plus net.
 const CHAR_LEVEL_BONUS = 0.12;
-const RARITY_LEVEL_BONUS = { common: .08, rare: .10, epic: .13, legendary: .17, mythic: .22 };
+const RARITY_LEVEL_BONUS = { common: .03, rare: .035, epic: .04, legendary: .045, mythic: .05 };
 const RARITY_PASSIVE = {
   common: 'Apprenti · progression économique', rare: 'Endurance · +5% de production personnelle au niveau 10',
   epic: 'Aura · +3% de production à toute l’équipe au niveau 10', legendary: 'Domination · +8% de production à toute l’équipe au niveau 10',
@@ -46,15 +52,15 @@ function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
 const CHAR_LEVEL_BASE_COST = { common: 4, rare: 12, epic: 40, legendary: 140, mythic: 500 };
-const CHAR_LEVEL_GROWTH = 1.16;
+const CHAR_LEVEL_GROWTH = 1.10;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
-  return Math.round(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1));
+  return Math.round(finiteIdleNumber(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1), 1));
 }
 function charLevelBulkCost(rarity, level, amount) {
   const count = Math.max(1, Math.min(100, Math.floor(amount || 1)));
   let total = 0; for (let i = 0; i < count; i++) total += charLevelUpCost(rarity, (level || 1) + i);
-  return total;
+  return finiteIdleNumber(total, 1);
 }
 
 // Taux de production d'un emplacement (essence/s), avant multiplicateurs
@@ -62,7 +68,12 @@ function charLevelBulkCost(rarity, level, amount) {
 function slotRate(rarity, charLevel) {
   const scaling = RARITY_LEVEL_BONUS[rarity] || CHAR_LEVEL_BONUS;
   const endurance = rarity === 'rare' && charLevel >= 10 ? 1.05 : 1;
-  return (RARITY_RATE[rarity] || 0) * (1 + Math.max(0, (charLevel || 1) - 1) * scaling) * endurance;
+  const level = Math.max(1, charLevel || 1);
+  const reached = HERO_MILESTONES.filter((target) => target <= level).length;
+  // Multiplicateurs de palier façon Clicker Heroes : ils créent des pics
+  // d'objectif lisibles et permettent au DPS de suivre les PV exponentiels.
+  const milestoneMultiplier = Math.pow(4, reached);
+  return finiteIdleNumber((RARITY_RATE[rarity] || 0) * Math.pow(1 + scaling, level - 1) * milestoneMultiplier * endurance);
 }
 
 // ── Recrutement : la SEULE façon d'obtenir un personnage dans le Dojo, contre
@@ -99,7 +110,7 @@ const RECRUIT_GROWTH = 1.1;
 function recruitCost(count, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
   const base = RECRUIT_BASE_COST * Math.pow(RECRUIT_GROWTH, Math.max(0, count || 0));
-  return Math.max(1, Math.round(base * (1 - discount)));
+  return Math.max(1, Math.round(finiteIdleNumber(base * (1 - discount), 1)));
 }
 
 // Amélioration « Discipline » : multiplicateur de production globale.
@@ -112,7 +123,7 @@ function prodMultiplier(level, ancientBonus) {
   return base * (1 + Math.max(0, ancientBonus || 0));
 }
 function prodUpgradeCost(level) {
-  return Math.round(50 * Math.pow(1.6, level));
+  return Math.round(finiteIdleNumber(50 * Math.pow(1.6, level), 1));
 }
 
 // Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
@@ -125,18 +136,96 @@ function clickYield(level, ancientBonus) {
   return Math.round(base * (1 + Math.max(0, ancientBonus || 0)));
 }
 function clickUpgradeCost(level) {
-  return Math.round(30 * Math.pow(1.5, level));
+  return Math.round(finiteIdleNumber(30 * Math.pow(1.5, level), 1));
 }
-const CLICK_COOLDOWN_MS = 900; // anti-spam serveur (rate-limit)
+const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood réseau
 
 // Coût pour débloquer l'emplacement d'index `nextSlotIndex` (START_SLOTS..MAX_SLOTS-1).
 function slotUpgradeCost(nextSlotIndex) {
-  return Math.round(200 * Math.pow(2, nextSlotIndex - START_SLOTS));
+  return Math.round(finiteIdleNumber(200 * Math.pow(2, nextSlotIndex - START_SLOTS), 1));
 }
 
 // Plafond de production hors-ligne : au-delà, le surplus n'est plus compté —
 // encourage à revenir régulièrement sans punir une grosse pause.
 const OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // 12h
+
+// Combat de run : contrairement à l'ancien affichage, un stage possède
+// maintenant de vrais PV. L'équipe inflige son taux de production sous forme
+// de DPS et chaque ennemi vaincu verse de l'Essence. Les boss, tous les dix
+// stages, doivent tomber en 30 secondes ; sinon la simulation revient sur le
+// dernier stage normal afin qu'une absence ne bloque jamais le joueur.
+const ENEMY_HP_BASE = 10;
+const ENEMY_HP_GROWTH = 1.10;
+const BOSS_INTERVAL = 10;
+const BOSS_HP_MULTIPLIER = 8;
+const BOSS_TIMER_SECONDS = 30;
+const ENEMY_REWARD_BASE = 2;
+const ENEMY_REWARD_GROWTH = 1.11;
+function isBossStage(stage) {
+  return Math.max(1, Math.floor(stage || 1)) % BOSS_INTERVAL === 0;
+}
+function enemyMaxHp(stage) {
+  const s = Math.max(1, Math.floor(stage || 1));
+  return finiteIdleNumber(ENEMY_HP_BASE * Math.pow(ENEMY_HP_GROWTH, s - 1) * (isBossStage(s) ? BOSS_HP_MULTIPLIER : 1), 1);
+}
+function enemyReward(stage) {
+  const s = Math.max(1, Math.floor(stage || 1));
+  return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * (isBossStage(s) ? 4 : 1), 1)));
+}
+function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
+  let currentStage = Math.max(1, Math.floor(stage || 1));
+  let currentHp = Number(hp);
+  let seconds = Math.max(0, Number(elapsedSeconds) || 0);
+  const damagePerSecond = Math.max(0, Number(dps) || 0);
+  let essence = 0;
+  let kills = 0;
+  let bossFailed = false;
+  let farming = mode === 'farm';
+  const maxHp = () => enemyMaxHp(currentStage);
+  if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
+  if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, essence, kills, bossFailed, elapsedSeconds: 0 };
+
+  while (seconds > 0 && kills < maxKills) {
+    const timeToKill = currentHp / damagePerSecond;
+    if (isBossStage(currentStage) && timeToKill > BOSS_TIMER_SECONDS) {
+      bossFailed = true;
+      currentStage = Math.max(1, currentStage - 1);
+      currentHp = enemyMaxHp(currentStage);
+      farming = true;
+      continue;
+    }
+    // Une fois en farm, tous les ennemis ont les mêmes PV : calcul fermé
+    // plutôt qu'une boucle par kill, indispensable pour plusieurs heures
+    // hors-ligne à haut niveau.
+    if (farming && currentHp === enemyMaxHp(currentStage)) {
+      const cycle = currentHp / damagePerSecond;
+      const bulk = Math.floor(seconds / cycle);
+      if (bulk > 0) {
+        essence = finiteIdleNumber(essence + bulk * enemyReward(currentStage));
+        kills += bulk;
+        seconds -= bulk * cycle;
+      }
+    }
+    if (timeToKill > seconds) {
+      currentHp -= damagePerSecond * seconds;
+      seconds = 0;
+      break;
+    }
+    seconds -= timeToKill;
+    essence = finiteIdleNumber(essence + enemyReward(currentStage));
+    kills++;
+    if (!farming) currentStage++;
+    currentHp = enemyMaxHp(currentStage);
+  }
+  return {
+    stage: currentStage,
+    hp: currentHp,
+    essence,
+    kills,
+    bossFailed,
+    elapsedSeconds: Math.max(0, (Number(elapsedSeconds) || 0) - seconds),
+  };
+}
 
 // Essence en attente depuis `lastCollectAt`, plafonnée à `capMs` (défaut
 // OFFLINE_CAP_MS ; cf. Ancient « Bourse Profonde » pour l'étendre), pour un
@@ -164,17 +253,19 @@ const DOJO_XP_GROWTH = 1.35; // +35% de coût par niveau
 // mathématique, juste deux jeux de constantes très différents.
 function xpForLevel(base, growth, level) {
   if (level <= 1) return 0;
-  return Math.round((base * (Math.pow(growth, level - 1) - 1)) / (growth - 1));
+  return Math.round(finiteIdleNumber((base * (Math.pow(growth, level - 1) - 1)) / (growth - 1)));
 }
 function levelForXp(base, growth, xp) {
   if (!xp || xp <= 0) return 1;
-  const raw = 1 + Math.log(1 + (xp * (growth - 1)) / base) / Math.log(growth);
+  const boundedXp = finiteIdleNumber(xp);
+  const raw = 1 + Math.log(1 + (boundedXp * (growth - 1)) / base) / Math.log(growth);
   let level = Math.max(1, Math.floor(raw + 1e-9));
+  if (boundedXp >= IDLE_NUMBER_CAP) return level;
   // log/exp ne sont pas exacts : petite correction pour rester cohérent avec
   // xpForLevel (la source de vérité), qui dérive sinon d'un niveau près des
   // seuils. Converge en 0-1 itération dans l'immense majorité des cas.
-  while (xpForLevel(base, growth, level + 1) <= xp) level++;
-  while (level > 1 && xpForLevel(base, growth, level) > xp) level--;
+  while (xpForLevel(base, growth, level + 1) <= boundedXp) level++;
+  while (level > 1 && xpForLevel(base, growth, level) > boundedXp) level--;
   return level;
 }
 function dojoXpForLevel(level) { return xpForLevel(DOJO_XP_BASE, DOJO_XP_GROWTH, level); }
@@ -239,7 +330,7 @@ function milestoneTierForLevel(level) {
 }
 function milestoneReward(tier) {
   if (tier <= 0) return 0;
-  return Math.round(MILESTONE_BASE_REWARD * Math.pow(MILESTONE_GROWTH, tier - 1));
+  return Math.round(finiteIdleNumber(MILESTONE_BASE_REWARD * Math.pow(MILESTONE_GROWTH, tier - 1)));
 }
 
 // ── Prestige (« Retraite du Maître ») : remet à zéro la RUN (essence,
@@ -249,12 +340,18 @@ function milestoneReward(tier) {
 // En échange, crédite de la Sagesse (voir ANCIENTS ci-dessous) — PAS de
 // multiplicateur automatique : depuis la refonte, c'est aux Ancients de
 // convertir cette Sagesse en puissance, avec de vrais choix à faire.
-const PRESTIGE_MIN_DOJO_LEVEL = 10; // en dessous, rien à gagner à prestiger (on perdrait plus qu'on ne gagne)
+const PRESTIGE_MIN_DOJO_LEVEL = 10; // conservé pour compatibilité d'affichage historique
+const PRESTIGE_MIN_STAGE = 100;
 // Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
 // généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
 // rapporter de nul (toujours au moins 1 point).
 function wisdomForPrestige(dojoLevel) {
   return Math.max(1, Math.floor((dojoLevel || 1) / 5));
+}
+function wisdomForRunStage(stage) {
+  const s = Math.max(0, Number(stage) || 0);
+  if (s < PRESTIGE_MIN_STAGE) return 0;
+  return Math.max(1, Math.floor(5 * Math.pow(s / PRESTIGE_MIN_STAGE, 1.5)));
 }
 
 // ── Ancients : arbre de Prestige PERMANENT (jamais reset, y compris par un
@@ -265,7 +362,7 @@ function wisdomForPrestige(dojoLevel) {
 const ANCIENT_BASE_COST = 1;
 const ANCIENT_COST_GROWTH = 1.3; // pas de plafond : puits de Sagesse à très long terme
 function ancientCost(level) {
-  return Math.round(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)));
+  return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)), 1));
 }
 const ANCIENTS = [
   { key: 'discipline_eternelle', name: 'Discipline Éternelle', icon: 'fa-infinity', kind: 'prodMult', effectPerLevel: 0.02 },
@@ -288,6 +385,8 @@ function ancientBonus(levelsByKey, kind) {
 module.exports = {
   START_SLOTS,
   MAX_SLOTS,
+  IDLE_NUMBER_CAP,
+  finiteIdleNumber,
   RARITY_RATE,
   slotRate,
   RECRUIT_WEIGHTS,
@@ -309,6 +408,17 @@ module.exports = {
   slotUpgradeCost,
   OFFLINE_CAP_MS,
   pendingEssence,
+  ENEMY_HP_BASE,
+  ENEMY_HP_GROWTH,
+  BOSS_INTERVAL,
+  BOSS_HP_MULTIPLIER,
+  BOSS_TIMER_SECONDS,
+  ENEMY_REWARD_BASE,
+  ENEMY_REWARD_GROWTH,
+  isBossStage,
+  enemyMaxHp,
+  enemyReward,
+  simulateCombat,
   CHAR_LEVEL_BONUS,
   charLevelMultiplier,
   CHAR_LEVEL_BASE_COST,
@@ -336,7 +446,9 @@ module.exports = {
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
+  PRESTIGE_MIN_STAGE,
   wisdomForPrestige,
+  wisdomForRunStage,
   ANCIENT_BASE_COST,
   ANCIENT_COST_GROWTH,
   ancientCost,

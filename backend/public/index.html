@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-build-id="">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -32,23 +32,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
-  <!-- Remplacé côté serveur par le SHA du déploiement (cf. versionize() dans
-       src/share/og.js) : permet à loadScript() (main.js) de versionner aussi
-       les scripts chargés à la volée (gacha.js, admin.js…), pas juste ceux
-       de cette page — sinon un déploiement pouvait rester invisible tant
-       qu'un cache intermédiaire gardait l'ancienne version de ces fichiers. -->
-  <script>window.BUILD_ID = "";</script>
-  <!-- Thème (clair/sombre) posé AVANT le premier rendu pour éviter le flash
-       de thème sombre quand l'utilisateur a choisi le clair. -->
-  <script>
-    (function () {
-      try {
-        if (localStorage.getItem('amq_theme') === 'light') {
-          document.documentElement.dataset.theme = 'light';
-        }
-      } catch (e) { /* stockage indisponible : thème sombre par défaut */ }
-    })();
-  </script>
+  <!-- Le serveur injecte le SHA dans data-build-id. bootstrap.js le transmet
+       aux scripts lazy-loadés et applique le thème avant le premier rendu. -->
+  <script src="bootstrap.js"></script>
 </head>
 <body class="session-pending">
   <div id="session-loader" class="session-loader" role="status" aria-live="polite">
@@ -1604,7 +1590,7 @@
             <div class="idle-currency-grid">
               <div class="idle-currency-item">
                 <i class="fas fa-bolt idle-currency-ico"></i>
-                <div><b><span id="idle-rate-val">0</span>/s</b><small>Production</small></div>
+                <div><b><span id="idle-rate-val">0</span>/s</b><small>DPS d’équipe</small></div>
               </div>
               <div class="idle-currency-item">
                 <i class="fas fa-fire idle-currency-ico fire"></i>
@@ -1663,9 +1649,9 @@
               <div class="idle-skills" id="idle-skills"><button class="idle-skill" id="idle-skill-burst" title="Déchaîne une attaque surpuissante"><i class="fas fa-burst"></i><span><b>Ultime</b><small id="idle-skill-status">Prêt · ×25</small></span></button><button class="idle-skill idle-skill-team" id="idle-skill-team" title="Attaque combinée de l'équipe"><i class="fas fa-people-group"></i><span><b>Combo</b><small id="idle-team-skill-status">2 héros requis</small></span></button><span class="idle-boss-mechanic hidden" id="idle-boss-mechanic"></span></div>
               <button class="btn-secondary" id="idle-collect-btn" title="Ajoute au solde les gains produits automatiquement par ton équipe"><i class="fas fa-coins"></i> Encaisser <span id="idle-pending-val"></span></button>
               <button class="btn-secondary" id="idle-top-recruit-btn" title="Obtiens définitivement un nouveau personnage Rare ou supérieur"><i class="fas fa-user-plus"></i> Recruter <span id="idle-top-recruit-cost"></span></button>
-              <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige un coup et gagne l'Essence indiquée"><i class="fas fa-hand-fist"></i> Attaquer <span id="idle-click-yield"></span></button>
+              <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige des dégâts ; l’Essence tombe quand le gardien est vaincu"><i class="fas fa-hand-fist"></i> Attaquer <span id="idle-click-yield"></span></button>
             </div>
-            <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère dans ton solde l’Essence fabriquée automatiquement depuis la dernière collecte.</p>
+            <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
           </div>
 
           <!-- Panneau Progression : frise des paliers de décor (équivalent
@@ -1686,7 +1672,7 @@
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-star"></i> Maîtrise des licences</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-masteries" id="idle-masteries"></div></div></div>
           <h3 class="idle-section-title">Équipe recrutée</h3>
-          <div class="idle-team-tools"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Répartit ton Essence sur les niveaux les moins chers.</small></span></div><button class="btn-primary" id="idle-optimize-team"><i class="fas fa-bolt"></i> Optimiser</button></div>
+          <div class="idle-team-tools"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Achète en priorité les niveaux offrant le meilleur gain de DPS par Essence.</small></span></div><button class="btn-primary" id="idle-optimize-team"><i class="fas fa-bolt"></i> Optimiser</button></div>
           <div id="idle-slots" class="idle-slots"></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-clock-rotate-left"></i> Historique des recrutements</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-recruit-history" id="idle-recruit-history"></div></div></div>
         </section>

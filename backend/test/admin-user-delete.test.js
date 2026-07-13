@@ -38,6 +38,27 @@ test('404 si le compte cible n\'existe pas', async () => {
   assert.equal(res.status, 404);
 });
 
+test('attribue et retire le rôle bêta Idle sans accorder les droits admin', async () => {
+  let target = { id: 'target1', displayName: 'Beta', email: 'beta@x.fr', roles: ['community_helper'] };
+  prisma.user.findUnique = async ({ where }) => where.id === ADMIN.id ? ADMIN : (where.id === target.id ? target : null);
+  prisma.user.update = async ({ data }) => { target = { ...target, ...data }; return target; };
+
+  const enabled = await app.request('/api/admin/user/target1/roles/idle-beta', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { enabled: true },
+  });
+  assert.equal(enabled.status, 200);
+  assert.deepEqual(target.roles.sort(), ['community_helper', 'idle_beta']);
+
+  const forbidden = await app.request('/api/admin/r2-status', { cookie: app.authCookie(target.id) });
+  assert.equal(forbidden.status, 403);
+
+  const disabled = await app.request('/api/admin/user/target1/roles/idle-beta', {
+    method: 'POST', cookie: app.authCookie(ADMIN.id), body: { enabled: false },
+  });
+  assert.equal(disabled.status, 200);
+  assert.deepEqual(target.roles, ['community_helper']);
+});
+
 test('supprime le compte : rend le stock des cartes possédées puis cascade', async () => {
   prisma.user.findUnique = async ({ where }) => {
     if (where.id === ADMIN.id) return ADMIN;

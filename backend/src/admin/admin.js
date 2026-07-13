@@ -7,6 +7,7 @@ const ADMIN_EMAILS = new Set(
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
 );
+const IDLE_BETA_ROLE = 'idle_beta';
 
 function isAdmin(user) {
   return !!(user && user.email && ADMIN_EMAILS.has(user.email.toLowerCase()));
@@ -15,6 +16,20 @@ function isAdmin(user) {
 // Middleware : réserve une route aux admins (à placer après requireAuth)
 function requireAdmin(req, res, next) {
   if (!isAdmin(req.user)) return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  next();
+}
+
+function hasRole(user, role) {
+  return !!(user && Array.isArray(user.roles) && user.roles.includes(role));
+}
+
+function canAccessIdle(user) {
+  return isAdmin(user) || hasRole(user, IDLE_BETA_ROLE);
+}
+
+// Accès au jeu bêta uniquement : ce middleware ne donne aucun privilège admin.
+function requireIdleBeta(req, res, next) {
+  if (!canAccessIdle(req.user)) return res.status(403).json({ error: 'Anime Ascension est réservé aux bêta-testeurs' });
   next();
 }
 
@@ -37,4 +52,4 @@ async function deleteUserCascade(prisma, userId) {
   ]);
 }
 
-module.exports = { isAdmin, requireAdmin, deleteUserCascade };
+module.exports = { IDLE_BETA_ROLE, isAdmin, hasRole, canAccessIdle, requireAdmin, requireIdleBeta, deleteUserCascade };

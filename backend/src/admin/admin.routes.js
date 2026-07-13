@@ -2,7 +2,7 @@
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
-const { requireAdmin, deleteUserCascade } = require('./admin');
+const { IDLE_BETA_ROLE, requireAdmin, deleteUserCascade } = require('./admin');
 const { getCharacterMedia, seriesOfCharacter, getTopCharacters, getAnimeCharacters } = require('../anilist/anilist.service');
 const { rarityForRank, MAX_SUPPLY, RARITY_RATES, RARITY_LABELS } = require('../gacha/rarity');
 const { invalidateWeeklyCaches } = require('../gacha/gacha.routes');
@@ -715,6 +715,20 @@ router.post('/user/:id/mute', requireAuth, requireAdmin, async (req, res) => {
   const mutedUntil = minutes > 0 ? new Date(Date.now() + minutes * 60000) : null;
   await prisma.user.update({ where: { id }, data: { mutedUntil } });
   res.json({ ok: true, minutes, mutedUntil, displayName: target.displayName });
+});
+
+// Rôle réversible de bêta-testeur Anime Ascension. Il ouvre uniquement les
+// routes Idle protégées par requireIdleBeta, jamais les outils administrateur.
+router.post('/user/:id/roles/idle-beta', requireAuth, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, displayName: true, roles: true } });
+  if (!target) return res.status(404).json({ error: 'Compte introuvable' });
+  const enabled = req.body?.enabled !== false;
+  const roles = new Set(target.roles || []);
+  if (enabled) roles.add(IDLE_BETA_ROLE);
+  else roles.delete(IDLE_BETA_ROLE);
+  await prisma.user.update({ where: { id }, data: { roles: [...roles] } });
+  res.json({ ok: true, enabled, role: IDLE_BETA_ROLE, displayName: target.displayName });
 });
 
 // Supprime un compte (ex. comptes de test/diagnostic créés en prod pendant le

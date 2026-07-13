@@ -9,7 +9,7 @@ const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
-  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_DOJO_LEVEL, wisdomForPrestige,
+  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
 } = require('../src/idle/idle');
 
@@ -18,7 +18,8 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleMilestoneClaimed: 0, prestigeLevel: 0,
+    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
+    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, prestigeLevel: 0,
     wisdomPoints: 0, ...over,
   };
 }
@@ -31,6 +32,8 @@ test.after(() => app.close());
 test.beforeEach(() => {
   prisma.idleSlot.findMany = async () => [];
   prisma.dojoRecruit.count = async () => 0;
+  prisma.dojoRecruit.update = async () => ({});
+  prisma.dojoRecruit.updateMany = async () => ({count:0});
   // buildState()/withSettle() appellent systématiquement decorArtForTheme()
   // et loadAncientLevels() : sans stub par défaut, tous les tests existants
   // (qui ne testent ni l'habillage visuel ni les Ancients) planteraient sur
@@ -49,6 +52,13 @@ test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de t
   assert.equal(res.status, 403);
 });
 
+test('GET /state : un joueur portant idle_beta accède au jeu sans être administrateur', async () => {
+  prisma.user.findUnique = async () => dbUser({ email: 'joueur@example.com', roles: ['idle_beta'] });
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.battle.stage, 1);
+});
+
 test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé avec un coût, recrutement à son 1er coût', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
@@ -64,6 +74,10 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(locked.unlockCost, slotUpgradeCost(locked.index));
   assert.equal(res.json.recruit.count, 0);
   assert.equal(res.json.recruit.nextCost, recruitCost(0));
+  assert.equal(res.json.recruit.guaranteedEpicIn, 10);
+  assert.equal(res.json.combat.stage, 1);
+  assert.equal(res.json.economy.essence, 0);
+  assert.equal(res.json.permanentProgress.prestige, 0);
   assert.equal(res.json.battle.stage, 1);
   assert.equal(res.json.battle.kills, 0); // stage 1 = aucun kill encore
   assert.equal(res.json.battle.xpIntoStage, 0);
@@ -95,11 +109,8 @@ test('GET /state : reflète les niveaux d\'Ancients déjà achetés (bonus appli
   }
 });
 
-test('GET /state : le stage de combat avance BEAUCOUP plus vite que le niveau de Dojo, à essence égale', async () => {
-  // Assez d'essence gagnée pour plusieurs stages, mais pas de quoi bouger le
-  // niveau du Dojo (courbe bien plus raide) — prouve le découplage voulu :
-  // le combat doit rester vivant même quand le Dojo (décor) n'a pas bougé.
-  const user = dbUser({ essenceEarnedTotal: 40 });
+test('GET /state : le stage de run est indépendant du niveau permanent du Dojo', async () => {
+  const user = dbUser({ essenceEarnedTotal: 40, idleStage:7,idleRunBestStage:7,idleBestStage:7,idleEnemyHp:enemyMaxHp(7) });
   prisma.user.findUnique = async () => user;
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
@@ -350,11 +361,11 @@ test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé r
   assert.equal(upsertArgs.update.level, 1);
 });
 
-test('assign : réassigner le MÊME personnage déjà en place (clic redondant) ne touche pas son niveau', async () => {
+test('assign : réassigner un personnage restaure son niveau propre', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
-  prisma.dojoRecruit.findUnique = async () => ({ userId: 'u1', characterId: 3 });
+  prisma.dojoRecruit.findUnique = async () => ({ userId: 'u1', characterId: 3,trainingLevel:50,idleAscension:2 });
   prisma.idleSlot.findUnique = async () => ({ id: 5, userId: 'u1', slotIndex: 0, characterId: 3, level: 50 });
   prisma.idleSlot.updateMany = async () => ({ count: 0 });
   let upsertArgs = null;
@@ -364,7 +375,8 @@ test('assign : réassigner le MÊME personnage déjà en place (clic redondant) 
     method: 'POST', cookie: app.authCookie('u1'), body: { slotIndex: 0, characterId: 3 },
   });
   assert.equal(res.status, 200);
-  assert.equal(upsertArgs.update.level, undefined);
+  assert.equal(upsertArgs.update.level, 50);
+  assert.equal(upsertArgs.update.ascension, 2);
 });
 
 test('unassign : vide un emplacement', async () => {
@@ -451,18 +463,48 @@ test('collect : crédite la production en attente et avance idleLastCollectAt', 
   assert.ok(increment > 0);
 });
 
-test('click : ajoute le gain instantané, indépendant des emplacements', async () => {
-  const user = dbUser({ idleClickLevel: 3 });
+test('collect : retente proprement si une autre requête a déjà encaissé la même période', async () => {
+  const user = dbUser({ idleLastCollectAt: new Date(Date.now() - 1000) });
   prisma.user.findUnique = async () => user;
-  let gainApplied = null;
+  let calls = 0;
+  prisma.user.update = async () => {
+    calls++;
+    if (calls === 1) throw Object.assign(new Error('conflit optimiste'), { code: 'P2025' });
+    return user;
+  };
+  const res = await app.request('/api/idle/collect', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.equal(calls, 2);
+});
+
+test('click : inflige des dégâts autoritaires au gardien', async () => {
+  let user = dbUser({ idleClickLevel: 3,idleStage:9,idleEnemyHp:enemyMaxHp(9) });
+  prisma.user.findUnique = async () => user;
+  let damageWrite=null;
   prisma.user.update = async (args) => {
-    gainApplied = args.data.essence.increment;
-    return { essence: user.essence + gainApplied };
+    if(typeof args.data.idleEnemyHp==='number'){
+      damageWrite=args.data;
+      user={...user,idleEnemyHp:args.data.idleEnemyHp};
+    }
+    return user;
   };
   const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(res.status, 200);
-  assert.equal(res.json.gained, gainApplied);
-  assert.ok(res.json.gained > 0);
+  assert.ok(res.json.damage > 0);
+  assert.ok(damageWrite&&Number.isFinite(damageWrite.idleEnemyHp));
+});
+
+test('click : accepte une cadence de clicker sans 429 immédiat', async () => {
+  let user = dbUser({ idleClickLevel: 1, idleStage: 9, idleEnemyHp: enemyMaxHp(9) });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async ({ data }) => {
+    if (typeof data.idleEnemyHp === 'number') user = { ...user, idleEnemyHp: data.idleEnemyHp };
+    return user;
+  };
+  for (let i = 0; i < 5; i++) {
+    const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+    assert.equal(res.status, 200);
+  }
 });
 
 test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {
@@ -502,9 +544,8 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   const lowRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(lowRes.status, 400);
 
-  const xpAtMin = dojoXpForLevel(PRESTIGE_MIN_DOJO_LEVEL);
   const eligible = dbUser({
-    essenceEarnedTotal: xpAtMin, essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
+    idleRunBestStage:PRESTIGE_MIN_STAGE, idleBestStage:PRESTIGE_MIN_STAGE, essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
   });
   prisma.user.findUnique = async () => eligible;
   let slotsReset = null;
@@ -524,13 +565,14 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(userUpdate.essenceEarnedTotal, undefined); // le niveau du Dojo (le lieu) n'est jamais reset
   // Plus de multiplicateur automatique : la Sagesse gagnée dépend du niveau
   // du Dojo AU MOMENT du Prestige, à dépenser ensuite dans les Ancients.
-  assert.equal(userUpdate.wisdomPoints.increment, wisdomForPrestige(PRESTIGE_MIN_DOJO_LEVEL));
+  assert.equal(userUpdate.wisdomPoints.increment, wisdomForRunStage(PRESTIGE_MIN_STAGE));
+  assert.equal(userUpdate.idleStage,1);
+  assert.equal(userUpdate.idleRunBestStage,1);
 });
 
 test("prestige : solde la production en attente AVANT le reset — elle compte dans l'XP du Dojo au lieu d'être perdue", async () => {
   const anHourAgo = new Date(Date.now() - 3600 * 1000);
-  const xpAtMin = dojoXpForLevel(PRESTIGE_MIN_DOJO_LEVEL);
-  const eligible = dbUser({ essenceEarnedTotal: xpAtMin, idleLastCollectAt: anHourAgo });
+  const eligible = dbUser({ idleRunBestStage:PRESTIGE_MIN_STAGE,idleBestStage:PRESTIGE_MIN_STAGE,idleStage:9,idleBattleMode:'farm',idleEnemyHp:enemyMaxHp(9), idleLastCollectAt: anHourAgo });
   prisma.user.findUnique = async () => eligible;
   prisma.idleSlot.findMany = async () => [
     { id: 1, userId: 'u1', slotIndex: 0, level: 1, characterId: 42, character: { id: 42, name: 'Mika', imageUrl: null, rarity: 'mythic' } },
@@ -545,6 +587,25 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   // 2e appel = le reset lui-même : ne touche jamais essenceEarnedTotal.
   assert.equal(updateCalls[1].essenceEarnedTotal, undefined);
   assert.equal(updateCalls[1].essence, 0);
+});
+
+test('prestige : une même run ne peut pas être encaissée deux fois', async () => {
+  let user = dbUser({ idleStage: PRESTIGE_MIN_STAGE, idleRunBestStage: PRESTIGE_MIN_STAGE, idleBestStage: PRESTIGE_MIN_STAGE });
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.updateMany = async () => ({ count: 0 });
+  prisma.user.update = async ({ data }) => {
+    for (const [key, value] of Object.entries(data)) {
+      if (value && typeof value === 'object' && 'increment' in value) user[key] = (user[key] || 0) + value.increment;
+      else user[key] = value;
+    }
+    return user;
+  };
+  const first = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  const second = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 400);
+  assert.equal(user.prestigeLevel, 1);
+  assert.equal(user.wisdomPoints, wisdomForRunStage(PRESTIGE_MIN_STAGE));
 });
 
 test('ancient : refuse une clé inconnue', async () => {

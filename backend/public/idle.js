@@ -15,15 +15,21 @@ let idleTickCount = 0; // compteur du ticker — cadence les gains flottants pas
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
 let idleBurstReadyAt = 0;
 let idleTeamSkillReadyAt = 0;
+let idleNextClickAt = 0;
+let idleSyncInFlight = false;
 
 function idleFormatNumber(n) {
-  n = Math.floor(n || 0);
+  n = Number(n || 0);
+  if (!Number.isFinite(n)) return '∞';
+  n = Math.floor(n);
   const sign = n < 0 ? '-' : '';
   n = Math.abs(n);
   if (n < 1000) return sign + n;
   if (n < 1e6) return sign + (n / 1e3).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '') + 'K';
   if (n < 1e9) return sign + (n / 1e6).toFixed(n < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M';
-  return sign + (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (n < 1e12) return sign + (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (n < 1e15) return sign + (n / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
+  return sign + n.toExponential(2).replace('+', '');
 }
 
 // Temps restant avant le prochain niveau de Dojo, lisible (« 1m 30s », « 2h 5m »).
@@ -65,10 +71,14 @@ async function openIdle() {
 // crédite la production en attente en base à intervalle régulier pour que le
 // combat progresse réellement même quand le joueur ne clique sur rien.
 async function idleBackgroundSync() {
+  if (idleSyncInFlight) return;
+  idleSyncInFlight = true;
   try {
     await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
   } catch {
     return; // pas grave : la prochaine synchro (6 s plus tard) rattrapera
+  } finally {
+    idleSyncInFlight = false;
   }
   refreshIdleState();
 }
@@ -139,7 +149,7 @@ function idleStopTicker() {
 function idleTick() {
   if (!idleState) return;
   const elapsed = (Date.now() - idleFetchedAt) / 1000;
-  const display = idleState.essence + idleState.pendingEssence + elapsed * idleState.totalRate;
+  const display = idleState.essence + idleState.pendingEssence;
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
   idleTickInterpolateBattle(elapsed);
@@ -150,7 +160,7 @@ function idleTick() {
   idleTickCount++;
   const passiveGain = idleState.totalRate * 3.2;
   if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
-    idleSpawnFloat(`+${idleFormatNumber(passiveGain)}`, 'xp');
+    idleSpawnFloat(`-${idleFormatNumber(passiveGain)} PV`, 'xp');
     idleCombatMotion('team');
   }
 }
@@ -199,7 +209,7 @@ function renderIdleState(state) {
   document.getElementById('idle-pending-val').textContent = state.pendingEssence > 0 ? `+${idleFormatNumber(state.pendingEssence)}` : '0';
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-coins"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en attente.</b> Encaisse-la maintenant dans ton solde.` : '<i class="fas fa-check"></i> Tous les gains automatiques sont encaissés. Ton équipe continue à produire.';
-  document.getElementById('idle-click-yield').textContent = `+${state.click.yield}`;
+  document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.yield)} dégâts`;
   document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleMissions(state.missions || []);
@@ -261,7 +271,7 @@ function renderIdleTeamStrategy(state) {
   const best = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
   const bonus = best?.[1] >= 3 ? 25 : best?.[1] >= 2 ? 10 : active.length >= 3 ? 5 : 0;
   const bar = document.getElementById('idle-synergy-bar');
-  if (bar) bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}</span></div>` : '<i class="fas fa-link"></i><div><b>Aucune synergie active</b><span>Aligne 2 héros d’une même licence ou 3 univers différents.</span></div>';
+  if (bar) { const reserve=Math.round((state.strategy?.reserveBonus||0)*100);bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}${reserve?` · Réserve +${reserve}%`:''}</span></div>` : `<i class="fas fa-link"></i><div><b>${reserve?`Réserve +${reserve}%`:'Aucune synergie active'}</b><span>Chaque recrue en réserve donne +1% DPS, jusqu’à +20%.</span></div>`; }
 }
 
 function renderIdleCodex(codex) {
@@ -344,8 +354,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const titleEl = document.getElementById('idle-enemy-title');
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
-  if (zoneEl) zoneEl.textContent = `ZONE ${zone} · ${boss ? 'BOSS' : `VAGUE ${wave}/10`}`;
-  if (tagEl) { tagEl.textContent = boss ? 'BOSS' : 'GARDIEN'; tagEl.classList.toggle('boss', boss); }
+  if (zoneEl) zoneEl.textContent = `${battle?.world?.name || `ZONE ${zone}`} · ${boss ? `BOSS · ${battle.timerSeconds || 30}s` : `VAGUE ${wave}/10`}`;
+  if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : 'GARDIEN'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
   if (fill) fill.style.width = `${hpPct}%`;
@@ -405,7 +415,8 @@ async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle
 
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
-  box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}"><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : ''}</button>`).join('');
+  const classWait=Math.max(0,new Date(idleState.heroClass.changeReadyAt||0)-Date.now());
+  box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}" ${classWait&&c.key!==idleState.heroClass.key?'disabled':''}><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : classWait?`<small>Disponible dans ${Math.ceil(classWait/60000)} min</small>`:''}</button>`).join('');
   const specBox=document.getElementById('idle-spec-grid'); if(specBox) specBox.innerHTML=idleState.heroSpecialization.choices.map((s)=>`<button class="idle-style-choice ${s.selected?'active':''}" data-hero-spec="${s.key}" ${idleState.heroSpecialization.unlocked?'':'disabled'}><i class="fas ${idleState.heroSpecialization.unlocked?'fa-code-branch':'fa-lock'}"></i><b>${escapeHtml(s.name)}</b><small>${idleState.heroSpecialization.unlocked?escapeHtml(s.description):'Niveau 25 requis'}</small></button>`).join('');
   renderIdleStyleChoices('hairs','idle-hair-grid','fa-scissors'); renderIdleStyleChoices('outfits','idle-outfit-grid','fa-shirt'); renderIdleStyleChoices('colors','idle-color-grid','fa-palette'); renderIdleStyleChoices('auras','idle-aura-grid','fa-fire'); renderIdleStyleChoices('stances','idle-stance-grid','fa-person-running'); renderIdleStyleChoices('titles','idle-title-grid','fa-crown');
   document.getElementById('idle-class-picker').classList.remove('hidden');
@@ -438,7 +449,7 @@ function renderIdleRecruit(recruit, essence) {
   }
   for (const id of ['idle-top-recruit-btn', 'idle-recruit-btn']) {
     const btn = document.getElementById(id);
-    if (btn) btn.disabled = !affordable;
+    if (btn) { btn.disabled = !affordable; btn.title = `Epic ou mieux garanti dans ${recruit.guaranteedEpicIn || 10} recrutement(s)`; }
   }
 }
 
@@ -459,7 +470,7 @@ function renderIdleAchievements(items) {
   box.innerHTML = items.map((a) => `<div class="idle-achievement ${a.completed ? 'completed' : ''}"><i class="fas ${a.icon}"></i><div><b>${escapeHtml(a.title)}</b><span>${escapeHtml(a.description)} · ${idleFormatNumber(a.progress)}/${idleFormatNumber(a.target)}</span><em style="--progress:${a.progress/a.target*100}%"></em></div><button class="btn-secondary" data-achievement="${a.key}" ${!a.completed || a.claimed ? 'disabled' : ''}>${a.claimed ? '<i class="fas fa-check"></i>' : `+${idleFormatNumber(a.reward)}`}</button></div>`).join('');
 }
 function renderIdleGuide(guide){if(!guide)return;const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
-function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box||!season)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Fin dans ${Math.ceil(left/86400000)} jour(s)</span></div></div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>Niv. ${t.level}</span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)}`}</button></div>`).join('')}</div>`;}
+function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box)return;box.classList.toggle('hidden',!season?.enabled);if(!season?.enabled)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Fin dans ${Math.ceil(left/86400000)} jour(s)</span></div></div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>Niv. ${t.level}</span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)}`}</button></div>`).join('')}</div>`;}
 async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');await refreshIdleState();}catch(e){alert(e.message);}}
 function openIdleGuide(){document.getElementById('idle-guide-modal')?.classList.remove('hidden');}
 async function openIdleRanking(){const modal=document.getElementById('idle-ranking-modal');const list=document.getElementById('idle-ranking-list');modal?.classList.remove('hidden');if(list)list.innerHTML='<p class="hint">Chargement…</p>';try{const data=await api('/api/idle/leaderboard');if(list)list.innerHTML=data.players.map((p)=>`<div class="idle-ranking-row ${p.isMe?'me':''}"><strong>${p.rank<=3?['🥇','🥈','🥉'][p.rank-1]:p.rank}</strong><span class="idle-ranking-player"><span class="avatar" ${p.avatarUrl?`style="background-image:url('${escapeHtml(p.avatarUrl)}')"`:''}></span><span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.className)}</small></span></span><b>${idleFormatNumber(p.stage)}</b><b>${idleFormatNumber(p.level)}</b><b>${p.prestige}</b></div>`).join('')||'<p class="hint">Aucun joueur classé.</p>';}catch(e){if(list)list.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}}
@@ -762,8 +773,8 @@ function renderIdlePrestige(dojo) {
   if (btn) btn.disabled = !dojo.prestige.eligible;
   if (hint) {
     hint.textContent = dojo.prestige.eligible
-      ? ''
-      : `Débloqué au niveau ${dojo.prestige.minLevel} de l'Idle (actuellement ${dojo.level}).`;
+      ? `Prestige disponible : +${idleFormatNumber(dojo.prestige.reward)} Sagesse.`
+      : `Atteins le stage ${dojo.prestige.minStage} pendant cette run (record : ${dojo.prestige.runBestStage}).`;
   }
 }
 
@@ -869,12 +880,16 @@ function renderIdleUpgrades(state) {
 }
 
 async function collectIdle() {
+  if (idleSyncInFlight) return;
+  idleSyncInFlight = true;
   const pending = idleState?.pendingEssence || 0;
   try {
     await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
   } catch (e) {
     alert(e.message);
     return;
+  } finally {
+    idleSyncInFlight = false;
   }
   // Le nombre affiché inclut déjà le pending (cf. idleTick) : sans ce petit
   // retour, cliquer « Récolter » ne « faisait » visiblement rien.
@@ -886,11 +901,14 @@ async function collectIdle() {
 }
 
 async function clickIdle() {
+  const now = Date.now();
+  if (now < idleNextClickAt) return;
+  idleNextClickAt = now + 110;
   // Retour immédiat : l'animation part au pointer-down, sans attendre le
   // réseau. Le serveur reste autoritaire pour le solde et l'anti-spam.
   const predicted = idleState?.click?.yield || 1;
   idleClickFeedback(predicted);
-  idleSpawnFloat(`+${predicted}`, idleFloatTier(predicted));
+  idleSpawnFloat(`-${idleFormatNumber(predicted)} PV`, idleFloatTier(predicted));
   let r;
   try {
     r = await api('/api/idle/click', { method: 'POST', body: JSON.stringify({}) });
@@ -898,7 +916,7 @@ async function clickIdle() {
     return; // 429 (anti-spam) ou réseau : on ignore silencieusement, pas de quoi bloquer le joueur
   }
   if (idleState) idleState.essence = r.essence;
-  if(r.critical){idleSpawnFloat(`CRITIQUE +${r.gained}`,'crit');idleCombatMotion('hero');}
+  if(r.critical){idleSpawnFloat(`CRITIQUE −${idleFormatNumber(r.damage || r.gained)} PV`,'crit');idleCombatMotion('hero');}
   // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
   // le passage à la vague/zone suivante après le coup.
   refreshIdleState();
@@ -909,14 +927,14 @@ function idleClickFeedback(gained) {
   if (!btn) return;
   const fx = document.createElement('span');
   fx.className = 'idle-click-fx';
-  fx.textContent = `+${gained}`;
+  fx.textContent = `−${idleFormatNumber(gained)} PV`;
   btn.appendChild(fx);
   setTimeout(() => fx.remove(), 700);
   // Deux petites pièces qui s'envolent, angles légèrement aléatoires — pur sucre visuel.
   for (let i = 0; i < 2; i++) {
     const coin = document.createElement('span');
     coin.className = 'idle-click-coin';
-    coin.textContent = '🪙';
+    coin.textContent = '✦';
     coin.style.setProperty('--dx', `${Math.round((Math.random() - 0.5) * 60)}px`);
     btn.appendChild(coin);
     setTimeout(() => coin.remove(), 650);
