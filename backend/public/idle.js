@@ -227,6 +227,7 @@ function renderIdleState(state) {
   document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.damage ?? state.click.yield)} dégâts`;
   document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
+  renderIdleRank(state.rank);
   renderIdleMissions(state.missions || []);
   renderIdleChallenges(state.challenges||[]);
   renderIdleEvent(state.event);
@@ -637,8 +638,9 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
   if (next) {
-    const remaining = Math.max(0, (dojo.xpForNextLevel || 0) - (dojo.xpIntoLevel || 0));
-    const base = `Ascension ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} XP${idleEtaSuffix(remaining)}`;
+    const base = dojo.xpIntoLevel >= dojo.xpForNextLevel
+      ? 'Épreuves terminées · passage de niveau disponible'
+      : `Épreuves d’Ascension ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)}`;
     const text = dojo.nextDecor
       ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : base;
@@ -658,6 +660,51 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
 function idleCelebrate() {
   if (typeof burstConfetti === 'function') burstConfetti(36);
   if (typeof sfx !== 'undefined' && sfx.levelup) sfx.levelup();
+}
+
+function renderIdleRank(rank) {
+  const box = document.getElementById('idle-rank-quests');
+  if (!box || !rank) return;
+  document.getElementById('idle-rank-current').textContent = `Niv. ${idleFormatNumber(rank.level)}`;
+  document.getElementById('idle-rank-next').textContent = `Niv. ${idleFormatNumber(rank.nextLevel)}`;
+  const summary = document.getElementById('idle-rank-summary');
+  if (summary) summary.textContent = rank.ready
+    ? 'La série est complète. Valide ton ascension quand tu es prêt.'
+    : `${rank.completed}/${rank.total} épreuves terminées · la progression est conservée jusqu’à la validation.`;
+  box.innerHTML = (rank.quests || []).map((quest) => {
+    const progress = Math.min(100, Math.round((quest.progress / Math.max(1, quest.target)) * 100));
+    return `<article class="idle-rank-quest ${quest.completed ? 'done' : ''}">
+      <span class="idle-rank-quest-icon"><i class="fas ${escapeHtml(quest.icon)}"></i></span>
+      <div><small>${quest.completed ? 'TERMINÉE' : 'EN COURS'}</small><b>${escapeHtml(quest.name)}</b><span>${escapeHtml(quest.description)}</span><em style="--progress:${progress}%"></em></div>
+      <strong>${idleFormatNumber(quest.progress)}/${idleFormatNumber(quest.target)}${quest.completed ? ' <i class="fas fa-check"></i>' : ''}</strong>
+    </article>`;
+  }).join('');
+  const reward = document.getElementById('idle-rank-reward');
+  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> Récompense : ${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
+  const button = document.getElementById('idle-rank-advance');
+  if (button) {
+    button.disabled = !rank.ready;
+    button.classList.toggle('ready', rank.ready);
+    button.innerHTML = rank.ready
+      ? `<i class="fas fa-arrow-up"></i> Passer niveau ${idleFormatNumber(rank.nextLevel)}`
+      : '<i class="fas fa-lock"></i> Terminer les épreuves';
+  }
+}
+
+async function advanceIdleRank() {
+  const button = document.getElementById('idle-rank-advance');
+  if (!idleState?.rank?.ready || button?.disabled) return;
+  button.disabled = true;
+  try {
+    const result = await api('/api/idle/rank/advance', { method:'POST', body:JSON.stringify({}) });
+    idleState = null;
+    renderIdleState(result.state);
+    idleCelebrate();
+    idleSpawnFloat(`NIVEAU ${result.level} · +${result.seals} SCEAU${result.seals > 1 ? 'X' : ''}`, 'crit');
+  } catch (e) {
+    alert(e.message);
+    await refreshIdleState();
+  }
 }
 
 // Impact de kill (stage franchi) : flash + micro-secousse sur la scène, plus
@@ -1301,6 +1348,7 @@ function initIdleUI() {
   document.getElementById('idle-skill-burst')?.addEventListener('click', idleUseBurst);
   document.getElementById('idle-skill-team')?.addEventListener('click', idleUseTeamSkill);
   document.getElementById('idle-missions')?.addEventListener('click', (e) => { const b = e.target.closest('[data-idle-mission]'); if (b && !b.disabled) claimIdleMission(b.dataset.idleMission); });
+  document.getElementById('idle-rank-advance')?.addEventListener('click', advanceIdleRank);
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});

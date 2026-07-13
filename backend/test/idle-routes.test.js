@@ -8,7 +8,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const {
-  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost, dojoXpForLevel,
+  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
 } = require('../src/idle/idle');
@@ -19,6 +19,7 @@ function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
+    idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
@@ -44,6 +45,8 @@ test.beforeEach(() => {
   prisma.ancientLevel.findMany = async () => [];
   prisma.dojoBossArt.findUnique = async () => null;
   prisma.idleTeamPreset.findMany = async () => [];
+  prisma.idleProgressCounter.findMany = async () => [];
+  prisma.idleProgressCounter.upsert = async () => ({});
   idleRoutes.decorArtCache.clear();
 });
 
@@ -161,15 +164,40 @@ test('GET /state : la production hors-ligne est plafonnée et reflétée dans pe
   assert.equal(res.json.slots[0].character.rarity, 'mythic');
 });
 
-test('GET /state : le niveau du Dojo dérive de essenceEarnedTotal, décor + XP cohérents', async () => {
-  const user = dbUser({ essenceEarnedTotal: dojoXpForLevel(10) });
+test('GET /state : le niveau dépend du rang validé et expose sa série d’épreuves', async () => {
+  const user = dbUser({ idleRankLevel:10, idleRankKills:60, idleRankClicks:50, idleRankUpgrades:3 });
   prisma.user.findUnique = async () => user;
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.dojo.level, 10);
-  assert.equal(res.json.dojo.xpIntoLevel, 0);
+  assert.equal(res.json.rank.level, 10);
+  assert.equal(res.json.rank.nextLevel, 11);
+  assert.equal(res.json.rank.quests.length, 3);
+  assert.equal(res.json.dojo.xpIntoLevel, res.json.rank.completed);
   assert.ok(res.json.dojo.decor && res.json.dojo.decor.theme);
   assert.ok(res.json.dojo.multiplier > 1);
+});
+
+test('passage de niveau : refuse une série incomplète puis valide atomiquement la série complète', async () => {
+  let user = dbUser({ idleRankLevel:1 });
+  prisma.user.findUnique = async () => user;
+  let res = await app.request('/api/idle/rank/advance', { method:'POST', cookie:app.authCookie('u1'), body:{} });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /épreuves/);
+
+  user = dbUser({ idleRankLevel:1, idleRankKills:15, idleRankClicks:35, idleRankUpgrades:3, idleSeals:2 });
+  prisma.user.updateMany = async ({ where, data }) => {
+    assert.equal(where.idleRankLevel, 1);
+    user = { ...user, idleRankLevel:2, idleRankKills:0, idleRankClicks:0, idleRankUpgrades:0, idleRankBosses:0, idleSeals:user.idleSeals + data.idleSeals.increment, idleRankStartedAt:data.idleRankStartedAt };
+    return { count:1 };
+  };
+  res = await app.request('/api/idle/rank/advance', { method:'POST', cookie:app.authCookie('u1'), body:{} });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.level, 2);
+  assert.equal(res.json.seals, 1);
+  assert.equal(res.json.state.rank.level, 2);
+  assert.equal(res.json.state.rank.completed, 0);
+  assert.equal(res.json.state.economy.seals, 3);
 });
 
 test("GET /state : le décor porte un gardien mythique réel + le fond de son anime quand disponibles", async () => {
@@ -572,16 +600,15 @@ test('feedback bêta : conserve le message et son contexte', async () => {
 });
 
 test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {
-  const noneYet = dbUser({ essenceEarnedTotal: 0 }); // niveau 1, aucun palier atteint
+  const noneYet = dbUser({ idleRankLevel:1 }); // niveau 1, aucun palier atteint
   prisma.user.findUnique = async () => noneYet;
   prisma.user.update = async () => noneYet;
   const refusedRes = await app.request('/api/idle/claim-milestone', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(refusedRes.status, 400);
   assert.match(refusedRes.json.error, /coffre/);
 
-  const dojoLevel5 = dojoXpForLevel(5); // MILESTONE_INTERVAL = 5 → 1er palier atteint pile au niveau 5
   const tier = milestoneTierForLevel(5);
-  const eligible = dbUser({ essenceEarnedTotal: dojoLevel5 });
+  const eligible = dbUser({ idleRankLevel:5 });
   prisma.user.findUnique = async () => eligible;
   let updateData = null;
   prisma.user.update = async (args) => { updateData = args.data; return eligible; };
@@ -592,9 +619,8 @@ test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompen
 });
 
 test('claim-milestone : un palier déjà réclamé ne peut pas l\'être une seconde fois', async () => {
-  const dojoLevel5 = dojoXpForLevel(5);
   const tier = milestoneTierForLevel(5);
-  const already = dbUser({ essenceEarnedTotal: dojoLevel5, idleMilestoneClaimed: tier });
+  const already = dbUser({ idleRankLevel:5, idleMilestoneClaimed: tier });
   prisma.user.findUnique = async () => already;
   prisma.user.update = async () => already;
   const res = await app.request('/api/idle/claim-milestone', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
@@ -648,9 +674,10 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   assert.equal(res.status, 200);
   // 1er appel = solde de la production en attente (avant le reset) : doit créditer essenceEarnedTotal.
   assert.ok(updateCalls[0].essenceEarnedTotal.increment > 0);
-  // 2e appel = le reset lui-même : ne touche jamais essenceEarnedTotal.
-  assert.equal(updateCalls[1].essenceEarnedTotal, undefined);
-  assert.equal(updateCalls[1].essence, 0);
+  // Le compteur d'épreuve de combat peut s'intercaler après le règlement.
+  const resetCall = updateCalls.find((data) => data.essence === 0);
+  assert.ok(resetCall);
+  assert.equal(resetCall.essenceEarnedTotal, undefined);
 });
 
 test('prestige : une même run ne peut pas être encaissée deux fois', async () => {

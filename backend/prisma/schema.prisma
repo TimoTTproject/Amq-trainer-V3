@@ -152,6 +152,12 @@ model User {
   idleFormation          String    @default("balanced")
   idlePrestigePath       String    @default("balanced")
   idlePrestigeMilestone  Int       @default(0)
+  idleRankLevel          Int       @default(1)
+  idleRankKills          Int       @default(0)
+  idleRankClicks         Int       @default(0)
+  idleRankUpgrades       Int       @default(0)
+  idleRankBosses         Int       @default(0)
+  idleRankStartedAt      DateTime  @default(now())
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
