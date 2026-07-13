@@ -1,6 +1,6 @@
 // Dojo (idle/clicker) — configuration et calculs purs (pas d'accès DB ici).
 // Jeu à PART ENTIÈRE, indépendant de la collection gacha : les personnages du
-// roster sont RECRUTÉS avec des Sceaux ou des Golds, pas tirés au gacha —
+// roster sont RECRUTÉS avec des Sceaux ou de l'Essence, pas tirés au gacha —
 // seule la table Character (nom/portrait/rareté) est partagée comme référentiel
 // de contenu ; UserCard/CardInstance restent indépendants. Un personnage assigné à un emplacement produit de l'essence en
 // continu, proportionnellement à sa rareté et à son niveau d'entraînement
@@ -100,23 +100,17 @@ function rollRecruitRarity(luckBonus) {
   return 'rare';
 }
 const RECRUIT_BASE_COST = 1;
-const RECRUIT_GROWTH = 1;
-// `count` = nombre de personnages déjà recrutés par le joueur. `discountBonus`
-// (0-0.6, cf. Ancient « Marché Facile ») réduit le coût multiplicativement —
-// plancher à 1 essence, jamais gratuit.
-function recruitCost(count, discountBonus) {
-  const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
-  const base = Math.min(12, RECRUIT_BASE_COST + Math.floor(Math.max(0, (count || 0) - 1) / 2));
-  return Math.max(1, Math.round(finiteIdleNumber(base * (1 - discount), 1)));
+// Un Sceau est un ticket : son pouvoir d'achat ne diminue jamais avec le roster.
+function recruitCost() {
+  return RECRUIT_BASE_COST;
 }
 
-// Alternative en Golds (monnaie globale). Le prix progresse avec le roster :
-// elle dépanne quand les Sceaux manquent sans permettre de recruter toute la
-// collection à bas coût. L'Ancient Marché Facile s'applique aux deux devises.
-function recruitGoldCost(count, discountBonus) {
+// Alternative en Essence. Elle sert de puits économique progressif sans ajouter
+// une troisième monnaie à l'Idle. L'Ancient Marché Facile réduit ce coût.
+function recruitEssenceCost(count, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
-  const base = Math.min(1500, Math.round(40 * Math.pow(1.16, Math.max(0, count || 0))));
-  return Math.max(20, Math.round(finiteIdleNumber(base * (1 - discount), 40)));
+  const base = Math.min(25000000, Math.round(1500 * Math.pow(1.26, Math.max(0, count || 0))));
+  return Math.max(600, Math.round(finiteIdleNumber(base * (1 - discount), 1500)));
 }
 
 // Amélioration « Discipline » : multiplicateur de production globale.
@@ -294,11 +288,11 @@ function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosse
   const current = Math.max(1, Math.floor(level || 1));
   const nextLevel = current + 1;
   const defs = [
-    { key:'kills', icon:'fa-skull', name:'Épreuve de combat', description:'Vaincre des ennemis', progress:kills, target:Math.min(5000, 15 + current * 8) },
-    { key:'clicks', icon:'fa-hand-fist', name:'Épreuve de maîtrise', description:'Porter des frappes manuelles', progress:clicks, target:Math.min(4000, 40 + current * 15) },
-    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Épreuve d’entraînement', description:'Acheter des améliorations', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
+    { key:'kills', icon:'fa-skull', name:'Ennemis vaincus', description:'Élimine des ennemis dans Combat', progress:kills, target:Math.min(5000, 15 + current * 8) },
+    { key:'clicks', icon:'fa-hand-fist', name:'Frappes manuelles', description:'Utilise le bouton Attaquer', progress:clicks, target:Math.min(4000, 40 + current * 15) },
+    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Améliorations achetées', description:'Dépense de l’Essence dans Améliorer', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
   ];
-  if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Épreuve du gardien', description:'Ouvrir un nouveau coffre de boss', progress:bosses, target:1 });
+  if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Coffre de gardien', description:'Vaincs un boss et ouvre son coffre', progress:bosses, target:1 });
   const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));
   return { level:current, nextLevel, quests, completed:quests.filter((q)=>q.completed).length, total:quests.length, ready:quests.every((q)=>q.completed), sealReward:nextLevel % 5 === 0 ? 2 : 1 };
 }
@@ -456,9 +450,8 @@ module.exports = {
   RECRUIT_TOTAL_WEIGHT,
   rollRecruitRarity,
   RECRUIT_BASE_COST,
-  RECRUIT_GROWTH,
   recruitCost,
-  recruitGoldCost,
+  recruitEssenceCost,
   PROD_LEVEL_BONUS,
   PROD_LEVEL_MAX,
   prodMultiplier,

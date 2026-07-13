@@ -805,6 +805,7 @@
         <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" />
         <button id="replay-btn" class="btn-secondary" title="Réécouter l'extrait"><i class="fas fa-rotate-left"></i></button>
         <button id="like-btn" class="btn-secondary" title="Ajouter à ma playlist" disabled><i class="far fa-heart"></i></button>
+        <button id="report-btn" class="btn-secondary hidden" title="Signaler : ce son ne correspond à aucune réponse"><i class="fas fa-flag"></i></button>
         <button id="reveal-video-btn" class="btn-secondary"><i class="fas fa-eye"></i> Vidéo</button>
         <button id="show-answer-btn" class="btn-secondary"><i class="fas fa-lightbulb"></i> Voir la réponse</button>
         <button id="layout-toggle-btn" class="btn-secondary" title="Changer la disposition du quiz"><i class="fas fa-table-columns"></i> Horizontal</button>
@@ -1663,7 +1664,7 @@
               <button class="btn-secondary" id="idle-collect-btn" title="Ajoute au solde les gains produits automatiquement par ton équipe"><i class="fas fa-coins"></i> Encaisser <span id="idle-pending-val"></span></button>
               <div class="idle-recruit-payment" aria-label="Choisir la monnaie d'invocation">
                 <button class="btn-secondary" id="idle-top-recruit-btn" title="Invoquer avec des Sceaux"><i class="fas fa-ticket"></i><span><b>Invoquer</b><small id="idle-top-recruit-cost"></small></span></button>
-                <button class="btn-secondary idle-recruit-gold" id="idle-top-recruit-gold-btn" title="Invoquer avec des Golds"><i class="fas fa-coins"></i><span><b>Invoquer</b><small id="idle-top-recruit-gold-cost"></small></span></button>
+                <button class="btn-secondary idle-recruit-essence" id="idle-top-recruit-essence-btn" title="Invoquer avec de l’Essence"><i class="fas fa-bolt"></i><span><b>Invoquer</b><small id="idle-top-recruit-essence-cost"></small></span></button>
               </div>
             </div>
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
@@ -1673,11 +1674,12 @@
         </section>
 
         <section id="idle-panel-progression" class="idle-panel hidden">
-          <div class="idle-page-head"><i class="fas fa-torii-gate"></i><div><small>ASCENSION</small><h2>Progression</h2></div></div>
+          <div class="idle-page-head"><i class="fas fa-arrow-up-right-dots"></i><div><small>NIVEAUX</small><h2>Progression</h2></div></div>
           <div class="profile-section idle-rank-panel">
-            <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PROGRESSION</span><h3><i class="fas fa-torii-gate"></i> Épreuves d’Ascension</h3><p id="idle-rank-summary">0/3 épreuves terminées</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
+            <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PASSAGE DE NIVEAU</span><h3><i class="fas fa-list-check"></i> Objectifs du niveau</h3><p id="idle-rank-summary">0/3 objectifs terminés</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
+            <p class="idle-rank-how"><i class="fas fa-circle-info"></i> Termine chaque objectif ci-dessous. Le bouton se déverrouille ensuite : ton niveau augmente et une nouvelle liste commence.</p>
             <div class="idle-rank-quests" id="idle-rank-quests"></div>
-            <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> +1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Terminer les épreuves</button></div>
+            <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> Récompense : +1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Objectifs incomplets</button></div>
           </div>
 
           <!-- Panneau Progression : frise des paliers de décor (équivalent
@@ -1746,7 +1748,7 @@
       <!-- Barre d'onglets bas d'écran, façon appli mobile -->
       <nav class="idle-tabs" id="idle-tabs">
         <button class="idle-tab active" data-idle-tab="home" title="Combattre et récupérer l'Essence"><i class="fas fa-fire"></i><span>Combat</span></button>
-        <button class="idle-tab" data-idle-tab="progression" title="Accomplir les épreuves et explorer les mondes"><i class="fas fa-torii-gate"></i><span>Ascension</span></button>
+        <button class="idle-tab" data-idle-tab="progression" title="Monter de niveau et explorer les mondes"><i class="fas fa-arrow-up-right-dots"></i><span>Niveaux</span></button>
         <button class="idle-tab" data-idle-tab="team" title="Choisir les héros qui produisent automatiquement"><i class="fas fa-users"></i><span>Équipe</span></button>
         <button class="idle-tab" data-idle-tab="equipment" title="Gérer les objets et les panoplies"><i class="fas fa-shield-halved"></i><span>Objets</span></button>
         <button class="idle-tab" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
@@ -1797,10 +1799,10 @@
       <div class="modal-card wide">
         <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
-        <p class="hint">Ton roster de l'Idle — indépendant de ta collection gacha. Utilise des Sceaux ou des Golds pour invoquer.</p>
+        <p class="hint">Ton roster de l'Idle — indépendant de ta collection gacha. Un Sceau donne toujours une invocation ; l’Essence offre une alternative.</p>
         <div class="idle-recruit-payment idle-recruit-payment-wide" aria-label="Choisir la monnaie d'invocation">
           <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-ticket"></i><span><b>Invoquer avec des Sceaux</b><small id="idle-recruit-cost"></small></span></button>
-          <button class="btn-secondary idle-recruit-btn idle-recruit-gold" id="idle-recruit-gold-btn"><i class="fas fa-coins"></i><span><b>Invoquer avec des Golds</b><small id="idle-recruit-gold-cost"></small></span></button>
+          <button class="btn-secondary idle-recruit-btn idle-recruit-essence" id="idle-recruit-essence-btn"><i class="fas fa-bolt"></i><span><b>Invoquer avec de l’Essence</b><small id="idle-recruit-essence-cost"></small></span></button>
         </div>
         <p class="hint" id="idle-picker-hint"></p>
         <div id="idle-picker-list" class="card-grid"></div>

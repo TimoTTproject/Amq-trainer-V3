@@ -1,6 +1,6 @@
 // Routes du Dojo (idle/clicker) : état, récolte, recrutement, assignation
 // d'emplacements, clic manuel, améliorations. Le roster reste séparé du gacha ;
-// seuls les Golds globaux peuvent servir d'alternative aux Sceaux à l'invocation.
+// l'Essence sert d'alternative aux Sceaux à l'invocation.
 const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
@@ -48,7 +48,7 @@ const {
   ancientBonus,
   rollRecruitRarity,
   recruitCost,
-  recruitGoldCost,
+  recruitEssenceCost,
 } = require('./idle');
 
 const router = express.Router();
@@ -124,10 +124,10 @@ function idleMissionList(user, recruitCount, activeCount, stage, counters=new Ma
 }
 
 const SEASON_TIERS = [
-  {tier:1,level:1000,reward:1,gold:0},{tier:2,level:2500,reward:2,gold:0},
-  {tier:3,level:5000,reward:2,gold:25},{tier:4,level:8000,reward:3,gold:0},
-  {tier:5,level:12000,reward:3,gold:0},{tier:6,level:16000,reward:4,gold:50},
-  {tier:7,level:20000,reward:5,gold:0},{tier:8,level:24000,reward:7,gold:100},
+  {tier:1,level:1000,reward:1,essence:0},{tier:2,level:2500,reward:2,essence:0},
+  {tier:3,level:5000,reward:2,essence:25000},{tier:4,level:8000,reward:3,essence:0},
+  {tier:5,level:12000,reward:3,essence:0},{tier:6,level:16000,reward:4,essence:75000},
+  {tier:7,level:20000,reward:5,essence:0},{tier:8,level:24000,reward:7,essence:200000},
 ];
 
 function seasonActivityScore(counters, period) {
@@ -168,15 +168,15 @@ function weeklyConvergence(counters, periods=idlePeriods()) {
     {label:'Compétences',progress:value('skill'),target:40},
     {label:'Améliorations',progress:value('upgrade'),target:100},
   ];
-  return {title:'Convergence suprême',description:'Accomplis les quatre objectifs avant la fin de la semaine.',requirements,...challengeProgress(requirements),reward:7,gold:75,rewardCurrency:'seals'};
+  return {title:'Convergence suprême',description:'Accomplis les quatre objectifs avant la fin de la semaine.',requirements,...challengeProgress(requirements),reward:7,essence:100000,rewardCurrency:'seals'};
 }
 
 function bossChestRewards(tier) {
   const reward=Math.round(80*Math.pow(1.4,Math.max(0,tier-1)));
   const sealReward=1+Math.min(3,Math.floor(tier/5));
-  const goldReward=tier%5===0?25+tier*5:0;
+  const bonusEssence=tier%5===0?Math.round(reward*.5):0;
   const lootRarity=tier%10===0?'mythic':tier%5===0?'legendary':tier%3===0?'epic':'rare';
-  return {reward,sealReward,goldReward,lootRarity};
+  return {reward,sealReward,bonusEssence,lootRarity};
 }
 
 const IDLE_ITEM_CAPACITY=120;
@@ -578,7 +578,7 @@ async function buildState(userId) {
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
       idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleOnboardingComplete:true,
-      idleSeals:true,tokens:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idlePrestigePath:true,idlePrestigeMilestone:true,
+      idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idlePrestigePath:true,idlePrestigeMilestone:true,
       idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankStartedAt:true,
     },
   });
@@ -709,7 +709,7 @@ async function buildState(userId) {
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
   const challenges=challengeDefs.map((c)=>({...c,progress:Math.min(c.progress,c.target),completed:c.progress>=c.target,claimed:claimedChallenges.has(`challenge_${c.key}:${c.period}`)}));
   const guide=[
-    {key:'recruit',title:'Invoque ton premier héros',description:'Utilise des Sceaux ou des Golds pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
+    {key:'recruit',title:'Invoque ton premier héros',description:'Utilise 1 Sceau ou de l’Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
     {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
     {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
@@ -738,7 +738,7 @@ async function buildState(userId) {
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
-    economy:{essence:user.essence,seals:user.idleSeals,gold:user.tokens,pendingEssence:pending,dps:totalRate,offlineCapMs},
+    economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,offlineCapMs},
     run:{stage,bestStage:Math.max(user.idleRunBestStage||1,stage),essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress'},
     combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
@@ -761,7 +761,7 @@ async function buildState(userId) {
     slotsUnlocked: user.idleSlotsUnlocked,
     maxSlots: MAX_SLOTS,
     startSlots: START_SLOTS,
-    recruit: { count: recruitCount, nextCost: recruitCost(recruitCount, recruitDiscountBonus),nextCostAfter:recruitCost(recruitCount+1,recruitDiscountBonus),currency:'seals',balance:user.idleSeals,goldCost:recruitGoldCost(recruitCount,recruitDiscountBonus),goldCostAfter:recruitGoldCost(recruitCount+1,recruitDiscountBonus),goldBalance:user.tokens,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
+    recruit: { count: recruitCount, nextCost:recruitCost(),nextCostAfter:recruitCost(),currency:'seals',balance:user.idleSeals,essenceCost:recruitEssenceCost(recruitCount,recruitDiscountBonus),essenceCostAfter:recruitEssenceCost(recruitCount+1,recruitDiscountBonus),essenceBalance:user.essence,pity:user.idleRecruitPity||0,guaranteedEpicIn:Math.max(1,10-(user.idleRecruitPity||0)),odds:Object.fromEntries(RECRUIT_WEIGHTS.map(([rarity,weight])=>[rarity,weight])),income:{daily:3,weekly:3} },
     recruitHistory: recruits.slice(0,8).map((r)=>({ id:r.characterId, name:r.character?.name, series:r.character?.series, rarity:r.character?.rarity, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character) })),
     battle: {
       stage,
@@ -874,7 +874,7 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
       const user = await tx.user.findUnique({ where:{id:req.user.id} });
       if (!user) throw new IdleError(404, 'Compte introuvable');
       const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bosses:user.idleRankBosses });
-      if (!series.ready) throw new IdleError(400, 'Termine toutes les épreuves avant de passer au niveau suivant');
+      if (!series.ready) throw new IdleError(400, 'Termine tous les objectifs avant de passer au niveau suivant');
       const updated = await tx.user.updateMany({
         where:{
           id:user.id,idleRankLevel:series.level,
@@ -954,22 +954,22 @@ router.post('/collect', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
 });
 
 // Recrute un personnage au hasard (pondéré par rareté, cf. RECRUIT_WEIGHTS)
-// avec des Sceaux ou des Golds — la SEULE façon d'obtenir un personnage dans le Dojo.
+// avec 1 Sceau ou de l'Essence — la SEULE façon d'obtenir un personnage dans le Dojo.
 // Exclut les personnages déjà recrutés par ce joueur ; si la rareté tirée est
 // épuisée (tout recruté), retombe sur les autres raretés dans l'ordre.
 router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const currency = String(req.body?.currency || 'seals');
-  if (!['seals', 'gold'].includes(currency)) return res.status(400).json({ error: 'Devise de recrutement invalide' });
+  if (!['seals', 'essence'].includes(currency)) return res.status(400).json({ error: 'Devise de recrutement invalide' });
   let result;
   let paymentCost = 0;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const count = await tx.dojoRecruit.count({ where: { userId: user.id } });
       const discount = ancientBonus(ancientLevelsByKey, 'recruitDiscount');
-      const cost = currency === 'gold' ? recruitGoldCost(count, discount) : recruitCost(count, discount);
+      const cost = currency === 'essence' ? recruitEssenceCost(count, discount) : recruitCost();
       paymentCost = cost;
-      if (currency === 'gold' ? (user.tokens||0) < cost : (user.idleSeals||0) < cost) {
-        throw new IdleError(400, currency === 'gold' ? 'Golds insuffisants' : 'Sceaux insuffisants');
+      if (currency === 'essence' ? (user.essence||0) < cost : (user.idleSeals||0) < cost) {
+        throw new IdleError(400, currency === 'essence' ? 'Essence insuffisante' : 'Sceaux insuffisants');
       }
       const already = (await tx.dojoRecruit.findMany({ where: { userId: user.id }, select: { characterId: true } })).map((r) => r.characterId);
       const pity = user.idleRecruitPity || 0;
@@ -987,10 +987,9 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
       if (!pool.length) throw new IdleError(400, 'Tu as déjà recruté tout le roster disponible !');
       const picked = pool[Math.floor(Math.random() * pool.length)];
       const pityUpdate = ['epic', 'legendary', 'mythic'].includes(picked.rarity) ? 0 : { increment: 1 };
-      if (currency === 'gold') {
-        const debit = await tx.user.updateMany({ where: { id: user.id, tokens: { gte: cost } }, data: { tokens: { decrement: cost }, idleRecruitPity: pityUpdate } });
-        if (!debit.count) throw new IdleError(400, 'Golds insuffisants');
-        await tx.tokenTransaction.create({ data: { userId: user.id, amount: -cost, reason: 'idle_recruit' } });
+      if (currency === 'essence') {
+        const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost }, idleRecruitPity: pityUpdate } });
+        if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
       } else {
         await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });
       }
@@ -1413,10 +1412,9 @@ router.post('/event/claim', requireAuth, requireIdleBeta, rateLimit({ max: 10, n
     await prisma.$transaction(async (tx) => {
       if (!event.completed) throw new IdleError(400, 'Défi hebdomadaire incomplet');
       await tx.idleMissionClaim.create({ data: { userId: req.user.id, missionKey: 'weekly_convergence', period } });
-      await tx.user.update({ where: { id: req.user.id }, data: { idleSeals: { increment: event.reward },tokens:{increment:event.gold} } });
-      await tx.tokenTransaction.create({data:{userId:req.user.id,amount:event.gold,reason:'idle_weekly_event'}});
+      await tx.user.update({ where: { id: req.user.id }, data: { idleSeals: { increment: event.reward },essence:{increment:event.essence},essenceEarnedTotal:{increment:event.essence} } });
     });
-    res.json({ ok: true, reward:event.reward,gold:event.gold,currency:'seals' });
+    res.json({ ok: true, reward:event.reward,essence:event.essence,currency:'seals' });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Récompense déjà réclamée' });
@@ -1449,7 +1447,7 @@ router.post('/achievement/claim', requireAuth, requireIdleBeta, rateLimit({ max:
 router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-season'}),async(req,res)=>{
   const tier=Number(req.body?.tier);const def=SEASON_TIERS.find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier inconnu'});
   const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const activity=seasonActivityScore(counters,periods.month);if(activity.score<def.level)return res.status(400).json({error:'Palier de saison incomplet'});
-  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},...(def.gold?{tokens:{increment:def.gold}}:{})}});if(def.gold)await tx.tokenTransaction.create({data:{userId:req.user.id,amount:def.gold,reason:'idle_season_reward'}});});res.json({ok:true,reward:def.reward,gold:def.gold,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
+  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},...(def.essence?{essence:{increment:def.essence},essenceEarnedTotal:{increment:def.essence}}:{})}});});res.json({ok:true,reward:def.reward,essence:def.essence,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
 });
 router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
@@ -1478,16 +1476,15 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const defeated = Math.floor(Math.max(0, (user.idleBestStage || user.idleStage || 1) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
       if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
-      const {reward:amount,sealReward,goldReward,lootRarity}=bossChestRewards(tier);
-      const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward},tokens:{increment:goldReward}, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
+      const {reward:amount,sealReward,bonusEssence,lootRarity}=bossChestRewards(tier);const totalEssence=amount+bonusEssence;
+      const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward}, essence: { increment: totalEssence }, essenceEarnedTotal: { increment: totalEssence } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
-      if(goldReward>0)await tx.tokenTransaction.create({data:{userId:user.id,amount:goldReward,reason:'idle_boss_chest'}});
       const kinds=['weapon','relic','accessory'];const kind=kinds[(tier-1)%kinds.length];const rarity=lootRarity;
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
       const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
       if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
       else{const equippedFortune=await tx.idleItem.findMany({where:{userId:user.id,equippedSlotId:{not:null},effectKey:'salvage'},select:{effectValue:true}});const salvage=Math.round(itemSalvageValue(drop)*(1+equippedFortune.reduce((sum,x)=>sum+x.effectValue,0)));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
-      return { tier,reward:amount,seals:sealReward,gold:goldReward,loot };
+      return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
     res.json({ ok: true, ...result });

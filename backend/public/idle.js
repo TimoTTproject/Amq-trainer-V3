@@ -559,7 +559,7 @@ function renderIdleBossChest(chest) {
   const btn = document.getElementById('idle-boss-chest'); if (!btn) return;
   btn.classList.toggle('hidden', !chest?.available);
   const label = document.getElementById('idle-boss-chest-label');
-  if (label && chest) label.textContent = `Coffre ${chest.tier} · objet ${chest.lootRarity||'rare'} · +${idleFormatNumber(chest.reward)} Essence · +${chest.sealReward||1} Sceau${chest.goldReward?` · +${chest.goldReward} Golds`:''}`;
+  if (label && chest) label.textContent = `Coffre ${chest.tier} · objet ${chest.lootRarity||'rare'} · +${idleFormatNumber(chest.reward+(chest.bonusEssence||0))} Essence · +${chest.sealReward||1} Sceau`;
 }
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'}>×${x.value}${x.unlocked?'':` · niv.${x.level}`}</button>`).join('');}
 function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>b.classList.toggle('active',b.dataset.battleMode===mode));}
@@ -600,15 +600,15 @@ function showIdleBossReward(reward) {
   const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');if(!modal||!body)return;
   const names = { weapon: 'Arme', relic: 'Relique', accessory: 'Accessoire' };
   const loot=reward.loot;
-  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span>${reward.gold?`<span><i class="fas fa-coins"></i><b>+${reward.gold}</b><small>Golds</small></span>`:''}</div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Ajouté à l’inventaire · +${Math.round(loot.bonus*100)}%`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-shield-halved"></i> Voir et équiper l’objet</button>':''}`:''}`;
+  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span></div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Ajouté à l’inventaire · +${Math.round(loot.bonus*100)}%`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-shield-halved"></i> Voir et équiper l’objet</button>':''}`:''}`;
   modal.classList.remove('hidden');
 }
 
 function renderIdleRecruit(recruit) {
   const sealCostLabel = `${idleFormatNumber(recruit.nextCost)} Sceau${recruit.nextCost > 1 ? 'x' : ''} · ${idleFormatNumber(recruit.balance)} dispo.`;
-  const goldCostLabel = `${idleFormatNumber(recruit.goldCost)} Golds · ${idleFormatNumber(recruit.goldBalance)} dispo.`;
+  const essenceCostLabel = `${idleFormatNumber(recruit.essenceCost)} Essence · ${idleFormatNumber(recruit.essenceBalance)} dispo.`;
   const sealAffordable = recruit.balance >= recruit.nextCost;
-  const goldAffordable = recruit.goldBalance >= recruit.goldCost;
+  const essenceAffordable = recruit.essenceBalance >= recruit.essenceCost;
   for (const id of ['idle-top-recruit-cost', 'idle-recruit-cost']) {
     const el = document.getElementById(id);
     if (el) el.textContent = sealCostLabel;
@@ -617,15 +617,15 @@ function renderIdleRecruit(recruit) {
     const btn = document.getElementById(id);
     if (btn) { btn.disabled = !sealAffordable; btn.title = `Invoquer avec des Sceaux · Épique garanti dans ${recruit.guaranteedEpicIn||10} invocation(s)`; }
   }
-  for (const id of ['idle-top-recruit-gold-cost', 'idle-recruit-gold-cost']) {
+  for (const id of ['idle-top-recruit-essence-cost', 'idle-recruit-essence-cost']) {
     const el = document.getElementById(id);
-    if (el) el.textContent = goldCostLabel;
+    if (el) el.textContent = essenceCostLabel;
   }
-  for (const id of ['idle-top-recruit-gold-btn', 'idle-recruit-gold-btn']) {
+  for (const id of ['idle-top-recruit-essence-btn', 'idle-recruit-essence-btn']) {
     const btn = document.getElementById(id);
-    if (btn) { btn.disabled = !goldAffordable; btn.title = `Invoquer avec des Golds · prochain coût ${idleFormatNumber(recruit.goldCostAfter)} Golds`; }
+    if (btn) { btn.disabled = !essenceAffordable; btn.title = `Invoquer avec de l’Essence · prochain coût ${idleFormatNumber(recruit.essenceCostAfter)} Essence`; }
   }
-  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>${idleFormatNumber(recruit.balance)} Sceaux</b> · <i class="fas fa-coins"></i> <b>${idleFormatNumber(recruit.goldBalance)} Golds</b> · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
+  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>1 Sceau = 1 invocation</b> · <i class="fas fa-bolt"></i> <b>${idleFormatNumber(recruit.essenceBalance)} Essence</b> · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
@@ -648,7 +648,7 @@ function renderIdleCombatQuests(missions) {
 function renderIdleEvent(event) {
   const box = document.getElementById('idle-event-banner'); if (!box || !event) return;
   const w = event.weekly;
-  box.innerHTML = `<div class="idle-event-today"><i class="fas ${event.icon}"></i><div><small>ÉVÉNEMENT DU JOUR</small><b>${escapeHtml(event.name)}</b><span>${escapeHtml(event.description)}</span></div><time data-event-end="${event.endsAt}"></time></div><div class="idle-weekly"><i class="fas fa-trophy"></i><div><small>DÉFI HEBDOMADAIRE · OBJECTIF COMPOSÉ</small><b>${escapeHtml(w.title)}</b><span>${escapeHtml(w.description)}</span><div class="idle-weekly-requirements">${(w.requirements||[]).map((r)=>`<span class="${r.progress>=r.target?'done':''}"><i class="fas ${r.progress>=r.target?'fa-check':'fa-circle'}"></i>${escapeHtml(r.label)} <b>${idleFormatNumber(Math.min(r.progress,r.target))}/${idleFormatNumber(r.target)}</b></span>`).join('')}</div><em style="--progress:${w.progress/w.target*100}%"></em></div><button class="btn-secondary" id="idle-event-claim" ${!w.completed || w.claimed ? 'disabled' : ''}>${w.claimed ? 'Réclamé' : `+${w.reward} Sceaux${w.gold?` + ${w.gold} Golds`:''}`}</button></div>`;
+  box.innerHTML = `<div class="idle-event-today"><i class="fas ${event.icon}"></i><div><small>ÉVÉNEMENT DU JOUR</small><b>${escapeHtml(event.name)}</b><span>${escapeHtml(event.description)}</span></div><time data-event-end="${event.endsAt}"></time></div><div class="idle-weekly"><i class="fas fa-trophy"></i><div><small>DÉFI HEBDOMADAIRE · OBJECTIF COMPOSÉ</small><b>${escapeHtml(w.title)}</b><span>${escapeHtml(w.description)}</span><div class="idle-weekly-requirements">${(w.requirements||[]).map((r)=>`<span class="${r.progress>=r.target?'done':''}"><i class="fas ${r.progress>=r.target?'fa-check':'fa-circle'}"></i>${escapeHtml(r.label)} <b>${idleFormatNumber(Math.min(r.progress,r.target))}/${idleFormatNumber(r.target)}</b></span>`).join('')}</div><em style="--progress:${w.progress/w.target*100}%"></em></div><button class="btn-secondary" id="idle-event-claim" ${!w.completed || w.claimed ? 'disabled' : ''}>${w.claimed ? 'Réclamé' : `+${w.reward} Sceaux${w.essence?` + ${idleFormatNumber(w.essence)} Essence`:''}`}</button></div>`;
   const time = box.querySelector('[data-event-end]'); if (time) { const left = Math.max(0, new Date(event.endsAt) - Date.now()); time.textContent = `${Math.floor(left/3600000)}h ${Math.floor(left%3600000/60000)}m`; }
   box.querySelector('#idle-event-claim')?.addEventListener('click', claimIdleEvent);
 }
@@ -657,7 +657,7 @@ function renderIdleAchievements(items) {
   box.innerHTML = items.map((a) => `<div class="idle-achievement ${a.completed ? 'completed' : ''}"><i class="fas ${a.icon}"></i><div><b>${escapeHtml(a.title)}</b><span>${escapeHtml(a.description)} · ${idleFormatNumber(a.progress)}/${idleFormatNumber(a.target)}</span><em style="--progress:${a.progress/a.target*100}%"></em></div><button class="btn-secondary" data-achievement="${a.key}" ${!a.completed || a.claimed ? 'disabled' : ''}>${a.claimed ? '<i class="fas fa-check"></i>' : idleRewardLabel(a)}</button></div>`).join('');
 }
 function renderIdleGuide(guide){if(!guide)return;const count=document.getElementById('idle-guide-count');if(count)count.textContent=`${guide.completed}/${guide.total}`;const text=document.getElementById('idle-guide-progress-text');if(text)text.textContent=`${guide.completed}/${guide.total} étapes`;const bar=document.getElementById('idle-guide-progress-bar');if(bar)bar.style.setProperty('--progress',`${guide.completed/guide.total*100}%`);const list=document.getElementById('idle-guide-list');if(list)list.innerHTML=guide.items.map((x,i)=>`<div class="idle-guide-step ${x.done?'done':x===guide.next?'current':''}"><span>${x.done?'<i class="fas fa-check"></i>':i+1}</span><div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.description)}</small></div>${x.done?'':`<button class="btn-secondary" data-guide-tab="${x.tab}">Voir</button>`}</div>`).join('');}
-function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box)return;box.classList.toggle('hidden',!season?.enabled);if(!season?.enabled)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());const next=season.tiers.find((t)=>!t.completed);box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>PARCOURS MENSUEL · SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Joue de plusieurs façons pour gagner de l’activité. Chaque source est plafonnée : aucune action ne suffit seule.</span><strong>${idleFormatNumber(season.level)}${next?` / ${idleFormatNumber(next.level)}`:''} activité · ${Math.ceil(left/86400000)} jour(s) restants</strong></div></div><div class="idle-season-breakdown">${(season.breakdown||[]).map((x)=>`<span><small>${escapeHtml(x.label)}</small><b>+${idleFormatNumber(x.score)}</b><em>${idleFormatNumber(x.value)}/${idleFormatNumber(x.cap)}</em></span>`).join('')}</div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>PALIER ${t.tier}<b>${idleFormatNumber(t.level)}</b></span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)} Sceau${t.reward>1?'x':''}${t.gold?` · ${t.gold} Golds`:''}`}</button></div>`).join('')}</div>`;}
+function renderIdleSeason(season){const box=document.getElementById('idle-season-card');if(!box)return;box.classList.toggle('hidden',!season?.enabled);if(!season?.enabled)return;const left=Math.max(0,new Date(season.endsAt)-Date.now());const next=season.tiers.find((t)=>!t.completed);box.innerHTML=`<div class="idle-season-head"><i class="fas fa-crown"></i><div><small>PARCOURS MENSUEL · SAISON ${season.period}</small><b>${escapeHtml(season.name)}</b><span>Joue de plusieurs façons pour gagner de l’activité. Chaque source est plafonnée : aucune action ne suffit seule.</span><strong>${idleFormatNumber(season.level)}${next?` / ${idleFormatNumber(next.level)}`:''} activité · ${Math.ceil(left/86400000)} jour(s) restants</strong></div></div><div class="idle-season-breakdown">${(season.breakdown||[]).map((x)=>`<span><small>${escapeHtml(x.label)}</small><b>+${idleFormatNumber(x.score)}</b><em>${idleFormatNumber(x.value)}/${idleFormatNumber(x.cap)}</em></span>`).join('')}</div><div class="idle-season-track">${season.tiers.map((t)=>`<div class="idle-season-tier ${t.completed?'completed':''} ${t.claimed?'claimed':''}"><span>PALIER ${t.tier}<b>${idleFormatNumber(t.level)}</b></span><i class="fas ${t.claimed?'fa-check':t.completed?'fa-gift':'fa-lock'}"></i><button data-season-tier="${t.tier}" ${!t.completed||t.claimed?'disabled':''}>${t.claimed?'Réclamé':`+${idleFormatNumber(t.reward)} Sceau${t.reward>1?'x':''}${t.essence?` · ${idleFormatNumber(t.essence)} Essence`:''}`}</button></div>`).join('')}</div>`;}
 async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');await refreshIdleState();}catch(e){alert(e.message);}}
 function openIdleGuide(){document.getElementById('idle-guide-modal')?.classList.remove('hidden');}
 async function openIdleRanking(){const modal=document.getElementById('idle-ranking-modal');const list=document.getElementById('idle-ranking-list');modal?.classList.remove('hidden');if(list)list.innerHTML='<p class="hint">Chargement…</p>';try{const data=await api('/api/idle/leaderboard');if(list)list.innerHTML=data.players.map((p)=>`<div class="idle-ranking-row ${p.isMe?'me':''}"><strong>${p.rank<=3?['🥇','🥈','🥉'][p.rank-1]:p.rank}</strong><span class="idle-ranking-player"><span class="avatar" ${p.avatarUrl?`style="background-image:url('${escapeHtml(p.avatarUrl)}')"`:''}></span><span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.className)}</small></span></span><b>${idleFormatNumber(p.stage)}</b><b>${idleFormatNumber(p.level)}</b><b>${p.prestige}</b></div>`).join('')||'<p class="hint">Aucun joueur classé.</p>';}catch(e){if(list)list.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}}
@@ -706,8 +706,8 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   const next = document.getElementById('idle-decor-next');
   if (next) {
     const base = dojo.xpIntoLevel >= dojo.xpForNextLevel
-      ? 'Épreuves terminées · passage de niveau disponible'
-      : `Épreuves d’Ascension ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)}`;
+      ? 'Objectifs terminés · passage de niveau disponible'
+      : `Niveau : ${idleFormatNumber(dojo.xpIntoLevel)}/${idleFormatNumber(dojo.xpForNextLevel)} objectifs terminés`;
     const text = dojo.nextDecor
       ? `${base} · ${dojo.nextDecor.name} dans ${dojo.nextDecor.levelsRemaining} niveau(x)`
       : base;
@@ -736,8 +736,8 @@ function renderIdleRank(rank) {
   document.getElementById('idle-rank-next').textContent = `Niv. ${idleFormatNumber(rank.nextLevel)}`;
   const summary = document.getElementById('idle-rank-summary');
   if (summary) summary.textContent = rank.ready
-    ? 'Ascension prête.'
-    : `${rank.completed}/${rank.total} épreuves terminées`;
+    ? `Tout est terminé : valide le niveau ${idleFormatNumber(rank.nextLevel)}.`
+    : `${rank.completed}/${rank.total} objectifs terminés`;
   box.innerHTML = (rank.quests || []).map((quest) => {
     const progress = Math.min(100, Math.round((quest.progress / Math.max(1, quest.target)) * 100));
     return `<article class="idle-rank-quest ${quest.completed ? 'done' : ''}">
@@ -747,14 +747,14 @@ function renderIdleRank(rank) {
     </article>`;
   }).join('');
   const reward = document.getElementById('idle-rank-reward');
-  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
+  if (reward) reward.innerHTML = `<i class="fas fa-ticket"></i> Récompense : +${idleFormatNumber(rank.sealReward)} Sceau${rank.sealReward > 1 ? 'x' : ''}`;
   const button = document.getElementById('idle-rank-advance');
   if (button) {
     button.disabled = !rank.ready;
     button.classList.toggle('ready', rank.ready);
     button.innerHTML = rank.ready
       ? `<i class="fas fa-arrow-up"></i> Passer niveau ${idleFormatNumber(rank.nextLevel)}`
-      : '<i class="fas fa-lock"></i> Terminer les épreuves';
+      : '<i class="fas fa-lock"></i> Objectifs incomplets';
   }
 }
 
@@ -1309,10 +1309,6 @@ async function recruitIdle(currency = 'seals') {
     return;
   }
   idleLastRecruitCurrency = r.payment?.currency || currency;
-  if (idleLastRecruitCurrency === 'gold' && typeof currentUser !== 'undefined') {
-    currentUser.tokens = r.recruit.goldBalance;
-    if (typeof renderHeaderUser === 'function') renderHeaderUser();
-  }
   if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(r.recruited.rarity);
   if (['epic', 'legendary', 'mythic'].includes(r.recruited.rarity) && typeof burstConfetti === 'function') {
     burstConfetti(r.recruited.rarity === 'mythic' ? 50 : 30);
@@ -1495,8 +1491,8 @@ function initIdleUI() {
   });
   document.getElementById('idle-top-recruit-btn')?.addEventListener('click', () => recruitIdle('seals'));
   document.getElementById('idle-recruit-btn')?.addEventListener('click', () => recruitIdle('seals'));
-  document.getElementById('idle-top-recruit-gold-btn')?.addEventListener('click', () => recruitIdle('gold'));
-  document.getElementById('idle-recruit-gold-btn')?.addEventListener('click', () => recruitIdle('gold'));
+  document.getElementById('idle-top-recruit-essence-btn')?.addEventListener('click', () => recruitIdle('essence'));
+  document.getElementById('idle-recruit-essence-btn')?.addEventListener('click', () => recruitIdle('essence'));
   document.getElementById('idle-recruit-reveal-close')?.addEventListener('click', closeIdleRecruitReveal);
   document.getElementById('idle-recruit-reveal')?.addEventListener('click', (e) => { if (e.target.id === 'idle-recruit-reveal') closeIdleRecruitReveal(); });
   document.getElementById('idle-recruit-again')?.addEventListener('click', () => { closeIdleRecruitReveal(); recruitIdle(idleLastRecruitCurrency); });
