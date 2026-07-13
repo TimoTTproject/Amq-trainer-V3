@@ -6357,6 +6357,13 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-particles{display:none}
 #view-idle .idle-tabs{background:#11141b;border-color:#2a303b;box-shadow:0 14px 32px #0008}
 #view-idle .idle-tab.active{background:var(--accent);box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 28%,transparent)}
+#view-idle .idle-tab:focus-visible{outline:3px solid #38bdf8;outline-offset:2px}
+#view-idle .idle-battle-tag.enemy-swift{border-color:#38bdf888;background:#08202a;color:#67e8f9}
+#view-idle .idle-battle-tag.enemy-armored{border-color:#94a3b888;background:#20242c;color:#e2e8f0}
+#view-idle .idle-battle-tag.enemy-captain{border-color:#f59e0b99;background:#291b06;color:#fbbf24}
+#view-idle #idle-decor-boss[data-archetype="swift"] .idle-enemy-sprite{filter:drop-shadow(0 0 9px #22d3ee88) saturate(1.15)}
+#view-idle #idle-decor-boss[data-archetype="armored"] .idle-enemy-sprite{filter:drop-shadow(0 0 10px #cbd5e188) grayscale(.25) contrast(1.2)}
+#view-idle #idle-decor-boss[data-archetype="captain"] .idle-enemy-sprite{filter:drop-shadow(0 0 14px #f59e0baa) saturate(1.35);transform:scale(1.08)}
 #view-idle .idle-currency-panel{border-color:#2a303b;background:#101319}
 #view-idle .idle-combat-panel{border-color:#08aee866;background:#0b0e14;box-shadow:0 12px 34px #0008,0 0 0 1px #08aee812}
 #view-idle .idle-recruit-payment .idle-recruit-essence{background:#0c1b20}

@@ -28,6 +28,7 @@ let idleOnboardingSubmitting = false;
 let idleCombatEntries = [];
 let idleItemFilter = 'all';
 let idleItemSort = 'power';
+let idleLastAnnouncement = '';
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -35,6 +36,7 @@ function idleNotify(message,type='info'){
   toast.innerHTML=`<i class="fas ${type==='error'?'fa-triangle-exclamation':type==='success'?'fa-circle-check':'fa-circle-info'}"></i><span>${escapeHtml(String(message||''))}</span><button type="button" aria-label="Fermer"><i class="fas fa-times"></i></button>`;
   toast.querySelector('button').addEventListener('click',()=>toast.remove());box.appendChild(toast);setTimeout(()=>toast.remove(),4200);
 }
+function idleAnnounce(message){if(!message||message===idleLastAnnouncement)return;idleLastAnnouncement=message;const live=document.getElementById('idle-live-status');if(live)live.textContent=message;}
 function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggle=document.getElementById('idle-effects-reduced');if(toggle)toggle.checked=!!reduced;}
 
 function idleAddCombatLog(message,icon='fa-bolt'){
@@ -113,12 +115,14 @@ async function idleBackgroundSync() {
 function idleShowPanel(name) {
   idleActivePanel = name;
   for (const p of ['home', 'progression', 'team', 'equipment', 'upgrades', 'activities']) {
-    document.getElementById('idle-panel-' + p)?.classList.toggle('hidden', p !== name);
+    const panel=document.getElementById('idle-panel-' + p);panel?.classList.toggle('hidden', p !== name);panel?.setAttribute('aria-hidden',p===name?'false':'true');
   }
   document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => {
     const active = t.dataset.idleTab === name;
     t.classList.toggle('active', active);
     t.setAttribute('aria-current', active ? 'page' : 'false');
+    t.setAttribute('aria-selected',active?'true':'false');
+    t.tabIndex=active?0:-1;
   });
 }
 
@@ -535,7 +539,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
-  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${boss?'Vaincs-le pour passer au monde suivant':`Ennemi ${enemyNumber}/${enemiesRequired} · +${idleFormatNumber(battle?.reward||0)} Essence par victoire`}</small></span><strong>${boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
+  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${boss?'Vaincs-le pour passer au monde suivant':`${escapeHtml(battle?.enemy?.name||'Standard')} · ${escapeHtml(battle?.enemy?.description||'')} · +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>${boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
   if (waveTrack) {
     waveTrack.classList.toggle('is-boss', boss);
     waveTrack.setAttribute('aria-label', boss ? 'Boss final de la vague' : `${battle?.enemiesDefeated||0} ennemis vaincus sur ${enemiesRequired}`);
@@ -544,7 +548,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
       : Array.from({length:enemiesRequired},(_,index)=>`<span class="${index<(battle?.enemiesDefeated||0)?'done':index===enemyNumber-1?'current':''}"><i class="fas ${index<(battle?.enemiesDefeated||0)?'fa-check':'fa-skull'}"></i><b>${index+1}</b></span>`).join('');
   }
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
-  if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
+  if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
   idleAnimateEnemyHp(fill,remaining,total,stage);
@@ -553,6 +557,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   // vrais niveaux de Dojo.
   if (prevBattle && (battle?.kills || 0) > (prevBattle?.kills || 0)) {
     idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0), stage > Math.max(1, prevBattle.stage || 1));
+    idleAnnounce(stage>Math.max(1,prevBattle.stage||1)?`Vague terminée. Vague ${wave} commencée.`:`Ennemi vaincu. ${enemiesRemaining} restant${enemiesRemaining>1?'s':''}.`);
   }
 }
 
@@ -738,7 +743,7 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = world.flavor || dojo.decor.flavor || '';
   idleRenderBackdrop(world.backgroundUrl||dojo.decor.backgroundUrl);
-  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':'normal',battle?.world?.enemyName,battle?.enemyNumber||1);
+  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':battle?.enemy?.key||'standard',battle?.world?.enemyName,battle?.enemyNumber||1);
   // La barre #idle-xp-fill est la barre de PV du combat (cf. renderIdleBattle,
   // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
@@ -1011,15 +1016,16 @@ function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversair
   el.dataset.variant=String((Math.max(1,wave)-1)%4);
   el.classList.toggle('is-elite',kind==='elite');
   el.classList.toggle('is-boss',kind==='boss');
+  el.dataset.archetype=kind;
   const enemyAtlases = Object.fromEntries(['wood','garden','temple','gold','celestial','hueco','ua','shibuya','aincrad','void'].map((key)=>[key,`/assets/idle/enemies/world-${key}-v1.webp`]));
   const atlas = enemyAtlases[theme];
   if (atlas) {
-    const spriteIndex = kind === 'boss' ? 5 : kind === 'elite' ? 4 : (Math.max(1,wave)+Math.max(1,enemyNumber)-2)%4;
+    const spriteIndex = kind === 'boss' ? 5 : kind === 'elite'||kind==='captain' ? 4 : (Math.max(1,wave)+Math.max(1,enemyNumber)-2)%4;
     const x = [0,50,100,0,50,100][spriteIndex];
     const y = spriteIndex < 3 ? 0 : 100;
     el.classList.add('idle-scene-fighter');
     el.innerHTML = `<span class="idle-fighter-sprite idle-enemy-sprite" role="img" aria-label="${escapeHtml(enemyName)}" style="background-image:url('${atlas}');background-position:${x}% ${y}%"></span>
-      <span class="idle-boss-name"><small>${kind==='boss'?'BOSS':kind==='elite'?'ÉLITE':'ENNEMI'}</small><b>${escapeHtml(enemyName)}</b></span>`;
+      <span class="idle-boss-name"><small>${kind==='boss'?'BOSS':kind==='elite'?'ÉLITE':kind==='captain'?'CAPITAINE':kind==='armored'?'BLINDÉ':kind==='swift'?'RAPIDE':'ENNEMI'}</small><b>${escapeHtml(enemyName)}</b></span>`;
     return;
   }
   el.classList.remove('idle-scene-fighter');
@@ -1497,6 +1503,19 @@ function initIdleUI() {
   document.getElementById('idle-tabs')?.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-idle-tab]');
     if (tab) idleShowPanel(tab.dataset.idleTab);
+  });
+  document.getElementById('idle-tabs')?.addEventListener('keydown',(e)=>{
+    if(!['ArrowDown','ArrowRight','ArrowUp','ArrowLeft','Home','End'].includes(e.key))return;
+    const tabs=[...e.currentTarget.querySelectorAll('[data-idle-tab]')];let index=tabs.indexOf(document.activeElement);
+    if(e.key==='Home')index=0;else if(e.key==='End')index=tabs.length-1;else index=(index+(['ArrowDown','ArrowRight'].includes(e.key)?1:-1)+tabs.length)%tabs.length;
+    e.preventDefault();idleShowPanel(tabs[index].dataset.idleTab);tabs[index].focus();
+  });
+  document.addEventListener('keydown',(e)=>{
+    if(document.getElementById('view-idle')?.classList.contains('hidden'))return;
+    const openModals=[...document.querySelectorAll('.modal-overlay[id^="idle-"]:not(.hidden)')];
+    if(e.key==='Escape'&&openModals.length){e.preventDefault();openModals.at(-1).classList.add('hidden');return;}
+    const editable=e.target.closest?.('input,textarea,select,button,[contenteditable="true"]');
+    if(e.code==='Space'&&!editable&&!openModals.length&&idleActivePanel==='home'){e.preventDefault();clickIdle();}
   });
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });

@@ -41,6 +41,8 @@ const {
   enemyReward,
   enemiesRequiredForStage,
   enemyUnitReward,
+  enemyUnitMaxHp,
+  enemyArchetype,
   PRESTIGE_MIN_STAGE,
   wisdomForRunStage,
   campaignForStage,
@@ -67,7 +69,7 @@ test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans 
   assert.equal(wall.stage,9);
   assert.equal(wall.bossFailed,true);
   assert.ok(wall.kills > 50);
-  assert.equal(wall.essence,wall.kills*enemyUnitReward(9));
+  assert.ok(wall.essence>wall.kills*enemyUnitReward(9));
 });
 
 test('chaque vague normale demande 10 ennemis et le boss reste un combat unique', () => {
@@ -83,6 +85,12 @@ test('chaque vague normale demande 10 ennemis et le boss reste un combat unique'
   const finishBoss = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:enemyMaxHp(10),elapsedSeconds:1,mode:'progress'});
   assert.equal(finishBoss.stage, 11);
   assert.equal(finishBoss.waveKills, 0);
+});
+
+test('les archétypes ennemis changent réellement les PV et le butin',()=>{
+  assert.equal(enemyArchetype(1,9).key,'captain');
+  assert.ok(enemyUnitMaxHp(1,9)>enemyMaxHp(1));
+  assert.ok(enemyUnitReward(1,9)>enemyReward(1));
 });
 
 test('équilibrage : les murs croissent plus vite que les récompenses et les achats restent espacés', () => {

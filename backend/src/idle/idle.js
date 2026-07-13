@@ -181,15 +181,32 @@ function enemyReward(stage) {
   const special = isBossStage(s) ? 3 : isEliteStage(s) ? 1.5 : 1;
   return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special, 1)));
 }
+const ENEMY_ARCHETYPES = {
+  standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
+  swift: { key:'swift', name:'Rapide', description:'Peu de PV, récompense normale.', hpMultiplier:.68, rewardMultiplier:1 },
+  armored: { key:'armored', name:'Blindé', description:'Plus résistant, butin amélioré.', hpMultiplier:1.6, rewardMultiplier:1.5 },
+  captain: { key:'captain', name:'Capitaine', description:'Dixième ennemi renforcé de la vague.', hpMultiplier:2.25, rewardMultiplier:2.25 },
+  boss: { key:'boss', name:'Gardien', description:'Boss du monde.', hpMultiplier:1, rewardMultiplier:1 },
+};
+function enemyArchetype(stage, waveKills = 0) {
+  if (isBossStage(stage)) return ENEMY_ARCHETYPES.boss;
+  const number = Math.max(1, Math.min(10, Math.floor(waveKills || 0) + 1));
+  if (number === 10) return ENEMY_ARCHETYPES.captain;
+  const roll = (Math.max(1, Math.floor(stage || 1)) * 31 + number * 17) % 7;
+  return roll === 0 || roll === 3 ? ENEMY_ARCHETYPES.armored : roll === 1 || roll === 5 ? ENEMY_ARCHETYPES.swift : ENEMY_ARCHETYPES.standard;
+}
+function enemyUnitMaxHp(stage, waveKills = 0) {
+  return finiteIdleNumber(enemyMaxHp(stage) * enemyArchetype(stage, waveKills).hpMultiplier, 1);
+}
 function enemiesRequiredForStage(stage) {
   if (isBossStage(stage)) return 1;
   return 10;
 }
-function enemyUnitReward(stage) {
+function enemyUnitReward(stage, waveKills = 0) {
   // Chaque nouvel ennemi remplace un ancien changement de stage : conserver
   // la récompense unitaire maintient le revenu par minute sans fractions
   // perdues lors des synchronisations fréquentes.
-  return enemyReward(stage);
+  return Math.max(1, Math.round(enemyReward(stage) * enemyArchetype(stage, waveKills).rewardMultiplier));
 }
 function enemiesDefeatedBeforeStage(stage) {
   const completedStages = Math.max(0, Math.floor(stage || 1) - 1);
@@ -207,7 +224,7 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
   let kills = 0;
   let bossFailed = false;
   let farming = mode === 'farm';
-  const maxHp = () => enemyMaxHp(currentStage);
+  const maxHp = () => enemyUnitMaxHp(currentStage, currentWaveKills);
   if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
   if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
 
@@ -217,23 +234,18 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
       bossFailed = true;
       currentStage = Math.max(1, currentStage - 1);
       currentWaveKills = 0;
-      currentHp = enemyMaxHp(currentStage);
+      currentHp = enemyUnitMaxHp(currentStage, currentWaveKills);
       farming = true;
       continue;
     }
     // Une fois en farm, tous les ennemis ont les mêmes PV : calcul fermé
     // plutôt qu'une boucle par kill, indispensable pour plusieurs heures
     // hors-ligne à haut niveau.
-    if (farming && currentHp === enemyMaxHp(currentStage)) {
-      const cycle = currentHp / damagePerSecond;
-      const bulk = Math.min(maxKills - kills, Math.floor(seconds / cycle));
-      if (bulk > 0) {
-        essence = finiteIdleNumber(essence + bulk * enemyUnitReward(currentStage));
-        kills += bulk;
-        seconds -= bulk * cycle;
-        currentWaveKills = (currentWaveKills + bulk) % enemiesRequiredForStage(currentStage);
-        if (kills >= maxKills) break;
-      }
+    if (farming && !isBossStage(currentStage) && currentWaveKills === 0 && currentHp === maxHp()) {
+      const cycleHp = Array.from({length:10}, (_, index) => enemyUnitMaxHp(currentStage, index)).reduce((sum, value) => sum + value, 0);
+      const cycleReward = Array.from({length:10}, (_, index) => enemyUnitReward(currentStage, index)).reduce((sum, value) => sum + value, 0);
+      const cycles = Math.min(Math.floor((maxKills-kills)/10), Math.floor(seconds/(cycleHp/damagePerSecond)));
+      if (cycles > 0) { essence=finiteIdleNumber(essence+cycles*cycleReward);kills+=cycles*10;seconds-=cycles*cycleHp/damagePerSecond;if(kills>=maxKills)break; }
     }
     if (timeToKill > seconds) {
       currentHp -= damagePerSecond * seconds;
@@ -241,14 +253,14 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
       break;
     }
     seconds -= timeToKill;
-    essence = finiteIdleNumber(essence + enemyUnitReward(currentStage));
+    essence = finiteIdleNumber(essence + enemyUnitReward(currentStage, currentWaveKills));
     kills++;
     currentWaveKills++;
     if (currentWaveKills >= enemiesRequiredForStage(currentStage)) {
       currentWaveKills = 0;
       if (!farming) currentStage++;
     }
-    currentHp = enemyMaxHp(currentStage);
+    currentHp = enemyUnitMaxHp(currentStage, currentWaveKills);
   }
   return {
     stage: currentStage,
@@ -503,6 +515,9 @@ module.exports = {
   isEliteStage,
   enemyMaxHp,
   enemyReward,
+  ENEMY_ARCHETYPES,
+  enemyArchetype,
+  enemyUnitMaxHp,
   enemiesRequiredForStage,
   enemyUnitReward,
   enemiesDefeatedBeforeStage,
