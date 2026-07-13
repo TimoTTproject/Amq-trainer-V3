@@ -215,6 +215,31 @@ router.patch('/characters/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// Liste tous les exemplaires (CardInstance) d'un personnage avec leur
+// propriétaire actuel — pour retrouver qui a quel n° de série sans passer par
+// la base directement (support joueur, litiges d'échange/marché, etc.).
+router.get('/characters/:id/instances', requireAuth, requireAdmin, async (req, res) => {
+  const characterId = parseInt(req.params.id);
+  const character = await prisma.character.findUnique({
+    where: { id: characterId },
+    select: { id: true, name: true, rarity: true, minted: true, maxSupply: true },
+  });
+  if (!character) return res.status(404).json({ error: 'Personnage introuvable' });
+  const instances = await prisma.cardInstance.findMany({
+    where: { characterId },
+    orderBy: { serial: 'asc' },
+    select: {
+      id: true,
+      serial: true,
+      source: true,
+      listed: true,
+      obtainedAt: true,
+      user: { select: { id: true, displayName: true } },
+    },
+  });
+  res.json({ character, instances });
+});
+
 // Remplit « series » par lots (déclenché côté serveur, qui a accès à la prod + AniList).
 // Appeler en boucle jusqu'à remaining === 0.
 router.post('/backfill-series', requireAuth, requireAdmin, async (req, res) => {

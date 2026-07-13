@@ -1122,6 +1122,20 @@
 
     <!-- Collection complète d'un joueur (lecture seule), ouverte depuis sa
          fiche profil — la vitrine n'affiche que 6 cartes au max. -->
+    <div id="admin-instances-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Exemplaires du personnage">
+      <div class="modal-card wide">
+        <button class="modal-close" id="admin-instances-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <h3 id="admin-instances-title"><i class="fas fa-hashtag"></i> Exemplaires</h3>
+        <input type="search" id="admin-instances-search" class="trade-search" placeholder="Filtrer par joueur ou n° de série…" autocomplete="off" />
+        <div class="table-scroll">
+        <table class="catalog-table admin-table">
+          <thead><tr><th>N°</th><th>Propriétaire</th><th>Origine</th><th>En vente</th><th>Obtenu le</th></tr></thead>
+          <tbody id="admin-instances-tbody"></tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
     <div id="player-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Collection du joueur">
       <div class="modal-card wide">
         <button class="modal-close" id="player-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
@@ -1558,7 +1572,7 @@
       <div class="table-scroll">
       <table class="catalog-table admin-table">
         <thead>
-          <tr><th></th><th>Nom</th><th>Série</th><th>❤</th><th>Rareté</th><th>Vedette</th></tr>
+          <tr><th></th><th>Nom</th><th>Série</th><th>❤</th><th>Rareté</th><th>Vedette</th><th>Exemplaires</th></tr>
         </thead>
         <tbody id="admin-tbody"></tbody>
       </table>
@@ -1641,8 +1655,10 @@
               <button type="button" id="idle-stage-prev" title="Revenir au niveau précédent"><i class="fas fa-chevron-left"></i><span>Niveau précédent</span></button>
               <div><small>NIVEAU DE COMBAT</small><b id="idle-stage-current">1</b><em id="idle-stage-location">Monde 1 · Vague 1/10</em></div>
               <button type="button" id="idle-stage-next" title="Aller au niveau suivant déjà débloqué"><span>Niveau suivant</span><i class="fas fa-chevron-right"></i></button>
+              <button type="button" class="idle-world-open" id="idle-world-open" aria-expanded="false" aria-controls="idle-world-jump"><i class="fas fa-earth-asia"></i><span>Changer de monde</span></button>
               <button type="button" class="idle-stage-best" id="idle-stage-best"><i class="fas fa-forward-step"></i> Niveau maximum <b id="idle-stage-best-value">1</b></button>
             </nav>
+            <div class="idle-world-jump hidden" id="idle-world-jump"><header><span><small>VOYAGE RAPIDE</small><b>Choisir un monde</b></span><button type="button" id="idle-world-close" aria-label="Fermer la liste des mondes"><i class="fas fa-times"></i></button></header><p>Retourne au début d’un monde découvert. Les anciens mondes passent automatiquement en mode Farm.</p><div id="idle-world-jump-list"></div></div>
             <div class="idle-scene" id="idle-scene" title="Frappe pour gagner de l'essence">
               <div id="idle-scenery" class="idle-scenery" aria-hidden="true"></div>
               <div class="idle-scene-head">

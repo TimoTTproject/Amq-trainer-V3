@@ -115,7 +115,7 @@ async function loadAdminChars(page, search) {
   if (page < 1) return;
   adminSearch = search;
   const tbody = document.getElementById('admin-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" class="muted">Chargement…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="muted">Chargement…</td></tr>';
   try {
     const rq = adminRarity !== 'all' ? `&rarity=${adminRarity}` : '';
     const r = await api(`/api/admin/characters?page=${page}&search=${encodeURIComponent(search)}${rq}`);
@@ -134,7 +134,7 @@ async function loadAdminChars(page, search) {
         r.missingSeries ? `${r.missingSeries} séries manquantes` : 'Toutes les séries sont remplies ✅';
     }
     if (!r.characters.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="muted">Aucun personnage.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">Aucun personnage.</td></tr>';
     } else {
       tbody.innerHTML = r.characters
         .map((c) => {
@@ -147,6 +147,7 @@ async function loadAdminChars(page, search) {
             <td class="nowrap">${(c.favourites || 0).toLocaleString('fr-FR')}</td>
             <td><select class="admin-rarity r-${c.rarity}" data-cid="${c.id}">${opts}</select></td>
             <td><button class="admin-feat${c.featured ? ' on' : ''}" data-feat data-cid="${c.id}" title="Vedette">${c.featured ? '⭐' : '☆'}</button></td>
+            <td><button class="btn-secondary" data-instances data-cid="${c.id}" title="Voir qui possède quel exemplaire"><i class="fas fa-hashtag"></i></button></td>
           </tr>`;
         })
         .join('');
@@ -155,8 +156,49 @@ async function loadAdminChars(page, search) {
     document.getElementById('admin-prev').disabled = adminPage <= 1;
     document.getElementById('admin-next').disabled = adminPage >= adminPages;
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">${escapeHtml(e.message)}</td></tr>`;
   }
+}
+
+// ── ADMIN : exemplaires d'un personnage (qui possède quel n° de série) ──
+let adminInstances = [];
+
+async function openAdminInstances(characterId) {
+  const modal = document.getElementById('admin-instances-modal');
+  const tbody = document.getElementById('admin-instances-tbody');
+  document.getElementById('admin-instances-search').value = '';
+  modal.classList.remove('hidden');
+  tbody.innerHTML = '<tr><td colspan="5" class="muted">Chargement…</td></tr>';
+  try {
+    const r = await api(`/api/admin/characters/${characterId}/instances`);
+    adminInstances = r.instances;
+    document.getElementById('admin-instances-title').innerHTML =
+      `<i class="fas fa-hashtag"></i> Exemplaires de ${escapeHtml(r.character.name)} (${r.character.minted}/${r.character.maxSupply})`;
+    renderAdminInstances();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderAdminInstances() {
+  const tbody = document.getElementById('admin-instances-tbody');
+  const q = document.getElementById('admin-instances-search').value.trim().toLowerCase();
+  const filtered = q
+    ? adminInstances.filter((i) => i.user.displayName.toLowerCase().includes(q) || String(i.serial).includes(q))
+    : adminInstances;
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun exemplaire.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map((i) => `<tr>
+      <td>#${i.serial}</td>
+      <td>${escapeHtml(i.user.displayName)}</td>
+      <td class="muted">${i.source === 'craft' ? 'Fabriqué' : 'Tirage'}</td>
+      <td>${i.listed ? '🏷️' : ''}</td>
+      <td class="muted">${new Date(i.obtainedAt).toLocaleDateString('fr-FR')}</td>
+    </tr>`)
+    .join('');
 }
 
 async function toggleFeatured(btn) {

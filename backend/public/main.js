@@ -1630,7 +1630,11 @@ function setupAppUI() {
   document.getElementById('admin-tbody').addEventListener('click', (e) => {
     const fb = e.target.closest('[data-feat]');
     if (fb) toggleFeatured(fb);
+    const ib = e.target.closest('[data-instances]');
+    if (ib) openAdminInstances(ib.dataset.cid);
   });
+  document.getElementById('admin-instances-close').addEventListener('click', () => document.getElementById('admin-instances-modal').classList.add('hidden'));
+  document.getElementById('admin-instances-search').addEventListener('input', renderAdminInstances);
   document.getElementById('admin-backfill-btn').addEventListener('click', runBackfillSeries);
   document.getElementById('admin-import-btn').addEventListener('click', runImportCharacters);
   document.getElementById('admin-import-anime-btn').addEventListener('click', runImportCharactersFromAnime);
