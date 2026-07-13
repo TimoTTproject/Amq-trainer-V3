@@ -11,7 +11,7 @@ const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,p
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
-  ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR,
+  ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, enemiesDefeatedBeforeStage,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -21,7 +21,7 @@ function dbUser(over = {}) {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
-    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
+    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
@@ -203,14 +203,16 @@ test('GET /state : reflète les niveaux d\'Ancients déjà achetés (bonus appli
   }
 });
 
-test('GET /state : le stage de run est indépendant du niveau permanent du Dojo', async () => {
-  const user = dbUser({ essenceEarnedTotal: 40, idleStage:7,idleRunBestStage:7,idleBestStage:7,idleEnemyHp:enemyMaxHp(7) });
+test('GET /state : le stage de run et le décompte de vague sont indépendants du niveau permanent du Dojo', async () => {
+  const user = dbUser({ essenceEarnedTotal: 40, idleStage:7,idleRunBestStage:7,idleBestStage:7,idleEnemyHp:enemyMaxHp(7),idleWaveKills:4 });
   prisma.user.findUnique = async () => user;
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
   assert.equal(res.status, 200);
   assert.equal(res.json.dojo.level, 1);
   assert.ok(res.json.battle.stage > 1);
-  assert.equal(res.json.battle.kills, res.json.battle.stage - 1);
+  assert.equal(res.json.battle.kills, enemiesDefeatedBeforeStage(res.json.battle.stage)+4);
+  assert.equal(res.json.battle.enemiesRemaining, 6);
+  assert.equal(res.json.battle.enemyNumber, 5);
 });
 
 test('GET /state : la production hors-ligne est plafonnée et reflétée dans pendingEssence', async () => {

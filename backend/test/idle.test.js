@@ -39,6 +39,8 @@ const {
   simulateCombat,
   enemyMaxHp,
   enemyReward,
+  enemiesRequiredForStage,
+  enemyUnitReward,
   PRESTIGE_MIN_STAGE,
   wisdomForRunStage,
   campaignForStage,
@@ -65,7 +67,22 @@ test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans 
   assert.equal(wall.stage,9);
   assert.equal(wall.bossFailed,true);
   assert.ok(wall.kills > 50);
-  assert.equal(wall.essence,wall.kills*enemyReward(9));
+  assert.equal(wall.essence,wall.kills*enemyUnitReward(9));
+});
+
+test('chaque vague normale demande 10 ennemis et le boss reste un combat unique', () => {
+  assert.equal(enemiesRequiredForStage(1), 10);
+  assert.equal(enemiesRequiredForStage(5), 10);
+  assert.equal(enemiesRequiredForStage(10), 1);
+  const oneKill = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:20,elapsedSeconds:1,mode:'progress'});
+  assert.equal(oneKill.stage, 1);
+  assert.equal(oneKill.waveKills, 1);
+  const finishWave = simulateCombat({stage:1,hp:enemyMaxHp(1),waveKills:9,dps:20,elapsedSeconds:1,mode:'progress'});
+  assert.equal(finishWave.stage, 2);
+  assert.equal(finishWave.waveKills, 0);
+  const finishBoss = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:enemyMaxHp(10),elapsedSeconds:1,mode:'progress'});
+  assert.equal(finishBoss.stage, 11);
+  assert.equal(finishBoss.waveKills, 0);
 });
 
 test('équilibrage : les murs croissent plus vite que les récompenses et les achats restent espacés', () => {

@@ -22,6 +22,9 @@ const {
   simulateCombat,
   enemyMaxHp,
   enemyReward,
+  enemiesRequiredForStage,
+  enemyUnitReward,
+  enemiesDefeatedBeforeStage,
   isBossStage,
   isEliteStage,
   campaignForStage,
@@ -445,6 +448,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
 
 async function applyActiveDamage(tx, user, damage) {
   const stage = Math.max(1, user.idleStage || 1);
+  const waveKills = Math.max(0, Math.min(enemiesRequiredForStage(stage) - 1, user.idleWaveKills || 0));
   const maxHp = enemyMaxHp(stage);
   const hp = user.idleEnemyHp > 0 && user.idleEnemyHp <= maxHp ? user.idleEnemyHp : maxHp;
   const now = new Date();
@@ -456,8 +460,10 @@ async function applyActiveDamage(tx, user, damage) {
     const updated = await tx.user.update({ where: { id: user.id }, data: { idleEnemyHp: hp - dealt, idleBossStartedAt: bossStartedAt } });
     return { updated, killed:false, bossKilled:false };
   }
-  const reward = enemyReward(stage);
-  const nextStage = user.idleBattleMode === 'farm' ? stage : stage + 1;
+  const reward = enemyUnitReward(stage);
+  const waveComplete = waveKills + 1 >= enemiesRequiredForStage(stage);
+  const nextStage = waveComplete && user.idleBattleMode !== 'farm' ? stage + 1 : stage;
+  const nextWaveKills = waveComplete ? 0 : waveKills + 1;
   const bossMs = bossStartedAt ? Math.max(1, now.getTime() - bossStartedAt.getTime()) : null;
   const updated = await tx.user.update({
     where: { id: user.id },
@@ -466,6 +472,7 @@ async function applyActiveDamage(tx, user, damage) {
       essenceEarnedTotal: { increment: reward },
       idleRunEssenceEarned: { increment: reward },
       idleStage: nextStage,
+      idleWaveKills: nextWaveKills,
       idleRunBestStage: Math.max(user.idleRunBestStage || 1, nextStage),
       idleBestStage: Math.max(user.idleBestStage || 1, nextStage),
       idleEnemyHp: enemyMaxHp(nextStage),
@@ -474,7 +481,7 @@ async function applyActiveDamage(tx, user, damage) {
       ...(bossMs ? { idleBestBossMs: user.idleBestBossMs ? Math.min(user.idleBestBossMs, bossMs) : bossMs } : {}),
     },
   });
-  return { updated, killed:true, bossKilled:isBossStage(stage) && user.idleBattleMode !== 'farm' };
+  return { updated, killed:true, bossKilled:isBossStage(stage) && waveComplete && user.idleBattleMode !== 'farm' };
 }
 
 function synergyForSlots(slots) {
@@ -517,6 +524,7 @@ async function withSettle(userId, mutate) {
     const combat = simulateCombat({
       stage: user.idleStage,
       hp: user.idleEnemyHp,
+      waveKills: user.idleWaveKills,
       dps: totalRate,
       elapsedSeconds: elapsedMs / 1000,
       mode: user.idleBattleMode,
@@ -546,6 +554,7 @@ async function withSettle(userId, mutate) {
           idleRunBestStage: Math.max(user.idleRunBestStage || 1, stage),
           idleBestStage: Math.max(user.idleBestStage || 1, stage),
           idleEnemyHp: hp,
+          idleWaveKills: combat.waveKills,
           idleBossProgress:stage!==(user.idleStage||1)?0:user.idleBossProgress,
           idleLastCollectAt: new Date(),
         },
@@ -573,7 +582,7 @@ async function buildState(userId) {
     where: { id: userId },
     select: {
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true,
-      essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true,
+      essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true, idleWaveKills:true,
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
@@ -610,6 +619,7 @@ async function buildState(userId) {
   const combatPreview = simulateCombat({
     stage: user.idleStage,
     hp: user.idleEnemyHp,
+    waveKills: user.idleWaveKills,
     dps: totalRate,
     elapsedSeconds: previewElapsedMs / 1000,
     mode: user.idleBattleMode,
@@ -663,6 +673,8 @@ async function buildState(userId) {
   // Le stage de combat est indépendant du rang : il rythme les combats et les
   // mondes, tandis que le rang se valide avec les épreuves d'Ascension.
   const stage = combatPreview.stage;
+  const waveKills = combatPreview.waveKills || 0;
+  const enemiesRequired = enemiesRequiredForStage(stage);
   const clickBase = clickYield(user.idleClickLevel, clickAncientBonus);
   const clickMechanic = bossMechanicForStage(stage);
   const maxEnemyHp = enemyMaxHp(stage);
@@ -740,7 +752,7 @@ async function buildState(userId) {
     totalRate,
     economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,offlineCapMs},
     run:{stage,bestStage:Math.max(user.idleRunBestStage||1,stage),essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress'},
-    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
+    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     rank:{...rank,startedAt:user.idleRankStartedAt?.toISOString()||null},
     collection:{recruits:recruitCount,masteries,worldsDiscovered},
@@ -769,7 +781,7 @@ async function buildState(userId) {
       runBestStage: Math.max(user.idleRunBestStage || 1, stage),
       hp: enemyHp,
       maxHp: maxEnemyHp,
-      reward: enemyReward(stage),
+      reward: enemyUnitReward(stage),
       isBoss: isBossStage(stage),
       phase:isBossStage(stage)?(hpRatio<=.5?2:1):null,
       enraged:isBossStage(stage)&&!!user.idleBossStartedAt&&(Date.now()-new Date(user.idleBossStartedAt).getTime()>=BOSS_TIMER_SECONDS*1000),
@@ -777,7 +789,11 @@ async function buildState(userId) {
       timerSeconds: isBossStage(stage) ? BOSS_TIMER_SECONDS : null,
       bossFailed: combatPreview.bossFailed,
       world:combatWorld,
-      kills: Math.max(0, stage - 1), // les stages commencent à 1 — affichage façon "X ennemis vaincus"
+      kills: enemiesDefeatedBeforeStage(stage) + waveKills,
+      enemiesDefeated: waveKills,
+      enemiesRequired,
+      enemiesRemaining: enemiesRequired - waveKills,
+      enemyNumber: waveKills + 1,
       xpIntoStage,
       xpForNextStage,
       progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
@@ -1262,6 +1278,7 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleClickLevel: 0,
           idleRunEssenceEarned: 0,
           idleStage: 1,
+          idleWaveKills: 0,
           idleRunBestStage: 1,
           idleEnemyHp: enemyMaxHp(1),
           idleBossProgress: 0,
@@ -1295,7 +1312,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
   if(!count){void recordIdleEvent(req.user.id,'click_rejected',{value:requested});return res.status(429).json({error:'Cadence de frappe impossible'});}
   let result;
   await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
-    let stage=Math.max(1,liveUser.idleStage||1);let hp=liveUser.idleEnemyHp>0?liveUser.idleEnemyHp:enemyMaxHp(stage);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
+    let stage=Math.max(1,liveUser.idleStage||1);let waveKills=Math.max(0,Math.min(enemiesRequiredForStage(stage)-1,liveUser.idleWaveKills||0));let hp=liveUser.idleEnemyHp>0?liveUser.idleEnemyHp:enemyMaxHp(stage);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click;
     for(let i=0;i<count;i++){
@@ -1310,9 +1327,9 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
       const executeAt=world.modifier?.executeAt||.2;if(heroClass(liveUser.idleHeroClass).execute&&hpRatio<=executeAt)multiplier*=heroClass(liveUser.idleHeroClass).execute;
       const critical=Math.random()<((heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0));if(critical)criticals++;
       const damage=Math.max(1,Math.round(base*multiplier*(critical?2:1)));damageTotal+=damage;
-      if(damage>=hp){rewardTotal+=enemyReward(stage);kills++;if(isBossStage(stage)&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}stage=liveUser.idleBattleMode==='farm'?stage:stage+1;hp=enemyMaxHp(stage);progress=0;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
+      if(damage>=hp){const defeatedStage=stage;rewardTotal+=enemyUnitReward(stage);kills++;waveKills++;const waveComplete=waveKills>=enemiesRequiredForStage(stage);if(isBossStage(stage)&&waveComplete&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}if(waveComplete){waveKills=0;if(liveUser.idleBattleMode!=='farm')stage++;}hp=enemyMaxHp(stage);progress=stage!==defeatedStage?0:progress;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
     }
-    const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleBossProgress:progress,idleBossStartedAt:bossStartedAt,idleBestBossMs:bestBossMs,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
+    const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleWaveKills:waveKills,idleBossProgress:progress,idleBossStartedAt:bossStartedAt,idleBestBossMs:bestBossMs,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
     result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,bosses,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
   });
   await incrementIdleCounter(req.user.id,'click',count);

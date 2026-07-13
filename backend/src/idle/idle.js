@@ -181,8 +181,25 @@ function enemyReward(stage) {
   const special = isBossStage(s) ? 3 : isEliteStage(s) ? 1.5 : 1;
   return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special, 1)));
 }
-function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
+function enemiesRequiredForStage(stage) {
+  if (isBossStage(stage)) return 1;
+  return 10;
+}
+function enemyUnitReward(stage) {
+  // Chaque nouvel ennemi remplace un ancien changement de stage : conserver
+  // la récompense unitaire maintient le revenu par minute sans fractions
+  // perdues lors des synchronisations fréquentes.
+  return enemyReward(stage);
+}
+function enemiesDefeatedBeforeStage(stage) {
+  const completedStages = Math.max(0, Math.floor(stage || 1) - 1);
+  const completeWorlds = Math.floor(completedStages / BOSS_INTERVAL);
+  const remainingStages = completedStages % BOSS_INTERVAL;
+  return completeWorlds * 91 + remainingStages * 10; // 9 vagues ×10 ennemis + 1 boss.
+}
+function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
   let currentStage = Math.max(1, Math.floor(stage || 1));
+  let currentWaveKills = Math.max(0, Math.min(enemiesRequiredForStage(currentStage) - 1, Math.floor(waveKills || 0)));
   let currentHp = Number(hp);
   let seconds = Math.max(0, Number(elapsedSeconds) || 0);
   const damagePerSecond = Math.max(0, Number(dps) || 0);
@@ -192,13 +209,14 @@ function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode =
   let farming = mode === 'farm';
   const maxHp = () => enemyMaxHp(currentStage);
   if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
-  if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, essence, kills, bossFailed, elapsedSeconds: 0 };
+  if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
 
   while (seconds > 0 && kills < maxKills) {
     const timeToKill = currentHp / damagePerSecond;
     if (isBossStage(currentStage) && timeToKill > BOSS_TIMER_SECONDS) {
       bossFailed = true;
       currentStage = Math.max(1, currentStage - 1);
+      currentWaveKills = 0;
       currentHp = enemyMaxHp(currentStage);
       farming = true;
       continue;
@@ -208,11 +226,13 @@ function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode =
     // hors-ligne à haut niveau.
     if (farming && currentHp === enemyMaxHp(currentStage)) {
       const cycle = currentHp / damagePerSecond;
-      const bulk = Math.floor(seconds / cycle);
+      const bulk = Math.min(maxKills - kills, Math.floor(seconds / cycle));
       if (bulk > 0) {
-        essence = finiteIdleNumber(essence + bulk * enemyReward(currentStage));
+        essence = finiteIdleNumber(essence + bulk * enemyUnitReward(currentStage));
         kills += bulk;
         seconds -= bulk * cycle;
+        currentWaveKills = (currentWaveKills + bulk) % enemiesRequiredForStage(currentStage);
+        if (kills >= maxKills) break;
       }
     }
     if (timeToKill > seconds) {
@@ -221,14 +241,19 @@ function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode =
       break;
     }
     seconds -= timeToKill;
-    essence = finiteIdleNumber(essence + enemyReward(currentStage));
+    essence = finiteIdleNumber(essence + enemyUnitReward(currentStage));
     kills++;
-    if (!farming) currentStage++;
+    currentWaveKills++;
+    if (currentWaveKills >= enemiesRequiredForStage(currentStage)) {
+      currentWaveKills = 0;
+      if (!farming) currentStage++;
+    }
     currentHp = enemyMaxHp(currentStage);
   }
   return {
     stage: currentStage,
     hp: currentHp,
+    waveKills: currentWaveKills,
     essence,
     kills,
     bossFailed,
@@ -478,6 +503,9 @@ module.exports = {
   isEliteStage,
   enemyMaxHp,
   enemyReward,
+  enemiesRequiredForStage,
+  enemyUnitReward,
+  enemiesDefeatedBeforeStage,
   simulateCombat,
   CHAR_LEVEL_BONUS,
   charLevelMultiplier,

@@ -500,8 +500,8 @@ function idleEtaSuffix(remainingXp) {
 // La boucle de combat utilise le STAGE (cf. src/idle/idle.js), volontairement
 // découplé du niveau du Dojo : le Dojo reste lent (décor/paliers), le stage
 // s'incrémente en quelques secondes pour que le combat se sente vivant en
-// continu, façon Clicker Heroes. Chaque stage est un ennemi, chaque dixième
-// un boss, et les « PV » sont l'XP de stage restant avant le suivant. Le
+// continu, façon Clicker Heroes. Chaque vague contient plusieurs ennemis,
+// chaque dixième est un boss, et les PV appartiennent à l'ennemi actuel. Le
 // gardien affiché (portrait) reste lui lié au DÉCOR (dojo), cohérent : le
 // visuel change par grand palier, le rythme de combat lui est indépendant.
 function renderIdleBattle(battle, dojo, prevBattle) {
@@ -509,6 +509,9 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const wave = ((stage - 1) % 10) + 1;
   const zone = Math.floor((stage - 1) / 10) + 1;
   const boss = wave === 10;
+  const enemiesRequired = Math.max(1, battle?.enemiesRequired || 1);
+  const enemiesRemaining = Math.max(1, battle?.enemiesRemaining || enemiesRequired);
+  const enemyNumber = Math.max(1, Math.min(enemiesRequired, battle?.enemyNumber || 1));
   const mechanicEl = document.getElementById('idle-boss-mechanic');
   if (mechanicEl) { const mechanic=battle?.mechanic;mechanicEl.classList.toggle('hidden', !boss); mechanicEl.innerHTML = boss&&mechanic ? `<i class="fas fa-shield-halved"></i> <b>${escapeHtml(mechanic.name)}</b> · ${escapeHtml(mechanic.description)}${mechanic.required?` <strong>${Math.min(mechanic.progress,mechanic.required)}/${mechanic.required}</strong>`:''}` : ''; }
   const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
@@ -522,8 +525,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const modifierEl=document.getElementById('idle-world-modifier');
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b>`:'';modifierEl.title=modifier?.description||'Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
-  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss vaincu → monde suivant':`Vague ${wave}/10 · ennemi vaincu → vague ${wave+1}`}</b><small>${boss?'Ouvre ensuite son coffre de gardien':`Chaque vague contient un ennemi · +${idleFormatNumber(battle?.reward||0)} Essence à la victoire`}</small></span><strong>Avance automatique</strong>`;}
-  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · 1 ENNEMI`}`;
+  if(objective){objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-forward-step'}"></i><span><b>${boss?'Vague 10/10 · Boss final':`Vague ${wave}/10 · ${enemiesRemaining} ennemi${enemiesRemaining>1?'s':''} restant${enemiesRemaining>1?'s':''}`}</b><small>${boss?'Vaincs-le pour passer au monde suivant':`Ennemi ${enemyNumber}/${enemiesRequired} · +${idleFormatNumber(battle?.reward||0)} Essence par victoire`}</small></span><strong>${boss?'Monde suivant':`Puis vague ${wave+1}`}</strong>`;}
+  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
@@ -531,8 +534,8 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
-  if (prevBattle && stage > Math.max(1, prevBattle.stage || 1)) {
-    idleKillBurst(stage - Math.max(1, prevBattle.stage || 1));
+  if (prevBattle && (battle?.kills || 0) > (prevBattle?.kills || 0)) {
+    idleKillBurst((battle?.kills || 0) - (prevBattle?.kills || 0));
   }
 }
 
