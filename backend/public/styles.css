@@ -6581,3 +6581,22 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-hero-milestone-guide>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.idle-hero-milestone-guide>div>span{position:relative;display:flex;min-width:0;flex-direction:column;padding:6px 7px;border-left:2px solid #3b4350;background:#ffffff06}.idle-hero-milestone-guide>div>span b{font-size:10px}.idle-hero-milestone-guide>div>span em{overflow:hidden;color:var(--text-2);font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}.idle-hero-milestone-guide>div>span>i{position:absolute;right:6px;top:7px;color:#86efac;font-size:8px}.idle-hero-milestone-guide>div>span.reached{border-color:#22c55e;background:#22c55e0d}.idle-hero-milestone-guide>div>span.next{border-color:#fbbf24;background:#f59e0b0b}.idle-hero-milestone-guide>p{margin:7px 0 0;color:var(--text-2);font-size:9px;line-height:1.4}.idle-hero-milestone-guide>p b,.idle-hero-milestone-guide>p strong{color:#fde68a}
 #view-idle .idle-hero-milestone-guide.sheet{margin:12px 0;padding:12px;border:1px solid #ffffff14;border-radius:9px;background:#0b0e14}.idle-hero-milestone-guide.sheet>div{grid-template-columns:repeat(3,1fr)}
 @media(max-width:760px){#view-idle .idle-stage-nav{grid-template-columns:44px 1fr 44px}.idle-stage-nav button>span{display:none}#view-idle .idle-stage-nav .idle-stage-best{grid-column:1/-1;min-height:36px;border-top:1px solid #2a303b}.idle-stage-nav>div{flex-wrap:wrap;gap:3px 7px}.idle-stage-nav>div small{width:100%}.idle-hero-milestone-guide>header{flex-direction:column;gap:3px}.idle-hero-milestone-guide>header small{text-align:left}}
+/* Page Équipe : les héros actifs précèdent les outils avancés. */
+#view-idle .idle-team-page-head{display:grid;grid-template-columns:42px minmax(0,1fr) auto;padding-bottom:12px;border-bottom:1px solid #2a303b}
+#view-idle .idle-team-page-head p{margin:4px 0 0;color:var(--text-2);font-size:11px}
+#view-idle .idle-team-page-head>button{align-self:center;padding-inline:18px}
+#view-idle .idle-team-primary{margin:12px 0 8px;padding:16px;border:1px solid #e11d4855;border-radius:14px;background:#0f1218;box-shadow:0 12px 30px #0004}
+#view-idle .idle-team-primary>header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:12px}
+#view-idle .idle-team-primary>header small,#view-idle .idle-team-secondary>header small{color:#fb7185;font-size:9px;font-weight:900;letter-spacing:.12em}
+#view-idle .idle-team-primary>header h3,#view-idle .idle-team-secondary>header h3{margin:2px 0 0;font-size:17px}
+#view-idle .idle-team-primary-stats{display:flex;align-items:stretch;border:1px solid #2a303b;border-radius:9px;overflow:hidden}
+#view-idle .idle-team-primary-stats>span{display:flex;min-width:92px;flex-direction:column;padding:8px 11px;background:#151922}
+#view-idle .idle-team-primary-stats>span+span{border-left:1px solid #2a303b}
+#view-idle .idle-team-primary-stats small{color:#8f99a8!important;font-size:7px!important;letter-spacing:.08em!important}
+#view-idle .idle-team-primary-stats b{font-size:12px}
+#view-idle .idle-team-primary .idle-team-tools{margin-bottom:10px;padding:9px 0;border-block:1px solid #ffffff10}
+#view-idle .idle-team-primary .idle-slots{margin-top:4px}
+#view-idle .idle-team-secondary{margin:18px 0 8px;padding-top:2px}
+#view-idle .idle-team-secondary>header{margin-bottom:7px}
+#view-idle .idle-summon-entry-secondary{margin-top:14px}
+@media(max-width:760px){#view-idle .idle-team-page-head{grid-template-columns:38px 1fr}#view-idle .idle-team-page-head>button{grid-column:1/-1;width:100%;justify-content:center}#view-idle .idle-team-primary{padding:11px}#view-idle .idle-team-primary>header{align-items:stretch;flex-direction:column}#view-idle .idle-team-primary-stats{display:grid;grid-template-columns:repeat(3,1fr)}#view-idle .idle-team-primary-stats>span{min-width:0;padding:7px}#view-idle .idle-team-primary-stats b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}}
