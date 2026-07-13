@@ -229,6 +229,7 @@ const WORLD_ITEM_NAMES={
   'Monde du Néant':{weapon:'Lame du Néant',relic:'Cœur abyssal',accessory:'Sceau dimensionnel'},
 };
 const ITEM_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
+function upgradedItemRarity(currentRarity,bonus){const earned=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';return (ITEM_RARITY_ORDER[earned]||1)>(ITEM_RARITY_ORDER[currentRarity]||1)?earned:currentRarity;}
 
 function idleItemDrop(tier,kind,rarity,bonus,sourceWorld='Dojo ancestral') {
   const def=ITEM_KINDS[kind];
@@ -1237,7 +1238,7 @@ router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 
 router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const slotIndex=Number(req.body?.slotIndex);const kind=String(req.body?.kind||'');if(!Number.isInteger(slotIndex)||!['weapon','relic','accessory'].includes(kind))return res.status(400).json({error:'Équipement invalide'});
-  try{await withSettle(req.user.id,async(tx,user)=>{const slot=await tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}});if(!slot)throw new IdleError(404,'Héros introuvable');const item=await tx.idleItem.findUnique({where:{equippedSlotId_kind:{equippedSlotId:slot.id,kind}}});if(!item)throw new IdleError(400,'Emplacement vide');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});});await incrementIdleCounter(req.user.id,'upgrade',1);res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id,async(tx,user)=>{const slot=await tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}});if(!slot)throw new IdleError(404,'Héros introuvable');const item=await tx.idleItem.findUnique({where:{equippedSlotId_kind:{equippedSlotId:slot.id,kind}}});if(!item)throw new IdleError(400,'Emplacement vide');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=upgradedItemRarity(item.rarity,bonus);await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});});await incrementIdleCounter(req.user.id,'upgrade',1);res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 router.post('/equipment/equip',requireAuth,requireIdleBeta,rateLimit({max:40,name:'idle-equipment-equip'}),async(req,res)=>{
@@ -1598,6 +1599,7 @@ module.exports = {
   bossChestRewards,
   idleItemDrop,
   itemProductionBonus,
+  upgradedItemRarity,
   itemActionBonus,
   equipmentSetMultiplier,
   itemSalvageValue,

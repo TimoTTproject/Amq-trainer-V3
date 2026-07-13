@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -97,6 +97,12 @@ test('inventaire : chaque type possède un effet utile et une valeur de recyclag
   assert.equal(weapon.effectKey,'precision');assert.equal(itemProductionBonus(weapon),.11);
   assert.equal(accessory.effectKey,'salvage');assert.equal(itemProductionBonus(accessory),.11);assert.ok(itemSalvageValue(accessory)>25);
   assert.ok(itemActionBonus([{items:[weapon]}],'click')>1);
+});
+
+test('améliorer un objet ne peut jamais réduire sa rareté',()=>{
+  assert.equal(upgradedItemRarity('legendary',.12),'legendary');
+  assert.equal(upgradedItemRarity('epic',.16),'legendary');
+  assert.equal(upgradedItemRarity('mythic',.26),'mythic');
 });
 
 test('inventaire : les mondes et les paliers créent des familles variées',()=>{
