@@ -467,6 +467,7 @@
           </div>
         </div>
         <div class="profile-banner-actions">
+          <button class="btn-secondary" id="profile-edit-name-shortcut"><i class="fas fa-pen"></i> Modifier mon pseudo</button>
           <button class="btn-primary level-claim hidden" id="profile-claim"><i class="fas fa-gift"></i> Réclamer</button>
           <button class="btn-secondary" id="profile-share"><i class="fas fa-share-nodes"></i> Partager mon profil</button>
           <button class="btn-primary hidden" id="profile-trade-btn"><i class="fas fa-right-left"></i> Proposer un échange</button>
@@ -543,6 +544,14 @@
                suppression — thème/langue/volume restent dans le menu ⋮ du header. -->
           <div class="profile-section hidden" id="profile-account">
             <h3><i class="fas fa-user-gear"></i> Compte</h3>
+            <div class="account-block account-name-block">
+              <b>Pseudo public</b>
+              <p class="hint">Visible dans les classements, le chat et sur ton profil.</p>
+              <div class="account-form">
+                <input type="text" id="account-name-new" maxlength="30" placeholder="Nouveau pseudo" autocomplete="nickname" />
+                <button class="btn-secondary" id="account-name-btn"><i class="fas fa-pen"></i> Changer le pseudo</button>
+              </div>
+            </div>
             <div class="account-block">
               <b>Adresse email</b>
               <p class="hint">Actuelle : <span id="account-email-current">—</span></p>
@@ -571,8 +580,8 @@
         </div>
       </div>
 
-      <details class="profile-edit">
-        <summary><i class="fas fa-pen"></i> Modifier mon profil</summary>
+      <details class="profile-edit" id="profile-edit">
+        <summary><i class="fas fa-pen"></i> Modifier mon pseudo, ma photo ou ma bio</summary>
         <div class="profile-avatar-edit">
           <div class="avatar-actions">
             <button class="btn-secondary" id="avatar-upload-btn"><i class="fas fa-camera"></i> Changer la photo</button>

@@ -1230,6 +1230,9 @@ select.album-form-control {
   color: var(--text); border-radius: 8px; padding: 9px 10px;
 }
 .account-form input:focus { outline: none; border-color: var(--accent); }
+.account-name-block { padding: 14px; margin: 4px 0 10px; border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.account-name-block .account-form input { min-width: min(100%, 240px); font-size: 1rem; }
+.account-name-block .account-form button { white-space: nowrap; }
 .legal-body h3 { margin: 14px 0 6px; font-size: .95rem; }
 .legal-body ul { padding-left: 18px; }
 .legal-body li { margin-bottom: 6px; }
