@@ -42,6 +42,8 @@ let idleVisualEnemyNumber = null;
 let idleVisualRespawnTimer = null;
 let idleCoachAction = null;
 let idleForceHpSync = false;
+let idleMissionDayKey = null;
+let idleMissionWeekKey = null;
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -229,6 +231,7 @@ function idleTick() {
   if (el) el.textContent = idleFormatNumber(display);
   idleUpdateBossTimer();
   idleRenderSkillCooldown();
+  idleUpdateMissionCountdowns();
   // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
   // purement cosmétique, ça montre la production "vivre" comme dans un vrai
   // idle game. Seulement si la scène est visible et produit au moins 1.
@@ -244,6 +247,17 @@ function idleTick() {
     idleSpawnFloat(`−${idleFormatNumber(passiveGain)}`, 'damage passive');
     idleCombatMotion('team');
   }
+}
+
+function idleCountdownLabel(milliseconds){
+  const seconds=Math.max(0,Math.ceil(milliseconds/1000));const days=Math.floor(seconds/86400);const hours=Math.floor(seconds%86400/3600);const minutes=Math.floor(seconds%3600/60);const secs=seconds%60;
+  return days?`${days}j ${hours}h ${minutes}m`:`${String(hours).padStart(2,'0')}h ${String(minutes).padStart(2,'0')}m ${String(secs).padStart(2,'0')}s`;
+}
+function idleUpdateMissionCountdowns(){
+  const now=new Date();const nextDay=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1);const day=(new Date()).toISOString().slice(0,10);
+  const utcDay=now.getUTCDay();const daysUntilMonday=utcDay===0?1:8-utcDay;const nextWeek=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+daysUntilMonday);const weekDate=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-((utcDay+6)%7))).toISOString().slice(0,10);
+  const daily=document.getElementById('idle-daily-reset');const weekly=document.getElementById('idle-weekly-reset');if(daily)daily.textContent=`dans ${idleCountdownLabel(nextDay-now.getTime())}`;if(weekly)weekly.textContent=`dans ${idleCountdownLabel(nextWeek-now.getTime())}`;
+  if(idleMissionDayKey&&idleMissionDayKey!==day&&idleActivePanel==='activities')refreshIdleState();else if(idleMissionWeekKey&&idleMissionWeekKey!==weekDate&&idleActivePanel==='activities')refreshIdleState();idleMissionDayKey=day;idleMissionWeekKey=weekDate;
 }
 
 function idleUpdateBossTimer(){
