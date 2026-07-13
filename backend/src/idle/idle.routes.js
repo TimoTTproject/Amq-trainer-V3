@@ -185,18 +185,47 @@ const ITEM_KINDS={
   relic:{label:'Relique',icon:'fa-gem',effectKey:'resonance',effectLabel:'Résonance'},
   accessory:{label:'Accessoire',icon:'fa-ring',effectKey:'salvage',effectLabel:'Fortune'},
 };
+const ITEM_EFFECTS={
+  assault:{label:'Assaut',mode:'dps',description:'Dégâts constants'},
+  precision:{label:'Précision',mode:'dps',description:'Maîtrise offensive'},
+  overdrive:{label:'Surcharge',mode:'dps',description:'Énergie déchaînée'},
+  resonance:{label:'Résonance',mode:'dps',description:'Puissance harmonique'},
+  focus:{label:'Concentration',mode:'dps',description:'Énergie canalisée'},
+  echo:{label:'Écho',mode:'dps',description:'Pouvoir rémanent'},
+  salvage:{label:'Fortune',mode:'salvage',description:'Essence de recyclage'},
+  aura:{label:'Aura',mode:'dps',description:'Présence amplifiée'},
+  pact:{label:'Pacte',mode:'dps',description:'Lien de puissance'},
+};
+const ITEM_EFFECT_POOLS={weapon:['assault','precision','overdrive'],relic:['resonance','focus','echo'],accessory:['salvage','aura','pact']};
+const WORLD_ITEM_NAMES={
+  'Konoha':{weapon:'Kunai de la Feuille',relic:'Parchemin du Hokage',accessory:'Talisman du Feu'},
+  'Namek':{weapon:'Lame de Ki',relic:'Cristal namek',accessory:'Capsule Senzu'},
+  'Marineford':{weapon:'Sabre de Justice',relic:'Vivre Card',accessory:'Menotte marine'},
+  'Château de l’Infini':{weapon:'Nichirin fracturée',relic:'Œil démoniaque',accessory:'Clochette de l’Infini'},
+  'Shiganshina':{weapon:'Lame tridimensionnelle',relic:'Éclat du Mur',accessory:'Insigne des Éclaireurs'},
+  'Hueco Mundo':{weapon:'Zanpakutō blanc',relic:'Fragment de Hōgyoku',accessory:'Masque Hollow'},
+  'U.A.':{weapon:'Gantelet Plus Ultra',relic:'Noyau d’Alter',accessory:'Permis de Héros'},
+  'Shibuya':{weapon:'Dague maudite',relic:'Doigt scellé',accessory:'Talisman d’Exorciste'},
+  'Aincrad':{weapon:'Épée de Fer Noir',relic:'Cristal de téléportation',accessory:'Anneau de guilde'},
+  'Monde du Néant':{weapon:'Lame du Néant',relic:'Cœur abyssal',accessory:'Sceau dimensionnel'},
+};
 const ITEM_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
 
 function idleItemDrop(tier,kind,rarity,bonus,sourceWorld='Dojo ancestral') {
   const def=ITEM_KINDS[kind];
-  const effectValue=kind==='accessory'?Number((.05+Math.min(.25,tier*.005)).toFixed(3)):Number((.01+Math.min(.09,tier*.002)).toFixed(3));
+  const pool=ITEM_EFFECT_POOLS[kind]||[def.effectKey];
+  const effectKey=pool[Math.floor(Math.max(0,tier-1)/3)%pool.length];
+  const effect=ITEM_EFFECTS[effectKey];
+  const effectValue=effect.mode==='salvage'?Number((.05+Math.min(.25,tier*.005)).toFixed(3)):Number((.01+Math.min(.09,tier*.002)).toFixed(3));
   const adjectives={rare:'Affûté',epic:'Héroïque',legendary:'Légendaire',mythic:'Transcendant'};
   const world=String(sourceWorld).split(' · ')[0];
-  return {kind,rarity,bonus,name:`${def.label} ${adjectives[rarity]} · ${world}`,effectKey:def.effectKey,effectValue,sourceWorld:world};
+  const family=Object.entries(WORLD_ITEM_NAMES).find(([name])=>world.startsWith(name))?.[1];
+  const baseName=family?.[kind]||`${def.label} de ${world}`;
+  return {kind,rarity,bonus,name:`${baseName} · ${adjectives[rarity]}`,effectKey,effectValue,sourceWorld:world};
 }
 
 function itemProductionBonus(item) {
-  return item.bonus+(['assault','resonance'].includes(item.effectKey)?item.effectValue:0);
+  return item.bonus+(ITEM_EFFECTS[item.effectKey]?.mode==='dps'?item.effectValue:0);
 }
 
 function equipmentSetMultiplier(items=[]) {
@@ -615,7 +644,7 @@ async function buildState(userId) {
         ascensionMultiplier: Math.pow(2, row.ascension || 0),
         canAscend: level >= 500 && (row.ascension || 0) < 5,
         ascensionCost: Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[row.character.rarity] || 25000) * Math.pow(3, row.ascension || 0)),
-        equipments: ['weapon', 'relic', 'accessory'].map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind); return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_KINDS[kind].effectLabel,enhanceCost:Math.max(100,Math.round(250*Math.pow(1+e.bonus,6))),powerLevel:Math.max(1,Math.round(e.bonus*100))}:{kind,empty:true}; }),
+        equipments: ['weapon', 'relic', 'accessory'].map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind); return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',enhanceCost:Math.max(100,Math.round(250*Math.pow(1+e.bonus,6))),powerLevel:Math.max(1,Math.round(e.bonus*100))}:{kind,empty:true}; }),
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
@@ -688,13 +717,21 @@ async function buildState(userId) {
     {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le niveau requis pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
   ];
   const slotById=new Map(slots.map((s)=>[s.id,s]));
+  const preparedInventoryItems=inventoryItems.map((item)=>{
+    const equipped=slotById.get(item.equippedSlotId);
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),equippedSlotIndex:equipped?.slotIndex??null,equippedCharacter:equipped?.character?.name||null};
+  });
+  const inventoryFamilies=[...new Set(preparedInventoryItems.map((item)=>item.sourceWorld))].filter(Boolean).map((world)=>{
+    const familyItems=preparedInventoryItems.filter((item)=>item.sourceWorld===world);
+    const kinds=[...new Set(familyItems.map((item)=>item.kind))];
+    return {world,count:familyItems.length,kinds,complete:kinds.length===3};
+  }).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
   const inventory={
     capacity:IDLE_ITEM_CAPACITY,
     count:inventoryItems.length,
-    items:inventoryItems.map((item)=>{
-      const equipped=slotById.get(item.equippedSlotId);
-      return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_KINDS[item.kind]?.effectLabel||'Effet',kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),equippedSlotIndex:equipped?.slotIndex??null,equippedCharacter:equipped?.character?.name||null};
-    }),
+    items:preparedInventoryItems,
+    summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.map((item)=>item.effectKey)).size,equipped:preparedInventoryItems.filter((item)=>item.equippedSlotIndex!==null).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
+    families:inventoryFamilies,
     setBonus:{required:3,multiplier:1.10,label:'Trois pièces du même monde : +10% DPS sur le héros'},
   };
   return {
