@@ -160,7 +160,7 @@ router.get('/players/list', requireAuth, async (req, res) => {
       orderBy: [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { mmr: 'desc' }, { createdAt: 'asc' }],
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, mmr: true, rankedGames: true, towerBestFloor: true, createdAt: true, lastSeenAt: true },
+      select: { id: true, displayName: true, avatarUrl: true, avatarFrame: true, mmr: true, rankedGames: true, towerBestFloor: true, createdAt: true, lastSeenAt: true, roles: true },
     }),
   ]);
   res.json({
@@ -178,6 +178,7 @@ router.get('/players/list', requireAuth, async (req, res) => {
         // Masqué si en ligne (on affiche « En ligne » à la place).
         lastSeenAt: online ? null : (u.lastSeenAt || null),
         isMe: u.id === req.user.id,
+        idleBetaTester: (u.roles || []).includes('idle_beta'),
       };
     }),
   });

@@ -30,7 +30,7 @@ function versionize(html) {
   return html
     .replace(/(src|href)="([\w.-]+\.js)"/g, `$1="$2?v=${BUILD_ID}"`)
     .replace(/(src|href)="([\w.-]+\.css)"/g, `$1="$2?v=${BUILD_ID}"`)
-    .replace(/window\.BUILD_ID\s*=\s*"[^"]*"/, `window.BUILD_ID = "${BUILD_ID}"`);
+    .replace(/data-build-id="[^"]*"/, `data-build-id="${BUILD_ID}"`);
 }
 
 // Échappe pour une valeur d'attribut HTML / le contenu de <title>.

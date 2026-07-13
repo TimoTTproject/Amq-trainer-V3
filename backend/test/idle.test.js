@@ -34,7 +34,35 @@ const {
   RECRUIT_WEIGHTS,
   rollRecruitRarity,
   recruitCost,
+  simulateCombat,
+  enemyMaxHp,
+  enemyReward,
+  PRESTIGE_MIN_STAGE,
+  wisdomForRunStage,
 } = require('../src/idle/idle');
+
+test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans boucle coûteuse', () => {
+  const push = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:10,elapsedSeconds:30,mode:'progress'});
+  assert.ok(push.stage > 1);
+  const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:3600,mode:'progress'});
+  assert.equal(wall.stage,9);
+  assert.equal(wall.bossFailed,true);
+  assert.ok(wall.kills > 100);
+  assert.equal(wall.essence,wall.kills*enemyReward(9));
+});
+
+test('wisdomForRunStage : exige une nouvelle run au stage 100 et récompense le push',()=>{
+  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE-1),0);
+  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),5);
+  assert.ok(wisdomForRunStage(200)>wisdomForRunStage(100));
+});
+
+test('les courbes restent finies aux niveaux extrêmes', () => {
+  for (const value of [charLevelMultiplier(1e9), charLevelUpCost('mythic', 1e9), enemyMaxHp(1e9), enemyReward(1e9)]) {
+    assert.ok(Number.isFinite(value));
+    assert.ok(value >= 0);
+  }
+});
 
 test('slotRate : croît avec la rareté et le niveau d\'entraînement, indépendant de tout autre système', () => {
   const order = ['common', 'rare', 'epic', 'legendary', 'mythic'];

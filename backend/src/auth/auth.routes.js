@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { prisma } = require('../db');
 const { setAuthCookie, setGuestCookie, clearAuthCookie } = require('./jwt');
 const { requirePlayer, requireAuth } = require('./auth.middleware');
-const { isAdmin, deleteUserCascade } = require('../admin/admin');
+const { isAdmin, canAccessIdle, deleteUserCascade } = require('../admin/admin');
 const { tierFromMmr } = require('../mp/rank');
 const { resolveEquipped } = require('../shop/cosmetics');
 const { rateLimit } = require('../util/ratelimit');
@@ -44,6 +44,7 @@ function publicUser(u) {
       dust: 0,
       isGuest: true,
       isAdmin: false,
+      canAccessIdle: false,
       dailyAvailable: false,
       cosmetics: {},
     };
@@ -66,6 +67,7 @@ function publicUser(u) {
     dailyAvailable: dailyAvailable(u.lastDailyAt),
     createdAt: u.createdAt,
     isAdmin: isAdmin(u),
+    canAccessIdle: canAccessIdle(u),
     cosmetics: resolveEquipped(u),
     pinnedNav: u.pinnedNav || [],
     bannerBoostEnabled: u.bannerBoostEnabled !== false,

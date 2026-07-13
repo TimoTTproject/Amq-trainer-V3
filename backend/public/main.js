@@ -1088,7 +1088,7 @@ function renderHeaderUser() {
   document.getElementById('admin-badge').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('dev-tokens-btn').classList.toggle('hidden', !currentUser.isAdmin);
   document.getElementById('nav-admin').classList.toggle('hidden', !currentUser.isAdmin);
-  document.getElementById('nav-idle').classList.toggle('hidden', !currentUser.isAdmin);
+  document.getElementById('nav-idle').classList.toggle('hidden', !currentUser.canAccessIdle);
   const rk = document.getElementById('header-rank');
   if (rk) {
     if (currentUser.rankTier) { rk.innerHTML = tierBadge(currentUser.rankTier); rk.classList.remove('hidden'); }
@@ -1439,6 +1439,8 @@ function setupAppUI() {
     if (mute) { e.stopPropagation(); return mutePlayer(mute.dataset.muteUserid, mute.dataset.modName); }
     const ban = e.target.closest('[data-ban-userid]');
     if (ban) { e.stopPropagation(); return banPlayer(ban.dataset.banUserid, ban.dataset.modName); }
+    const beta = e.target.closest('[data-beta-userid]');
+    if (beta) { e.stopPropagation(); return setIdleBetaTester(beta.dataset.betaUserid, beta.dataset.modName, beta.dataset.betaEnabled !== 'true'); }
     const del = e.target.closest('[data-del-userid]');
     if (del) { e.stopPropagation(); return deletePlayerAccount(del.dataset.delUserid, del.dataset.delName); }
     const row = e.target.closest('[data-userid]');

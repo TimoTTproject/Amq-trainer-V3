@@ -4777,6 +4777,15 @@ textarea::placeholder {
   }
 }
 
+/* Confort : texte secondaire lisible, cibles tactiles et animations optionnelles. */
+#view-idle small,#view-idle .hint,#view-idle .idle-action-help{font-size:max(12px,.75rem)}
+#view-idle button,#view-idle .idle-tab{min-height:44px}
+#view-idle .idle-battle-kicker,#view-idle .idle-chip,#view-idle .idle-combat-stats{font-size:12px}
+@media (prefers-reduced-motion:reduce){
+  #view-idle *,#view-idle *::before,#view-idle *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  #view-idle .idle-particles{display:none!important}
+}
+
 @media (max-width: 700px) {
   .hub-grid {
     grid-template-columns: 1fr;
