@@ -1251,7 +1251,8 @@ async function flushIdleClicks(){
   const count=r.count||batch.count;
   if(idleState)idleState.essence=r.essence;
   if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);idleCombatMotion('hero');}
-  idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · ${r.kills} victoire${r.kills>1?'s':''}`:''}`,r.kills?'fa-skull':'fa-hand-fist');
+  if(r.passiveKills)idleSpawnFloat(`ÉQUIPE AUTO · ${r.passiveKills} élimination${r.passiveKills>1?'s':''}`,'xp');
+  idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · clic : ${r.kills} élimination${r.kills>1?'s':''}`:''}${r.passiveKills?` · équipe auto : ${r.passiveKills}`:''}`,(r.kills||r.passiveKills)?'fa-skull':'fa-hand-fist');
   await refreshIdleState();
   if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
 }

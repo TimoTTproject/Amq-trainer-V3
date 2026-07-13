@@ -599,7 +599,7 @@ async function withSettle(userId, mutate) {
     if(combat.kills>0)await incrementIdleCounter(userId,'kill',combat.kills);
     const bosses=progressionBossesCrossed(user.idleStage||1,stage,user.idleBattleMode);
     if(bosses>0)await incrementIdleCounter(userId,'boss_kill',bosses);
-    if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey);
+    if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey, { passiveKills: combat.kills });
     return settledUser;
   }
   throw new IdleError(409, 'Une autre action est déjà en cours, réessaie.');
@@ -1354,7 +1354,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
   const used=await store.incrBy(`idle:click:budget:${req.user.id}:${Math.floor(Date.now()/1000)}`,requested,2);const count=Math.min(requested,Math.max(0,30-(used-requested)));
   if(!count){void recordIdleEvent(req.user.id,'click_rejected',{value:requested});return res.status(429).json({error:'Cadence de frappe impossible'});}
   let result;
-  await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
+  await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey, settlement) => {
     const normalized=normalizeWaveProgress(liveUser.idleStage,liveUser.idleWaveKills,liveUser.idleBattleMode);let stage=normalized.stage;let waveKills=normalized.waveKills;let hp=liveUser.idleEnemyHp>0&&liveUser.idleEnemyHp<=enemyUnitMaxHp(stage,waveKills)?liveUser.idleEnemyHp:enemyUnitMaxHp(stage,waveKills);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const slots=await loadSlots(tx,liveUser.id);const roles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
@@ -1376,7 +1376,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
       if(damage>=hp){const defeatedStage=stage;rewardTotal+=enemyUnitReward(stage,waveKills);kills++;waveKills++;const waveComplete=waveKills>=enemiesRequiredForStage(stage);if(isBossStage(stage)&&waveComplete&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}if(waveComplete){waveKills=0;if(liveUser.idleBattleMode!=='farm')stage++;}hp=enemyUnitMaxHp(stage,waveKills);progress=stage!==defeatedStage?0:progress;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
     }
     const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleWaveKills:waveKills,idleBossProgress:progress,idleBossStartedAt:bossStartedAt,idleBestBossMs:bestBossMs,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
-    result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,bosses,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
+    result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,passiveKills:settlement?.passiveKills||0,bosses,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
   });
   await incrementIdleCounter(req.user.id,'click',count);
   if(result?.kills)await incrementIdleCounter(req.user.id,'kill',result.kills);

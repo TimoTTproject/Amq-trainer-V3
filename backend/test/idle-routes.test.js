@@ -678,6 +678,7 @@ test('click : inflige des dégâts autoritaires au gardien', async () => {
   const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {requestId:'click-test-0001'} });
   assert.equal(res.status, 200);
   assert.ok(res.json.damage > 0);
+  assert.equal(res.json.passiveKills,0);
   assert.ok(damageWrite&&Number.isFinite(damageWrite.idleEnemyHp));
 });
 
