@@ -19,7 +19,7 @@ function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
-    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, prestigeLevel: 0,
+    idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0, ...over,
   };
 }
@@ -59,6 +59,31 @@ test('GET /state : un joueur portant idle_beta accède au jeu sans être adminis
   assert.equal(res.json.battle.stage, 1);
 });
 
+test('onboarding : impose un choix initial puis offre et assigne le starter', async () => {
+  let user=dbUser({idleOnboardingComplete:false});
+  const starter={id:77,name:'Starter',imageUrl:'https://cdn.example/starter.jpg',rarity:'rare',series:'Série'};
+  prisma.user.findUnique=async()=>user;
+  prisma.character.findMany=async(args)=>args.where?.rarity==='rare'?[starter]:[];
+  prisma.character.findFirst=async()=>({id:starter.id});
+  let recruitWrite=null,slotWrite=null;
+  prisma.dojoRecruit.upsert=async(args)=>{recruitWrite=args;return{};};
+  prisma.idleSlot.upsert=async(args)=>{slotWrite=args;return{};};
+  prisma.user.update=async({data})=>{user={...user,...data};return user;};
+
+  const before=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(before.status,200);
+  assert.equal(before.json.onboarding.required,true);
+  assert.equal(before.json.onboarding.starters[0].id,starter.id);
+
+  const started=await app.request('/api/idle/onboarding',{method:'POST',cookie:app.authCookie('u1'),body:{classKey:'mage',characterId:starter.id}});
+  assert.equal(started.status,200);
+  assert.equal(user.idleOnboardingComplete,true);
+  assert.equal(user.idleHeroClass,'mage');
+  assert.equal(recruitWrite.create.characterId,starter.id);
+  assert.equal(slotWrite.create.slotIndex,0);
+  assert.equal(slotWrite.create.characterId,starter.id);
+});
+
 test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé avec un coût, recrutement à son 1er coût', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
@@ -78,6 +103,8 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(res.json.combat.stage, 1);
   assert.equal(res.json.economy.essence, 0);
   assert.equal(res.json.permanentProgress.prestige, 0);
+  assert.equal(res.json.click.yield, 5);
+  assert.equal(res.json.click.damage, 8); // Guerrier : 5 × 1,5, arrondi
   assert.equal(res.json.battle.stage, 1);
   assert.equal(res.json.battle.kills, 0); // stage 1 = aucun kill encore
   assert.equal(res.json.battle.xpIntoStage, 0);
