@@ -60,6 +60,9 @@ test('campagne : 10 mondes par acte, boss tous les 10 stages et élite au milieu
   assert.equal(isEliteStage(10),false);
   assert.equal(campaignForStage(11).modifier.key,'gravity');
   assert.ok(campaignForStage(91).modifier.team>1);
+  assert.equal(campaignForStage(1).difficulty.name,'Normal');
+  assert.equal(campaignForStage(101).difficulty.name,'Héroïque');
+  assert.equal(campaignForStage(201).difficulty.name,'Cauchemar');
 });
 
 test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans boucle coûteuse', () => {
