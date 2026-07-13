@@ -36,10 +36,8 @@ const RARITY_RATE = {
 // C'est le principal puits d'essence à long terme — ★ et Discipline plafonnent,
 // pas ça : le coût croît plus vite que le gain, donc la progression ralentit
 // sans jamais s'arrêter (courbe idle classique).
-// +12% (au lieu de +5%) : à l'ancien taux, niveauter un perso commun changeait
-// à peine son rendement (0.05/s de base) — des dizaines de niveaux pour un
-// effet perceptible. Le coût (CHAR_LEVEL_GROWTH) ne change pas : la courbe
-// ralentit toujours autant à long terme, seul le gain immédiat est plus net.
+// Le gain reste perceptible à chaque achat, mais la base et la croissance du
+// coût empêchent désormais d'enchaîner des dizaines de niveaux sans choix.
 const CHAR_LEVEL_BONUS = 0.12;
 const RARITY_LEVEL_BONUS = { common: .03, rare: .04, epic: .055, legendary: .07, mythic: .085 };
 const RARITY_PASSIVE = {
@@ -51,8 +49,8 @@ const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
-const CHAR_LEVEL_BASE_COST = { common: 4, rare: 12, epic: 28, legendary: 70, mythic: 180 };
-const CHAR_LEVEL_GROWTH = 1.10;
+const CHAR_LEVEL_BASE_COST = { common: 8, rare: 20, epic: 45, legendary: 110, mythic: 280 };
+const CHAR_LEVEL_GROWTH = 1.13;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
   return Math.round(finiteIdleNumber(base * Math.pow(CHAR_LEVEL_GROWTH, Math.max(1, level || 1) - 1), 1));
@@ -123,7 +121,7 @@ function prodMultiplier(level, ancientBonus) {
   return base * (1 + Math.max(0, ancientBonus || 0));
 }
 function prodUpgradeCost(level) {
-  return Math.round(finiteIdleNumber(50 * Math.pow(1.6, level), 1));
+  return Math.round(finiteIdleNumber(75 * Math.pow(1.75, level), 1));
 }
 
 // Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
@@ -136,13 +134,13 @@ function clickYield(level, ancientBonus) {
   return Math.round(base * (1 + Math.max(0, ancientBonus || 0)));
 }
 function clickUpgradeCost(level) {
-  return Math.round(finiteIdleNumber(30 * Math.pow(1.5, level), 1));
+  return Math.round(finiteIdleNumber(60 * Math.pow(1.7, level), 1));
 }
 const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood réseau
 
 // Coût pour débloquer l'emplacement d'index `nextSlotIndex` (START_SLOTS..MAX_SLOTS-1).
 function slotUpgradeCost(nextSlotIndex) {
-  return Math.round(finiteIdleNumber(200 * Math.pow(2, nextSlotIndex - START_SLOTS), 1));
+  return Math.round(finiteIdleNumber(400 * Math.pow(2.25, nextSlotIndex - START_SLOTS), 1));
 }
 
 // Plafond de production hors-ligne : au-delà, le surplus n'est plus compté —
@@ -154,15 +152,17 @@ const OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // 12h
 // de DPS et chaque ennemi vaincu verse de l'Essence. Les boss, tous les dix
 // stages, doivent tomber en 30 secondes ; sinon la simulation revient sur le
 // dernier stage normal afin qu'une absence ne bloque jamais le joueur.
-const ENEMY_HP_BASE = 10;
-const ENEMY_HP_GROWTH = 1.10;
+const ENEMY_HP_BASE = 20;
+const ENEMY_HP_GROWTH = 1.13;
 const BOSS_INTERVAL = 10;
-const BOSS_HP_MULTIPLIER = 8;
+const BOSS_HP_MULTIPLIER = 9;
 const ELITE_WAVE = 5;
-const ELITE_HP_MULTIPLIER = 2.5;
+const ELITE_HP_MULTIPLIER = 3;
 const BOSS_TIMER_SECONDS = 30;
 const ENEMY_REWARD_BASE = 2;
-const ENEMY_REWARD_GROWTH = 1.11;
+// La récompense augmente moins vite que les PV : progresser exige désormais
+// des investissements au lieu de devenir automatiquement plus facile.
+const ENEMY_REWARD_GROWTH = 1.08;
 function isBossStage(stage) {
   return Math.max(1, Math.floor(stage || 1)) % BOSS_INTERVAL === 0;
 }
@@ -176,7 +176,7 @@ function enemyMaxHp(stage) {
 }
 function enemyReward(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
-  const special = isBossStage(s) ? 4 : isEliteStage(s) ? 2 : 1;
+  const special = isBossStage(s) ? 3 : isEliteStage(s) ? 1.5 : 1;
   return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special, 1)));
 }
 function simulateCombat({ stage = 1, hp = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
@@ -247,11 +247,10 @@ function pendingEssence(lastCollectAt, totalRate, now = new Date(), capMs = OFFL
 // Dérivé de l'essence gagnée à VIE (User.essenceEarnedTotal, jamais décrémentée)
 // via une suite géométrique — formule fermée, donc O(1) même à très haut niveau
 // (pas de boucle : la progression est volontairement quasi infinie).
-// 70 (au lieu de 100) : réduit UNIFORMÉMENT tous les paliers (la formule est
-// linéaire en DOJO_XP_BASE), pour une première poussée de niveaux plus rapide
-// sans changer la forme de la courbe (toujours +35%/niveau au-delà).
-const DOJO_XP_BASE = 70; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
-const DOJO_XP_GROWTH = 1.35; // +35% de coût par niveau
+// Le premier niveau reste accessible, puis chaque palier demande un
+// investissement sensiblement plus long que le précédent.
+const DOJO_XP_BASE = 100; // XP (= essence gagnée) pour passer du niveau 1 au niveau 2
+const DOJO_XP_GROWTH = 1.40; // +40% de coût par niveau
 
 // Formule fermée générique (suite géométrique) — XP cumulé requis pour
 // atteindre `level` à partir d'un coût de base et d'une croissance par
@@ -365,12 +364,10 @@ function decorForLevel(level) {
 // d'essence est réclamable une fois. Permanents (jamais reperdus, y compris
 // après une Prestige) puisqu'ils dépendent du niveau du Dojo, lui aussi permanent.
 const MILESTONE_INTERVAL = 5;
-// ×6, en phase avec RARITY_RATE : les coûts (recrutement, améliorations,
-// niveaux de perso) n'ont pas bougé, donc l'essence en circulation est
-// désormais ~6x plus abondante — une récompense de 50 serait devenue
-// négligeable face à ces montants.
-const MILESTONE_BASE_REWARD = 300;
-const MILESTONE_GROWTH = 1.5;
+// Récompense volontairement inférieure au prix de plusieurs améliorations :
+// un coffre accélère un objectif sans supprimer la phase d'accumulation.
+const MILESTONE_BASE_REWARD = 150;
+const MILESTONE_GROWTH = 1.45;
 function milestoneTierForLevel(level) {
   return Math.floor((level || 1) / MILESTONE_INTERVAL);
 }

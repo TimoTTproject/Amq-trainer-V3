@@ -543,7 +543,7 @@ async function buildState(userId) {
   const xpForNextStage = maxEnemyHp;
   const defeatedBosses = Math.floor(Math.max(0, stage - 1) / 10);
   const nextBossChest = user.idleBossClaimed + 1;
-  const bossReward = (tier) => Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
+  const bossReward = (tier) => Math.round(80 * Math.pow(1.4, Math.max(0, tier - 1)));
 
   const missionDefs = idleMissionList(user, recruitCount, slots.filter((s) => s.characterId).length, stage,missionCounters);
   let claims = [];
@@ -1258,7 +1258,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const defeated = Math.floor(Math.max(0, (user.idleBestStage || user.idleStage || 1) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
       if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
-      const amount = Math.round(150 * Math.pow(1.45, Math.max(0, tier - 1)));
+      const amount = Math.round(80 * Math.pow(1.4, Math.max(0, tier - 1)));
       const sealReward=1+(tier%5===0?1:0);
       const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward}, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');

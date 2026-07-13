@@ -62,8 +62,17 @@ test('simulateCombat : progresse, échoue sur un boss trop fort puis farme sans 
   const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:3600,mode:'progress'});
   assert.equal(wall.stage,9);
   assert.equal(wall.bossFailed,true);
-  assert.ok(wall.kills > 100);
+  assert.ok(wall.kills > 50);
   assert.equal(wall.essence,wall.kills*enemyReward(9));
+});
+
+test('équilibrage : les murs croissent plus vite que les récompenses et les achats restent espacés', () => {
+  assert.equal(enemyMaxHp(1), 20);
+  assert.ok(enemyMaxHp(50) / enemyMaxHp(10) > enemyReward(50) / enemyReward(10));
+  assert.equal(clickUpgradeCost(0), 60);
+  assert.equal(prodUpgradeCost(0), 75);
+  assert.equal(slotUpgradeCost(START_SLOTS), 400);
+  assert.ok(charLevelUpCost('rare', 25) > charLevelUpCost('rare', 10) * 5);
 });
 
 test('wisdomForRunStage : exige une nouvelle run au stage 100 et récompense le push',()=>{
