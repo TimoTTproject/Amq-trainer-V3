@@ -6140,7 +6140,10 @@ body.idle-fullscreen #app { padding-top: 0; }
 /* Équipe : deux colonnes lisibles sur grand écran. Les cartes actives ont
    assez de largeur pour leurs statistiques ; les places vides restent
    compactes afin de ne pas créer plusieurs écrans de vide. */
-#view-idle .idle-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+#view-idle .idle-slots{display:block}
+#view-idle .idle-slot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+#view-idle .idle-slot-management{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+#view-idle .idle-slot-management>h4{display:flex;align-items:center;gap:8px;margin:0 0 10px;color:var(--text);font-size:12px}#view-idle .idle-slot-management>h4>i{color:var(--accent-2)}#view-idle .idle-slot-management>h4>span{margin-left:auto;color:var(--text-2);font-size:10px;font-weight:500}
 #view-idle .idle-hero,#view-idle .idle-hero-empty,#view-idle .idle-hero-locked{width:100%;min-width:0;max-width:none;flex:none}
 #view-idle .idle-hero{display:grid;grid-template-columns:112px minmax(0,1fr);gap:0 14px;padding:13px;overflow:visible;border-radius:14px}
 #view-idle .idle-hero-portrait{grid-row:1/7;width:112px;height:148px;aspect-ratio:auto;border-radius:11px;background-position:center top;box-shadow:inset 0 -20px 16px -12px rgba(0,0,0,.55)}
@@ -6156,8 +6159,8 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-hero-empty,#view-idle .idle-hero-locked{display:flex;min-height:82px;aspect-ratio:auto;flex-direction:row;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;text-align:left}
 #view-idle .idle-slot-state{display:flex;min-width:0;align-items:center;gap:12px}.idle-slot-state>i{display:grid;place-items:center;width:38px;height:38px;flex:none;border-radius:10px;background:var(--bg-3);color:var(--text-2);font-size:16px!important}.idle-slot-state>span{display:flex;min-width:0;flex-direction:column;gap:2px}.idle-slot-state b{color:var(--text);font-size:13px}.idle-slot-state small{color:var(--text-2);font-size:10px}
 #view-idle .idle-hero-empty>strong{display:flex;align-items:center;gap:7px;color:var(--accent-2);font-size:11px;white-space:nowrap}.idle-unlock-btn{display:flex;align-items:center;gap:12px}.idle-unlock-btn>span{font-size:11px}.idle-unlock-btn>strong{display:flex;align-items:center;gap:5px;font-size:13px}
-@media(max-width:800px){#view-idle .idle-slots{grid-template-columns:1fr}}
-@media(max-width:620px){#view-idle .idle-slots{gap:12px}#view-idle .idle-hero{grid-template-columns:88px minmax(0,1fr);gap:0 10px;padding:10px}#view-idle .idle-hero-portrait{width:88px;height:116px}#view-idle .idle-hero-name{font-size:14px}#view-idle .idle-hero-meta{font-size:11px}#view-idle .idle-hero-stats span{padding:6px;font-size:11px}#view-idle .idle-hero-stats small{font-size:9px}#view-idle .idle-hero-passive{grid-template-columns:auto minmax(0,1fr);padding:6px}#view-idle .idle-hero-passive em{grid-column:2;justify-self:start}#view-idle .idle-hero-empty,#view-idle .idle-hero-locked{align-items:stretch;flex-direction:column}.idle-unlock-btn{justify-content:space-between;width:100%}}
+@media(max-width:800px){#view-idle .idle-slot-grid{grid-template-columns:1fr}}
+@media(max-width:620px){#view-idle .idle-slot-grid{gap:12px}#view-idle .idle-hero{grid-template-columns:88px minmax(0,1fr);gap:0 10px;padding:10px}#view-idle .idle-hero-portrait{width:88px;height:116px}#view-idle .idle-hero-name{font-size:14px}#view-idle .idle-hero-meta{font-size:11px}#view-idle .idle-hero-stats span{padding:6px;font-size:11px}#view-idle .idle-hero-stats small{font-size:9px}#view-idle .idle-hero-passive{grid-template-columns:auto minmax(0,1fr);padding:6px}#view-idle .idle-hero-passive em{grid-column:2;justify-self:start}#view-idle .idle-hero-empty,#view-idle .idle-hero-locked{align-items:stretch;flex-direction:column}.idle-unlock-btn{justify-content:space-between;width:100%}}
 
 /* Sections secondaires repliables : garde les actions importantes visibles
    et évite plusieurs écrans de scroll pour les collections longues. */
