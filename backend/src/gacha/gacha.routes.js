@@ -945,6 +945,15 @@ router.get('/collection', requireAuth, async (req, res) => {
   const ownedByRarity = {};
   cards.forEach((c) => (ownedByRarity[c.character.rarity] = (ownedByRarity[c.character.rarity] || 0) + 1));
 
+  // Numéro d'exemplaire affiché sur la carte : le plus bas possédé par le joueur.
+  const minSerials = await prisma.cardInstance.groupBy({
+    by: ['characterId'],
+    where: { userId: targetUserId },
+    _min: { serial: true },
+  });
+  const serialByCharacter = {};
+  minSerials.forEach((g) => (serialByCharacter[g.characterId] = g._min.serial));
+
   res.json({
     cards: cards.map((c) => ({
       id: c.character.id,
@@ -953,6 +962,7 @@ router.get('/collection', requireAuth, async (req, res) => {
       rarity: c.character.rarity,
       series: c.character.series || null,
       copies: c.copies,
+      serial: serialByCharacter[c.characterId] ?? null,
       stars: c.stars || 1,
     })),
     poolByRarity,

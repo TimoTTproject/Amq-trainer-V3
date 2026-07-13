@@ -237,9 +237,18 @@ router.get('/:userId', requireAuth, async (req, res) => {
   // Vitrine : les favoris en priorité, sinon les meilleures cartes
   const favs = cards.filter((c) => c.favorite);
   const showcaseCards = (favs.length ? favs : cards).slice(0, 6);
+  // Numéro d'exemplaire affiché sur la carte : le plus bas possédé par le joueur.
+  const showcaseSerials = await prisma.cardInstance.groupBy({
+    by: ['characterId'],
+    where: { userId: user.id, characterId: { in: showcaseCards.map((c) => c.characterId) } },
+    _min: { serial: true },
+  });
+  const serialByCharacter = {};
+  showcaseSerials.forEach((g) => (serialByCharacter[g.characterId] = g._min.serial));
   const showcase = showcaseCards.map((c) => ({
     id: c.character.id, name: c.character.name, imageUrl: c.character.imageUrl,
-    rarity: c.character.rarity, copies: c.copies, favorite: c.favorite, stars: c.stars || 1,
+    rarity: c.character.rarity, copies: c.copies, serial: serialByCharacter[c.characterId] ?? null,
+    favorite: c.favorite, stars: c.stars || 1,
   }));
 
   // Graphe de progression : 14 derniers jours d'activité
