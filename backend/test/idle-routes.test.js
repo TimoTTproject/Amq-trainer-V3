@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -88,8 +88,9 @@ test('les gardiens sont comptés uniquement lors dune nouvelle progression', () 
 
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
   const weapon=idleItemDrop(5,'weapon','legendary',.11,'Hueco Mundo');const accessory=idleItemDrop(3,'accessory','legendary',.11,'Hueco Mundo');
-  assert.equal(weapon.effectKey,'precision');assert.ok(itemProductionBonus(weapon)>.11);
+  assert.equal(weapon.effectKey,'precision');assert.equal(itemProductionBonus(weapon),.11);
   assert.equal(accessory.effectKey,'salvage');assert.equal(itemProductionBonus(accessory),.11);assert.ok(itemSalvageValue(accessory)>25);
+  assert.ok(itemActionBonus([{items:[weapon]}],'click')>1);
 });
 
 test('inventaire : les mondes et les paliers créent des familles variées',()=>{
