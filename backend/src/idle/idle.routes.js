@@ -986,7 +986,8 @@ router.get('/roster', requireAuth, requireIdleBeta, async (req, res) => {
   });
   res.json({
     recruits: recruits.map((r) => ({
-      id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt, talent:characterTalent(r.character),role:roleForCharacter(r.character),
+      id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt,
+      level:r.trainingLevel||1,baseRate:slotRate(r.character.rarity,r.trainingLevel||1),talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),
     })),
   });
 });

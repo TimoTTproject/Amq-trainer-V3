@@ -345,6 +345,10 @@ test('GET /roster : liste les personnages recrutés (pas la collection gacha)', 
   assert.equal(res.status, 200);
   assert.equal(res.json.recruits.length, 1);
   assert.equal(res.json.recruits[0].name, 'Roy');
+  assert.ok(res.json.recruits[0].role);
+  assert.ok(res.json.recruits[0].talent?.description);
+  assert.ok(res.json.recruits[0].combatSkill?.description);
+  assert.ok(res.json.recruits[0].baseRate > 0);
 });
 
 test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost et crée une ligne DojoRecruit', async () => {
