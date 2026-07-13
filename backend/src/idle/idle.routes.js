@@ -25,6 +25,7 @@ const {
   enemyArchetype,
   enemyReward,
   enemiesRequiredForStage,
+  normalizeWaveProgress,
   enemyUnitReward,
   enemiesDefeatedBeforeStage,
   isBossStage,
@@ -471,8 +472,9 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
 }
 
 async function applyActiveDamage(tx, user, damage) {
-  const stage = Math.max(1, user.idleStage || 1);
-  const waveKills = Math.max(0, Math.min(enemiesRequiredForStage(stage) - 1, user.idleWaveKills || 0));
+  const normalized = normalizeWaveProgress(user.idleStage, user.idleWaveKills, user.idleBattleMode);
+  const stage = normalized.stage;
+  const waveKills = normalized.waveKills;
   const maxHp = enemyUnitMaxHp(stage, waveKills);
   const hp = user.idleEnemyHp > 0 && user.idleEnemyHp <= maxHp ? user.idleEnemyHp : maxHp;
   const now = new Date();
@@ -1347,7 +1349,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
   if(!count){void recordIdleEvent(req.user.id,'click_rejected',{value:requested});return res.status(429).json({error:'Cadence de frappe impossible'});}
   let result;
   await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
-    let stage=Math.max(1,liveUser.idleStage||1);let waveKills=Math.max(0,Math.min(enemiesRequiredForStage(stage)-1,liveUser.idleWaveKills||0));let hp=liveUser.idleEnemyHp>0?liveUser.idleEnemyHp:enemyUnitMaxHp(stage,waveKills);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
+    const normalized=normalizeWaveProgress(liveUser.idleStage,liveUser.idleWaveKills,liveUser.idleBattleMode);let stage=normalized.stage;let waveKills=normalized.waveKills;let hp=liveUser.idleEnemyHp>0&&liveUser.idleEnemyHp<=enemyUnitMaxHp(stage,waveKills)?liveUser.idleEnemyHp:enemyUnitMaxHp(stage,waveKills);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const slots=await loadSlots(tx,liveUser.id);const roles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
     const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click');

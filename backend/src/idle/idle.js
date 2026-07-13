@@ -202,6 +202,20 @@ function enemiesRequiredForStage(stage) {
   if (isBossStage(stage)) return 1;
   return 10;
 }
+// Répare aussi les anciens états où idleWaveKills a pu être enregistré à 10
+// entre deux requêtes. Le compteur ne doit jamais être simplement ramené à 9 :
+// il représente alors une vague terminée et doit être reporté sur la suivante.
+function normalizeWaveProgress(stage, waveKills = 0, mode = 'progress') {
+  let currentStage = Math.max(1, Math.floor(stage || 1));
+  let currentWaveKills = Math.max(0, Math.floor(Number(waveKills) || 0));
+  if (mode === 'farm') return { stage: currentStage, waveKills: currentWaveKills % enemiesRequiredForStage(currentStage) };
+  let guard = 0;
+  while (currentWaveKills >= enemiesRequiredForStage(currentStage) && guard++ < 1000) {
+    currentWaveKills -= enemiesRequiredForStage(currentStage);
+    currentStage++;
+  }
+  return { stage: currentStage, waveKills: Math.min(currentWaveKills, enemiesRequiredForStage(currentStage) - 1) };
+}
 function enemyUnitReward(stage, waveKills = 0) {
   // Chaque nouvel ennemi remplace un ancien changement de stage : conserver
   // la récompense unitaire maintient le revenu par minute sans fractions
@@ -215,8 +229,9 @@ function enemiesDefeatedBeforeStage(stage) {
   return completeWorlds * 91 + remainingStages * 10; // 9 vagues ×10 ennemis + 1 boss.
 }
 function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
-  let currentStage = Math.max(1, Math.floor(stage || 1));
-  let currentWaveKills = Math.max(0, Math.min(enemiesRequiredForStage(currentStage) - 1, Math.floor(waveKills || 0)));
+  const normalized = normalizeWaveProgress(stage, waveKills, mode);
+  let currentStage = normalized.stage;
+  let currentWaveKills = normalized.waveKills;
   let currentHp = Number(hp);
   let seconds = Math.max(0, Number(elapsedSeconds) || 0);
   const damagePerSecond = Math.max(0, Number(dps) || 0);
@@ -520,6 +535,7 @@ module.exports = {
   enemyArchetype,
   enemyUnitMaxHp,
   enemiesRequiredForStage,
+  normalizeWaveProgress,
   enemyUnitReward,
   enemiesDefeatedBeforeStage,
   simulateCombat,
