@@ -20,7 +20,7 @@ function dbUser(over = {}) {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleMilestoneClaimed: 0, idleRecruitPity: 0, idleOnboardingComplete: true, prestigeLevel: 0,
-    wisdomPoints: 0,idleSeals:2,idleBossProgress:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
+    wisdomPoints: 0,idleSeals:2,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
   };
 }
 
@@ -43,6 +43,7 @@ test.beforeEach(() => {
   prisma.song.findFirst = async () => null;
   prisma.ancientLevel.findMany = async () => [];
   prisma.dojoBossArt.findUnique = async () => null;
+  prisma.idleTeamPreset.findMany = async () => [];
   idleRoutes.decorArtCache.clear();
 });
 
@@ -515,7 +516,7 @@ test('click : inflige des dégâts autoritaires au gardien', async () => {
     }
     return user;
   };
-  const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {requestId:'click-test-0001'} });
   assert.equal(res.status, 200);
   assert.ok(res.json.damage > 0);
   assert.ok(damageWrite&&Number.isFinite(damageWrite.idleEnemyHp));
@@ -529,7 +530,7 @@ test('click : accepte une cadence de clicker sans 429 immédiat', async () => {
     return user;
   };
   for (let i = 0; i < 5; i++) {
-    const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+    const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: {requestId:`click-rate-000${i}`} });
     assert.equal(res.status, 200);
   }
 });
@@ -538,10 +539,36 @@ test('click : regroupe plusieurs frappes dans une seule requête autoritaire', a
   let user=dbUser({idleClickLevel:2,idleStage:3,idleEnemyHp:enemyMaxHp(3)});
   prisma.user.findUnique=async()=>user;
   prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')user={...user,idleEnemyHp:data.idleEnemyHp,idleStage:data.idleStage};return user;};
-  const res=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:5}});
+  const res=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:5,requestId:'click-batch-0001'}});
   assert.equal(res.status,200);
   assert.equal(res.json.count,5);
   assert.ok(res.json.damage>=5);
+});
+
+test('click : rejouer le même requestId ne réapplique jamais les dégâts', async () => {
+  let user=dbUser({id:'u-dedup',idleClickLevel:2,idleStage:4,idleEnemyHp:enemyMaxHp(4)});
+  prisma.user.findUnique=async()=>user;
+  let writes=0;
+  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number'){writes++;user={...user,idleEnemyHp:data.idleEnemyHp,idleStage:data.idleStage||user.idleStage};}return user;};
+  const request={method:'POST',cookie:app.authCookie('u-dedup'),body:{count:3,requestId:'click-dedup-0001'}};
+  const first=await app.request('/api/idle/click',request);
+  const writesAfterFirst=writes;
+  const second=await app.request('/api/idle/click',request);
+  assert.equal(first.status,200);
+  assert.equal(second.status,200);
+  assert.equal(second.json.duplicate,true);
+  assert.ok(writesAfterFirst>0);
+  assert.equal(writes,writesAfterFirst);
+});
+
+test('feedback bêta : conserve le message et son contexte', async () => {
+  prisma.user.findUnique=async()=>dbUser({roles:['idle_beta']});
+  let created=null;
+  prisma.idleFeedback.create=async({data})=>{created=data;return{id:1,...data};};
+  const res=await app.request('/api/idle/feedback',{method:'POST',cookie:app.authCookie('u1'),body:{message:'Le bouton de boss reste bloqué.',context:'{"stage":20}'}});
+  assert.equal(res.status,201);
+  assert.equal(created.userId,'u1');
+  assert.match(created.message,/boss/);
 });
 
 test('claim-milestone : refuse si rien à réclamer, sinon crédite la récompense et avance idleMilestoneClaimed', async () => {

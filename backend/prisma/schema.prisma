@@ -147,6 +147,11 @@ model User {
   idleBurstReadyAt       DateTime?
   idleTeamReadyAt        DateTime?
   idleBossProgress       Int       @default(0)
+  idleBossStartedAt      DateTime?
+  idleBestBossMs         Int?
+  idleFormation          String    @default("balanced")
+  idlePrestigePath       String    @default("balanced")
+  idlePrestigeMilestone  Int       @default(0)
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
@@ -181,6 +186,8 @@ model User {
   idleMissionClaims    IdleMissionClaim[]
   idleTelemetry        IdleTelemetry[]
   idleProgressCounters IdleProgressCounter[]
+  idleTeamPresets      IdleTeamPreset[]
+  idleFeedback         IdleFeedback[]
   dailyStats           DailyStat[]
   coopWeekly           CoopWeeklyScore[]
   cosmetics            UserCosmetic[]
@@ -889,6 +896,33 @@ model IdleProgressCounter {
 
   @@unique([userId, key, period])
   @@index([userId, period])
+}
+
+model IdleTeamPreset {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  name      String
+  slots     Json
+  formation String   @default("balanced")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model IdleFeedback {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  message   String
+  context   String?
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([resolved, createdAt])
+  @@index([userId, createdAt])
 }
 
 // Roster du Dojo : personnages RECRUTÉS via l'essence (voir POST
