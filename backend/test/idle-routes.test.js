@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,equipmentSetMultiplier,itemSalvageValue }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -48,6 +48,7 @@ test.beforeEach(() => {
   prisma.idleTeamPreset.findMany = async () => [];
   prisma.idleProgressCounter.findMany = async () => [];
   prisma.idleProgressCounter.upsert = async () => ({});
+  prisma.idleItem.findMany = async () => [];
   idleRoutes.decorArtCache.clear();
 });
 
@@ -83,6 +84,26 @@ test('coffres : les paliers majeurs ajoutent Golds et rareté garantie', () => {
 test('les gardiens sont comptés uniquement lors dune nouvelle progression', () => {
   assert.equal(progressionBossesCrossed(9,31,'progress'),3);
   assert.equal(progressionBossesCrossed(10,10,'farm'),0);
+});
+
+test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
+  const weapon=idleItemDrop(5,'weapon','legendary',.11,'Hueco Mundo');const accessory=idleItemDrop(5,'accessory','legendary',.11,'Hueco Mundo');
+  assert.equal(weapon.effectKey,'assault');assert.ok(itemProductionBonus(weapon)>.11);
+  assert.equal(accessory.effectKey,'salvage');assert.ok(itemSalvageValue(accessory)>25);
+});
+
+test('inventaire : une panoplie des trois types accorde le bonus complet',()=>{
+  assert.equal(equipmentSetMultiplier([{kind:'weapon'},{kind:'relic'}]),1);
+  assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'A'},{kind:'accessory',sourceWorld:'A'}]),1.10);
+  assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'B'},{kind:'accessory',sourceWorld:'A'}]),1);
+});
+
+test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{
+  prisma.user.findUnique=async()=>dbUser();
+  prisma.idleItem.findFirst=async({where})=>where.userId==='u1'?{id:'item-1',userId:'u1'}:null;
+  let locked=null;prisma.idleItem.update=async({data})=>{locked=data.locked;return{};};
+  const res=await app.request('/api/idle/equipment/lock',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1',locked:true}});
+  assert.equal(res.status,200);assert.equal(locked,true);
 });
 
 test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {

@@ -1711,6 +1711,14 @@
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-clock-rotate-left"></i> Historique des recrutements</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-recruit-history" id="idle-recruit-history"></div></div></div>
         </section>
 
+        <section id="idle-panel-equipment" class="idle-panel hidden">
+          <div class="idle-page-head"><i class="fas fa-shield-halved"></i><div><small>ARSENAL</small><h2>Équipement</h2></div></div>
+          <div class="idle-inventory-intro"><i class="fas fa-boxes-stacked"></i><div><b>Construis les panoplies de ton équipe</b><span>Les coffres ajoutent maintenant leurs objets dans ton inventaire. Compare, équipe, verrouille ou recycle chaque pièce.</span></div><strong id="idle-inventory-capacity">0 / 120</strong></div>
+          <div class="idle-loadouts" id="idle-loadouts"></div>
+          <div class="idle-inventory-toolbar"><div id="idle-item-filters"><button class="active" data-item-filter="all">Tout</button><button data-item-filter="weapon"><i class="fas fa-khanda"></i> Armes</button><button data-item-filter="relic"><i class="fas fa-gem"></i> Reliques</button><button data-item-filter="accessory"><i class="fas fa-ring"></i> Accessoires</button></div><label>Trier <select id="idle-item-sort"><option value="power">Puissance</option><option value="recent">Plus récents</option><option value="rarity">Rareté</option></select></label></div>
+          <div class="idle-inventory-grid" id="idle-inventory-grid"></div>
+        </section>
+
         <!-- Onglet AMÉLIORER : améliorations + prestige -->
         <section id="idle-panel-upgrades" class="idle-panel hidden">
           <div class="idle-page-head"><i class="fas fa-arrow-trend-up"></i><div><small>PUISSANCE</small><h2>Améliorer</h2></div></div>
@@ -1738,6 +1746,7 @@
         <button class="idle-tab active" data-idle-tab="home" title="Combattre et récupérer l'Essence"><i class="fas fa-fire"></i><span>Combat</span></button>
         <button class="idle-tab" data-idle-tab="progression" title="Accomplir les épreuves et explorer les mondes"><i class="fas fa-torii-gate"></i><span>Ascension</span></button>
         <button class="idle-tab" data-idle-tab="team" title="Choisir les héros qui produisent automatiquement"><i class="fas fa-users"></i><span>Équipe</span></button>
+        <button class="idle-tab" data-idle-tab="equipment" title="Gérer les objets et les panoplies"><i class="fas fa-shield-halved"></i><span>Objets</span></button>
         <button class="idle-tab" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
         <button class="idle-tab" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
       </nav>
