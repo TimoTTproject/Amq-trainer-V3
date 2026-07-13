@@ -294,7 +294,7 @@ function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosse
   ];
   if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Coffre de gardien', description:'Vaincs un boss et ouvre son coffre', progress:bosses, target:1 });
   const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));
-  return { level:current, nextLevel, quests, completed:quests.filter((q)=>q.completed).length, total:quests.length, ready:quests.every((q)=>q.completed), sealReward:nextLevel % 5 === 0 ? 2 : 1 };
+  return { level:current, nextLevel, quests, completed:quests.filter((q)=>q.completed).length, total:quests.length, ready:quests.every((q)=>q.completed), sealReward:nextLevel % 5 === 0 ? 2 : 1, powerReward:DOJO_LEVEL_BONUS };
 }
 
 // ── Stage de combat (vague) — décorrélé du niveau du Dojo : c'est LUI qui
