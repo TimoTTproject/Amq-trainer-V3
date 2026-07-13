@@ -4,7 +4,6 @@
 // cardHTML() de gacha.js pour le sélecteur de personnage (modale) — le roster
 // assigné a sa propre ligne de héros compacte, voir idleSlotHTML.
 let idleState = null; // dernier état reçu du serveur
-let idleFetchedAt = 0; // Date.now() de ce dernier état (base du ticker en direct)
 let idleTicker = null;
 let idleSyncTicker = null; // resynchronisation périodique légère (cf. openIdle) — sans ça, un joueur qui ne clique jamais ne verrait aucun kill se produire réellement côté serveur
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
@@ -36,6 +35,11 @@ let idleRosterRole = 'all';
 let idleRosterRarity = 'all';
 let idleLastAnnouncement = '';
 let idleWaveTransitionTimers = [];
+let idleVisualHp = null;
+let idleVisualMaxHp = null;
+let idleVisualStage = null;
+let idleVisualEnemyNumber = null;
+let idleVisualRespawnTimer = null;
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -48,8 +52,31 @@ function applyIdleComfortSettings(){const view=document.getElementById('view-idl
 
 function idleAddCombatLog(message,icon='fa-bolt'){
   idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
+  idleRenderCombatLog();
+}
+
+function idleRenderCombatLog(){
   const box=document.getElementById('idle-combat-log');if(!box)return;
-  box.innerHTML=idleCombatEntries.map((entry)=>`<span><i class="fas ${entry.icon}"></i>${escapeHtml(entry.message)}<small>${entry.at.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</small></span>`).join('');
+  box.innerHTML=idleCombatEntries.map((entry)=>`<span><i class="fas ${entry.icon}"></i>${escapeHtml(entry.message)}<small>${entry.at.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</small></span>`).join('');
+}
+
+// Les clics partent au serveur par petits lots techniques de 160 ms. Le joueur
+// n'a pas besoin de voir ces lots : on les regroupe par seconde pour afficher
+// une vraie mesure de cadence et de DPS.
+function idleRecordStrikeBatch(count, damage, kills = 0, passiveKills = 0) {
+  const bucket = Math.floor(Date.now() / 1000);
+  let entry = idleCombatEntries.find((item) => item.type === 'strikes' && item.bucket === bucket);
+  if (!entry) {
+    entry = { type:'strikes', bucket, count:0, damage:0, kills:0, passiveKills:0, icon:'fa-hand-fist', at:new Date() };
+    idleCombatEntries.unshift(entry);
+  }
+  entry.count += count || 0;
+  entry.damage += damage || 0;
+  entry.kills += kills || 0;
+  entry.passiveKills += passiveKills || 0;
+  entry.message = `${entry.count} frappe${entry.count>1?'s':''}/s · ${idleFormatNumber(entry.damage)} dégâts · ${idleFormatNumber(entry.damage)} DPS${entry.kills?` · ${entry.kills} élimination${entry.kills>1?'s':''}`:''}${entry.passiveKills?` · équipe : ${entry.passiveKills}`:''}`;
+  idleCombatEntries = idleCombatEntries.slice(0, 4);
+  idleRenderCombatLog();
 }
 
 function idleFormatNumber(n) {
@@ -195,17 +222,21 @@ function idleStopTicker() {
 
 function idleTick() {
   if (!idleState) return;
-  const elapsed = (Date.now() - idleFetchedAt) / 1000;
   const display = idleState.essence + idleState.pendingEssence;
   const el = document.getElementById('idle-essence-val');
   if (el) el.textContent = idleFormatNumber(display);
-  idleTickInterpolateBattle(elapsed);
   idleUpdateBossTimer();
   idleRenderSkillCooldown();
   // Gain flottant passif dans la scène toutes les ~3,2 s (8 ticks de 400 ms) —
   // purement cosmétique, ça montre la production "vivre" comme dans un vrai
   // idle game. Seulement si la scène est visible et produit au moins 1.
   idleTickCount++;
+  // La production automatique frappe par impulsions visibles. La barre de PV
+  // descend donc à chaque proc, au lieu de lancer une transition continue vers
+  // 0 qui la laissait vide presque tout le temps sur les équipes puissantes.
+  if (idleActivePanel === 'home' && idleState.totalRate > 0) {
+    idleApplyVisualDamage(idleState.totalRate * .4);
+  }
   const passiveGain = idleState.totalRate * 3.2;
   if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
     idleSpawnFloat(`−${idleFormatNumber(passiveGain)}`, 'damage passive');
@@ -221,38 +252,48 @@ function idleUpdateBossTimer(){
   label.textContent=remaining>0?`${Math.ceil(remaining/1000)}s avant enrage`:'ENRAGÉ · clics affaiblis';
 }
 
-// Fait baisser la barre de PV du gardien en continu entre deux synchros
-// serveur (~6 s, cf. openIdle), exactement comme l'essence affichée
-// ci-dessus : même taux (essenceEarnedTotal progresse au même rythme que
-// l'essence), simple extrapolation visuelle. Le vrai kill (nouveau stage,
-// nouvelle vague) n'arrive qu'à la prochaine synchro — la barre se contente
-// de tendre vers 0 en l'attendant, jamais de fausse transition côté client.
-function idleTickInterpolateBattle(elapsed) {
-  if (!idleState?.battle || idleActivePanel !== 'home') return;
-  const gained = elapsed * (idleState.totalRate || 0);
-  const total = Math.max(1, idleState.battle.maxHp || idleState.battle.xpForNextStage || 1);
-  const remaining = Math.max(0, (idleState.battle.hp ?? total) - gained);
+function idlePaintVisualHp(remaining, total, animate = true) {
   const hpEl = document.getElementById('idle-enemy-hp-text');
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
-}
-
-// Anime réellement la barre entre deux états serveur. Le serveur reste la
-// source de vérité (stage, kill, boss), mais la largeur ne paraît plus figée
-// jusqu'au prochain clic ou à la synchronisation des 6 secondes.
-function idleAnimateEnemyHp(fill,remaining,total,stage) {
+  const fill = document.getElementById('idle-xp-fill');
   if (!fill) return;
   const hpPct=Math.max(0,Math.min(100,remaining/Math.max(1,total)*100));
-  const dps=Math.max(0,idleState?.totalRate||0);
-  fill.style.transition='none';
+  fill.style.transition=animate?'width .18s ease-out':'none';
   fill.style.width=`${hpPct}%`;
-  void fill.offsetWidth;
-  if(dps<=0||remaining<=0)return;
-  const duration=Math.max(.2,remaining/dps);
-  requestAnimationFrame(()=>{
-    if(idleState?.battle?.stage!==stage)return;
-    fill.style.transition=`width ${duration}s linear`;
-    fill.style.width='0%';
-  });
+}
+
+function idleResetVisualHp(battle) {
+  clearTimeout(idleVisualRespawnTimer);
+  idleVisualRespawnTimer = null;
+  idleVisualStage = Math.max(1, battle?.stage || 1);
+  idleVisualEnemyNumber = Math.max(1, battle?.enemyNumber || 1);
+  idleVisualMaxHp = Math.max(1, battle?.maxHp || battle?.xpForNextStage || 1);
+  idleVisualHp = Math.max(0, Math.min(idleVisualMaxHp, battle?.hp ?? idleVisualMaxHp));
+  idlePaintVisualHp(idleVisualHp, idleVisualMaxHp, false);
+}
+
+// Retour instantané sur tous les dégâts : clics, compétence et DPS automatique.
+// Ce compteur est uniquement visuel ; la synchronisation serveur reste la
+// source de vérité pour les éliminations et les changements de vague.
+function idleApplyVisualDamage(amount) {
+  const battle = idleState?.battle;
+  if (!battle || idleActivePanel !== 'home' || amount <= 0 || idleVisualRespawnTimer) return;
+  const stage = Math.max(1, battle.stage || 1);
+  const enemyNumber = Math.max(1, battle.enemyNumber || 1);
+  if (idleVisualHp === null || idleVisualStage !== stage || idleVisualEnemyNumber !== enemyNumber) {
+    idleResetVisualHp(battle);
+  }
+  idleVisualHp = Math.max(0, idleVisualHp - amount);
+  idlePaintVisualHp(idleVisualHp, idleVisualMaxHp, true);
+  if (idleVisualHp > 0 || battle.isBoss) return;
+  // Entre deux synchronisations, un ennemi normal vaincu laisse brièvement la
+  // barre à zéro puis fait apparaître la prochaine cible avec une barre pleine.
+  idleVisualRespawnTimer = setTimeout(() => {
+    idleVisualRespawnTimer = null;
+    if (!idleState?.battle || idleState.battle.isBoss) return;
+    idleVisualHp = idleVisualMaxHp;
+    idlePaintVisualHp(idleVisualHp, idleVisualMaxHp, false);
+  }, 170);
 }
 
 async function refreshIdleState() {
@@ -272,7 +313,6 @@ async function refreshIdleState() {
 function renderIdleState(state) {
   const prev = idleState;
   idleState = state;
-  idleFetchedAt = Date.now();
   renderIdleOnboarding(state.onboarding);
   const essenceEl = document.getElementById('idle-essence-val');
   essenceEl.textContent = idleFormatNumber(state.essence + state.pendingEssence);
@@ -429,7 +469,9 @@ function openIdleCharacterSheet(character){
   modal.querySelector('.modal-close')?.focus();
 }
 function renderIdleTeamStrategy(state) {
-  const active = (state.slots || []).filter((s) => s.character).map((s) => s.character);
+  const activeSlots = (state.slots || []).filter((s) => s.character);
+  const leaderSlot = activeSlots.find((s)=>s.character.id===state.strategy?.leaderCharacterId) || activeSlots[0];
+  const active = leaderSlot ? [leaderSlot.character,...activeSlots.filter((s)=>s!==leaderSlot).map((s)=>s.character)] : [];
   const stage = document.getElementById('idle-stage-team');
   // Le premier personnage est le chef affiché en grand dans la scène.
   if (stage) stage.innerHTML = active.slice(1, 5).map((c) => {
@@ -455,7 +497,7 @@ function renderIdleTeamStrategy(state) {
       <p class="idle-meta-recommendation"><i class="fas fa-lightbulb"></i><span><b>Conseil actuel</b>${escapeHtml(meta.recommendation)}</span></p>
       <details><summary><span><i class="fas fa-calculator"></i> Voir tous les multiplicateurs et rôles</span><i class="fas fa-chevron-down"></i></summary><div class="idle-meta-details"><section><h4>Multiplicateurs actuels</h4>${(meta.multipliers||[]).map((item)=>`<span class="${item.multiplier>1?'active':''}"><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small><strong>×${Number(item.multiplier).toFixed(2)}</strong></span>`).join('')}</section><section><h4>Effet exact de chaque rôle</h4>${(meta.roleDetails||[]).map((role)=>`<span class="${role.count?'active':''}"><b>${escapeHtml(role.name)} · ${role.count}</b><small>${escapeHtml(role.effect)}${role.situational?' · situationnel':''}</small></span>`).join('')}</section></div></details>`;
   }
-  const formations=document.getElementById('idle-formations');if(formations)formations.innerHTML=(state.strategy?.formations||[]).map((f)=>`<button data-idle-formation="${f.key}" class="${f.active?'active':''}"><b>${escapeHtml(f.name)}</b><small>${escapeHtml(f.description)}${f.multiplier>1?` · ×${f.multiplier.toFixed(2)}`:''}</small></button>`).join('');
+  const formations=document.getElementById('idle-formations');if(formations){const list=state.strategy?.formations||[];const current=list.find((f)=>f.active);formations.innerHTML=`<div class="idle-formation-state ${current?.conditionMet?'active':'inactive'}"><i class="fas ${current?.conditionMet?'fa-circle-check':'fa-triangle-exclamation'}"></i><span><small>FORMATION ACTIVE</small><b>${escapeHtml(current?.name||'Équilibrée')} · ${current?.conditionMet?(current.multiplier>1?`bonus ×${current.multiplier.toFixed(2)}`:'rendement stable'):'condition non remplie'}</b></span></div>${list.map((f)=>`<button data-idle-formation="${f.key}" class="${f.active?'active':''}"><i class="fas ${f.active?'fa-circle-check':'fa-circle'}"></i><span><b>${escapeHtml(f.name)}</b><small>${escapeHtml(f.description)}</small></span><strong>${f.active?'ACTIF':f.conditionMet&&f.multiplier>1?`×${f.multiplier.toFixed(2)}`:'CHOISIR'}</strong></button>`).join('')}`;}
   const presets=document.getElementById('idle-presets');if(presets)presets.innerHTML=`<div class="idle-preset-save"><input id="idle-preset-name" maxlength="24" placeholder="Nom du preset"><button data-preset-save><i class="fas fa-floppy-disk"></i></button></div>${(state.strategy?.presets||[]).map((p)=>`<button data-preset-load="${escapeHtml(p.name)}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.formation)}</small><i class="fas fa-play"></i></button>`).join('')}`;
 }
 
@@ -544,7 +586,8 @@ function renderIdleMainHero(state) {
   const hero = document.getElementById('idle-main-hero');
   if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'} hair-${state.heroStyle?.hair || 'short'} outfit-${state.heroStyle?.outfit || 'dojo'} energy-${state.heroStyle?.color || 'red'}`; }
   const avatar = document.getElementById('idle-main-hero-avatar');
-  const leader = (state.slots || []).find((slot)=>slot.character)?.character;
+  const active=(state.slots||[]).filter((slot)=>slot.character);
+  const leader=(active.find((slot)=>slot.character.id===state.strategy?.leaderCharacterId)||active[0])?.character;
   if (avatar) {
     avatar.className='idle-main-hero-avatar';
     avatar.innerHTML=leader?.imageUrl?'':`<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i>`;
@@ -584,14 +627,12 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const enemyNumber = Math.max(1, Math.min(enemiesRequired, battle?.enemyNumber || 1));
   const mechanicEl = document.getElementById('idle-boss-mechanic');
   if (mechanicEl) { const mechanic=battle?.mechanic;mechanicEl.classList.toggle('hidden', !boss); mechanicEl.innerHTML = boss&&mechanic ? `<i class="fas fa-shield-halved"></i> <b>${escapeHtml(mechanic.name)}</b> · ${escapeHtml(mechanic.description)}${mechanic.required?` <strong>${Math.min(mechanic.progress,mechanic.required)}/${mechanic.required}</strong>`:''}` : ''; }
-  const remaining = Math.max(0, (battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0));
-  const total = Math.max(1, battle?.xpForNextStage || 1);
+  const remaining = Math.max(0, battle?.hp ?? ((battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0)));
+  const total = Math.max(1, battle?.maxHp || battle?.xpForNextStage || 1);
   const guardianName = battle?.world?.enemyName || (boss ? `Boss de la zone ${zone}` : 'Gardien ennemi');
   const zoneEl = document.getElementById('idle-battle-zone');
   const tagEl = document.getElementById('idle-battle-tag');
   const titleEl = document.getElementById('idle-enemy-title');
-  const hpEl = document.getElementById('idle-enemy-hp-text');
-  const fill = document.getElementById('idle-xp-fill');
   const waveTrack = document.getElementById('idle-wave-track');
   const bossTimer=document.getElementById('idle-boss-timer');
   const modifierEl=document.getElementById('idle-world-modifier');
@@ -609,8 +650,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · ${battle?.world?.difficulty?.name?.toUpperCase()||'NORMAL'} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
   if (titleEl) titleEl.textContent = guardianName;
-  if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
-  idleAnimateEnemyHp(fill,remaining,total,stage);
+  idleResetVisualHp({ ...battle, hp: remaining, maxHp: total });
   // Le stage a avancé depuis le dernier rendu (au moins un kill) : retour
   // léger et fréquent, distinct de la célébration (confettis) réservée aux
   // vrais niveaux de Dojo.
@@ -630,8 +670,17 @@ function idleRenderSkillCooldown() {
   const left = Math.max(0, idleBurstReadyAt - Date.now());
   btn.disabled = left > 0;
   const teamBtn = document.getElementById('idle-skill-team'); const teamLabel = document.getElementById('idle-team-skill-status');
-  if (teamBtn && teamLabel) { const teamLeft = Math.max(0, idleTeamSkillReadyAt - Date.now()); const count = idleState?.slots?.filter((s) => s.character).length || 0; teamBtn.disabled = teamLeft > 0 || count < 2; teamLabel.textContent = count < 2 ? '2 héros requis' : (teamLeft > 0 ? `Recharge · ${Math.ceil(teamLeft / 1000)}s` : 'Prêt · rôles variés = bonus'); }
-  label.textContent = left > 0 ? `Recharge · ${Math.ceil(left / 1000)}s` : 'Prêt · ×25';
+  const skills=idleState?.battle?.skills||{};
+  if (teamBtn && teamLabel) { const teamLeft = Math.max(0, idleTeamSkillReadyAt - Date.now()); const count = idleState?.slots?.filter((s) => s.character).length || 0; teamBtn.disabled = teamLeft > 0 || count < 2; teamLabel.textContent = count < 2 ? '2 héros requis' : (teamLeft > 0 ? `Recharge · ${Math.ceil(teamLeft / 1000)}s` : `Prêt · ${idleFormatNumber(skills.teamDamage)} dégâts · ${skills.uniqueRoles||1} rôles`); }
+  label.textContent = left > 0 ? `Recharge · ${Math.ceil(left / 1000)}s` : `Prêt · ${idleFormatNumber(skills.burstDamage||((idleState?.click?.damage||1)*25))} dégâts · ×25`;
+}
+
+function idleShowSkillImpact(kind, damage, killed) {
+  const scene=document.getElementById('idle-scene');if(!scene)return;
+  const old=scene.querySelector('.idle-skill-impact');old?.remove();
+  const impact=document.createElement('div');impact.className=`idle-skill-impact ${kind}`;
+  impact.innerHTML=`<i class="fas ${kind==='ultimate'?'fa-burst':'fa-people-group'}"></i><span><small>${kind==='ultimate'?'ULTIME DÉCHAÎNÉ':'COMBO D’ÉQUIPE'}</small><b>−${idleFormatNumber(damage)} PV</b><em>${killed?'ENNEMI VAINCU':kind==='ultimate'?'Puissance ×25':'Bonus de rôles appliqué'}</em></span>`;
+  scene.appendChild(impact);setTimeout(()=>impact.remove(),1350);
 }
 
 async function idleUseBurst(event) {
@@ -641,8 +690,11 @@ async function idleUseBurst(event) {
     const result = await api('/api/idle/skill/burst', { method: 'POST', body: JSON.stringify({}) });
     idleBurstReadyAt = result.readyAt ? new Date(result.readyAt).getTime() : Date.now() + result.cooldownMs;
     const scene = document.getElementById('idle-scene');
-    scene?.classList.add('skill-burst'); setTimeout(() => scene?.classList.remove('skill-burst'), 600);
+    scene?.classList.add('skill-burst'); setTimeout(() => scene?.classList.remove('skill-burst'), 1100);
     idleSpawnFloat(`ULTIME −${idleFormatNumber(result.gained)}`, 'damage crit huge');
+    idleApplyVisualDamage(result.damage ?? result.gained);
+    idleShowSkillImpact('ultimate',result.damage??result.gained,result.killed);
+    sfx?.idleUltimate?.();
     idleCombatMotion('hero');
     await refreshIdleState();
   } catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
@@ -651,7 +703,7 @@ async function idleUseBurst(event) {
 
 async function idleUseTeamSkill(event) {
   event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt) return;
-  try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO −${idleFormatNumber(r.gained)}`, 'damage crit huge'); idleCombatMotion('team'); await refreshIdleState(); }
+  try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO −${idleFormatNumber(r.gained)}`, 'damage crit huge'); idleApplyVisualDamage(r.damage ?? r.gained); idleShowSkillImpact('combo',r.damage??r.gained,r.killed);sfx?.idleCombo?.();document.getElementById('idle-scene')?.classList.add('skill-team');setTimeout(()=>document.getElementById('idle-scene')?.classList.remove('skill-team'),850);idleCombatMotion('team'); await refreshIdleState(); }
   catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
   idleRenderSkillCooldown();
 }
@@ -676,6 +728,7 @@ async function chooseIdleBattleMode(mode){
 }
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));}catch(e){alert(e.message);}}
+async function chooseIdleLeader(characterId){try{const state=await api('/api/idle/team-leader',{method:'POST',body:JSON.stringify({characterId})});renderIdleState(state);idleNotify('Chef d’équipe modifié. Ce choix est visuel : les bonus viennent des rôles et talents.','success');}catch(e){idleNotify(e.message,'error');}}
 async function saveIdlePreset(){const name=document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} sauvegardé`,'fa-floppy-disk');}catch(e){alert(e.message);}}
 async function loadIdlePreset(name){try{renderIdleState(await api('/api/idle/team-preset/load',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} chargé`,'fa-users-gear');}catch(e){alert(e.message);}}
 async function chooseIdlePrestigePath(path){try{renderIdleState(await api('/api/idle/prestige-path',{method:'POST',body:JSON.stringify({path})}));}catch(e){alert(e.message);}}
@@ -1198,16 +1251,18 @@ function idleSlotHTML(slot) {
   }
   const c = slot.character;
   const role=idleRoleFor(c);
+  const isLeader=idleState?.strategy?.leaderCharacterId===c.id;
   const img = c.imageUrl ? ` style="background-image:url('${c.imageUrl}')"` : '';
   const equipment=c.equipments.map((e)=>{const meta=IDLE_ITEM_META[e.kind]||IDLE_ITEM_META.accessory;return e.empty?`<span class="empty" title="${meta.label} non équipé"><i class="fas ${meta.icon}"></i><div><small>${meta.label}</small><b>Vide</b></div></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer ${meta.label.toLowerCase()} · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b>+${Math.round(e.bonus*100)}%</b><em>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</em></span></button>`;}).join('');
   // data-action="pick" sur le conteneur : cliquer la carte propose de la
   // remplacer (un seul geste, au lieu de retirer puis réassigner). Les
   // boutons ×/niveau matchent leur propre data-action en premier dans la
   // délégation d'événements (cf. initIdleUI), donc pas de conflit.
-  return `<div class="idle-hero r-${c.rarity}" data-slot="${slot.index}" data-action="pick" title="${escapeHtml(c.name)} — cliquer pour remplacer">
+  return `<div class="idle-hero r-${c.rarity} ${isLeader?'is-leader':''}" data-slot="${slot.index}" data-action="pick" title="${escapeHtml(c.name)} — cliquer pour remplacer">
     <div class="idle-hero-portrait"${img}></div>
     <button class="idle-hero-remove" data-slot="${slot.index}" data-action="unassign" title="Retirer"><i class="fas fa-xmark"></i></button>
     <button class="idle-hero-details" data-slot="${slot.index}" data-action="details" title="Voir la fiche complète"><i class="fas fa-circle-info"></i><span>Fiche</span></button>
+    <button class="idle-hero-leader" data-character-id="${c.id}" data-action="leader" title="${isLeader?'Chef d’équipe actuel':'Définir comme chef d’équipe'}" ${isLeader?'disabled':''}><i class="fas fa-crown"></i><span>${isLeader?'Chef actuel':'Définir comme chef'}</span></button>
     <div class="idle-hero-name">${escapeHtml(c.name)}</div>
     <div class="idle-hero-meta">
       <span class="idle-hero-lvl">Nv. ${idleFormatNumber(c.level)}</span>
@@ -1286,7 +1341,7 @@ async function collectIdle() {
 async function clickIdle() {
   const now=Date.now();if(now<idleNextClickAt)return;idleNextClickAt=now+45;
   const predicted=idleState?.click?.damage||idleState?.click?.yield||1;
-  idleClickFeedback(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',idleFloatTier(predicted)].filter(Boolean).join(' '));
+  idleClickFeedback(predicted);idleApplyVisualDamage(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',idleFloatTier(predicted)].filter(Boolean).join(' '));
   idleClickPending=Math.min(10,idleClickPending+1);
   if(!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,160);
 }
@@ -1303,7 +1358,7 @@ async function flushIdleClicks(){
   if(idleState)idleState.essence=r.essence;
   if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);idleCombatMotion('hero');}
   if(r.passiveKills)idleSpawnFloat(`ÉQUIPE AUTO · ${r.passiveKills} élimination${r.passiveKills>1?'s':''}`,'xp');
-  idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · clic : ${r.kills} élimination${r.kills>1?'s':''}`:''}${r.passiveKills?` · équipe auto : ${r.passiveKills}`:''}`,(r.kills||r.passiveKills)?'fa-skull':'fa-hand-fist');
+  idleRecordStrikeBatch(count, r.damage || 0, r.kills || 0, r.passiveKills || 0);
   await refreshIdleState();
   if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
 }
@@ -1655,6 +1710,8 @@ function initIdleUI() {
   document.getElementById('idle-slots')?.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('[data-action="unassign"]');
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));
+    const leaderBtn=e.target.closest('[data-action="leader"]');
+    if(leaderBtn&&!leaderBtn.disabled)return chooseIdleLeader(Number(leaderBtn.dataset.characterId));
     const detailsBtn=e.target.closest('[data-action="details"]');
     if(detailsBtn)return openIdleCharacterSheet(idleState?.slots?.find((slot)=>slot.index===Number(detailsBtn.dataset.slot))?.character);
     const levelBtn = e.target.closest('[data-action="levelup"]');
