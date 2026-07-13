@@ -50,6 +50,14 @@ async function incr(key, ttlSec) {
   return e.n;
 }
 
+async function incrBy(key, amount, ttlSec) {
+  const delta=Math.max(0,Math.floor(Number(amount)||0));
+  if(redis){const n=await redis.incrby(key,delta);if(n===delta)await redis.expire(key,Math.max(1,ttlSec));return n;}
+  const now=Date.now();let e=mem.get(key);
+  if(!e||(e.exp&&e.exp<now)){e={exp:now+ttlSec*1000,n:0};mem.set(key,e);}
+  e.n=(e.n||0)+delta;return e.n;
+}
+
 function redisEnabled() { return !!redis; }
 
-module.exports = { setIfAbsent, incr, redisEnabled };
+module.exports = { setIfAbsent, incr, incrBy, redisEnabled };

@@ -19,6 +19,7 @@ let idleNextClickAt = 0;
 let idleClickPending = 0;
 let idleClickFlushTimer = null;
 let idleClickSending = false;
+let idleClickRetryBatch = null;
 let idleSyncInFlight = false;
 let idleOnboardingClass = 'warrior';
 let idleOnboardingCharacterId = null;
@@ -227,6 +228,7 @@ function renderIdleState(state) {
   document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleMissions(state.missions || []);
+  renderIdleChallenges(state.challenges||[]);
   renderIdleEvent(state.event);
   renderIdleAchievements(state.achievements || []);
   renderIdleGuide(state.guide);
@@ -366,7 +368,11 @@ function renderIdleTeamStrategy(state) {
   const bonus = best?.[1] >= 3 ? 25 : best?.[1] >= 2 ? 10 : active.length >= 3 ? 5 : 0;
   const bar = document.getElementById('idle-synergy-bar');
   if (bar) { const reserve=Math.round((state.strategy?.reserveBonus||0)*100);bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}${reserve?` · Réserve +${reserve}%`:''}</span></div>` : `<i class="fas fa-link"></i><div><b>${reserve?`Réserve +${reserve}%`:'Aucune synergie active'}</b><span>Chaque recrue en réserve donne +1% DPS, jusqu’à +20%.</span></div>`; }
+  const formations=document.getElementById('idle-formations');if(formations)formations.innerHTML=(state.strategy?.formations||[]).map((f)=>`<button data-idle-formation="${f.key}" class="${f.active?'active':''}"><b>${escapeHtml(f.name)}</b><small>${escapeHtml(f.description)}${f.multiplier>1?` · ×${f.multiplier.toFixed(2)}`:''}</small></button>`).join('');
+  const presets=document.getElementById('idle-presets');if(presets)presets.innerHTML=`<div class="idle-preset-save"><input id="idle-preset-name" maxlength="24" placeholder="Nom du preset"><button data-preset-save><i class="fas fa-floppy-disk"></i></button></div>${(state.strategy?.presets||[]).map((p)=>`<button data-preset-load="${escapeHtml(p.name)}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.formation)}</small><i class="fas fa-play"></i></button>`).join('')}`;
 }
+
+function renderIdleChallenges(items){const box=document.getElementById('idle-challenges');if(!box)return;box.innerHTML=items.map((c)=>`<div class="idle-challenge ${c.completed?'done':''}"><i class="fas ${c.icon}"></i><div><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.description)} · ${c.progress}/${c.target}</small><em style="--progress:${Math.min(100,c.progress/c.target*100)}%"></em></div><button data-challenge-claim="${c.key}" ${!c.completed||c.claimed?'disabled':''}>${c.claimed?'<i class="fas fa-check"></i>':`+${c.reward} <i class="fas fa-ticket"></i>`}</button></div>`).join('');}
 
 function renderIdleCodex(codex) {
   const masteries = document.getElementById('idle-masteries');
@@ -454,7 +460,7 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b> · ${escapeHtml(modifier.description)}`:'';modifierEl.title='Règle spéciale appliquée dans ce monde';}
   const objective=document.getElementById('idle-next-objective');
   if(objective){const remainingWaves=boss?0:10-wave;objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-flag-checkered'}"></i><span><b>${boss?'Boss en cours':`Boss dans ${remainingWaves} vague${remainingWaves>1?'s':''}`}</b><small>${boss?'Brise sa mécanique pour ouvrir le coffre':`Prochaine victoire : +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>Monde ${battle?.world?.index||zone}/10</strong>`;}
-  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · ${battle.timerSeconds || 30}s` : `VAGUE ${wave}/10`}`;
+  if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
   if (hpEl) hpEl.textContent = `${idleFormatNumber(remaining)} / ${idleFormatNumber(total)} PV${idleEtaSuffix(remaining)}`;
@@ -512,6 +518,13 @@ function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto
 async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){alert(e.message);}}
 async function chooseIdleBattleMode(mode){try{const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode})});renderIdleState(state);}catch(e){alert(e.message);}}
 async function chooseIdleBattleSpeed(speed){try{const state=await api('/api/idle/battle-speed',{method:'POST',body:JSON.stringify({speed})});renderIdleState(state);}catch(e){alert(e.message);}}
+async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));}catch(e){alert(e.message);}}
+async function saveIdlePreset(){const name=document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} sauvegardé`,'fa-floppy-disk');}catch(e){alert(e.message);}}
+async function loadIdlePreset(name){try{renderIdleState(await api('/api/idle/team-preset/load',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} chargé`,'fa-users-gear');}catch(e){alert(e.message);}}
+async function chooseIdlePrestigePath(path){try{renderIdleState(await api('/api/idle/prestige-path',{method:'POST',body:JSON.stringify({path})}));}catch(e){alert(e.message);}}
+async function claimIdleChallenge(key){try{const r=await api('/api/idle/challenge/claim',{method:'POST',body:JSON.stringify({key})});idleSpawnFloat(`DÉFI +${r.reward} SCEAUX`,'crit');renderIdleState(r.state);}catch(e){alert(e.message);}}
+async function loadIdleTelemetry(){const box=document.getElementById('idle-telemetry-summary');if(!box)return;box.innerHTML='<p class="hint">Chargement…</p>';try{const data=await api('/api/idle/telemetry/beta');box.innerHTML=`<div class="idle-telemetry-head"><b>${data.betaPlayers} testeurs</b><small>${data.windowDays} derniers jours</small></div>${data.events.map((e)=>`<span><b>${escapeHtml(e.event)}</b><strong>${e.count}</strong><small>${e.averageStage?`Stage moyen ${Math.round(e.averageStage)}`:''}</small></span>`).join('')}`;}catch(e){box.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}}
+async function sendIdleFeedback(event){event.preventDefault();const input=document.getElementById('idle-feedback-text');const status=document.getElementById('idle-feedback-status');const message=input?.value.trim()||'';if(message.length<10)return;const button=event.currentTarget.querySelector('button[type="submit"]');button.disabled=true;status.textContent='Envoi…';try{await api('/api/idle/feedback',{method:'POST',body:JSON.stringify({message,context:JSON.stringify({stage:idleState?.battle?.stage||null,world:idleState?.dojo?.decor?.theme||null,version:'v33'})})});input.value='';status.textContent='Merci, ton retour a bien été transmis.';}catch(e){status.textContent=e.message;}finally{button.disabled=false;}}
 
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
@@ -839,23 +852,15 @@ function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversair
   el.dataset.variant=String((Math.max(1,wave)-1)%4);
   el.classList.toggle('is-elite',kind==='elite');
   el.classList.toggle('is-boss',kind==='boss');
-  const fighters = {
-    wood: { name: 'Naruto Uzumaki', image: '/assets/idle/fighters/naruto.webp' },
-    garden: { name: 'Son Goku', image: '/assets/idle/fighters/goku.webp' },
-    temple: { name: 'Monkey D. Luffy', image: '/assets/idle/fighters/luffy.webp' },
-    gold: { name: 'Tanjiro Kamado', image: '/assets/idle/fighters/tanjiro.webp' },
-    celestial: { name: 'Eren Yeager', image: '/assets/idle/fighters/eren.webp' },
-    hueco: { name: 'Ichigo Kurosaki', image: '/assets/idle/fighters/ichigo.webp' },
-    ua: { name: 'Izuku Midoriya', image: '/assets/idle/fighters/deku.webp' },
-    shibuya: { name: 'Satoru Gojo', image: '/assets/idle/fighters/gojo.webp' },
-    aincrad: { name: 'Kirito', image: '/assets/idle/fighters/kirito.webp' },
-    void: { name: 'Jiren', image: '/assets/idle/fighters/jiren.webp' },
-  };
-  const fighter = fighters[theme];
-  if (fighter) {
+  const enemyAtlases = Object.fromEntries(['wood','garden','temple','gold','celestial','hueco','ua','shibuya','aincrad','void'].map((key)=>[key,`/assets/idle/enemies/world-${key}-v1.webp`]));
+  const atlas = enemyAtlases[theme];
+  if (atlas) {
+    const spriteIndex = kind === 'boss' ? 5 : kind === 'elite' ? 4 : (Math.max(1,wave)-1)%4;
+    const x = [0,50,100,0,50,100][spriteIndex];
+    const y = spriteIndex < 3 ? 0 : 100;
     el.classList.add('idle-scene-fighter');
-    el.innerHTML = `<img class="idle-fighter-sprite" src="${fighter.image}" alt="${escapeHtml(enemyName||fighter.name)}">
-      <span class="idle-boss-name"><small>${kind==='boss'?'BOSS':kind==='elite'?'ÉLITE':'ENNEMI'}</small><b>${escapeHtml(enemyName||fighter.name)}</b></span>`;
+    el.innerHTML = `<span class="idle-fighter-sprite idle-enemy-sprite" role="img" aria-label="${escapeHtml(enemyName)}" style="background-image:url('${atlas}');background-position:${x}% ${y}%"></span>
+      <span class="idle-boss-name"><small>${kind==='boss'?'BOSS':kind==='elite'?'ÉLITE':'ENNEMI'}</small><b>${escapeHtml(enemyName)}</b></span>`;
     return;
   }
   el.classList.remove('idle-scene-fighter');
@@ -886,6 +891,7 @@ function renderIdlePrestige(dojo) {
       ? `Prestige disponible : +${idleFormatNumber(dojo.prestige.reward)} Sagesse.`
       : `Atteins le stage ${dojo.prestige.minStage} pendant cette run (record : ${dojo.prestige.runBestStage}).`;
   }
+  const paths=document.getElementById('idle-prestige-paths');if(paths)paths.innerHTML=(dojo.prestige.paths||[]).map((p)=>`<button data-prestige-path="${p.key}" class="${p.selected?'active':''}" ${dojo.prestige.level<1?'disabled':''}><i class="fas ${p.key==='fist'?'fa-hand-fist':p.key==='army'?'fa-users':p.key==='time'?'fa-clock':'fa-scale-balanced'}"></i><b>${escapeHtml(p.name)}</b><small>Équipe ×${p.prod.toFixed(2)} · Clic ×${p.click.toFixed(2)}</small></button>`).join('');
 }
 
 // Description lisible d'un Ancient selon son `kind` (cf. ANCIENTS côté serveur,
@@ -954,6 +960,7 @@ function idleSlotHTML(slot) {
     <div class="idle-hero-stats"><span><small>Production de base</small><b>${idleFormatNumber(c.baseRate)}/s</b></span><span><small>Gain par niveau</small><b>+${Math.round(c.scaling * 100)}%</b></span></div>
     <div class="idle-hero-passive ${c.passiveUnlocked ? 'unlocked' : 'locked'}"><i class="fas ${c.passiveUnlocked ? 'fa-wand-sparkles' : 'fa-lock'}"></i><span><b>Passif</b><small>${escapeHtml(c.passive)}</small></span><em>${c.passiveUnlocked ? 'Actif' : 'Niv. 10'}</em></div>
     <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
+    <div class="idle-character-talent combat"><i class="fas fa-bolt"></i><span><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'Compétence de combat')}</small></span></div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
     <div class="idle-equipment">${c.equipments.map((e) => e.empty?`<span class="empty" title="Emplacement vide"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><small>Vide</small></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><span><b>+${Math.round(e.bonus*100)}%</b><small>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</small></span></button>`).join('')}</div>
     <div class="idle-level-buys">${[1,5,10,100,'max'].map((n) => {const cost=n==='max'?c.levelUpCost:c.levelCosts[n];return `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="${n==='max'?'Acheter le maximum abordable':`Monter de ${n} niveaux · coût ${idleFormatNumber(cost)}`}"${idleState && idleState.essence < cost ? ' disabled' : ''}><b>${n==='max'?'MAX':`×${n}`}</b><small>${n==='max'?'budget':idleFormatNumber(cost)}</small></button>`;}).join('')}</div>
@@ -1027,12 +1034,14 @@ async function clickIdle() {
 }
 
 async function flushIdleClicks(){
-  idleClickFlushTimer=null;if(idleClickSending||!idleClickPending)return;
-  const count=idleClickPending;idleClickPending=0;idleClickSending=true;let r;
-  try{r=await api('/api/idle/click',{method:'POST',body:JSON.stringify({count})});}
-  catch{idleClickPending=Math.min(10,idleClickPending+count);}
+  idleClickFlushTimer=null;if(idleClickSending||(!idleClickPending&&!idleClickRetryBatch))return;
+  const batch=idleClickRetryBatch||{count:idleClickPending,requestId:(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9_-]/g,'')};if(!idleClickRetryBatch)idleClickPending=0;idleClickSending=true;let r;
+  try{r=await api('/api/idle/click',{method:'POST',body:JSON.stringify(batch)});idleClickRetryBatch=null;}
+  catch{idleClickRetryBatch=batch;}
   finally{idleClickSending=false;}
-  if(!r){if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,250);return;}
+  if(!r){if((idleClickPending||idleClickRetryBatch)&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,250);return;}
+  if(r.duplicate){await refreshIdleState();if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);return;}
+  const count=r.count||batch.count;
   if(idleState)idleState.essence=r.essence;
   if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)} PV`,'crit');idleCombatMotion('hero');}
   idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · ${r.kills} victoire${r.kills>1?'s':''}`:''}`,r.kills?'fa-skull':'fa-hand-fist');
@@ -1293,6 +1302,12 @@ function initIdleUI() {
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
   document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-auto-skills')?.addEventListener('click',toggleIdleAutoSkills);
+  document.getElementById('idle-formations')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-idle-formation]');if(b)chooseIdleFormation(b.dataset.idleFormation);});
+  document.getElementById('idle-presets')?.addEventListener('click',(e)=>{const save=e.target.closest('[data-preset-save]');if(save)return saveIdlePreset();const load=e.target.closest('[data-preset-load]');if(load)return loadIdlePreset(load.dataset.presetLoad);});
+  document.getElementById('idle-prestige-paths')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-prestige-path]');if(b&&!b.disabled)chooseIdlePrestigePath(b.dataset.prestigePath);});
+  document.getElementById('idle-challenges')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-challenge-claim]');if(b&&!b.disabled)claimIdleChallenge(b.dataset.challengeClaim);});
+  document.getElementById('idle-telemetry-load')?.addEventListener('click',loadIdleTelemetry);
+  document.getElementById('idle-feedback-form')?.addEventListener('submit',sendIdleFeedback);
   document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-ranking-btn')?.addEventListener('click',openIdleRanking);document.getElementById('idle-ranking-close')?.addEventListener('click',()=>document.getElementById('idle-ranking-modal')?.classList.add('hidden'));document.getElementById('idle-ranking-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-ranking-modal')e.currentTarget.classList.add('hidden');});
   document.getElementById('idle-season-card')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-season-tier]');if(b&&!b.disabled)claimIdleSeason(Number(b.dataset.seasonTier));});

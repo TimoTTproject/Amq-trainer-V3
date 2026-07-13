@@ -1671,6 +1671,8 @@
           </div>
           <div class="profile-section idle-codex-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-book-open"></i> Codex des mondes</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-world-codex" id="idle-world-codex"></div></div></div>
           <div class="profile-section idle-missions-panel"><h3><i class="fas fa-scroll"></i> Missions d’Anime Ascension</h3><div class="idle-missions" id="idle-missions"></div></div>
+          <div class="profile-section"><h3><i class="fas fa-tower-observation"></i> Défis récurrents</h3><div class="idle-challenges" id="idle-challenges"></div></div>
+          <div class="profile-section idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-chart-line"></i> Observatoire bêta</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><button class="btn-secondary" id="idle-telemetry-load"><i class="fas fa-rotate"></i> Charger les statistiques</button><div id="idle-telemetry-summary"></div><form class="idle-feedback" id="idle-feedback-form"><label for="idle-feedback-text"><b>Signaler un problème ou une idée</b><small>Le stage et la version sont joints automatiquement.</small></label><textarea id="idle-feedback-text" minlength="10" maxlength="1000" required placeholder="Décris ce qui s’est passé et ce que tu attendais…"></textarea><button class="btn-primary" type="submit"><i class="fas fa-paper-plane"></i> Envoyer aux développeurs</button><span id="idle-feedback-status" aria-live="polite"></span></form></div></div>
         </section>
 
         <!-- Onglet ÉQUIPE : emplacements d'entraînement -->
@@ -1678,6 +1680,7 @@
           <div class="idle-help"><i class="fas fa-users-gear"></i><div><b>Équipe et production</b><span>Assigne tes recrues aux emplacements. Elles combattent seules, produisent de l’Essence par seconde et activent des synergies.</span></div></div>
           <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
+          <div class="idle-strategy-tools"><div><h3>Formation tactique</h3><div class="idle-formations" id="idle-formations"></div></div><div><h3>Presets d’équipe</h3><div class="idle-presets" id="idle-presets"></div></div></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-star"></i> Maîtrise des licences</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-masteries" id="idle-masteries"></div></div></div>
           <h3 class="idle-section-title">Équipe recrutée</h3>
           <div class="idle-team-tools"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Achète en priorité les niveaux offrant le meilleur gain de DPS par Essence.</small></span></div><button class="btn-primary" id="idle-optimize-team"><i class="fas fa-bolt"></i> Optimiser</button></div>
@@ -1700,6 +1703,7 @@
             </div>
             <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
           </div>
+          <div class="idle-prestige-paths" id="idle-prestige-paths"></div>
 
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-landmark"></i> Ancients <small>Bonus permanents</small></span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div id="idle-ancients" class="idle-upgrades"></div></div></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-trophy"></i> Succès permanents</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-achievements" id="idle-achievements"></div></div></div>
