@@ -16,10 +16,20 @@ let idleLastRecruit = null; // personnage affiché dans la révélation de recru
 let idleBurstReadyAt = 0;
 let idleTeamSkillReadyAt = 0;
 let idleNextClickAt = 0;
+let idleClickPending = 0;
+let idleClickFlushTimer = null;
+let idleClickSending = false;
 let idleSyncInFlight = false;
 let idleOnboardingClass = 'warrior';
 let idleOnboardingCharacterId = null;
 let idleOnboardingSubmitting = false;
+let idleCombatEntries = [];
+
+function idleAddCombatLog(message,icon='fa-bolt'){
+  idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
+  const box=document.getElementById('idle-combat-log');if(!box)return;
+  box.innerHTML=idleCombatEntries.map((entry)=>`<span><i class="fas ${entry.icon}"></i>${escapeHtml(entry.message)}<small>${entry.at.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</small></span>`).join('');
+}
 
 function idleFormatNumber(n) {
   n = Number(n || 0);
@@ -77,13 +87,13 @@ async function idleBackgroundSync() {
   if (idleSyncInFlight) return;
   idleSyncInFlight = true;
   try {
-    await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
+    const state=await api('/api/idle/collect',{method:'POST',body:JSON.stringify({})});
+    renderIdleState(state);
   } catch {
     return; // pas grave : la prochaine synchro (6 s plus tard) rattrapera
   } finally {
     idleSyncInFlight = false;
   }
-  refreshIdleState();
 }
 
 // Onglets de la barre du bas (façon appli mobile) : home = scène, team =
@@ -440,6 +450,10 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const titleEl = document.getElementById('idle-enemy-title');
   const hpEl = document.getElementById('idle-enemy-hp-text');
   const fill = document.getElementById('idle-xp-fill');
+  const modifierEl=document.getElementById('idle-world-modifier');
+  if(modifierEl){const modifier=battle?.world?.modifier;modifierEl.innerHTML=modifier?`<i class="fas fa-diamond"></i> <b>${escapeHtml(modifier.name)}</b> · ${escapeHtml(modifier.description)}`:'';modifierEl.title='Règle spéciale appliquée dans ce monde';}
+  const objective=document.getElementById('idle-next-objective');
+  if(objective){const remainingWaves=boss?0:10-wave;objective.innerHTML=`<i class="fas ${boss?'fa-crown':'fa-flag-checkered'}"></i><span><b>${boss?'Boss en cours':`Boss dans ${remainingWaves} vague${remainingWaves>1?'s':''}`}</b><small>${boss?'Brise sa mécanique pour ouvrir le coffre':`Prochaine victoire : +${idleFormatNumber(battle?.reward||0)} Essence`}</small></span><strong>Monde ${battle?.world?.index||zone}/10</strong>`;}
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · MONDE ${battle?.world?.index||zone} · ${boss ? `BOSS · ${battle.timerSeconds || 30}s` : `VAGUE ${wave}/10`}`;
   if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.isElite?'ÉLITE':'ENNEMI'; tagEl.classList.toggle('boss', boss); }
   if (titleEl) titleEl.textContent = guardianName;
@@ -527,16 +541,17 @@ function idleShowLoot(loot) {
 }
 
 function renderIdleRecruit(recruit) {
-  const costLabel = `(${idleFormatNumber(recruit.nextCost)} sceau${recruit.nextCost>1?'x':''})`;
+  const costLabel = `${idleFormatNumber(recruit.nextCost)} <i class="fas fa-ticket"></i> · ${idleFormatNumber(recruit.balance)} dispo.`;
   const affordable = recruit.balance >= recruit.nextCost;
   for (const id of ['idle-top-recruit-cost', 'idle-recruit-cost']) {
     const el = document.getElementById(id);
-    if (el) el.textContent = costLabel;
+    if (el) el.innerHTML = costLabel;
   }
   for (const id of ['idle-top-recruit-btn', 'idle-recruit-btn']) {
     const btn = document.getElementById(id);
-    if (btn) { btn.disabled = !affordable; btn.title = `Epic ou mieux garanti dans ${recruit.guaranteedEpicIn || 10} recrutement(s)`; }
+    if (btn) { btn.disabled = !affordable; btn.title = `Rare ${recruit.odds?.rare||70}% · Épique ${recruit.odds?.epic||20}% · Légendaire ${recruit.odds?.legendary||8}% · Mythique ${recruit.odds?.mythic||2}% · Épique garanti dans ${recruit.guaranteedEpicIn||10} recrutement(s) · Prochain coût ${recruit.nextCostAfter}`; }
   }
+  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>${idleFormatNumber(recruit.balance)} Sceaux</b> · missions : +${recruit.income?.daily||3}/jour · +${recruit.income?.weekly||3}/semaine · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
@@ -600,7 +615,7 @@ function renderIdleDecor(dojo, prevDojo,battle,prevBattle) {
   document.getElementById('idle-dojo-level').textContent = `Niveau ${idleFormatNumber(dojo.level)}`;
   document.getElementById('idle-decor-flavor').textContent = world.flavor || dojo.decor.flavor || '';
   idleRenderBackdrop(world.backgroundUrl||dojo.decor.backgroundUrl);
-  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':'normal');
+  idleRenderBoss(world.boss||dojo.decor.boss, world.theme, battle?.world?.wave||1, battle?.isBoss?'boss':battle?.isElite?'elite':'normal',battle?.world?.enemyName);
   // La barre #idle-xp-fill est la barre de PV du combat (cf. renderIdleBattle,
   // pilotée par le stage) — ici on ne fait QUE le texte de progression du Dojo.
   const next = document.getElementById('idle-decor-next');
@@ -812,7 +827,7 @@ function idleRenderBackdrop(url) {
 
 // Le « gardien » mythique du palier trône au centre de la scène — vrai
 // personnage AniList, pas une illustration générique.
-function idleRenderBoss(boss, theme, wave=1, kind='normal') {
+function idleRenderBoss(boss, theme, wave=1, kind='normal', enemyName='Adversaire') {
   const el = document.getElementById('idle-decor-boss');
   if (!el) return;
   if (!boss && !['wood', 'garden', 'temple', 'gold', 'celestial', 'hueco', 'ua', 'shibuya', 'aincrad', 'void'].includes(theme)) {
@@ -839,8 +854,8 @@ function idleRenderBoss(boss, theme, wave=1, kind='normal') {
   const fighter = fighters[theme];
   if (fighter) {
     el.classList.add('idle-scene-fighter');
-    el.innerHTML = `<img class="idle-fighter-sprite" src="${fighter.image}" alt="${escapeHtml(fighter.name)}">
-      <span class="idle-boss-name"><small>${kind==='boss'?'Boss de monde':kind==='elite'?'Adversaire élite':'Adversaire'}</small></span>`;
+    el.innerHTML = `<img class="idle-fighter-sprite" src="${fighter.image}" alt="${escapeHtml(enemyName||fighter.name)}">
+      <span class="idle-boss-name"><small>${kind==='boss'?'BOSS':kind==='elite'?'ÉLITE':'ENNEMI'}</small><b>${escapeHtml(enemyName||fighter.name)}</b></span>`;
     return;
   }
   el.classList.remove('idle-scene-fighter');
@@ -958,11 +973,11 @@ function renderIdleUpgrades(state) {
   const items = [
     {
       type: 'prod', icon: 'fa-brain', title: 'Discipline', level: state.prod.level, maxed: state.prod.maxed, cost: state.prod.nextCost,
-      desc: `Production totale ×${state.prod.multiplier.toFixed(2)}`,
+      desc: `Production totale ×${state.prod.multiplier.toFixed(2)} → ×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,
     },
     {
       type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost,
-      desc: `Dégâts réels par clic : ${state.click.damage ?? state.click.yield}`,
+      desc: `Dégâts par clic : ${state.click.damage ?? state.click.yield} → ${state.click.nextDamage ?? state.click.damage ?? state.click.yield}`,
     },
     {
       type: 'slot', icon: 'fa-square-plus', title: 'Nouvel emplacement', level: state.slotsUnlocked, maxed: state.slotsUnlocked >= state.maxSlots, cost: nextSlotCost,
@@ -987,7 +1002,8 @@ async function collectIdle() {
   idleSyncInFlight = true;
   const pending = idleState?.pendingEssence || 0;
   try {
-    await api('/api/idle/collect', { method: 'POST', body: JSON.stringify({}) });
+    const state=await api('/api/idle/collect',{method:'POST',body:JSON.stringify({})});
+    renderIdleState(state);
   } catch (e) {
     alert(e.message);
     return;
@@ -1000,29 +1016,28 @@ async function collectIdle() {
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
   const essenceEl = document.getElementById('idle-essence-val');
   if (essenceEl) idleBump(essenceEl);
-  refreshIdleState();
 }
 
 async function clickIdle() {
-  const now = Date.now();
-  if (now < idleNextClickAt) return;
-  idleNextClickAt = now + 110;
-  // Retour immédiat : l'animation part au pointer-down, sans attendre le
-  // réseau. Le serveur reste autoritaire pour le solde et l'anti-spam.
-  const predicted = idleState?.click?.damage || idleState?.click?.yield || 1;
-  idleClickFeedback(predicted);
-  idleSpawnFloat(`-${idleFormatNumber(predicted)} PV`, idleFloatTier(predicted));
-  let r;
-  try {
-    r = await api('/api/idle/click', { method: 'POST', body: JSON.stringify({}) });
-  } catch {
-    return; // 429 (anti-spam) ou réseau : on ignore silencieusement, pas de quoi bloquer le joueur
-  }
-  if (idleState) idleState.essence = r.essence;
-  if(r.critical){idleSpawnFloat(`CRITIQUE −${idleFormatNumber(r.damage || r.gained)} PV`,'crit');idleCombatMotion('hero');}
-  // Recharge l'état autoritaire pour animer les PV et détecter immédiatement
-  // le passage à la vague/zone suivante après le coup.
-  refreshIdleState();
+  const now=Date.now();if(now<idleNextClickAt)return;idleNextClickAt=now+45;
+  const predicted=idleState?.click?.damage||idleState?.click?.yield||1;
+  idleClickFeedback(predicted);idleSpawnFloat(`-${idleFormatNumber(predicted)} PV`,idleFloatTier(predicted));
+  idleClickPending=Math.min(10,idleClickPending+1);
+  if(!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,160);
+}
+
+async function flushIdleClicks(){
+  idleClickFlushTimer=null;if(idleClickSending||!idleClickPending)return;
+  const count=idleClickPending;idleClickPending=0;idleClickSending=true;let r;
+  try{r=await api('/api/idle/click',{method:'POST',body:JSON.stringify({count})});}
+  catch{idleClickPending=Math.min(10,idleClickPending+count);}
+  finally{idleClickSending=false;}
+  if(!r){if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,250);return;}
+  if(idleState)idleState.essence=r.essence;
+  if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)} PV`,'crit');idleCombatMotion('hero');}
+  idleAddCombatLog(`${count} frappe${count>1?'s':''} · ${idleFormatNumber(r.damage||0)} dégâts${r.kills?` · ${r.kills} victoire${r.kills>1?'s':''}`:''}`,r.kills?'fa-skull':'fa-hand-fist');
+  await refreshIdleState();
+  if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);
 }
 
 function idleClickFeedback(gained) {
@@ -1090,7 +1105,7 @@ async function ascendIdleSlot(slotIndex) {
   try { const state = await api('/api/idle/slot-ascend', { method: 'POST', body: JSON.stringify({ slotIndex }) }); if (typeof burstConfetti === 'function') burstConfetti(60); idleSpawnFloat('ASCENSION · PUISSANCE DOUBLÉE', 'crit'); renderIdleState(state); }
   catch (e) { alert(e.message); }
 }
-async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');if(typeof sfx!=='undefined'&&sfx.win)sfx.win();renderIdleState(state);}catch(e){alert(e.message);}finally{if(btn)btn.disabled=false;}}
+async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});idleSpawnFloat(`${state.optimization.bought} NIVEAUX · -${idleFormatNumber(state.optimization.spent)}`,'crit');idleAddCombatLog(`Optimisation : ${state.optimization.bought} niveaux achetés`,'fa-wand-magic-sparkles');if(typeof sfx!=='undefined'&&sfx.win)sfx.win();renderIdleState(state);}catch(e){alert(e.message);}finally{if(btn)btn.disabled=false;}}
 async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){alert(e.message);}}
 
 async function buyIdleUpgrade(type, cardEl) {
@@ -1101,6 +1116,7 @@ async function buyIdleUpgrade(type, cardEl) {
     return;
   }
   if (typeof sfx !== 'undefined' && sfx.tick) sfx.tick();
+  idleAddCombatLog(`${type==='click'?'Concentration':type==='prod'?'Discipline':'Emplacement'} amélioré`,'fa-arrow-trend-up');
   if (cardEl) idleCardBump(cardEl);
   refreshIdleState();
 }
@@ -1169,6 +1185,7 @@ async function recruitIdle() {
     burstConfetti(r.recruited.rarity === 'mythic' ? 50 : 30);
   }
   renderIdleState(r);
+  idleAddCombatLog(`${r.recruited.name} rejoint le Dojo`,'fa-user-plus');
   showIdleRecruitReveal(r.recruited);
   await refreshIdlePickerList(); // no-op si la modale n'est pas ouverte
 }

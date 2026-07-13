@@ -1617,6 +1617,7 @@
                 <div>
                   <span class="idle-battle-kicker" id="idle-battle-zone">ZONE 1 · VAGUE 1/10</span>
                   <h2 id="idle-decor-name">—</h2>
+                  <span class="idle-world-modifier" id="idle-world-modifier"></span>
                 </div>
                 <div class="idle-scene-chips">
                   <span class="idle-chip idle-chip-danger" id="idle-battle-tag">GARDIEN</span>
@@ -1644,6 +1645,8 @@
               <span><i class="fas fa-hand-fist"></i> Clic <b id="idle-combat-click">+0</b></span>
               <span><i class="fas fa-users"></i> Équipe <b id="idle-combat-team">0/s</b></span>
             </div>
+            <div class="idle-next-objective" id="idle-next-objective"></div>
+            <div class="idle-combat-log" id="idle-combat-log" aria-live="polite"></div>
             <div class="idle-speed-control"><span><i class="fas fa-forward-fast"></i> Vitesse de combat</span><div id="idle-speed-buttons"></div></div>
             <div class="idle-mode-control" id="idle-mode-control"><button data-battle-mode="progress"><i class="fas fa-route"></i><span><b>Progression</b><small>Avance dans les vagues</small></span></button><button data-battle-mode="farm"><i class="fas fa-coins"></i><span><b>Farm</b><small>Gagne sans avancer</small></span></button></div>
             <button class="idle-auto-skills" id="idle-auto-skills"><i class="fas fa-robot"></i><span><b>Compétences automatiques</b><small id="idle-auto-skills-label">Débloquées au niveau 50</small></span><i class="fas fa-toggle-off"></i></button>
@@ -1656,6 +1659,7 @@
               <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige des dégâts ; l’Essence tombe quand le gardien est vaincu"><i class="fas fa-hand-fist"></i> Attaquer <span id="idle-click-yield"></span></button>
             </div>
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
+            <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
           </div>
 
           <!-- Panneau Progression : frise des paliers de décor (équivalent
@@ -1745,7 +1749,7 @@
     </div>
     <div id="idle-guide-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Guide Anime Ascension"><div class="modal-card idle-guide-card"><button class="modal-close" id="idle-guide-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-compass"></i> Guide Anime Ascension</h3><p class="hint">Suis ces étapes pour comprendre les systèmes essentiels.</p><div class="idle-guide-progress"><span id="idle-guide-progress-text">0/6</span><em id="idle-guide-progress-bar"></em></div><div id="idle-guide-list"></div></div></div>
     <div id="idle-ranking-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Classement Anime Ascension"><div class="modal-card idle-ranking-card"><button class="modal-close" id="idle-ranking-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-ranking-star"></i> Classement Anime Ascension</h3><p class="hint">Les joueurs sont classés selon leur progression totale.</p><div class="idle-ranking-head"><span>#</span><span>Joueur</span><span>Vague</span><span>Niveau</span><span>Prestige</span></div><div id="idle-ranking-list"><p class="hint">Chargement…</p></div></div></div>
-    <div id="idle-class-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Personnaliser le héros"><div class="modal-card idle-class-card"><button class="modal-close" id="idle-class-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-wand-sparkles"></i> Personnaliser mon héros</h3><p class="hint">Crée ton apparence puis choisis ta classe. De nouveaux éléments se débloquent avec le niveau d’Anime Ascension.</p><h4>Coiffure</h4><div class="idle-style-grid" id="idle-hair-grid"></div><h4>Tenue</h4><div class="idle-style-grid" id="idle-outfit-grid"></div><h4>Couleur d’énergie</h4><div class="idle-style-grid" id="idle-color-grid"></div><h4>Classe de combat</h4><div class="idle-class-grid" id="idle-class-grid"></div><h4>Spécialisation</h4><div class="idle-style-grid" id="idle-spec-grid"></div><h4>Aura</h4><div class="idle-style-grid" id="idle-aura-grid"></div><h4>Posture</h4><div class="idle-style-grid" id="idle-stance-grid"></div><h4>Titre</h4><div class="idle-style-grid" id="idle-title-grid"></div></div></div>
+    <div id="idle-class-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Personnaliser le chef d'équipe"><div class="modal-card idle-class-card"><button class="modal-close" id="idle-class-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-wand-magic-sparkles"></i> Style du chef d'équipe</h3><p class="hint">Le personnage placé dans le premier emplacement est ton chef. Personnalise son énergie, sa classe et son titre.</p><h4>Couleur d’énergie</h4><div class="idle-style-grid" id="idle-color-grid"></div><h4>Classe de combat</h4><div class="idle-class-grid" id="idle-class-grid"></div><h4>Spécialisation</h4><div class="idle-style-grid" id="idle-spec-grid"></div><h4>Aura</h4><div class="idle-style-grid" id="idle-aura-grid"></div><h4>Posture</h4><div class="idle-style-grid" id="idle-stance-grid"></div><h4>Titre</h4><div class="idle-style-grid" id="idle-title-grid"></div><div class="hidden" id="idle-hair-grid"></div><div class="hidden" id="idle-outfit-grid"></div></div></div>
 
     <!-- Sélecteur de personnage pour un emplacement du Dojo -->
     <div id="idle-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Choisir un personnage">
