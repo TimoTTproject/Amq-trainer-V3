@@ -1857,6 +1857,8 @@ function initIdleUI() {
     e.stopPropagation();
     openIdleClassPicker();
   });
+  document.getElementById('idle-main-hero')?.addEventListener('click',(e)=>{e.stopPropagation();if(!e.target.closest('#idle-customize-hero'))openIdleClassPicker();});
+  document.getElementById('idle-main-hero')?.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();openIdleClassPicker();}});
   document.getElementById('idle-class-close')?.addEventListener('click', () => document.getElementById('idle-class-picker').classList.add('hidden'));
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-class-picker') e.currentTarget.classList.add('hidden'); const b = e.target.closest('[data-hero-class]'); if (b) chooseIdleHeroClass(b.dataset.heroClass); });
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { const b=e.target.closest('[data-style-key]'); if(b&&!b.disabled) chooseIdleHeroStyle(b.dataset.styleType,b.dataset.styleKey); });
