@@ -87,9 +87,16 @@ test('les gardiens sont comptés uniquement lors dune nouvelle progression', () 
 });
 
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
-  const weapon=idleItemDrop(5,'weapon','legendary',.11,'Hueco Mundo');const accessory=idleItemDrop(5,'accessory','legendary',.11,'Hueco Mundo');
-  assert.equal(weapon.effectKey,'assault');assert.ok(itemProductionBonus(weapon)>.11);
-  assert.equal(accessory.effectKey,'salvage');assert.ok(itemSalvageValue(accessory)>25);
+  const weapon=idleItemDrop(5,'weapon','legendary',.11,'Hueco Mundo');const accessory=idleItemDrop(3,'accessory','legendary',.11,'Hueco Mundo');
+  assert.equal(weapon.effectKey,'precision');assert.ok(itemProductionBonus(weapon)>.11);
+  assert.equal(accessory.effectKey,'salvage');assert.equal(itemProductionBonus(accessory),.11);assert.ok(itemSalvageValue(accessory)>25);
+});
+
+test('inventaire : les mondes et les paliers créent des familles variées',()=>{
+  const effects=new Set([2,5,8].map((tier)=>idleItemDrop(tier,'relic','rare',.03,'Konoha').effectKey));
+  assert.equal(effects.size,3);
+  assert.match(idleItemDrop(1,'weapon','rare',.03,'Konoha').name,/Kunai de la Feuille/);
+  assert.match(idleItemDrop(1,'weapon','rare',.03,'Namek').name,/Lame de Ki/);
 });
 
 test('inventaire : une panoplie des trois types accorde le bonus complet',()=>{
