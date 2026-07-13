@@ -7,6 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
+const { idleMissionList,seasonActivityScore,weeklyConvergence,bossChestRewards,progressionBossesCrossed,SEASON_TIERS }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -48,6 +49,40 @@ test.beforeEach(() => {
   prisma.idleProgressCounter.findMany = async () => [];
   prisma.idleProgressCounter.upsert = async () => ({});
   idleRoutes.decorArtCache.clear();
+});
+
+test('difficulté longue durée : missions tournantes et hebdomadaires renforcées', () => {
+  const missions=idleMissionList({},0,0,1,new Map());
+  assert.equal(missions.filter((m)=>m.cadence==='Quotidienne').length,3);
+  assert.equal(missions.filter((m)=>m.cadence==='Hebdomadaire').length,4);
+  assert.ok(missions.filter((m)=>m.cadence==='Hebdomadaire').every((m)=>m.target>=30));
+});
+
+test('saison : huit paliers et aucune action unique ne termine le parcours', () => {
+  const period='2026-07';
+  const killsOnly=seasonActivityScore(new Map([[`kill:${period}`,999999]]),period);
+  assert.equal(SEASON_TIERS.length,8);
+  assert.ok(killsOnly.score<SEASON_TIERS.at(-1).level);
+  assert.equal(killsOnly.breakdown.find((x)=>x.key==='kill').value,5000);
+});
+
+test('défi hebdomadaire : toutes les familles d actions sont obligatoires', () => {
+  const periods={week:'2026-07-13'};
+  const partial=weeklyConvergence(new Map([[`kill:${periods.week}`,99999]]),periods);
+  assert.equal(partial.completed,false);
+  const full=new Map([['kill',1500],['click',1000],['skill',40],['upgrade',100]].map(([key,value])=>[`${key}:${periods.week}`,value]));
+  assert.equal(weeklyConvergence(full,periods).completed,true);
+});
+
+test('coffres : les paliers majeurs ajoutent Golds et rareté garantie', () => {
+  assert.equal(bossChestRewards(5).lootRarity,'legendary');
+  assert.ok(bossChestRewards(5).goldReward>0);
+  assert.equal(bossChestRewards(10).lootRarity,'mythic');
+});
+
+test('les gardiens sont comptés uniquement lors dune nouvelle progression', () => {
+  assert.equal(progressionBossesCrossed(9,31,'progress'),3);
+  assert.equal(progressionBossesCrossed(10,10,'farm'),0);
 });
 
 test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {
@@ -185,7 +220,7 @@ test('passage de niveau : refuse une série incomplète puis valide atomiquement
   assert.equal(res.status, 400);
   assert.match(res.json.error, /épreuves/);
 
-  user = dbUser({ idleRankLevel:1, idleRankKills:15, idleRankClicks:35, idleRankUpgrades:3, idleSeals:2 });
+  user = dbUser({ idleRankLevel:1, idleRankKills:23, idleRankClicks:55, idleRankUpgrades:4, idleSeals:2 });
   prisma.user.updateMany = async ({ where, data }) => {
     assert.equal(where.idleRankLevel, 1);
     user = { ...user, idleRankLevel:2, idleRankKills:0, idleRankClicks:0, idleRankUpgrades:0, idleRankBosses:0, idleSeals:user.idleSeals + data.idleSeals.increment, idleRankStartedAt:data.idleRankStartedAt };
