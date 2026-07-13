@@ -378,11 +378,11 @@ async function loadSlots(tx, userId) {
 }
 
 const HERO_CLASSES = {
-  warrior: { name: 'Guerrier', icon: 'fa-shield-halved', description: '+50% frappe et 20% de critique', click: 1.5, prod: 1, burst: 1, team: 1,crit:.20 },
-  mage: { name: 'Mage', icon: 'fa-hat-wizard', description: '+75% puissance de l’Ultime', click: 1, prod: 1, burst: 1.75, team: 1 },
-  ninja: { name: 'Ninja', icon: 'fa-user-ninja', description: '+50% puissance du Combo', click: 1, prod: 1, burst: 1, team: 1.5 },
-  swordsman: { name: 'Épéiste', icon: 'fa-khanda', description: '+25% frappe, exécution sous 20% PV', click: 1.25, prod: 1.1, burst: 1, team: 1,execute:2 },
-  summoner: { name: 'Invocateur', icon: 'fa-dragon', description: '+20% production de l’équipe', click: 1, prod: 1.2, burst: 1, team: 1 },
+  warrior: { name: 'Guerrier', icon: 'fa-shield-halved', description: '+50% frappe · 20% de critique (×2)', click: 1.5, prod: 1, burst: 1, team: 1,crit:.20 },
+  mage: { name: 'Mage', icon: 'fa-hat-wizard', description: '+75% de dégâts avec l’Ultime', click: 1, prod: 1, burst: 1.75, team: 1 },
+  ninja: { name: 'Ninja', icon: 'fa-user-ninja', description: '+50% de dégâts avec le Combo', click: 1, prod: 1, burst: 1, team: 1.5 },
+  swordsman: { name: 'Épéiste', icon: 'fa-khanda', description: '+25% frappe · +10% DPS · Exécution ×2 sous 20% PV', click: 1.25, prod: 1.1, burst: 1, team: 1,execute:2 },
+  summoner: { name: 'Invocateur', icon: 'fa-dragon', description: '+20% de DPS d’équipe', click: 1, prod: 1.2, burst: 1, team: 1 },
 };
 const HERO_SPECS = {
   warrior:[{key:'berserker',name:'Berserker',description:'+30% aux frappes',click:1.3},{key:'guardian',name:'Gardien',description:'+15% production',prod:1.15}],
@@ -772,12 +772,18 @@ async function buildState(userId) {
   const maxEnemyHp = enemyUnitMaxHp(stage,waveKills);
   const enemyHp = Math.max(0, Math.min(maxEnemyHp, combatPreview.hp));
   const hpRatio=enemyHp/Math.max(1,maxEnemyHp);
-  const mechanicMultiplier=!clickMechanic?1:clickMechanic.key==='shield'&&(user.idleBossProgress||0)<8?.25:clickMechanic.key==='rage'&&hpRatio<=.3?.5:clickMechanic.key==='regen'&&(user.idleBossProgress||0)<1?.65:1;
+  let mechanicMultiplier=!clickMechanic?1:clickMechanic.key==='shield'&&(user.idleBossProgress||0)<8?.25:clickMechanic.key==='rage'&&hpRatio<=.3?.5:clickMechanic.key==='regen'&&(user.idleBossProgress||0)<1?.65:clickMechanic.key==='counter'&&(user.idleBossProgress||0)===1?.35:1;
   const combatWorld=campaignForStage(stage);
   const worldClick=combatWorld.modifier?.click||1;
   const prestigeClick=(PRESTIGE_PATHS[user.idlePrestigePath]||PRESTIGE_PATHS.balanced).click;
-  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * prestigeClick * mechanicMultiplier));
   const activeRoles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
+  const executeAt=combatWorld.modifier?.executeAt||.2;const executionActive=!!heroClass(user.idleHeroClass).execute&&hpRatio<=executeAt;
+  if(isBossStage(stage)&&hpRatio<=.5)mechanicMultiplier*=.75;
+  if(isBossStage(stage)&&user.idleBossStartedAt&&Date.now()-new Date(user.idleBossStartedAt).getTime()>=BOSS_TIMER_SECONDS*1000)mechanicMultiplier*=.5;
+  if(executionActive)mechanicMultiplier*=heroClass(user.idleHeroClass).execute;
+  if(hpRatio<=.2)mechanicMultiplier*=1+Math.min(.5,activeRoles.filter((role)=>role==='assassin').length*.25);
+  const clickItems=itemActionBonus(slots,'click')*(isBossStage(stage)?itemActionBonus(slots,'boss'):1);
+  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * prestigeClick * mechanicMultiplier * clickItems));
   const uniqueActiveRoles=new Set(activeRoles).size;
   const burstPreview=Math.max(1,Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,clickAncientBonus),totalRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*(combatWorld.modifier?.burst||1)*itemActionBonus(slots,'burst')));
   const teamPreview=activeRoles.length<2?0:Math.max(1,Math.floor(totalRate*(20+uniqueActiveRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(combatWorld.modifier?.team||1)*itemActionBonus(slots,'team')));
@@ -862,7 +868,7 @@ async function buildState(userId) {
       classes:Object.entries(HERO_CLASSES).map(([key,value])=>({key,name:value.name,icon:value.icon,description:value.description})),
       starters:starterChoices.map((character)=>({...character,talent:characterTalent(character),role:roleForCharacter(character),baseRate:slotRate(character.rarity,1)})),
     },
-    heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
+    heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), passiveActive:executionActive,passiveStatus:user.idleHeroClass==='swordsman'?(executionActive?'EXÉCUTION ACTIVE · dégâts de frappe ×2':`Exécution à ${Math.round(executeAt*100)}% PV · ennemi à ${Math.round(hpRatio*100)}%`):null, changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
     strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',leaderCharacterId:(slots.some((s)=>s.characterId===user.idleLeaderCharacterId)?user.idleLeaderCharacterId:slots.find((s)=>s.character)?.characterId)||null,formations:Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier,bonusPercent:f.bonusPercent,conditionMet:key==='balanced'||multiplier>1,requirements};}),presets,meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills,user.idleLeaderCharacterId),leaderSkill:leaderSkillForSlots(slots,user.idleLeaderCharacterId) },
