@@ -214,7 +214,7 @@ function renderIdleState(state) {
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-coins"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en attente.</b> Encaisse-la maintenant dans ton solde.` : '<i class="fas fa-check"></i> Tous les gains automatiques sont encaissés. Ton équipe continue à produire.';
   document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.damage ?? state.click.yield)} dégâts`;
-  document.getElementById('idle-slots').innerHTML = state.slots.map(idleSlotHTML).join('');
+  document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
   document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   renderIdleMissions(state.missions || []);
   renderIdleEvent(state.event);
@@ -926,6 +926,13 @@ function idleSlotHTML(slot) {
     <div class="idle-level-buys">${[1,5,10,100].map((n) => `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="Monter de ${n} niveaux · coût ${idleFormatNumber(c.levelCosts[n])}"${idleState && idleState.essence < c.levelCosts[n] ? ' disabled' : ''}><b>×${n}</b><small>${idleFormatNumber(c.levelCosts[n])}</small></button>`).join('')}</div>
     ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau 500 · prochain multiplicateur ×${c.ascensionMultiplier * 2}</span>`}
   </div>`;
+}
+
+function renderIdleSlots(slots) {
+  const heroes=slots.filter((slot)=>!slot.locked&&slot.character);
+  const compact=slots.filter((slot)=>slot.locked||!slot.character);
+  return `${heroes.length?`<div class="idle-slot-grid idle-slot-heroes">${heroes.map(idleSlotHTML).join('')}</div>`:''}
+    ${compact.length?`<section class="idle-slot-management"><h4><i class="fas fa-table-cells-large"></i> Gestion des emplacements <span>${slots.length-compact.filter((slot)=>slot.locked).length}/${slots.length} débloqués</span></h4><div class="idle-slot-grid idle-slot-compact">${compact.map(idleSlotHTML).join('')}</div></section>`:''}`;
 }
 
 function renderIdleUpgrades(state) {
