@@ -1335,30 +1335,41 @@ function renderIdleSlots(slots) {
 
 function renderIdleUpgrades(state) {
   const nextSlotCost = state.slots.find((s) => s.locked)?.unlockCost ?? null;
+  const rate=Math.max(0,state.totalRate||0);
+  const essence=Math.max(0,state.essence||0);
+  const waitLabel=(cost)=>cost<=essence?'Achetable maintenant':rate>0?`Environ ${Math.ceil((cost-essence)/rate)}s de production`:'Assigne un producteur';
   const items = [
     {
       type: 'prod', icon: 'fa-brain', title: 'Discipline', level: state.prod.level, maxed: state.prod.maxed, cost: state.prod.nextCost,
-      desc: `Production totale ×${state.prod.multiplier.toFixed(2)} → ×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,
+      label:'Production automatique',before:`×${state.prod.multiplier.toFixed(2)}`,after:`×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,desc:'Augmente toute la production de l’équipe, en ligne et hors ligne.',
     },
     {
       type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost,
-      desc: `Dégâts par clic : ${state.click.damage ?? state.click.yield} → ${state.click.nextDamage ?? state.click.damage ?? state.click.yield}`,
+      label:'Dégâts par clic',before:idleFormatNumber(state.click.damage ?? state.click.yield),after:idleFormatNumber(state.click.nextDamage ?? state.click.damage ?? state.click.yield),desc:'Renforce les frappes manuelles et la base de dégâts de l’Ultime.',
     },
     {
       type: 'slot', icon: 'fa-square-plus', title: 'Nouvel emplacement', level: state.slotsUnlocked, maxed: state.slotsUnlocked >= state.maxSlots, cost: nextSlotCost,
-      desc: `${state.slotsUnlocked}/${state.maxSlots} emplacements débloqués`,
+      label:'Héros actifs',before:`${state.slotsUnlocked}/${state.maxSlots}`,after:`${Math.min(state.maxSlots,state.slotsUnlocked+1)}/${state.maxSlots}`,desc:'Ajoute une place pour un producteur et ses bonus de rôle, talent et équipement.',
     },
   ];
+  const available=items.filter((item)=>!item.maxed&&Number.isFinite(item.cost));
+  const recommended=available.slice().sort((a,b)=>(a.cost<=essence?0:1)-(b.cost<=essence?0:1)||a.cost-b.cost)[0];
+  const essenceEl=document.getElementById('idle-upgrade-essence');if(essenceEl)essenceEl.textContent=idleFormatNumber(essence);
+  const productionEl=document.getElementById('idle-upgrade-production');if(productionEl)productionEl.textContent=`${idleFormatNumber(rate)}/s`;
+  const clickEl=document.getElementById('idle-upgrade-click');if(clickEl)clickEl.textContent=idleFormatNumber(state.click.damage??state.click.yield);
+  const recommendation=document.getElementById('idle-upgrade-recommendation');if(recommendation)recommendation.textContent=recommended?`${recommended.title} · ${waitLabel(recommended.cost)}`:'Toutes les améliorations sont au maximum';
   return items.map((it) => `
-    <div class="idle-upgrade-card">
+    <div class="idle-upgrade-card idle-upgrade-${it.type} ${recommended===it?'recommended':''}">
+      ${recommended===it?'<span class="idle-upgrade-best"><i class="fas fa-star"></i> CONSEILLÉ</span>':''}
       <div class="idle-upgrade-ico"><i class="fas ${it.icon}"></i></div>
       <div class="idle-upgrade-info">
-        <h4>${it.title} <span class="idle-upgrade-lvl">Nv. ${it.level}</span></h4>
+        <small>${it.label}</small><h4>${it.title} <span class="idle-upgrade-lvl">Nv. ${it.level}</span></h4>
         <p>${it.desc}</p>
+        <div class="idle-upgrade-comparison"><span><small>ACTUEL</small><b>${it.before}</b></span><i class="fas fa-arrow-right"></i><span><small>APRÈS ACHAT</small><b>${it.after}</b></span></div>
       </div>
       ${it.maxed
         ? '<span class="idle-upgrade-maxed">MAX</span>'
-        : `<button class="btn-secondary idle-upgrade-btn" data-upgrade="${it.type}"${state.essence < it.cost ? ' disabled' : ''}>${idleFormatNumber(it.cost)} <i class="fas fa-mortar-pestle"></i></button>`}
+        : `<div class="idle-upgrade-buy"><small>${waitLabel(it.cost)}</small><button class="btn-secondary idle-upgrade-btn" data-upgrade="${it.type}"${state.essence < it.cost ? ' disabled' : ''}>Améliorer · ${idleFormatNumber(it.cost)} <i class="fas fa-mortar-pestle"></i></button></div>`}
     </div>`).join('');
 }
 
