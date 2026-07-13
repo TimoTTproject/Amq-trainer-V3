@@ -240,6 +240,22 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   });
 });
 
+test('Épéiste : la frappe et l’aperçu appliquent bien l’Exécution sous 20% PV', async () => {
+  let user=dbUser({idleHeroClass:'swordsman',idleEnemyHp:enemyMaxHp(1)});
+  prisma.user.findUnique=async()=>user;
+  const normal=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  user={...user,idleEnemyHp:1};
+  const execute=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(normal.status,200);
+  assert.equal(execute.status,200);
+  assert.equal(normal.json.heroClass.passiveActive,false);
+  assert.equal(execute.json.heroClass.passiveActive,true);
+  assert.match(execute.json.heroClass.passiveStatus,/EXÉCUTION ACTIVE/);
+  // Le multiplicateur est appliqué avant l'arrondi final (6,25 → 6 ; 12,5 → 13).
+  assert.ok(execute.json.click.damage>=normal.json.click.damage*2);
+  assert.ok(execute.json.click.damage<=normal.json.click.damage*2+1);
+});
+
 test('GET /state : reflète les niveaux d\'Ancients déjà achetés (bonus appliqués, coût du niveau suivant)', async () => {
   const key = ANCIENTS[0].key;
   const user = dbUser({ wisdomPoints: 7 });

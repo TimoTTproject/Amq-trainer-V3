@@ -615,7 +615,7 @@ function renderIdleMainHero(state) {
   if (name) name.textContent = leader?.name || currentUser?.displayName || 'Héros AMQ';
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
-  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance`;
+  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance${state.heroClass?.passiveStatus?`<strong class="idle-class-passive-status ${state.heroClass.passiveActive?'active':''}">${escapeHtml(state.heroClass.passiveStatus)}</strong>`:''}`;
 }
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
@@ -776,7 +776,7 @@ async function sendIdleFeedback(event){event.preventDefault();const input=docume
 function openIdleClassPicker() {
   const box = document.getElementById('idle-class-grid'); if (!box || !idleState?.heroClass) return;
   const classWait=Math.max(0,new Date(idleState.heroClass.changeReadyAt||0)-Date.now());
-  box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}" ${classWait&&c.key!==idleState.heroClass.key?'disabled':''}><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? '<small>CLASSE ACTIVE</small>' : classWait?`<small>Disponible dans ${Math.ceil(classWait/60000)} min</small>`:''}</button>`).join('');
+  box.innerHTML = idleState.heroClass.choices.map((c) => `<button class="idle-class-choice ${c.key === idleState.heroClass.key ? 'active' : ''}" data-hero-class="${c.key}" ${classWait&&c.key!==idleState.heroClass.key?'disabled':''}><i class="fas ${c.icon}"></i><b>${escapeHtml(c.name)}</b><span>${escapeHtml(c.description)}</span>${c.key === idleState.heroClass.key ? `<small>CLASSE ACTIVE${idleState.heroClass.passiveStatus?` · ${escapeHtml(idleState.heroClass.passiveStatus)}`:''}</small>` : classWait?`<small>Disponible dans ${Math.ceil(classWait/60000)} min</small>`:''}</button>`).join('');
   const specBox=document.getElementById('idle-spec-grid'); if(specBox) specBox.innerHTML=idleState.heroSpecialization.choices.map((s)=>`<button class="idle-style-choice ${s.selected?'active':''}" data-hero-spec="${s.key}" ${idleState.heroSpecialization.unlocked?'':'disabled'}><i class="fas ${idleState.heroSpecialization.unlocked?'fa-code-branch':'fa-lock'}"></i><b>${escapeHtml(s.name)}</b><small>${idleState.heroSpecialization.unlocked?escapeHtml(s.description):'Niveau 25 requis'}</small></button>`).join('');
   renderIdleStyleChoices('hairs','idle-hair-grid','fa-scissors'); renderIdleStyleChoices('outfits','idle-outfit-grid','fa-shirt'); renderIdleStyleChoices('colors','idle-color-grid','fa-palette'); renderIdleStyleChoices('auras','idle-aura-grid','fa-fire'); renderIdleStyleChoices('stances','idle-stance-grid','fa-person-running'); renderIdleStyleChoices('titles','idle-title-grid','fa-crown');
   document.getElementById('idle-class-picker').classList.remove('hidden');
