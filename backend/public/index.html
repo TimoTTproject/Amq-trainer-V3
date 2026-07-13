@@ -1734,16 +1734,17 @@
 
         <!-- Onglet ÉQUIPE : emplacements d'entraînement -->
         <section id="idle-panel-team" class="idle-panel hidden" role="tabpanel" aria-labelledby="idle-tab-team" tabindex="0">
-          <div class="idle-page-head"><i class="fas fa-users-gear"></i><div><small>FORMATION</small><h2>Équipe</h2></div></div>
-          <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
-          <button class="idle-summon-entry" id="idle-open-summon"><i class="fas fa-wand-sparkles"></i><span><small>ESPACE SÉPARÉ</small><b>Invocation de personnages</b><em id="idle-summon-entry-summary">Sceaux ou Essence · garantie Épique</em></span><strong>Ouvrir <i class="fas fa-arrow-right"></i></strong></button>
+          <div class="idle-page-head idle-team-page-head"><i class="fas fa-users-gear"></i><div><small>TON MOTEUR DE PRODUCTION</small><h2>Mon équipe</h2><p>Choisis tes héros actifs, leur chef et leurs niveaux avant d’affiner la stratégie.</p></div><button class="btn-primary" id="idle-open-summon"><i class="fas fa-wand-sparkles"></i> Invoquer</button></div>
+          <section class="idle-team-primary" aria-labelledby="idle-active-team-title">
+            <header><div><small>ÉQUIPE ACTIVE</small><h3 id="idle-active-team-title">Tes héros au premier plan</h3></div><div class="idle-team-primary-stats"><span><small>HÉROS</small><b id="idle-team-active-count">0</b></span><span><small>PRODUCTION</small><b id="idle-team-production">0/s</b></span><span><small>FORMATION</small><b id="idle-team-formation-summary">Équilibrée</b></span></div></header>
+            <div class="idle-team-tools"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Achète les niveaux offrant le meilleur gain de DPS par Essence.</small></span></div><button class="btn-primary" id="idle-optimize-team"><i class="fas fa-bolt"></i> Optimiser les niveaux</button></div>
+            <div id="idle-slots" class="idle-slots"></div>
+          </section>
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
-          <section class="idle-meta-guide" id="idle-meta-guide" aria-label="Comprendre la méta de l'équipe"></section>
-          <div class="idle-strategy-tools"><div><h3>Formation tactique</h3><div class="idle-formations" id="idle-formations"></div></div><div><h3>Presets d’équipe</h3><div class="idle-presets" id="idle-presets"></div></div></div>
+          <section class="idle-team-secondary"><header><small>AJUSTER LA STRATÉGIE</small><h3>Bonus et compositions</h3></header><div class="idle-strategy-tools"><div><h3>Formation tactique</h3><div class="idle-formations" id="idle-formations"></div></div><div><h3>Compositions sauvegardées</h3><div class="idle-presets" id="idle-presets"></div></div></div></section>
+          <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-chart-simple"></i> Comprendre tout le calcul du DPS</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><section class="idle-meta-guide" id="idle-meta-guide" aria-label="Comprendre la méta de l'équipe"></section></div></div>
+          <button class="idle-summon-entry idle-summon-entry-secondary" data-open-idle-summon><i class="fas fa-wand-sparkles"></i><span><small>AGRANDIR LE ROSTER</small><b>Invoquer un nouveau personnage</b><em id="idle-summon-entry-summary">Sceaux ou Essence · garantie Épique</em></span><strong>Ouvrir <i class="fas fa-arrow-right"></i></strong></button>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-star"></i> Maîtrise des licences</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-masteries" id="idle-masteries"></div></div></div>
-          <h3 class="idle-section-title">Équipe recrutée</h3>
-          <div class="idle-team-tools"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Achète en priorité les niveaux offrant le meilleur gain de DPS par Essence.</small></span></div><button class="btn-primary" id="idle-optimize-team"><i class="fas fa-bolt"></i> Optimiser</button></div>
-          <div id="idle-slots" class="idle-slots"></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-clock-rotate-left"></i> Historique des recrutements</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-recruit-history" id="idle-recruit-history"></div></div></div>
         </section>
 
@@ -1783,8 +1784,8 @@
       <!-- Barre d'onglets bas d'écran, façon appli mobile -->
       <nav class="idle-tabs" id="idle-tabs" role="tablist" aria-label="Navigation Anime Ascension">
         <button class="idle-tab active" id="idle-tab-home" role="tab" aria-selected="true" aria-controls="idle-panel-home" data-idle-tab="home" title="Combattre et récupérer l'Essence"><i class="fas fa-fire"></i><span>Combat</span></button>
-        <button class="idle-tab" id="idle-tab-progression" role="tab" aria-selected="false" aria-controls="idle-panel-progression" data-idle-tab="progression" title="Monter de niveau et explorer les mondes"><i class="fas fa-arrow-up-right-dots"></i><span>Niveaux</span></button>
         <button class="idle-tab" id="idle-tab-team" role="tab" aria-selected="false" aria-controls="idle-panel-team" data-idle-tab="team" title="Choisir les héros qui produisent automatiquement"><i class="fas fa-users"></i><span>Équipe</span></button>
+        <button class="idle-tab" id="idle-tab-progression" role="tab" aria-selected="false" aria-controls="idle-panel-progression" data-idle-tab="progression" title="Monter de niveau et explorer les mondes"><i class="fas fa-arrow-up-right-dots"></i><span>Niveaux</span></button>
         <button class="idle-tab" id="idle-tab-equipment" role="tab" aria-selected="false" aria-controls="idle-panel-equipment" data-idle-tab="equipment" title="Gérer les objets et les panoplies"><i class="fas fa-shield-halved"></i><span>Objets</span></button>
         <button class="idle-tab" id="idle-tab-upgrades" role="tab" aria-selected="false" aria-controls="idle-panel-upgrades" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
         <button class="idle-tab" id="idle-tab-activities" role="tab" aria-selected="false" aria-controls="idle-panel-activities" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
