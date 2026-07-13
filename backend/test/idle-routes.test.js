@@ -126,6 +126,22 @@ test('inventaire : le verrouillage vérifie que l objet appartient au joueur',as
   assert.equal(res.status,200);assert.equal(locked,true);
 });
 
+test('inventaire : le recyclage exige une confirmation renforcée pour les objets précieux',async()=>{
+  prisma.user.findUnique=async()=>dbUser();
+  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'legend-1',userId:'u1',rarity:'legendary',locked:false,equippedSlotId:null,bonus:.14,effectValue:.03}]:[];
+  const res=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['legend-1']}});
+  assert.equal(res.status,400);
+  assert.match(res.json.error,/Confirmation requise/);
+});
+
+test('inventaire : le recyclage refuse une sélection partiellement introuvable',async()=>{
+  prisma.user.findUnique=async()=>dbUser();
+  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'item-1',userId:'u1',rarity:'rare',locked:false,equippedSlotId:null,bonus:.04,effectValue:.02}]:[];
+  const res=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['item-1','item-2']}});
+  assert.equal(res.status,404);
+  assert.match(res.json.error,/introuvable/);
+});
+
 test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {
   prisma.user.findUnique = async () => dbUser({ email: 'joueur@example.com' });
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
