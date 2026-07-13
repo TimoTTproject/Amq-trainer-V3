@@ -294,9 +294,9 @@ function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosse
   const current = Math.max(1, Math.floor(level || 1));
   const nextLevel = current + 1;
   const defs = [
-    { key:'kills', icon:'fa-skull', name:'Épreuve de combat', description:'Vaincre des ennemis', progress:kills, target:Math.min(2500, 10 + current * 5) },
-    { key:'clicks', icon:'fa-hand-fist', name:'Épreuve de maîtrise', description:'Porter des frappes manuelles', progress:clicks, target:Math.min(2000, 25 + current * 10) },
-    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Épreuve d’entraînement', description:'Acheter des améliorations', progress:upgrades, target:Math.min(100, 2 + Math.ceil(current / 2)) },
+    { key:'kills', icon:'fa-skull', name:'Épreuve de combat', description:'Vaincre des ennemis', progress:kills, target:Math.min(5000, 15 + current * 8) },
+    { key:'clicks', icon:'fa-hand-fist', name:'Épreuve de maîtrise', description:'Porter des frappes manuelles', progress:clicks, target:Math.min(4000, 40 + current * 15) },
+    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Épreuve d’entraînement', description:'Acheter des améliorations', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
   ];
   if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Épreuve du gardien', description:'Ouvrir un nouveau coffre de boss', progress:bosses, target:1 });
   const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));

@@ -104,13 +104,84 @@ function idlePeriods(now = new Date()) {
 function idleMissionList(user, recruitCount, activeCount, stage, counters=new Map()) {
   const p = idlePeriods();
   const value=(key,period)=>counters.get(`${key}:${period}`)||0;
-  return [
-    { key:'daily_clicks',period:p.day,cadence:'Quotidienne',title:'Effectuer 50 frappes',progress:Math.min(value('click',p.day),50),target:50,reward:1,rewardCurrency:'seals' },
-    { key:'daily_kills',period:p.day,cadence:'Quotidienne',title:'Vaincre 20 ennemis',progress:Math.min(value('kill',p.day),20),target:20,reward:1,rewardCurrency:'seals' },
-    { key:'daily_skills',period:p.day,cadence:'Quotidienne',title:'Utiliser 2 compétences',progress:Math.min(value('skill',p.day),2),target:2,reward:1,rewardCurrency:'seals' },
-    { key:'weekly_bosses',period:p.week,cadence:'Hebdomadaire',title:'Ouvrir 3 coffres de boss',progress:Math.min(value('boss_chest',p.week),3),target:3,reward:3,rewardCurrency:'seals' },
-    { key:'weekly_upgrades',period:p.week,cadence:'Hebdomadaire',title:'Acheter 25 améliorations',progress:Math.min(value('upgrade',p.week),25),target:25,reward:3,rewardCurrency:'seals' },
+  const dailyPool = [
+    { key:'daily_clicks',counter:'click',title:'Discipline du poing',description:'Porter 150 frappes manuelles',target:150,reward:1 },
+    { key:'daily_kills',counter:'kill',title:'Nettoyage de zone',description:'Vaincre 75 ennemis',target:75,reward:1 },
+    { key:'daily_skills',counter:'skill',title:'Maîtrise des techniques',description:'Utiliser 5 compétences actives',target:5,reward:1 },
+    { key:'daily_upgrades',counter:'upgrade',title:'Entretien du Dojo',description:'Acheter 5 améliorations',target:5,reward:1 },
   ];
+  const dayIndex = Math.floor(Date.parse(`${p.day}T00:00:00Z`) / 86400000);
+  const daily = [0,1,2].map((offset)=>dailyPool[(dayIndex+offset)%dailyPool.length]).map((m)=>({
+    ...m,period:p.day,cadence:'Quotidienne',progress:Math.min(value(m.counter,p.day),m.target),rewardCurrency:'seals',
+  }));
+  const weekly = [
+    { key:'weekly_kills',counter:'kill',title:'Campagne d’extermination',description:'Vaincre 1 000 ennemis cette semaine',target:1000,reward:4 },
+    { key:'weekly_clicks',counter:'click',title:'Entraînement intensif',description:'Porter 750 frappes manuelles',target:750,reward:3 },
+    { key:'weekly_skills',counter:'skill',title:'Arsenal complet',description:'Utiliser 30 compétences actives',target:30,reward:3 },
+    { key:'weekly_upgrades',counter:'upgrade',title:'Expansion du Dojo',description:'Acheter 75 améliorations',target:75,reward:4 },
+  ].map((m)=>({...m,period:p.week,cadence:'Hebdomadaire',progress:Math.min(value(m.counter,p.week),m.target),rewardCurrency:'seals'}));
+  return [...daily,...weekly];
+}
+
+const SEASON_TIERS = [
+  {tier:1,level:1000,reward:1,gold:0},{tier:2,level:2500,reward:2,gold:0},
+  {tier:3,level:5000,reward:2,gold:25},{tier:4,level:8000,reward:3,gold:0},
+  {tier:5,level:12000,reward:3,gold:0},{tier:6,level:16000,reward:4,gold:50},
+  {tier:7,level:20000,reward:5,gold:0},{tier:8,level:24000,reward:7,gold:100},
+];
+
+function seasonActivityScore(counters, period) {
+  const value=(key)=>counters.get(`${key}:${period}`)||0;
+  const breakdown=[
+    {key:'click',label:'Frappes',value:Math.min(value('click'),3000),cap:3000,weight:1},
+    {key:'kill',label:'Victoires',value:Math.min(value('kill'),5000),cap:5000,weight:1},
+    {key:'skill',label:'Compétences',value:Math.min(value('skill'),300),cap:300,weight:15},
+    {key:'upgrade',label:'Améliorations',value:Math.min(value('upgrade'),300),cap:300,weight:12},
+    {key:'boss_chest',label:'Coffres',value:Math.min(value('boss_chest'),20),cap:20,weight:300},
+    {key:'recruit',label:'Invocations',value:Math.min(value('recruit'),20),cap:20,weight:100},
+  ];
+  return { score:breakdown.reduce((sum,x)=>sum+x.value*x.weight,0),breakdown:breakdown.map((x)=>({...x,score:x.value*x.weight})) };
+}
+
+function challengeProgress(requirements) {
+  const completed=requirements.every((r)=>r.progress>=r.target);
+  const progress=Math.round(requirements.reduce((sum,r)=>sum+Math.min(1,r.progress/Math.max(1,r.target)),0)/requirements.length*100);
+  return {progress,target:100,completed};
+}
+
+function idleChallengeList(counters, slots, periods=idlePeriods()) {
+  const value=(key,period)=>counters.get(`${key}:${period}`)||0;
+  const uniqueRoles=new Set(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character))).size;
+  const defs=[
+    {key:'disciplined_assault',name:'Assaut discipliné',cadence:'Quotidien',difficulty:'Expert',description:'Combine activité manuelle et techniques.',period:periods.day,reward:3,icon:'fa-hand-fist',requirements:[{label:'Frappes',progress:value('click',periods.day),target:250},{label:'Compétences',progress:value('skill',periods.day),target:6}]},
+    {key:'complete_squad',name:'Escouade complète',cadence:'Hebdomadaire',difficulty:'Tactique',description:'Construis une équipe variée qui tient sur la durée.',period:periods.week,reward:5,icon:'fa-people-group',requirements:[{label:'Rôles actifs',progress:uniqueRoles,target:3},{label:'Ennemis vaincus',progress:value('kill',periods.week),target:1000}]},
+    {key:'guardian_hunt',name:'Chasse aux gardiens',cadence:'Hebdomadaire',difficulty:'Endurance',description:'Franchis trois nouveaux murs de boss.',period:periods.week,reward:6,icon:'fa-crown',requirements:[{label:'Gardiens vaincus',progress:value('boss_kill',periods.week),target:3}]},
+  ];
+  return defs.map((def)=>({...def,...challengeProgress(def.requirements)}));
+}
+
+function weeklyConvergence(counters, periods=idlePeriods()) {
+  const value=(key)=>counters.get(`${key}:${periods.week}`)||0;
+  const requirements=[
+    {label:'Ennemis',progress:value('kill'),target:1500},
+    {label:'Frappes',progress:value('click'),target:1000},
+    {label:'Compétences',progress:value('skill'),target:40},
+    {label:'Améliorations',progress:value('upgrade'),target:100},
+  ];
+  return {title:'Convergence suprême',description:'Accomplis les quatre objectifs avant la fin de la semaine.',requirements,...challengeProgress(requirements),reward:7,gold:75,rewardCurrency:'seals'};
+}
+
+function bossChestRewards(tier) {
+  const reward=Math.round(80*Math.pow(1.4,Math.max(0,tier-1)));
+  const sealReward=1+Math.min(3,Math.floor(tier/5));
+  const goldReward=tier%5===0?25+tier*5:0;
+  const lootRarity=tier%10===0?'mythic':tier%5===0?'legendary':tier%3===0?'epic':'rare';
+  return {reward,sealReward,goldReward,lootRarity};
+}
+
+function progressionBossesCrossed(startStage, endStage, mode='progress') {
+  if (mode === 'farm' || endStage <= startStage) return 0;
+  return Math.max(0, Math.floor((endStage - 1) / 10) - Math.floor((startStage - 1) / 10));
 }
 
 function bossMechanicForStage(stage) {
@@ -323,7 +394,7 @@ async function applyActiveDamage(tx, user, damage) {
   const dealt = safeIdleNumber(damage * phaseMult * enrageMult);
   if (dealt < hp) {
     const updated = await tx.user.update({ where: { id: user.id }, data: { idleEnemyHp: hp - dealt, idleBossStartedAt: bossStartedAt } });
-    return { updated, killed:false };
+    return { updated, killed:false, bossKilled:false };
   }
   const reward = enemyReward(stage);
   const nextStage = user.idleBattleMode === 'farm' ? stage : stage + 1;
@@ -343,7 +414,7 @@ async function applyActiveDamage(tx, user, damage) {
       ...(bossMs ? { idleBestBossMs: user.idleBestBossMs ? Math.min(user.idleBestBossMs, bossMs) : bossMs } : {}),
     },
   });
-  return { updated, killed:true };
+  return { updated, killed:true, bossKilled:isBossStage(stage) && user.idleBattleMode !== 'farm' };
 }
 
 function synergyForSlots(slots) {
@@ -427,6 +498,8 @@ async function withSettle(userId, mutate) {
     // ont besoin d'autres bonus d'Ancients (chance, remise) que celui déjà
     // appliqué ci-dessus à la production.
     if(combat.kills>0)await incrementIdleCounter(userId,'kill',combat.kills);
+    const bosses=progressionBossesCrossed(user.idleStage||1,stage,user.idleBattleMode);
+    if(bosses>0)await incrementIdleCounter(userId,'boss_kill',bosses);
     if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey);
     return settledUser;
   }
@@ -545,7 +618,7 @@ async function buildState(userId) {
   const xpForNextStage = maxEnemyHp;
   const defeatedBosses = Math.floor(Math.max(0, stage - 1) / 10);
   const nextBossChest = user.idleBossClaimed + 1;
-  const bossReward = (tier) => Math.round(80 * Math.pow(1.4, Math.max(0, tier - 1)));
+  const nextChestRewards=bossChestRewards(nextBossChest);
 
   const missionDefs = idleMissionList(user, recruitCount, slots.filter((s) => s.characterId).length, stage,missionCounters);
   let claims = [];
@@ -561,7 +634,6 @@ async function buildState(userId) {
   for (const s of slots) if (s.character?.series) { const x = masteryMap.get(s.character.series) || { series: s.character.series, recruits: 0, levels: 0 }; x.levels += s.level || 1; masteryMap.set(s.character.series, x); }
   const masteries = [...masteryMap.values()].map((m) => { const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = [25,100,250,500].find((n) => n > m.levels) || null; return { ...m, bonus, next }; }).sort((a,b) => b.levels-a.levels);
   const periods = idlePeriods(); const weeklyLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
-  const counterValue=(key,period)=>missionCounters.get(`${key}:${period}`)||0;
   let weeklyClaimed = false; try { weeklyClaimed = !!(await prisma.idleMissionClaim.findUnique({ where: { userId_missionKey_period: { userId, missionKey: 'weekly_convergence', period: periods.week } } })); } catch (e) { if (e?.code) throw e; }
   const worldsDiscovered=Math.min(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1);
   const achievementDefs = idleAchievementDefs({ stage:Math.max(user.idleBestStage||1,stage), recruits: recruitCount, teamLevels: weeklyLevels, worlds: worldsDiscovered, prestige: user.prestigeLevel });
@@ -569,15 +641,10 @@ async function buildState(userId) {
   const claimedAchievements = new Set(achievementClaims.map((c) => c.missionKey));
   const achievements = achievementDefs.map((a) => ({ ...a, completed: a.progress >= a.target, claimed: claimedAchievements.has(`achievement_${a.key}`) }));
   const now=new Date();const seasonPeriod=periods.month;const seasonName=['Hiver Éternel','Floraison des héros','Brasier des mondes','Crépuscule dimensionnel'][Math.floor(now.getUTCMonth()/3)];
-  const seasonActivity=counterValue('click',seasonPeriod)+counterValue('kill',seasonPeriod)*3+counterValue('skill',seasonPeriod)*10+counterValue('upgrade',seasonPeriod)*2+counterValue('boss_chest',seasonPeriod)*25;
-  const seasonDefs=[{tier:1,level:50,reward:2},{tier:2,level:150,reward:3},{tier:3,level:400,reward:5},{tier:4,level:1000,reward:8}];let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
+  const seasonActivity=seasonActivityScore(missionCounters,seasonPeriod);
+  let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
   const activeSlots=slots.filter((s)=>s.character);
-  const uniqueRoles=new Set(activeSlots.map((s)=>roleForCharacter(s.character))).size;
-  const challengeDefs=[
-    {key:'daily_boss',name:'Boss quotidien',description:'Ouvre un coffre de boss aujourd’hui',period:periods.day,progress:counterValue('boss_chest',periods.day),target:1,reward:2,icon:'fa-crown'},
-    {key:'weekly_tower',name:'Tour hebdomadaire',description:'Terrasse 100 ennemis cette semaine',period:periods.week,progress:counterValue('kill',periods.week),target:100,reward:3,icon:'fa-tower-observation'},
-    {key:'role_contract',name:'Contrat tactique',description:'Joue 3 rôles et porte 50 frappes',period:periods.day,progress:uniqueRoles>=3?counterValue('click',periods.day):0,target:50,reward:2,icon:'fa-file-signature'},
-  ];
+  const challengeDefs=idleChallengeList(missionCounters,slots,periods);
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
   const challenges=challengeDefs.map((c)=>({...c,progress:Math.min(c.progress,c.target),completed:c.progress>=c.target,claimed:claimedChallenges.has(`challenge_${c.key}:${c.period}`)}));
   const guide=[
@@ -634,7 +701,7 @@ async function buildState(userId) {
       xpIntoStage,
       xpForNextStage,
       progress: xpForNextStage > 0 ? Math.min(1, xpIntoStage / xpForNextStage) : 1,
-      bossChest: { defeated: defeatedBosses, claimed: user.idleBossClaimed, available: defeatedBosses >= nextBossChest, tier: nextBossChest, reward: bossReward(nextBossChest),sealReward:1+(nextBossChest%5===0?1:0) },
+      bossChest: { defeated: defeatedBosses, claimed: user.idleBossClaimed, available: defeatedBosses >= nextBossChest, tier: nextBossChest, ...nextChestRewards },
       isElite:isEliteStage(stage),
       mechanic: clickMechanic?{...clickMechanic,progress:user.idleBossProgress||0,active:clickMechanic.key!=='shield'||(user.idleBossProgress||0)<8}:null,
       speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
@@ -644,12 +711,12 @@ async function buildState(userId) {
     },
     missions,
     codex: { discovered: recruitCount, masteries, worlds: DOJO_DECOR.map((w,i) => ({ name: w.name, level:i*10+1, discovered:Math.max(user.idleBestStage||1,stage)>=i*10+1 })) },
-    event: { ...currentIdleEvent(), weekly: { title: 'Convergence', description: 'Achète 50 améliorations cette semaine', progress: Math.min(counterValue('upgrade',periods.week),50), target: 50, reward: 5,rewardCurrency:'seals', completed: counterValue('upgrade',periods.week) >= 50, claimed: weeklyClaimed } },
+    event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
     achievements,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     // La première vraie saison utilisera une progression dédiée. L'ancien
     // pass mensuel fondé sur le niveau à vie est volontairement masqué.
-    season:{enabled:true,period:seasonPeriod,name:seasonName,level:seasonActivity,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:seasonDefs.map((x)=>({...x,completed:seasonActivity>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
+    season:{enabled:true,period:seasonPeriod,name:seasonName,level:seasonActivity.score,breakdown:seasonActivity.breakdown,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:SEASON_TIERS.map((x)=>({...x,completed:seasonActivity.score>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
     challenges,
     prod: {
       level: user.idleProdLevel,
@@ -1130,7 +1197,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
   let result;
   await withSettle(req.user.id, async (tx, liveUser, ancientLevelsByKey) => {
     let stage=Math.max(1,liveUser.idleStage||1);let hp=liveUser.idleEnemyHp>0?liveUser.idleEnemyHp:enemyMaxHp(stage);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
-    let damageTotal=0,rewardTotal=0,kills=0,criticals=0,lastMechanic=null;
+    let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click;
     for(let i=0;i<count;i++){
       const world=campaignForStage(stage);const mechanic=bossMechanicForStage(stage);lastMechanic=mechanic?.key||null;
@@ -1144,27 +1211,29 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
       const executeAt=world.modifier?.executeAt||.2;if(heroClass(liveUser.idleHeroClass).execute&&hpRatio<=executeAt)multiplier*=heroClass(liveUser.idleHeroClass).execute;
       const critical=Math.random()<((heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0));if(critical)criticals++;
       const damage=Math.max(1,Math.round(base*multiplier*(critical?2:1)));damageTotal+=damage;
-      if(damage>=hp){rewardTotal+=enemyReward(stage);kills++;if(isBossStage(stage)&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;}stage=liveUser.idleBattleMode==='farm'?stage:stage+1;hp=enemyMaxHp(stage);progress=0;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
+      if(damage>=hp){rewardTotal+=enemyReward(stage);kills++;if(isBossStage(stage)&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}stage=liveUser.idleBattleMode==='farm'?stage:stage+1;hp=enemyMaxHp(stage);progress=0;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
     }
     const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleBossProgress:progress,idleBossStartedAt:bossStartedAt,idleBestBossMs:bestBossMs,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
-    result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
+    result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,bosses,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
   });
   await incrementIdleCounter(req.user.id,'click',count);
   if(result?.kills)await incrementIdleCounter(req.user.id,'kill',result.kills);
+  if(result?.bosses)await incrementIdleCounter(req.user.id,'boss_kill',result.bosses);
   if(result?.kills)void recordIdleEvent(req.user.id,'active_kill',{value:result.damage,count:result.kills});
   res.json(result);
 });
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
-  let gained=0;let readyAt;let killed=false;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+30000);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier);({killed}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  let gained=0;let readyAt;let killed=false,bossKilled=false;
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+30000);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult'))*25*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void incrementIdleCounter(req.user.id,'skill',1);
   if(killed)await incrementIdleCounter(req.user.id,'kill',1);
+  if(bossKilled)await incrementIdleCounter(req.user.id,'boss_kill',1);
   res.json({ ok: true, gained, damage:gained, cooldownMs: 30000,readyAt:readyAt.toISOString() });
 });
 
 router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
-  let gained=0,uniqueRoles=0,killed=false;
+  let gained=0,uniqueRoles=0,killed=false,bossKilled=false;
   try {
     await withSettle(req.user.id,async(tx,user,levels)=>{
       if(user.idleTeamReadyAt&&new Date(user.idleTeamReadyAt)>new Date())throw new IdleError(429,'Combo encore en recharge');
@@ -1177,11 +1246,12 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
       await tx.user.update({where:{id:user.id},data:{idleTeamReadyAt:new Date(Date.now()+60000),idleBossProgress:progress}});
       gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(campaignForStage(user.idleStage||1).modifier?.team||1)*multiplier));
-      ({killed}=await applyActiveDamage(tx,user,gained));
+      ({killed,bossKilled}=await applyActiveDamage(tx,user,gained));
     });
   } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message}); throw e; }
   void incrementIdleCounter(req.user.id,'skill',1);
   if(killed)await incrementIdleCounter(req.user.id,'kill',1);
+  if(bossKilled)await incrementIdleCounter(req.user.id,'boss_kill',1);
   res.json({ ok: true, gained, damage:gained, cooldownMs: 60000,readyAt:new Date(Date.now()+60000).toISOString(), uniqueRoles });
 });
 
@@ -1238,15 +1308,15 @@ router.post('/mission/claim', requireAuth, requireIdleBeta, rateLimit({ max: 30,
 });
 
 router.post('/event/claim', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-event' }), async (req, res) => {
-  const period = idlePeriods().week;
+  const periods=idlePeriods();const period=periods.week;const counters=await loadIdleCounters(req.user.id);const event=weeklyConvergence(counters,periods);
   try {
     await prisma.$transaction(async (tx) => {
-      const counter=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:req.user.id,key:'upgrade',period}}});
-      if ((counter?.value||0) < 50) throw new IdleError(400, 'Défi hebdomadaire incomplet');
+      if (!event.completed) throw new IdleError(400, 'Défi hebdomadaire incomplet');
       await tx.idleMissionClaim.create({ data: { userId: req.user.id, missionKey: 'weekly_convergence', period } });
-      await tx.user.update({ where: { id: req.user.id }, data: { idleSeals: { increment: 5 } } });
+      await tx.user.update({ where: { id: req.user.id }, data: { idleSeals: { increment: event.reward },tokens:{increment:event.gold} } });
+      await tx.tokenTransaction.create({data:{userId:req.user.id,amount:event.gold,reason:'idle_weekly_event'}});
     });
-    res.json({ ok: true, reward: 5,currency:'seals' });
+    res.json({ ok: true, reward:event.reward,gold:event.gold,currency:'seals' });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Récompense déjà réclamée' });
@@ -1277,11 +1347,11 @@ router.post('/achievement/claim', requireAuth, requireIdleBeta, rateLimit({ max:
   }
 });
 router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-season'}),async(req,res)=>{
-  const tier=Number(req.body?.tier);const def=[{tier:1,level:50,reward:2},{tier:2,level:150,reward:3},{tier:3,level:400,reward:5},{tier:4,level:1000,reward:8}].find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier inconnu'});
-  const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const activity=(counters.get(`click:${periods.month}`)||0)+(counters.get(`kill:${periods.month}`)||0)*3+(counters.get(`skill:${periods.month}`)||0)*10+(counters.get(`upgrade:${periods.month}`)||0)*2+(counters.get(`boss_chest:${periods.month}`)||0)*25;if(activity<def.level)return res.status(400).json({error:'Palier de saison incomplet'});
-  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}});});res.json({ok:true,reward:def.reward,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
+  const tier=Number(req.body?.tier);const def=SEASON_TIERS.find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier inconnu'});
+  const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const activity=seasonActivityScore(counters,periods.month);if(activity.score<def.level)return res.status(400).json({error:'Palier de saison incomplet'});
+  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},...(def.gold?{tokens:{increment:def.gold}}:{})}});if(def.gold)await tx.tokenTransaction.create({data:{userId:req.user.id,amount:def.gold,reason:'idle_season_reward'}});});res.json({ok:true,reward:def.reward,gold:def.gold,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
 });
-router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const roles=new Set(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character))).size;const defs={daily_boss:{period:periods.day,progress:counters.get(`boss_chest:${periods.day}`)||0,target:1,reward:2},weekly_tower:{period:periods.week,progress:counters.get(`kill:${periods.week}`)||0,target:100,reward:3},role_contract:{period:periods.day,progress:roles>=3?(counters.get(`click:${periods.day}`)||0):0,target:50,reward:2}};const def=defs[key];if(!def)return res.status(400).json({error:'Défi inconnu'});if(def.progress<def.target)return res.status(400).json({error:'Défi incomplet'});try{await prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}});await prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}});}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
+router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
 router.get('/telemetry/beta', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-telemetry' }), async (req, res) => {
   const since = new Date(Date.now() - 30 * 86400000);
@@ -1308,25 +1378,29 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const defeated = Math.floor(Math.max(0, (user.idleBestStage || user.idleStage || 1) - 1) / 10);
       const tier = user.idleBossClaimed + 1;
       if (defeated < tier) throw new IdleError(400, 'Aucun coffre de boss disponible');
-      const amount = Math.round(80 * Math.pow(1.4, Math.max(0, tier - 1)));
-      const sealReward=1+(tier%5===0?1:0);
-      const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward}, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
+      const {reward:amount,sealReward,goldReward,lootRarity}=bossChestRewards(tier);
+      const updated = await tx.user.updateMany({ where: { id: user.id, idleBossClaimed: user.idleBossClaimed }, data: { idleBossClaimed: { increment: 1 },idleSeals:{increment:sealReward},tokens:{increment:goldReward}, essence: { increment: amount }, essenceEarnedTotal: { increment: amount } } });
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
+      if(goldReward>0)await tx.tokenTransaction.create({data:{userId:user.id,amount:goldReward,reason:'idle_boss_chest'}});
        const activeSlots = await tx.idleSlot.findMany({ where: { userId: user.id, characterId: { not: null } }, include:{equipments:true} });
        const slot = activeSlots.sort((a,b)=>(a.equipments||[]).reduce((n,e)=>n+e.bonus,0)-(b.equipments||[]).reduce((n,e)=>n+e.bonus,0))[0] || null;
       let loot = null;
       if (slot) {
         const kinds = ['weapon', 'relic', 'accessory']; const kind = kinds[(tier - 1) % kinds.length];
-        const rarity = tier % 10 === 0 ? 'mythic' : tier % 5 === 0 ? 'legendary' : tier % 3 === 0 ? 'epic' : 'rare';
+        const rarity = lootRarity;
         const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
         const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
         const current = await tx.idleEquipment.findUnique({ where: { idleSlotId_kind: { idleSlotId: slot.id, kind } } });
         if (!current || bonus > current.bonus) {
           await tx.idleEquipment.upsert({ where: { idleSlotId_kind: { idleSlotId: slot.id, kind } }, create: { idleSlotId: slot.id, kind, rarity, bonus }, update: { rarity, bonus, obtainedAt: new Date() } });
           loot = { kind, rarity, bonus, equipped: true, slotIndex: slot.slotIndex };
-        } else loot = { kind, rarity, bonus, equipped: false, slotIndex: slot.slotIndex };
+        } else {
+          const salvage=Math.max(25,Math.round(amount*.25));
+          await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});
+          loot = { kind, rarity, bonus, equipped: false, slotIndex: slot.slotIndex,salvage };
+        }
       }
-      return { reward: amount,seals:sealReward, loot };
+      return { tier,reward:amount,seals:sealReward,gold:goldReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
     res.json({ ok: true, ...result });
@@ -1367,6 +1441,13 @@ router.post('/ancient', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
 module.exports = {
   router,
   decorArtCache,
+  idleMissionList,
+  seasonActivityScore,
+  idleChallengeList,
+  weeklyConvergence,
+  bossChestRewards,
+  progressionBossesCrossed,
+  SEASON_TIERS,
   // Exportés pour la route admin de génération de portraits IA
   // (src/admin/admin.routes.js) — même sélection déterministe du gardien
   // que celle utilisée pour l'affichage, une seule source de vérité.

@@ -185,8 +185,8 @@ test('rankQuestSeries : impose combat, clics et améliorations avant le niveau s
   const started = rankQuestSeries({ level:1 });
   assert.equal(started.nextLevel, 2);
   assert.equal(started.ready, false);
-  assert.deepEqual(started.quests.map((q) => q.target), [15, 35, 3]);
-  const ready = rankQuestSeries({ level:1, kills:15, clicks:35, upgrades:3 });
+  assert.deepEqual(started.quests.map((q) => q.target), [23, 55, 4]);
+  const ready = rankQuestSeries({ level:1, kills:23, clicks:55, upgrades:4 });
   assert.equal(ready.completed, 3);
   assert.equal(ready.ready, true);
   assert.equal(ready.sealReward, 1);
