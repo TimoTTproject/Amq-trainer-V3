@@ -392,11 +392,11 @@ async function completeIdleOnboarding() {
 }
 
 const IDLE_ROLES = {
-  attaquant:{ name: 'Attaquant', icon: 'fa-burst', color: '#ff704d' },
-  support:{ name: 'Support', icon: 'fa-wand-magic-sparkles', color: '#b06cff' },
-  tank:{ name: 'Tank', icon: 'fa-shield-halved', color: '#4db8ff' },
-  assassin:{ name: 'Assassin', icon: 'fa-bolt', color: '#ffd54a' },
-  producteur:{ name: 'Producteur', icon: 'fa-gears', color: '#3ec98a' },
+  attaquant:{ name: 'Attaquant', icon: 'fa-burst', color: '#ff704d', description:'+8% DPS d’équipe' },
+  support:{ name: 'Support', icon: 'fa-wand-magic-sparkles', color: '#b06cff', description:'−10% recharge des actifs' },
+  tank:{ name: 'Tank', icon: 'fa-shield-halved', color: '#4db8ff', description:'Réduit les pénalités des boss' },
+  assassin:{ name: 'Assassin', icon: 'fa-bolt', color: '#ffd54a', description:'+25% sous 20% PV' },
+  producteur:{ name: 'Producteur', icon: 'fa-gears', color: '#3ec98a', description:'+5% DPS d’équipe' },
 };
 function idleRoleFor(character) { return IDLE_ROLES[character?.role]||IDLE_ROLES.attaquant; }
 function renderIdleTeamStrategy(state) {
@@ -1116,6 +1116,7 @@ function idleSlotHTML(slot) {
   const c = slot.character;
   const role=idleRoleFor(c);
   const img = c.imageUrl ? ` style="background-image:url('${c.imageUrl}')"` : '';
+  const equipment=c.equipments.map((e)=>{const meta=IDLE_ITEM_META[e.kind]||IDLE_ITEM_META.accessory;return e.empty?`<span class="empty" title="${meta.label} non équipé"><i class="fas ${meta.icon}"></i><div><small>${meta.label}</small><b>Vide</b></div></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer ${meta.label.toLowerCase()} · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b>+${Math.round(e.bonus*100)}%</b><em>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</em></span></button>`;}).join('');
   // data-action="pick" sur le conteneur : cliquer la carte propose de la
   // remplacer (un seul geste, au lieu de retirer puis réassigner). Les
   // boutons ×/niveau matchent leur propre data-action en premier dans la
@@ -1134,7 +1135,8 @@ function idleSlotHTML(slot) {
     <div class="idle-character-talent"><i class="fas fa-fingerprint"></i><span><b>${escapeHtml(c.talent.name)}</b><small>${escapeHtml(c.talent.description)}</small></span></div>
     <div class="idle-character-talent combat"><i class="fas fa-bolt"></i><span><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'Compétence de combat')}</small></span></div>
     <div class="idle-hero-milestones">${c.milestones.map((m) => `<span class="${m.reached ? 'reached' : ''}" title="Palier niveau ${m.target}">${m.reached ? '<i class="fas fa-check"></i>' : ''}${m.target}</span>`).join('')}</div>
-    <div class="idle-equipment">${c.equipments.map((e) => e.empty?`<span class="empty" title="Emplacement vide"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><small>Vide</small></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${e.kind==='weapon'?'fa-khanda':e.kind==='relic'?'fa-gem':'fa-ring'}"></i><span><b>+${Math.round(e.bonus*100)}%</b><small>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</small></span></button>`).join('')}</div>
+    <div class="idle-equipment-title"><i class="fas fa-shield-halved"></i> ÉQUIPEMENT <small>Arme · Relique · Accessoire</small></div>
+    <div class="idle-equipment">${equipment}</div>
     <div class="idle-level-buys">${[1,5,10,100,'max'].map((n) => {const cost=n==='max'?c.levelUpCost:c.levelCosts[n];return `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="${n==='max'?'Acheter le maximum abordable':`Monter de ${n} niveaux · coût ${idleFormatNumber(cost)}`}"${idleState && idleState.essence < cost ? ' disabled' : ''}><b>${n==='max'?'MAX':`×${n}`}</b><small>${n==='max'?'budget':idleFormatNumber(cost)}</small></button>`;}).join('')}</div>
     ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau 500 · prochain multiplicateur ×${c.ascensionMultiplier * 2}</span>`}
   </div>`;
@@ -1351,8 +1353,10 @@ async function refreshIdlePickerList() {
   document.getElementById('idle-picker-hint').textContent = available.length
     ? `${available.length} personnage(s) recruté(s) disponible(s)`
     : 'Aucun personnage disponible — recrute-en un ci-dessus.';
-  document.getElementById('idle-picker-list').innerHTML = available.map((c, i) => cardHTML(c, { index: i })).join('');
+  document.getElementById('idle-picker-list').innerHTML = available.map(idleRosterCardHTML).join('');
 }
+
+function idleRosterCardHTML(c){const role=idleRoleFor(c);const rarity=(typeof RARITY_LABELS!=='undefined'&&RARITY_LABELS[c.rarity])||c.rarity;return `<button type="button" class="idle-roster-card r-${escapeHtml(c.rarity)}" data-cid="${c.id}"><span class="idle-roster-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}></span><span class="idle-roster-main"><span class="idle-roster-heading"><b>${escapeHtml(c.name)}</b><em>${escapeHtml(rarity)}</em></span><small>${escapeHtml(c.series||'Univers inconnu')} · Nv. ${idleFormatNumber(c.level||1)}</small><span class="idle-roster-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><b>${role.name}</b><small>${role.description}</small></span><span class="idle-roster-details"><span><i class="fas fa-fingerprint"></i><b>${escapeHtml(c.talent?.name||'Talent')}</b><small>${escapeHtml(c.talent?.description||'')}</small></span><span><i class="fas fa-bolt"></i><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'')}</small></span></span></span><strong>+${idleFormatNumber(c.baseRate||0)}/s <i class="fas fa-chevron-right"></i></strong></button>`;}
 
 async function recruitIdle(currency = 'seals') {
   let r;
