@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
@@ -57,6 +57,20 @@ test('difficulté longue durée : missions tournantes et hebdomadaires renforcé
   assert.equal(missions.filter((m)=>m.cadence==='Quotidienne').length,3);
   assert.equal(missions.filter((m)=>m.cadence==='Hebdomadaire').length,4);
   assert.ok(missions.filter((m)=>m.cadence==='Hebdomadaire').every((m)=>m.target>=30));
+});
+
+test('méta transparente : Producteur, Leader et Logistique reprennent les multiplicateurs réels', () => {
+  const slots=[
+    {characterId:1,level:10,character:{name:'Bulma',series:'Dragon Ball',rarity:'epic'}},
+    {characterId:2,level:10,character:{name:'Sakura',series:'Naruto',rarity:'legendary'}},
+  ];
+  const meta=teamMetaBreakdown(slots,5,'industry',false);
+  assert.equal(meta.roleDetails.find((role)=>role.key==='producteur').bonus,.05);
+  assert.equal(meta.talents.find((talent)=>talent.character==='Bulma').name,'Stratège');
+  assert.equal(meta.talents.find((talent)=>talent.character==='Sakura').name,'Leader');
+  assert.equal(meta.multipliers.find((item)=>item.key==='talents').multiplier,1.11);
+  assert.equal(meta.multipliers.find((item)=>item.key==='formation').multiplier,1.18);
+  assert.match(meta.leaderExplanation,/aucun bonus caché/i);
 });
 
 test('saison : huit paliers et aucune action unique ne termine le parcours', () => {
