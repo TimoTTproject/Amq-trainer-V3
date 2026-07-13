@@ -1627,25 +1627,10 @@
         <section id="idle-panel-home" class="idle-panel" role="tabpanel" aria-labelledby="idle-tab-home" tabindex="0">
           <!-- HUD économique plat : l'Essence disponible est déjà dans
                l'en-tête global. Cette ligne évite les cartes imbriquées. -->
-          <div class="idle-currency-panel" aria-label="Ressources et production">
-            <div class="idle-currency-grid">
-              <div class="idle-currency-item primary">
-                <i class="fas fa-bolt idle-currency-ico"></i>
-                <div><small>Production équipe</small><b><span id="idle-rate-val">0</span><em>/s</em></b></div>
-              </div>
-              <div class="idle-currency-item">
-                <i class="fas fa-fire idle-currency-ico fire"></i>
-                <div><small>Essence totale</small><b id="idle-xptotal-val">0</b></div>
-              </div>
-              <div class="idle-currency-item">
-                <i class="fas fa-brain idle-currency-ico wisdom"></i>
-                <div><small>Sagesse permanente</small><b id="idle-wisdom-val">0</b></div>
-              </div>
-              <div class="idle-currency-item">
-                <i class="fas fa-ticket idle-currency-ico seals"></i>
-                <div><small>Sceaux d’invocation</small><b id="idle-seals-val">0</b></div>
-              </div>
-            </div>
+          <div class="idle-spend-dock" aria-label="Ressources à dépenser">
+            <span class="idle-spend-title"><small>TES PROCHAINES ACTIONS</small><b>Dépenser mes ressources</b></span>
+            <button type="button" id="idle-spend-wisdom"><i class="fas fa-brain"></i><span><small>SAGESSE</small><b id="idle-wisdom-val">0</b></span><em>Bonus permanents <i class="fas fa-arrow-right"></i></em></button>
+            <button type="button" id="idle-spend-summon"><i class="fas fa-ticket"></i><span><small>SCEAUX</small><b id="idle-seals-val">0</b></span><em>Invoquer un héros <i class="fas fa-arrow-right"></i></em></button>
           </div>
 
           <!-- Panneau Combat : la scène (décor + gardien) encadrée, plus une
@@ -1805,6 +1790,7 @@
         <button class="idle-tab" id="idle-tab-activities" role="tab" aria-selected="false" aria-controls="idle-panel-activities" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
       </nav>
       <button class="idle-nav-summon" id="idle-nav-summon" type="button" aria-haspopup="dialog" aria-controls="idle-summon"><i class="fas fa-wand-sparkles"></i><span><b>Invocation</b><small id="idle-nav-summon-price">1 Sceau ou Essence</small></span><em>NOUVEAU</em></button>
+      <aside id="idle-coach" class="idle-coach hidden" role="status" aria-live="polite"><button type="button" id="idle-coach-close" aria-label="Masquer ce conseil"><i class="fas fa-times"></i></button><span class="idle-coach-avatar"><i class="fas fa-user-ninja"></i></span><div><small>GUIDE DU DOJO</small><b id="idle-coach-title">Ton prochain objectif</b><p id="idle-coach-text"></p><button type="button" id="idle-coach-action">Me montrer <i class="fas fa-arrow-right"></i></button></div></aside>
       <p id="idle-live-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
     </div>
 
@@ -1868,8 +1854,10 @@
     <div id="idle-summon" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-summon-title">
       <div class="modal-card idle-summon-card">
         <button class="modal-close" id="idle-summon-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
-        <header><i class="fas fa-wand-sparkles"></i><div><small>RECRUTEMENT DU DOJO</small><h3 id="idle-summon-title">Invocation</h3><p>Obtiens un nouveau personnage, puis décide ensuite où l’assigner.</p></div></header>
+        <header class="idle-summon-hero"><div class="idle-summon-orb" aria-hidden="true"><i class="fas fa-wand-sparkles"></i><span></span></div><div><small>PORTAIL DU DOJO</small><h3 id="idle-summon-title">Invoque ton prochain héros</h3><p>Chaque tirage donne un personnage permanent. Sa rareté, son rôle et son talent changent la composition idéale de ton équipe.</p></div></header>
         <div class="idle-summon-rules"><span><i class="fas fa-ticket"></i><b>Prix fixe</b><small>1 Sceau = 1 invocation</small></span><span><i class="fas fa-bolt"></i><b>Prix indépendant</b><small>Seuls les achats en Essence le font évoluer</small></span><span><i class="fas fa-shield-heart"></i><b>Protection</b><small id="idle-summon-pity">Épique garanti</small></span></div>
+        <div class="idle-summon-pity-track"><span><b>Garantie Épique</b><small id="idle-summon-pity-progress">0 / 10 tirages</small></span><em><i id="idle-summon-pity-fill"></i></em></div>
+        <div class="idle-summon-odds" id="idle-summon-odds" aria-label="Probabilités par rareté"></div>
         <div class="idle-recruit-payment idle-recruit-payment-wide" aria-label="Choisir la monnaie d'invocation">
           <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-ticket"></i><span><b>Invoquer avec des Sceaux</b><small id="idle-recruit-cost"></small></span></button>
           <button class="btn-secondary idle-recruit-btn idle-recruit-essence" id="idle-recruit-essence-btn"><i class="fas fa-bolt"></i><span><b>Invoquer avec de l’Essence</b><small id="idle-recruit-essence-cost"></small></span></button>

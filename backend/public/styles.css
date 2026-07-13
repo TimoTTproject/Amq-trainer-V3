@@ -6498,6 +6498,46 @@ body.idle-fullscreen #app { padding-top: 0; }
   #view-idle .idle-combat-stats{font-size:11px}
 }
 
+/* Ressources actionnables : aucune statistique dupliquée, seulement les deux
+   monnaies qui ouvrent immédiatement leur dépense. */
+#view-idle .idle-spend-dock{display:grid;grid-template-columns:minmax(190px,.8fr) 1fr 1fr;align-items:stretch;margin:0 0 12px;border-block:1px solid #262d38;background:#0b0e14}
+#view-idle .idle-spend-title{display:flex;justify-content:center;flex-direction:column;padding:12px 16px}
+#view-idle .idle-spend-title small{color:#f43f5e;font-size:9px;font-weight:900;letter-spacing:.12em}
+#view-idle .idle-spend-title b{font-size:14px}
+#view-idle .idle-spend-dock>button{display:grid;grid-template-columns:36px auto 1fr;align-items:center;gap:10px;padding:10px 14px;border:0;border-left:1px solid #262d38;background:transparent;color:var(--text);text-align:left;cursor:pointer}
+#view-idle .idle-spend-dock>button:hover{background:#141923}
+#view-idle .idle-spend-dock>button>i{display:grid;width:36px;height:36px;place-items:center;border-radius:50%;background:#a855f71a;color:#c084fc}
+#view-idle #idle-spend-summon>i{background:#f59e0b1a;color:#fbbf24}
+#view-idle .idle-spend-dock>button>span{display:flex;flex-direction:column}
+#view-idle .idle-spend-dock>button small{color:#929baa;font-size:8px;font-weight:900;letter-spacing:.08em}
+#view-idle .idle-spend-dock>button b{font-size:18px}
+#view-idle .idle-spend-dock>button>em{justify-self:end;color:#cbd5e1;font-size:10px;font-style:normal;font-weight:800}
+#view-idle .idle-spend-dock>button>em i{margin-left:5px;color:#f43f5e}
+
+/* Portail d'invocation : hiérarchie claire, probabilités et pity visibles. */
+.idle-summon-card{max-width:680px!important;border-color:#f43f5e66!important}
+.idle-summon-hero{align-items:center!important;padding-bottom:18px!important}
+.idle-summon-orb{position:relative;display:grid;width:78px;height:78px;flex:none;place-items:center;border:1px solid #fb718580;border-radius:50%;background:radial-gradient(circle,#fb71854d 0 18%,#4c051955 42%,#090b11 70%);box-shadow:0 0 30px #e11d4840;overflow:hidden}
+.idle-summon-orb:before,.idle-summon-orb:after{content:"";position:absolute;width:58px;height:58px;border:1px dashed #fda4af88;border-radius:50%;animation:idleSummonSpin 8s linear infinite}
+.idle-summon-orb:after{width:42px;height:42px;animation-direction:reverse;animation-duration:5s}
+.idle-summon-orb>i{z-index:1;color:#fff;font-size:23px}.idle-summon-orb>span{position:absolute;inset:0;background:linear-gradient(110deg,transparent 38%,#fff3 50%,transparent 62%);animation:idleSummonSweep 2.6s ease-in-out infinite}
+.idle-summon-pity-track{display:grid;grid-template-columns:145px 1fr;align-items:center;gap:12px;margin:12px 0;padding:9px 0;border-bottom:1px solid #ffffff12}
+.idle-summon-pity-track>span{display:flex;flex-direction:column}.idle-summon-pity-track b{font-size:10px}.idle-summon-pity-track small{color:var(--text-2);font-size:8px}
+.idle-summon-pity-track>em{height:8px;border-radius:99px;background:#232936;overflow:hidden}.idle-summon-pity-track>em>i{display:block;width:0;height:100%;border-radius:inherit;background:#f43f5e;transition:width .35s ease}
+.idle-summon-odds{display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:14px;border-block:1px solid #ffffff12}
+.idle-summon-odds>span{display:flex;justify-content:space-between;padding:9px 10px}.idle-summon-odds>span+span{border-left:1px solid #ffffff12}.idle-summon-odds small{color:var(--text-2);font-size:8px}.idle-summon-odds b{font-size:10px}.idle-summon-odds .r-epic b{color:#c084fc}.idle-summon-odds .r-legendary b{color:#fbbf24}.idle-summon-odds .r-mythic b{color:#fb7185}
+
+.idle-coach{position:fixed;right:22px;bottom:22px;z-index:750;display:grid;grid-template-columns:42px minmax(0,260px);gap:11px;width:min(340px,calc(100vw - 24px));padding:13px 15px;border:1px solid #f43f5e66;border-radius:12px;background:#11151df5;box-shadow:0 16px 45px #000b;color:var(--text)}
+.idle-coach.hidden{display:none}.idle-coach>button{position:absolute;right:6px;top:6px;border:0;background:transparent;color:var(--text-2);cursor:pointer}.idle-coach-avatar{display:grid;width:42px;height:42px;place-items:center;border-radius:50%;background:#e11d4820;color:#fb7185;font-size:18px}.idle-coach>div{display:flex;flex-direction:column;gap:3px}.idle-coach small{color:#fb7185;font-size:8px;font-weight:900;letter-spacing:.1em}.idle-coach b{padding-right:18px;font-size:12px}.idle-coach p{margin:0;color:#b6bfcc;font-size:10px;line-height:1.4}.idle-coach>div>button{align-self:flex-start;margin-top:5px;padding:5px 0;border:0;background:transparent;color:#fb7185;font-size:9px;font-weight:900;cursor:pointer}
+@keyframes idleSummonSpin{to{transform:rotate(360deg)}}@keyframes idleSummonSweep{0%,30%{transform:translateX(-100%)}70%,100%{transform:translateX(100%)}}
+@media(max-width:700px){#view-idle .idle-spend-dock{grid-template-columns:1fr 1fr}#view-idle .idle-spend-title{grid-column:1/-1;padding:8px 10px}#view-idle .idle-spend-dock>button{padding:8px}#view-idle .idle-spend-dock>button>em{display:none}.idle-summon-orb{width:58px;height:58px}.idle-summon-pity-track{grid-template-columns:110px 1fr}.idle-summon-odds{grid-template-columns:1fr 1fr}.idle-summon-odds>span:nth-child(3){border-left:0}.idle-summon-odds>span:nth-child(n+3){border-top:1px solid #ffffff12}.idle-coach{right:12px;bottom:74px}}
+.idle-recruit-reveal-modal .idle-recruit-reveal-card{transform:scale(.88) translateY(18px);opacity:0;transition:transform .38s cubic-bezier(.2,.9,.2,1.15),opacity .25s ease}
+.idle-recruit-reveal-modal.is-revealed .idle-recruit-reveal-card{transform:none;opacity:1}
+.idle-recruit-reveal-modal.is-revealed .idle-recruit-reveal-art{animation:idleRecruitArrival .65s .12s both}
+.idle-recruit-reveal-role{display:inline-flex;align-items:center;gap:6px;margin:8px auto 2px;padding:6px 9px;border-left:3px solid var(--role);border-radius:6px;background:color-mix(in srgb,var(--role) 11%,#11151d);color:#b9c2cf;font-size:9px}.idle-recruit-reveal-role i,.idle-recruit-reveal-role b{color:var(--role)}
+.idle-recruit-reveal-modal.reveal-legendary .idle-recruit-reveal-card,.idle-recruit-reveal-modal.reveal-mythic .idle-recruit-reveal-card{box-shadow:0 0 55px #f59e0b38}.idle-recruit-reveal-modal.reveal-mythic .idle-recruit-reveal-card{box-shadow:0 0 70px #ef444455}
+@keyframes idleRecruitArrival{0%{transform:scale(.72);filter:brightness(3) blur(8px)}60%{transform:scale(1.06);filter:brightness(1.5) blur(0)}100%{transform:none;filter:none}}
+
 /* Combat lisible : PV par impacts, actifs spectaculaires et méta explicite. */
 #view-idle .idle-enemy-hp .idle-xp-fill{min-width:0;will-change:width}
 #view-idle .idle-skill{position:relative;overflow:hidden;border:1px solid #ffffff2b;background:#171b25;box-shadow:none}
