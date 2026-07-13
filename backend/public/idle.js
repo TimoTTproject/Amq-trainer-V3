@@ -733,9 +733,10 @@ function renderIdleRecruit(recruit) {
     const btn = document.getElementById(id);
     if (btn) { btn.disabled = !essenceAffordable; btn.title = `Invoquer avec de l’Essence · prochain coût ${idleFormatNumber(recruit.essenceCostAfter)} Essence`; }
   }
-  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>1 Sceau = 1 invocation</b> · <i class="fas fa-bolt"></i> <b>${idleFormatNumber(recruit.essenceBalance)} Essence</b> · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
+  const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>Les Sceaux n’augmentent pas le prix en Essence</b> · prochain achat Essence : ${idleFormatNumber(recruit.essenceCostAfter)} · Épique dans ${recruit.guaranteedEpicIn||10}`;
   const pity=document.getElementById('idle-summon-pity');if(pity)pity.textContent=`Épique dans ${recruit.guaranteedEpicIn||10} invocation(s) max.`;
   const entry=document.getElementById('idle-summon-entry-summary');if(entry)entry.textContent=`${idleFormatNumber(recruit.balance)} Sceau${recruit.balance>1?'x':''} · ${idleFormatNumber(recruit.essenceBalance)} Essence · Épique dans ${recruit.guaranteedEpicIn||10}`;
+  const navPrice=document.getElementById('idle-nav-summon-price');if(navPrice)navPrice.textContent=`1 Sceau ou ${idleFormatNumber(recruit.essenceCost)} Essence`;
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
@@ -1645,6 +1646,7 @@ function initIdleUI() {
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
   document.getElementById('idle-open-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
+  document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));
   document.getElementById('idle-summon')?.addEventListener('click',(e)=>{if(e.target.id==='idle-summon')e.currentTarget.classList.add('hidden');});
   document.getElementById('idle-roster-sort')?.addEventListener('change',(e)=>{idleRosterSort=e.target.value;renderIdleRosterList();});

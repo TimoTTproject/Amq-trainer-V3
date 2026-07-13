@@ -1791,6 +1791,7 @@
         <button class="idle-tab" id="idle-tab-upgrades" role="tab" aria-selected="false" aria-controls="idle-panel-upgrades" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
         <button class="idle-tab" id="idle-tab-activities" role="tab" aria-selected="false" aria-controls="idle-panel-activities" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
       </nav>
+      <button class="idle-nav-summon" id="idle-nav-summon" type="button" aria-haspopup="dialog" aria-controls="idle-summon"><i class="fas fa-wand-sparkles"></i><span><b>Invocation</b><small id="idle-nav-summon-price">1 Sceau ou Essence</small></span><em>NOUVEAU</em></button>
       <p id="idle-live-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
     </div>
 
@@ -1855,7 +1856,7 @@
       <div class="modal-card idle-summon-card">
         <button class="modal-close" id="idle-summon-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <header><i class="fas fa-wand-sparkles"></i><div><small>RECRUTEMENT DU DOJO</small><h3 id="idle-summon-title">Invocation</h3><p>Obtiens un nouveau personnage, puis décide ensuite où l’assigner.</p></div></header>
-        <div class="idle-summon-rules"><span><i class="fas fa-ticket"></i><b>Prix fixe</b><small>1 Sceau = 1 invocation</small></span><span><i class="fas fa-bolt"></i><b>Alternative</b><small>Paiement en Essence</small></span><span><i class="fas fa-shield-heart"></i><b>Protection</b><small id="idle-summon-pity">Épique garanti</small></span></div>
+        <div class="idle-summon-rules"><span><i class="fas fa-ticket"></i><b>Prix fixe</b><small>1 Sceau = 1 invocation</small></span><span><i class="fas fa-bolt"></i><b>Prix indépendant</b><small>Seuls les achats en Essence le font évoluer</small></span><span><i class="fas fa-shield-heart"></i><b>Protection</b><small id="idle-summon-pity">Épique garanti</small></span></div>
         <div class="idle-recruit-payment idle-recruit-payment-wide" aria-label="Choisir la monnaie d'invocation">
           <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-ticket"></i><span><b>Invoquer avec des Sceaux</b><small id="idle-recruit-cost"></small></span></button>
           <button class="btn-secondary idle-recruit-btn idle-recruit-essence" id="idle-recruit-essence-btn"><i class="fas fa-bolt"></i><span><b>Invoquer avec de l’Essence</b><small id="idle-recruit-essence-cost"></small></span></button>

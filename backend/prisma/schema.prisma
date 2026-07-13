@@ -142,6 +142,9 @@ model User {
   idleBattleMode         String    @default("progress")
   idleAutoSkills         Boolean   @default(false)
   idleRecruitPity        Int       @default(0)
+  // Compte uniquement les invocations payées en Essence : les Sceaux ne
+  // doivent jamais augmenter le coût alternatif.
+  idleEssenceRecruitCount Int      @default(0)
   idleOnboardingComplete Boolean   @default(false)
   // Sceaux permanents gagnés sur les boss et missions. Ils financent le
   // recrutement, afin que les recrues permanentes ne concurrencent plus les

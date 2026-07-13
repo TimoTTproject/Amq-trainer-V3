@@ -182,11 +182,11 @@ test('recruitCost : un Sceau vaut toujours exactement une invocation', () => {
   assert.equal(recruitCost(999,999),1);
 });
 
-test('recruitEssenceCost : progresse avec le roster et respecte la remise', () => {
+test('recruitEssenceCost : progresse seulement avec les achats Essence et respecte la remise', () => {
   assert.equal(recruitEssenceCost(0),1500);
   assert.ok(recruitEssenceCost(10)>recruitEssenceCost(0));
   assert.ok(recruitEssenceCost(10,.25)<recruitEssenceCost(10));
-  assert.ok(recruitEssenceCost(999)<=25000000);
+  assert.ok(recruitEssenceCost(999)<=5000000);
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {

@@ -105,11 +105,12 @@ function recruitCost() {
   return RECRUIT_BASE_COST;
 }
 
-// Alternative en Essence. Elle sert de puits économique progressif sans ajouter
-// une troisième monnaie à l'Idle. L'Ancient Marché Facile réduit ce coût.
-function recruitEssenceCost(count, discountBonus) {
+// Alternative en Essence. Le compteur représente UNIQUEMENT les invocations
+// payées en Essence : utiliser un Sceau ne renchérit jamais ce prix.
+// La croissance reste progressive mais abordable pour un joueur en montée.
+function recruitEssenceCost(essenceRecruitCount, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
-  const base = Math.min(25000000, Math.round(1500 * Math.pow(1.26, Math.max(0, count || 0))));
+  const base = Math.min(5000000, Math.round(1500 * Math.pow(1.18, Math.max(0, essenceRecruitCount || 0))));
   return Math.max(600, Math.round(finiteIdleNumber(base * (1 - discount), 1500)));
 }
 
