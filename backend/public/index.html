@@ -1579,8 +1579,6 @@
       <div class="idle-content">
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel">
-          <div class="idle-event-banner" id="idle-event-banner"></div>
-          <div class="idle-season-card" id="idle-season-card"></div>
           <!-- Panneau Essence : theme-aware (.profile-section), regroupe les
                tuiles de stats + la Sagesse (auparavant visible seulement
                dans l'onglet Améliorer). -->
@@ -1668,6 +1666,10 @@
             <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
           </div>
 
+        </section>
+
+        <section id="idle-panel-progression" class="idle-panel hidden">
+          <div class="idle-page-head"><i class="fas fa-torii-gate"></i><div><small>ASCENSION</small><h2>Progression</h2></div></div>
           <div class="profile-section idle-rank-panel">
             <div class="idle-rank-heading"><div><span class="idle-rank-kicker">PROGRESSION</span><h3><i class="fas fa-torii-gate"></i> Épreuves d’Ascension</h3><p id="idle-rank-summary">0/3 épreuves terminées</p></div><div class="idle-rank-levels"><b id="idle-rank-current">Niv. 1</b><i class="fas fa-arrow-right"></i><strong id="idle-rank-next">Niv. 2</strong></div></div>
             <div class="idle-rank-quests" id="idle-rank-quests"></div>
@@ -1682,6 +1684,12 @@
             <div class="idle-roadmap" id="idle-roadmap"></div>
           </div>
           <div class="profile-section idle-codex-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-book-open"></i> Codex des mondes</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-world-codex" id="idle-world-codex"></div></div></div>
+        </section>
+
+        <section id="idle-panel-activities" class="idle-panel hidden">
+          <div class="idle-page-head"><i class="fas fa-bullseye"></i><div><small>OBJECTIFS</small><h2>Activités</h2></div></div>
+          <div class="idle-event-banner" id="idle-event-banner"></div>
+          <div class="idle-season-card" id="idle-season-card"></div>
           <div class="profile-section idle-missions-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-scroll"></i> Missions</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-missions" id="idle-missions"></div></div></div>
           <div class="profile-section idle-challenges-panel idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-tower-observation"></i> Défis</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-challenges" id="idle-challenges"></div></div></div>
           <div class="profile-section idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-chart-line"></i> Observatoire bêta</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><button class="btn-secondary" id="idle-telemetry-load"><i class="fas fa-rotate"></i> Charger les statistiques</button><div id="idle-telemetry-summary"></div><form class="idle-feedback" id="idle-feedback-form"><label for="idle-feedback-text"><b>Signaler un problème ou une idée</b><small>Le stage et la version sont joints automatiquement.</small></label><textarea id="idle-feedback-text" minlength="10" maxlength="1000" required placeholder="Décris ce qui s’est passé et ce que tu attendais…"></textarea><button class="btn-primary" type="submit"><i class="fas fa-paper-plane"></i> Envoyer aux développeurs</button><span id="idle-feedback-status" aria-live="polite"></span></form></div></div>
@@ -1689,7 +1697,7 @@
 
         <!-- Onglet ÉQUIPE : emplacements d'entraînement -->
         <section id="idle-panel-team" class="idle-panel hidden">
-          <div class="idle-help"><i class="fas fa-users-gear"></i><div><b>Équipe et production</b><span>Assigne tes recrues aux emplacements. Elles combattent seules, produisent de l’Essence par seconde et activent des synergies.</span></div></div>
+          <div class="idle-page-head"><i class="fas fa-users-gear"></i><div><small>FORMATION</small><h2>Équipe</h2></div></div>
           <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
           <div class="idle-strategy-tools"><div><h3>Formation tactique</h3><div class="idle-formations" id="idle-formations"></div></div><div><h3>Presets d’équipe</h3><div class="idle-presets" id="idle-presets"></div></div></div>
@@ -1702,7 +1710,7 @@
 
         <!-- Onglet AMÉLIORER : améliorations + prestige -->
         <section id="idle-panel-upgrades" class="idle-panel hidden">
-          <div class="idle-help"><i class="fas fa-arrow-trend-up"></i><div><b>Renforcer ton aventure</b><span>Dépense l’Essence pour améliorer les frappes, la production et l’équipe. Le Prestige débloque ensuite des bonus permanents.</span></div></div>
+          <div class="idle-page-head"><i class="fas fa-arrow-trend-up"></i><div><small>PUISSANCE</small><h2>Améliorer</h2></div></div>
           <h3 class="idle-section-title">Améliorations</h3>
           <div id="idle-upgrades" class="idle-upgrades"></div>
 
@@ -1725,8 +1733,10 @@
       <!-- Barre d'onglets bas d'écran, façon appli mobile -->
       <nav class="idle-tabs" id="idle-tabs">
         <button class="idle-tab active" data-idle-tab="home" title="Combattre et récupérer l'Essence"><i class="fas fa-fire"></i><span>Combat</span></button>
+        <button class="idle-tab" data-idle-tab="progression" title="Accomplir les épreuves et explorer les mondes"><i class="fas fa-torii-gate"></i><span>Ascension</span></button>
         <button class="idle-tab" data-idle-tab="team" title="Choisir les héros qui produisent automatiquement"><i class="fas fa-users"></i><span>Équipe</span></button>
-        <button class="idle-tab" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Progression</span></button>
+        <button class="idle-tab" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
+        <button class="idle-tab" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
       </nav>
     </div>
 
