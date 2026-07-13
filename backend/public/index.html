@@ -1700,13 +1700,8 @@
 
             <div class="idle-actions">
               <button class="btn-secondary" id="idle-collect-btn" title="Ajoute au solde les gains produits automatiquement par ton équipe"><i class="fas fa-coins"></i> Encaisser <span id="idle-pending-val"></span></button>
-              <div class="idle-recruit-payment" aria-label="Choisir la monnaie d'invocation">
-                <button class="btn-secondary" id="idle-top-recruit-btn" title="Invoquer avec des Sceaux"><i class="fas fa-ticket"></i><span><b>Invoquer</b><small id="idle-top-recruit-cost"></small></span></button>
-                <button class="btn-secondary idle-recruit-essence" id="idle-top-recruit-essence-btn" title="Invoquer avec de l’Essence"><i class="fas fa-bolt"></i><span><b>Invoquer</b><small id="idle-top-recruit-essence-cost"></small></span></button>
-              </div>
             </div>
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
-            <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
           </div>
 
         </section>
@@ -1743,7 +1738,9 @@
         <section id="idle-panel-team" class="idle-panel hidden" role="tabpanel" aria-labelledby="idle-tab-team" tabindex="0">
           <div class="idle-page-head"><i class="fas fa-users-gear"></i><div><small>FORMATION</small><h2>Équipe</h2></div></div>
           <div class="idle-team-intro"><i class="fas fa-user-shield"></i><div><b>Ton héros mène l'assaut</b><span>Il frappe activement avec ta puissance de clic. Les personnages recrutés ci-dessous forment son équipe et produisent de l'essence en continu.</span></div></div>
+          <button class="idle-summon-entry" id="idle-open-summon"><i class="fas fa-wand-sparkles"></i><span><small>ESPACE SÉPARÉ</small><b>Invocation de personnages</b><em id="idle-summon-entry-summary">Sceaux ou Essence · garantie Épique</em></span><strong>Ouvrir <i class="fas fa-arrow-right"></i></strong></button>
           <div class="idle-synergy-bar" id="idle-synergy-bar"></div>
+          <section class="idle-meta-guide" id="idle-meta-guide" aria-label="Comprendre la méta de l'équipe"></section>
           <div class="idle-strategy-tools"><div><h3>Formation tactique</h3><div class="idle-formations" id="idle-formations"></div></div><div><h3>Presets d’équipe</h3><div class="idle-presets" id="idle-presets"></div></div></div>
           <div class="idle-collapsible collapsed"><button class="idle-collapse-title" data-idle-collapse><span><i class="fas fa-star"></i> Maîtrise des licences</span><i class="fas fa-chevron-down"></i></button><div class="idle-collapse-body"><div class="idle-masteries" id="idle-masteries"></div></div></div>
           <h3 class="idle-section-title">Équipe recrutée</h3>
@@ -1843,13 +1840,27 @@
       <div class="modal-card wide">
         <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
         <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
-        <p class="hint">Ton roster de l'Idle — indépendant de ta collection gacha. Un Sceau donne toujours une invocation ; l’Essence offre une alternative.</p>
+        <p class="hint">Choisis ou compare une recrue déjà obtenue. Les nouvelles invocations se font dans leur espace dédié.</p>
+        <div class="idle-roster-toolbar" aria-label="Trier et filtrer les personnages">
+          <label><span>Trier par</span><select id="idle-roster-sort"><option value="meta">Recommandé pour l’équipe</option><option value="synergy">Synergie</option><option value="role">Rôle</option><option value="rarity">Rareté</option><option value="power">Production</option><option value="level">Niveau</option><option value="name">Nom</option></select></label>
+          <label><span>Rôle</span><select id="idle-roster-role"><option value="all">Tous les rôles</option><option value="attaquant">Attaquant</option><option value="producteur">Producteur</option><option value="support">Support</option><option value="tank">Tank</option><option value="assassin">Assassin</option></select></label>
+          <label><span>Rareté</span><select id="idle-roster-rarity"><option value="all">Toutes les raretés</option><option value="mythic">Mythique</option><option value="legendary">Légendaire</option><option value="epic">Épique</option><option value="rare">Rare</option></select></label>
+        </div>
+        <p class="hint" id="idle-picker-hint"></p>
+        <div id="idle-picker-list" class="idle-roster-grid"></div>
+      </div>
+    </div>
+
+    <div id="idle-summon" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-summon-title">
+      <div class="modal-card idle-summon-card">
+        <button class="modal-close" id="idle-summon-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <header><i class="fas fa-wand-sparkles"></i><div><small>RECRUTEMENT DU DOJO</small><h3 id="idle-summon-title">Invocation</h3><p>Obtiens un nouveau personnage, puis décide ensuite où l’assigner.</p></div></header>
+        <div class="idle-summon-rules"><span><i class="fas fa-ticket"></i><b>Prix fixe</b><small>1 Sceau = 1 invocation</small></span><span><i class="fas fa-bolt"></i><b>Alternative</b><small>Paiement en Essence</small></span><span><i class="fas fa-shield-heart"></i><b>Protection</b><small id="idle-summon-pity">Épique garanti</small></span></div>
         <div class="idle-recruit-payment idle-recruit-payment-wide" aria-label="Choisir la monnaie d'invocation">
           <button class="btn-primary idle-recruit-btn" id="idle-recruit-btn"><i class="fas fa-ticket"></i><span><b>Invoquer avec des Sceaux</b><small id="idle-recruit-cost"></small></span></button>
           <button class="btn-secondary idle-recruit-btn idle-recruit-essence" id="idle-recruit-essence-btn"><i class="fas fa-bolt"></i><span><b>Invoquer avec de l’Essence</b><small id="idle-recruit-essence-cost"></small></span></button>
         </div>
-        <p class="hint" id="idle-picker-hint"></p>
-        <div id="idle-picker-list" class="idle-roster-grid"></div>
+        <p class="idle-recruit-economy" id="idle-recruit-economy"></p>
       </div>
     </div>
 

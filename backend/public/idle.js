@@ -30,6 +30,10 @@ let idleItemFilter = 'all';
 let idleItemSort = 'power';
 let idleSelectedItems = new Set();
 let idleRosterCharacters = new Map();
+let idleRosterAvailable = [];
+let idleRosterSort = 'meta';
+let idleRosterRole = 'all';
+let idleRosterRarity = 'all';
 let idleLastAnnouncement = '';
 let idleWaveTransitionTimers = [];
 
@@ -437,6 +441,20 @@ function renderIdleTeamStrategy(state) {
   const bonus = best?.[1] >= 3 ? 25 : best?.[1] >= 2 ? 10 : active.length >= 3 ? 5 : 0;
   const bar = document.getElementById('idle-synergy-bar');
   if (bar) { const reserve=Math.round((state.strategy?.reserveBonus||0)*100);bar.innerHTML = bonus ? `<i class="fas fa-link"></i><div><b>${best[1]>=2?escapeHtml(best[0]):'Crossover'} · Synergie +${bonus}%</b><span>${best[1]>=2?`${best[1]} combattants de la même licence`:'Trois univers différents réunis'}${reserve?` · Réserve +${reserve}%`:''}</span></div>` : `<i class="fas fa-link"></i><div><b>${reserve?`Réserve +${reserve}%`:'Aucune synergie active'}</b><span>Chaque recrue en réserve donne +1% DPS, jusqu’à +20%.</span></div>`; }
+  const meta=state.strategy?.meta;const guide=document.getElementById('idle-meta-guide');
+  if(guide&&meta){
+    const producer=meta.roleDetails?.find((role)=>role.key==='producteur');
+    const leaders=(meta.talents||[]).filter((talent)=>talent.name==='Leader');
+    guide.innerHTML=`<header><div><small>MÉTA TRANSPARENTE</small><h3><i class="fas fa-chart-simple"></i> Pourquoi ton équipe produit ce DPS</h3></div><strong>×${Number(meta.visibleMultiplier||1).toFixed(2)} <small>bonus d’équipe visibles</small></strong></header>
+      <div class="idle-meta-formula"><b>Production des héros</b><i class="fas fa-xmark"></i><span>Rôles</span><i class="fas fa-xmark"></i><span>Talents</span><i class="fas fa-xmark"></i><span>Passifs</span><i class="fas fa-xmark"></i><span>Synergie</span><i class="fas fa-xmark"></i><span>Formation</span></div>
+      <div class="idle-meta-focus">
+        <article><i class="fas fa-gears"></i><div><b>Producteur · ${producer?.count||0} actif(s)</b><span>+5% DPS d’équipe chacun. Son talent Stratège ajoute encore +5% d’équipe.</span></div><strong>+${Math.round((producer?.bonus||0)*100)}%</strong></article>
+        <article><i class="fas fa-crown"></i><div><b>Talent Leader · ${leaders.length} actif(s)</b><span>${leaders.length?leaders.map((talent)=>escapeHtml(talent.character)).join(', '):'Aucun héros actif ne possède ce talent.'} · +6% d’équipe chacun.</span></div><strong>+${leaders.length*6}%</strong></article>
+        <article><i class="fas fa-user-shield"></i><div><b>Chef d’équipe</b><span>${escapeHtml(meta.leaderExplanation)}</span></div><strong>VISUEL</strong></article>
+      </div>
+      <p class="idle-meta-recommendation"><i class="fas fa-lightbulb"></i><span><b>Conseil actuel</b>${escapeHtml(meta.recommendation)}</span></p>
+      <details><summary><span><i class="fas fa-calculator"></i> Voir tous les multiplicateurs et rôles</span><i class="fas fa-chevron-down"></i></summary><div class="idle-meta-details"><section><h4>Multiplicateurs actuels</h4>${(meta.multipliers||[]).map((item)=>`<span class="${item.multiplier>1?'active':''}"><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small><strong>×${Number(item.multiplier).toFixed(2)}</strong></span>`).join('')}</section><section><h4>Effet exact de chaque rôle</h4>${(meta.roleDetails||[]).map((role)=>`<span class="${role.count?'active':''}"><b>${escapeHtml(role.name)} · ${role.count}</b><small>${escapeHtml(role.effect)}${role.situational?' · situationnel':''}</small></span>`).join('')}</section></div></details>`;
+  }
   const formations=document.getElementById('idle-formations');if(formations)formations.innerHTML=(state.strategy?.formations||[]).map((f)=>`<button data-idle-formation="${f.key}" class="${f.active?'active':''}"><b>${escapeHtml(f.name)}</b><small>${escapeHtml(f.description)}${f.multiplier>1?` · ×${f.multiplier.toFixed(2)}`:''}</small></button>`).join('');
   const presets=document.getElementById('idle-presets');if(presets)presets.innerHTML=`<div class="idle-preset-save"><input id="idle-preset-name" maxlength="24" placeholder="Nom du preset"><button data-preset-save><i class="fas fa-floppy-disk"></i></button></div>${(state.strategy?.presets||[]).map((p)=>`<button data-preset-load="${escapeHtml(p.name)}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.formation)}</small><i class="fas fa-play"></i></button>`).join('')}`;
 }
@@ -716,6 +734,8 @@ function renderIdleRecruit(recruit) {
     if (btn) { btn.disabled = !essenceAffordable; btn.title = `Invoquer avec de l’Essence · prochain coût ${idleFormatNumber(recruit.essenceCostAfter)} Essence`; }
   }
   const economy=document.getElementById('idle-recruit-economy');if(economy)economy.innerHTML=`<i class="fas fa-ticket"></i> <b>1 Sceau = 1 invocation</b> · <i class="fas fa-bolt"></i> <b>${idleFormatNumber(recruit.essenceBalance)} Essence</b> · Épique garanti dans ${recruit.guaranteedEpicIn||10}`;
+  const pity=document.getElementById('idle-summon-pity');if(pity)pity.textContent=`Épique dans ${recruit.guaranteedEpicIn||10} invocation(s) max.`;
+  const entry=document.getElementById('idle-summon-entry-summary');if(entry)entry.textContent=`${idleFormatNumber(recruit.balance)} Sceau${recruit.balance>1?'x':''} · ${idleFormatNumber(recruit.essenceBalance)} Essence · Épique dans ${recruit.guaranteedEpicIn||10}`;
 }
 
 function idleRewardLabel(item){return `+${idleFormatNumber(item.reward)} ${item.rewardCurrency==='seals'?'<i class="fas fa-ticket"></i>':'<i class="fas fa-mortar-pestle"></i>'}`;}
@@ -1415,13 +1435,37 @@ async function refreshIdlePickerList() {
   const assignedIds = new Set((idleState?.slots || []).filter((s) => s.character && s.index !== idlePickerSlot).map((s) => s.character.id));
   const available = (data.recruits || []).filter((c) => !assignedIds.has(c.id));
   idleRosterCharacters = new Map((data.recruits||[]).map((c)=>[Number(c.id),c]));
-  document.getElementById('idle-picker-hint').textContent = available.length
-    ? `${available.length} personnage(s) recruté(s) disponible(s)`
-    : 'Aucun personnage disponible — recrute-en un ci-dessus.';
-  document.getElementById('idle-picker-list').innerHTML = available.map(idleRosterCardHTML).join('');
+  idleRosterAvailable=available;
+  renderIdleRosterList();
 }
 
-function idleRosterCardHTML(c){const role=idleRoleFor(c);const rarity=idleRarityLabel(c.rarity);return `<article class="idle-roster-card r-${escapeHtml(c.rarity)}" data-cid="${c.id}"><span class="idle-roster-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}></span><span class="idle-roster-main"><span class="idle-roster-heading"><b>${escapeHtml(c.name)}</b><em>${escapeHtml(rarity)}</em></span><small>${escapeHtml(c.series||'Univers inconnu')} · Nv. ${idleFormatNumber(c.level||1)}</small><span class="idle-roster-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><b>${role.name}</b><small>${role.description}</small></span><span class="idle-roster-details"><span><i class="fas fa-fingerprint"></i><b>${escapeHtml(c.talent?.name||'Talent')}</b><small>${escapeHtml(c.talent?.description||'')}</small></span><span><i class="fas fa-bolt"></i><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'')}</small></span></span></span><span class="idle-roster-actions"><b>+${idleFormatNumber(c.baseRate||0)}/s</b><button type="button" class="btn-secondary" data-character-details><i class="fas fa-circle-info"></i> Fiche</button><button type="button" class="btn-primary" data-character-pick>Choisir</button></span></article>`;}
+function idleRosterProjection(c){
+  const active=(idleState?.slots||[]).filter((slot)=>slot.character&&slot.index!==idlePickerSlot).map((slot)=>slot.character);
+  const sameSeries=active.filter((hero)=>hero.series&&hero.series===c.series).length+1;
+  const synergyBonus=sameSeries>=3?.25:sameSeries===2?.10:active.length+1>=3?.05:0;
+  const formation=(idleState?.strategy?.formations||[]).find((item)=>item.active);
+  const roles=[...active.map((hero)=>hero.role),c.role];
+  const formationReady=formation?.key==='assault'?roles.filter((role)=>['attaquant','assassin'].includes(role)).length>=2:formation?.key==='fortress'?roles.includes('tank')&&roles.includes('support'):formation?.key==='industry'?roles.includes('producteur')&&roles.includes('support'):false;
+  const formationBonus=formationReady?({assault:.15,fortress:.20,industry:.18}[formation.key]||0):0;
+  return {synergyBonus,formationBonus,sameSeries,score:synergyBonus*1000+formationBonus*800+(IDLE_RARITY_ORDER[c.rarity]||0)*20+Math.log10(1+(c.rate||c.baseRate||0))*5};
+}
+function renderIdleRosterList(){
+  const list=document.getElementById('idle-picker-list');const hint=document.getElementById('idle-picker-hint');if(!list||!hint)return;
+  let available=idleRosterAvailable.filter((c)=>(idleRosterRole==='all'||c.role===idleRosterRole)&&(idleRosterRarity==='all'||c.rarity===idleRosterRarity));
+  const roleOrder={attaquant:1,producteur:2,support:3,tank:4,assassin:5};
+  available=[...available].sort((a,b)=>{
+    if(idleRosterSort==='name')return String(a.name).localeCompare(String(b.name),'fr');
+    if(idleRosterSort==='role')return (roleOrder[a.role]||9)-(roleOrder[b.role]||9)||String(a.name).localeCompare(String(b.name),'fr');
+    if(idleRosterSort==='rarity')return (IDLE_RARITY_ORDER[b.rarity]||0)-(IDLE_RARITY_ORDER[a.rarity]||0)||(b.rate||0)-(a.rate||0);
+    if(idleRosterSort==='power')return (b.rate||b.baseRate||0)-(a.rate||a.baseRate||0);
+    if(idleRosterSort==='level')return (b.level||1)-(a.level||1)||(b.rate||0)-(a.rate||0);
+    const pa=idleRosterProjection(a),pb=idleRosterProjection(b);return idleRosterSort==='synergy'?pb.synergyBonus-pa.synergyBonus||pb.formationBonus-pa.formationBonus:pb.score-pa.score;
+  });
+  hint.textContent=idleRosterAvailable.length?`${available.length} personnage(s) affiché(s) sur ${idleRosterAvailable.length} · le tri “Recommandé” privilégie synergie, formation, rareté puis production.`:'Aucun personnage disponible — utilise l’espace Invocation de la page Équipe.';
+  list.innerHTML=available.length?available.map(idleRosterCardHTML).join(''):'<p class="idle-roster-empty"><i class="fas fa-filter"></i>Aucun héros ne correspond à ces filtres.</p>';
+}
+
+function idleRosterCardHTML(c){const role=idleRoleFor(c);const rarity=idleRarityLabel(c.rarity);const projection=idleRosterProjection(c);const badges=[projection.synergyBonus?`${projection.sameSeries>=3?'Alliance':'Synergie'} +${Math.round(projection.synergyBonus*100)}%`:'',projection.formationBonus?`Formation +${Math.round(projection.formationBonus*100)}%`:''].filter(Boolean);return `<article class="idle-roster-card r-${escapeHtml(c.rarity)}" data-cid="${c.id}"><span class="idle-roster-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}></span><span class="idle-roster-main"><span class="idle-roster-heading"><b>${escapeHtml(c.name)}</b><em>${escapeHtml(rarity)}</em></span><small>${escapeHtml(c.series||'Univers inconnu')} · Nv. ${idleFormatNumber(c.level||1)}</small>${badges.length?`<span class="idle-roster-fit">${badges.map((badge)=>`<b><i class="fas fa-link"></i>${escapeHtml(badge)}</b>`).join('')}</span>`:''}<span class="idle-roster-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><b>${role.name}</b><small>${role.description}</small></span><span class="idle-roster-details"><span><i class="fas fa-fingerprint"></i><b>${escapeHtml(c.talent?.name||'Talent')}</b><small>${escapeHtml(c.talent?.description||'')}</small></span><span><i class="fas fa-bolt"></i><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'')}</small></span></span></span><span class="idle-roster-actions"><b>+${idleFormatNumber(c.rate||c.baseRate||0)}/s</b><button type="button" class="btn-secondary" data-character-details><i class="fas fa-circle-info"></i> Fiche</button><button type="button" class="btn-primary" data-character-pick>Choisir</button></span></article>`;}
 
 async function recruitIdle(currency = 'seals') {
   let r;
@@ -1438,6 +1482,7 @@ async function recruitIdle(currency = 'seals') {
   }
   renderIdleState(r);
   idleAddCombatLog(`${r.recruited.name} rejoint le Dojo`,'fa-user-plus');
+  document.getElementById('idle-summon')?.classList.add('hidden');
   showIdleRecruitReveal(r.recruited);
   await refreshIdlePickerList(); // no-op si la modale n'est pas ouverte
 }
@@ -1599,6 +1644,12 @@ function initIdleUI() {
   });
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
+  document.getElementById('idle-open-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
+  document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));
+  document.getElementById('idle-summon')?.addEventListener('click',(e)=>{if(e.target.id==='idle-summon')e.currentTarget.classList.add('hidden');});
+  document.getElementById('idle-roster-sort')?.addEventListener('change',(e)=>{idleRosterSort=e.target.value;renderIdleRosterList();});
+  document.getElementById('idle-roster-role')?.addEventListener('change',(e)=>{idleRosterRole=e.target.value;renderIdleRosterList();});
+  document.getElementById('idle-roster-rarity')?.addEventListener('change',(e)=>{idleRosterRarity=e.target.value;renderIdleRosterList();});
   document.getElementById('idle-slots')?.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('[data-action="unassign"]');
     if (removeBtn) return unassignIdleSlot(Number(removeBtn.dataset.slot));

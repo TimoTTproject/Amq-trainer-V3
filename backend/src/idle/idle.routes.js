@@ -525,6 +525,49 @@ function synergyForSlots(slots) {
   return { key: 'none', name: 'Aucune synergie', bonus: 0, multiplier: 1 };
 }
 
+// Décomposition pédagogique de la production d'équipe. Cette structure est
+// calculée avec les mêmes règles que computeTotalRate afin que l'interface
+// n'affiche jamais une « méta » approximative ou un bonus caché.
+function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkills=false) {
+  const active=slots.filter((slot)=>slot.characterId&&slot.character);
+  const roles=active.map((slot)=>roleForCharacter(slot.character));
+  const count=(role)=>roles.filter((value)=>value===role).length;
+  const roleBonus=count('attaquant')*.08+count('producteur')*.05;
+  const reserveBonus=Math.min(.20,Math.max(0,recruitCount-active.length)*.01);
+  const teamTalentBonus=active.reduce((sum,slot)=>sum+characterTalent(slot.character).team,0);
+  const passiveBonus=active.reduce((sum,slot)=>sum+((slot.level||1)>=10?({epic:.03,legendary:.08,mythic:.15}[slot.character.rarity]||0):0),0);
+  const synergy=synergyForSlots(slots);
+  const selectedFormation=FORMATIONS[formation]||FORMATIONS.balanced;
+  const formationMultiplier=selectedFormation.bonus(roles);
+  const multipliers=[
+    {key:'roles',label:'Rôles offensifs',multiplier:1+roleBonus,detail:`${count('attaquant')} Attaquant(s), ${count('producteur')} Producteur(s)`},
+    {key:'talents',label:'Talents d’équipe',multiplier:1+teamTalentBonus,detail:'Mentor, Leader et Stratège actifs'},
+    {key:'passives',label:'Passifs niv. 10',multiplier:1+passiveBonus,detail:'Bonus des héros Épiques et supérieurs'},
+    {key:'reserve',label:'Réserve',multiplier:1+reserveBonus,detail:`${Math.max(0,recruitCount-active.length)} recrue(s) non assignée(s), plafond +20%`},
+    {key:'synergy',label:'Synergie',multiplier:synergy.multiplier,detail:synergy.name},
+    {key:'formation',label:`Formation ${selectedFormation.name}`,multiplier:formationMultiplier,detail:formationMultiplier>1?'Condition remplie':'Condition non remplie ou formation neutre'},
+    {key:'auto',label:'Compétences automatiques',multiplier:autoSkills?1.15:1,detail:autoSkills?'Activées':'Inactives'},
+  ];
+  const roleDetails=[
+    {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+8% DPS d’équipe chacun',bonus:count('attaquant')*.08},
+    {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+5% DPS d’équipe chacun',bonus:count('producteur')*.05},
+    {key:'support',count:count('support'),name:'Support',effect:'−10% recharge du Combo chacun (max. −30%)',bonus:Math.min(.30,count('support')*.10),situational:true},
+    {key:'tank',count:count('tank'),name:'Tank',effect:'−15% de pénalité de boss chacun (minimum 45%)',bonus:count('tank')*.15,situational:true},
+    {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+25% dégâts chacun sous 20% PV ennemi (max. +50%)',bonus:Math.min(.50,count('assassin')*.25),situational:true},
+  ];
+  const talents=active.map((slot,index)=>{const talent=characterTalent(slot.character);return {slot:index+1,character:slot.character.name,name:talent.name,description:talent.description,teamBonus:talent.team,selfBonus:talent.self};});
+  let recommendation='Composition stable : compare les rôles, la synergie et la formation avant de remplacer un héros.';
+  if(!active.length)recommendation='Assigne un premier héros pour commencer à produire de l’Essence.';
+  else if(roles.includes('producteur')&&!roles.includes('support'))recommendation='Ajoute un Support pour activer Logistique : Producteur + Support donne ×1,18.';
+  else if(roles.includes('support')&&!roles.includes('producteur'))recommendation='Un Producteur ajoute +5% d’équipe, son talent Stratège +5%, et peut activer Logistique ×1,18.';
+  else if(formation!=='balanced'&&formationMultiplier===1)recommendation=`La formation ${selectedFormation.name} est sélectionnée mais sa condition n’est pas remplie.`;
+  return {
+    roleDetails,talents,multipliers,recommendation,
+    visibleMultiplier:multipliers.reduce((value,item)=>value*item.multiplier,1),
+    leaderExplanation:'Le premier emplacement choisit seulement le portrait du chef. Il ne donne aucun bonus caché. Le talent Leader donne +6% à toute l’équipe depuis n’importe quel emplacement.',
+  };
+}
+
 // Niveaux d'Ancients du joueur (Map clé→niveau, absent = pas encore acheté).
 async function loadAncientLevels(client, userId) {
   const rows = await client.ancientLevel.findMany({ where: { userId }, select: { ancientKey: true, level: true } });
@@ -801,7 +844,7 @@ async function buildState(userId) {
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
-    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',formations:Object.entries(FORMATIONS).map(([key,f])=>({key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier:f.bonus(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character)))})),presets },
+    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',formations:Object.entries(FORMATIONS).map(([key,f])=>({key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier:f.bonus(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character)))})),presets,meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
     offlineSummary:{awayMs:previewElapsedMs,essence:pending,kills:combatPreview.kills,waves:Math.max(0,combatPreview.stage-(user.idleStage||1)),bossBlocked:combatPreview.bossFailed,capped:Date.now()-new Date(user.idleLastCollectAt).getTime()>=offlineCapMs},
@@ -1617,6 +1660,7 @@ module.exports = {
   equipmentSetMultiplier,
   itemSalvageValue,
   progressionBossesCrossed,
+  teamMetaBreakdown,
   SEASON_TIERS,
   // Exportés pour la route admin de génération de portraits IA
   // (src/admin/admin.routes.js) — même sélection déterministe du gardien
