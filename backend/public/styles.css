@@ -6918,3 +6918,6 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-prestige-result-grid b{font-size:14px;font-variant-numeric:tabular-nums}
 .idle-prestige-result-grid small{color:#8f99a7;font-size:8.5px;font-weight:800;letter-spacing:.04em}
 @media(max-width:560px){.idle-prestige-columns{grid-template-columns:1fr}}
+
+/* Compteur « N achetables » sur le titre de la section Ancients. */
+.idle-collapse-badge{margin-left:8px;padding:3px 8px;border-radius:9px;background:#7c3aed;color:#fff;font-size:8.5px;font-weight:900;letter-spacing:.04em}
