@@ -525,7 +525,9 @@ function idleTabBadgeCounts(state) {
     + claimable(state.season?.tiers)
     + ((state.event?.weekly?.completed && !state.event?.weekly?.claimed) ? 1 : 0);
   const progression = state.rank?.ready ? 1 : 0;
-  return { team, upgrades, activities, progression, home: 0, equipment: 0 };
+  // Coffres en attente (boss + jalon) : signalés sur l'onglet Combat, où ils s'ouvrent.
+  const home = (state.battle?.bossChest?.available ? 1 : 0) + (state.dojo?.milestone?.available ? 1 : 0);
+  return { team, upgrades, activities, progression, home, equipment: 0 };
 }
 function renderIdleTabBadges(state) {
   const counts = idleTabBadgeCounts(state);

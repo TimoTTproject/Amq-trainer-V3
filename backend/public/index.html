@@ -1690,6 +1690,10 @@
                 <div class="idle-decor-next" id="idle-decor-next"></div>
               </div>
             </div>
+            <!-- Récompense en attente : affichée JUSTE SOUS la scène (avant
+                 était enterrée sous les quêtes/journal/réglages, invisible
+                 sans scroller — une récompense doit sauter aux yeux). -->
+            <button class="idle-boss-chest hidden" id="idle-boss-chest"><i class="fas fa-box-open"></i><span><b>Coffre de boss disponible</b><small id="idle-boss-chest-label">Récompense</small></span><i class="fas fa-chevron-right"></i></button>
             <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
             <div class="idle-combat-controls" aria-label="Commandes de combat">
               <button class="btn-primary idle-click-btn" id="idle-click-btn" title="Inflige des dégâts ; l’Essence tombe quand le gardien est vaincu"><i class="fas fa-hand-fist"></i><span><b>Attaquer</b><small id="idle-click-yield">5 dégâts par frappe</small></span></button>
@@ -1721,7 +1725,6 @@
                 <button class="idle-auto-skills" id="idle-auto-skills"><i class="fas fa-robot"></i><span><b>Auto-compétences</b><small id="idle-auto-skills-label">Niveau 50</small></span><i class="fas fa-toggle-off"></i></button>
               </div>
             </details>
-            <button class="idle-boss-chest hidden" id="idle-boss-chest"><i class="fas fa-box-open"></i><span><b>Coffre de boss disponible</b><small id="idle-boss-chest-label">Récompense</small></span><i class="fas fa-chevron-right"></i></button>
 
             <div class="idle-actions">
               <button class="btn-secondary" id="idle-collect-btn" title="Ajoute au solde les gains produits automatiquement par ton équipe"><i class="fas fa-coins"></i> Encaisser <span id="idle-pending-val"></span></button>
