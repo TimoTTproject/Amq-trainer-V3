@@ -6963,7 +6963,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 /* Compteur « N achetables » sur le titre de la section Ancients. */
 .idle-collapse-badge{margin-left:8px;padding:3px 8px;border-radius:9px;background:#7c3aed;color:#fff;font-size:8.5px;font-weight:900;letter-spacing:.04em}
-.idle-main-hero.no-team .idle-main-hero-avatar{border-style:dashed!important;background:#0b1018!important;color:#64748b;box-shadow:none!important;animation:none!important}.idle-main-hero.no-team .idle-main-hero-name{border-color:#64748b66;background:#0b1018f2}.idle-main-hero.no-team .idle-main-hero-name small{color:#94a3b8}.idle-main-hero.no-team>button{border-color:#e11d4866;background:#2a0d16;color:#fda4af}
+.idle-main-hero.no-team .idle-main-hero-avatar{border-style:dashed!important;background-color:#0b1018!important;color:#64748b;filter:saturate(.72);box-shadow:0 10px 24px #000b!important}.idle-main-hero.no-team .idle-main-hero-name{border-color:#64748b66;background:#0b1018f2}.idle-main-hero.no-team .idle-main-hero-name small{color:#94a3b8}.idle-main-hero.no-team>button{border-color:#e11d4866;background:#2a0d16;color:#fda4af}
 .idle-chat-launcher,.idle-community-chat{bottom:78px}
 /* Le chat reste un panneau latéral lisible sans écraser la zone de combat. */
 .idle-community-chat .idle-community-links{grid-template-columns:1fr!important}.idle-community-chat .idle-community-links button{min-width:0}.idle-community-chat .idle-community-links button span{min-width:0}.idle-community-chat .idle-community-links button b,.idle-community-chat .idle-community-links button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

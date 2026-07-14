@@ -800,12 +800,6 @@ async function buildState(userId) {
     },
   });
   if (!user) return null;
-  const starterChoices = user.idleOnboardingComplete ? [] : await prisma.character.findMany({
-    where: { rarity: 'rare', imageUrl: { not: null } },
-    select: { id:true, name:true, imageUrl:true, rarity:true, series:true },
-    orderBy: { id:'asc' },
-    take: 6,
-  });
   const [slots, recruitCount, ancientLevelsByKey,missionCounters,inventoryItems] = await Promise.all([
     loadSlots(prisma, userId),
     prisma.dojoRecruit.count({ where: { userId } }),
@@ -813,6 +807,16 @@ async function buildState(userId) {
     loadIdleCounters(userId),
     prisma.idleItem.findMany({where:{userId},orderBy:[{rarity:'desc'},{obtainedAt:'desc'}],take:IDLE_ITEM_CAPACITY}),
   ]);
+  // Certains comptes de la première bêta ont gardé le marqueur
+  // d'onboarding alors qu'un ancien reset avait supprimé leur roster. Un
+  // joueur sans aucune recrue doit toujours pouvoir récupérer un starter.
+  const needsStarter=!user.idleOnboardingComplete||recruitCount===0;
+  const starterChoices = needsStarter ? await prisma.character.findMany({
+    where: { rarity: 'rare', imageUrl: { not: null } },
+    select: { id:true, name:true, imageUrl:true, rarity:true, series:true },
+    orderBy: { id:'asc' },
+    take: 6,
+  }) : [];
   let recruits = [];let presets=[];
   try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { name:true, series: true, rarity: true } } }, orderBy:{recruitedAt:'desc'} }); } catch (e) { if (e?.code) throw e; }
   try{presets=await prisma.idleTeamPreset.findMany({where:{userId},select:{name:true,formation:true,slots:true},orderBy:{updatedAt:'desc'},take:3});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
@@ -1024,7 +1028,7 @@ async function buildState(userId) {
     inventory,
     automation:{speed:user.idleBattleSpeed||1,mode:user.idleBattleMode||'progress',autoSkills:!!user.idleAutoSkills},
     onboarding:{
-      required:!user.idleOnboardingComplete,
+      required:needsStarter,
       classes:Object.entries(HERO_CLASSES).map(([key,value])=>({key,name:value.name,icon:value.icon,description:value.description})),
       starters:starterChoices.map((character)=>({...character,talent:characterTalent(character),role:roleForCharacter(character),baseRate:slotRate(character.rarity,1)})),
     },
@@ -1226,9 +1230,12 @@ router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, na
   const characterId=Number(req.body?.characterId);
   if(!HERO_CLASSES[classKey])return res.status(400).json({error:'Classe invalide'});
   if(!Number.isInteger(characterId))return res.status(400).json({error:'Personnage invalide'});
-  const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleOnboardingComplete:true}});
+  const [user,recruitCount]=await Promise.all([
+    prisma.user.findUnique({where:{id:req.user.id},select:{idleOnboardingComplete:true}}),
+    prisma.dojoRecruit.count({where:{userId:req.user.id}}),
+  ]);
   if(!user)return res.status(404).json({error:'Compte introuvable'});
-  if(user.idleOnboardingComplete)return res.status(409).json({error:'Ton aventure a déjà commencé'});
+  if(user.idleOnboardingComplete&&recruitCount>0)return res.status(409).json({error:'Ton aventure a déjà commencé'});
   const character=await prisma.character.findFirst({where:{id:characterId,rarity:'rare',imageUrl:{not:null}},select:{id:true}});
   if(!character)return res.status(400).json({error:'Ce personnage de départ n’est pas disponible'});
   // Opérations idempotentes : le marqueur est écrit en dernier. Une coupure
