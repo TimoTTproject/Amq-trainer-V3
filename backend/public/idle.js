@@ -895,14 +895,16 @@ function renderIdleMainHero(state) {
   const avatar = document.getElementById('idle-main-hero-avatar');
   const active=(state.slots||[]).filter((slot)=>slot.character);
   const leader=(active.find((slot)=>slot.character.id===state.strategy?.leaderCharacterId)||active[0])?.character;
+  const baseHeroes={warrior:'/assets/idle/fighters/goku.webp',mage:'/assets/idle/fighters/gojo.webp',ninja:'/assets/idle/fighters/naruto.webp',swordsman:'/assets/idle/fighters/ichigo.webp',summoner:'/assets/idle/fighters/tanjiro.webp'};
+  const portrait=leader?.imageUrl||baseHeroes[state.heroClass?.key]||baseHeroes.warrior;
   if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'} hair-${state.heroStyle?.hair || 'short'} outfit-${state.heroStyle?.outfit || 'dojo'} energy-${state.heroStyle?.color || 'red'} ${leader?'':'no-team'}`;hero.setAttribute('aria-label',leader?'Personnaliser le personnage principal':'Choisir un héros pour l’équipe'); }
   if (avatar) {
     avatar.className='idle-main-hero-avatar';
-    avatar.innerHTML=leader?.imageUrl?'':`<i class="fas ${leader?(state.heroClass?.icon || 'fa-shield-halved'):'fa-user-plus'}"></i>`;
-    avatar.style.backgroundImage=leader?.imageUrl?`url('${leader.imageUrl}')`:'none';
+    avatar.innerHTML='';
+    avatar.style.backgroundImage=`url('${portrait}')`;
   }
   const name = document.getElementById('idle-main-hero-name');
-  if (name) name.textContent = leader?.name || 'Aucun héros assigné';
+  if (name) name.textContent = leader?.name || `${state.heroClass?.name||'Guerrier'} de base`;
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
   const canRestore=!leader&&Number(state.collection?.recruits||0)>0;

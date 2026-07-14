@@ -213,6 +213,19 @@ test('onboarding : impose un choix initial puis offre et assigne le starter', as
   assert.equal(slotWrite.create.characterId,starter.id);
 });
 
+test('onboarding : un ancien compte marqué terminé mais sans aucun héros récupère un starter', async () => {
+  const user=dbUser({idleOnboardingComplete:true});
+  const starter={id:88,name:'Nouveau départ',imageUrl:'https://cdn.example/restart.jpg',rarity:'rare',series:'Série'};
+  prisma.user.findUnique=async()=>user;
+  prisma.dojoRecruit.count=async()=>0;
+  prisma.character.findMany=async(args)=>args.where?.rarity==='rare'?[starter]:[];
+
+  const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(res.status,200);
+  assert.equal(res.json.onboarding.required,true);
+  assert.equal(res.json.onboarding.starters[0].id,starter.id);
+});
+
 test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé avec un coût, recrutement à son 1er coût', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
@@ -414,6 +427,7 @@ test('GET /state : sans mythique en base (ou sans portrait), le décor reste uti
 test('GET /state : le gardien du décor est mis en cache (pas de re-requête tant que le thème ne change pas)', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
+  prisma.dojoRecruit.count = async () => 1;
   let calls = 0;
   prisma.character.findMany = async () => { calls++; return [{ id: 102, name: 'Yamato', imageUrl: 'https://cdn.example/y.jpg', seriesId: null }]; };
   await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
