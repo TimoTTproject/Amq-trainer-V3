@@ -6474,6 +6474,10 @@ body.idle-fullscreen #app { padding-top: 0; }
 #feedback-message { margin-top: 10px; }
 #feedback-status { min-height: 1.2em; margin-top: 8px; }
 @media (max-width: 760px) { .feedback-fab { right: 12px; bottom: 76px; } }
+/* L'Idle a son propre formulaire de retour (onglet Activités · Observatoire
+   bêta) : le bouton flottant générique n'a plus qu'à se rajouter par-dessus
+   une scène de combat déjà dense sur mobile (chevauchait le bouton Attaquer). */
+body.idle-fullscreen .feedback-fab { display: none; }
 
 /* Lisibilité grand écran : la zone jouable utilise réellement la largeur
    disponible et les informations critiques ne descendent plus sous 10 px. */
@@ -6981,5 +6985,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-community-chat .idle-chat-quick{width:100%;flex:none}
 .idle-community-chat .idle-chat-form{position:relative!important;bottom:auto!important;width:calc(100% + 28px);flex:none;margin:8px -14px -14px!important;padding:9px 14px 14px!important}.idle-community-chat .idle-chat-form input{width:0;min-width:0;height:40px}.idle-community-chat .idle-chat-form button{height:40px;flex:none}
 @media(max-width:1200px){.idle-community-chat{width:min(360px,calc(100vw - 28px))}}
-@media(max-width:700px){.idle-chat-launcher{bottom:132px}.idle-community-chat{right:7px;bottom:72px;width:calc(100vw - 14px);height:min(560px,calc(100vh - 86px))}.idle-community-chat>header{width:calc(100% + 22px);margin:-11px -11px 0!important;padding:10px 11px!important}.idle-community-chat .idle-chat-form{width:calc(100% + 22px);margin:8px -11px -11px!important;padding:8px 11px 11px!important}}
+/* Repli compact (icône seule) sur la scène de combat mobile : la carte
+   large ("CHAT MONDE · Communauté") flottait au-dessus du bouton Attaquer,
+   quelle que soit sa position verticale — la scène y est trop dense pour
+   qu'un panneau de ~168px de large trouve une place libre. Un simple rond
+   d'icône reste un repère suffisant (le badge nombre de messages reste
+   visible) sans jamais recouvrir un bouton de jeu sur toute sa largeur. */
+@media(max-width:700px){.idle-chat-launcher{right:10px;bottom:90px;width:44px;height:44px;min-width:0;padding:0;grid-template-columns:1fr;justify-items:center}.idle-chat-launcher>span{display:none}.idle-chat-launcher>i{width:auto;height:auto;font-size:16px;background:none}.idle-community-chat{right:7px;bottom:72px;width:calc(100vw - 14px);height:min(560px,calc(100vh - 86px))}.idle-community-chat>header{width:calc(100% + 22px);margin:-11px -11px 0!important;padding:10px 11px!important}.idle-community-chat .idle-chat-form{width:calc(100% + 22px);margin:8px -11px -11px!important;padding:8px 11px 11px!important}}
 @media(max-width:420px){.idle-community-chat .idle-community-links{grid-template-columns:1fr!important}.idle-community-chat>p{display:none}.idle-community-chat>header>strong{font-size:.56rem}}
