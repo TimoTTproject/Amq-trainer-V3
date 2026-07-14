@@ -134,7 +134,7 @@ test('équilibrage : les murs croissent plus vite que les récompenses et les ac
 });
 
 test('wisdomForRunStage : exige une nouvelle run au seuil de Prestige et récompense le push',()=>{
-  assert.equal(PRESTIGE_MIN_STAGE,60); // première Retraite volontairement précoce (UX idle)
+  assert.equal(PRESTIGE_MIN_STAGE,100); // la Retraite conclut une vraie run (choix du créateur)
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE-1),0);
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),5);
   assert.ok(wisdomForRunStage(200)>wisdomForRunStage(100));

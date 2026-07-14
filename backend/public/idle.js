@@ -1923,21 +1923,49 @@ async function claimIdleMilestone() {
   refreshIdleState();
 }
 
-async function prestigeIdle() {
+// Ouvre le bilan de Prestige (modale) : le joueur voit EXACTEMENT ce qui
+// repart à zéro et ce qui est conservé avant de confirmer — le confirm()
+// texte brut laissait les testeurs dans le doute (« jsp si les sceaux sont
+// reset ou non »).
+function prestigeIdle() {
   if (!idleState || !idleState.dojo.prestige.eligible) return;
-  const ok = confirm(
-    "Prestiger remet à zéro l'essence, les emplacements et les améliorations de cette run (le niveau de l'Idle et les coffres réclamés sont conservés) contre de la Sagesse, à dépenser dans les Ancients. Confirmer ?"
-  );
-  if (!ok) return;
+  const modal = document.getElementById('idle-prestige-modal');
+  if (!modal) return;
+  const gain = idleFormatNumber(idleState.dojo.prestige.reward);
+  const gainEl = document.getElementById('idle-prestige-gain');
+  if (gainEl) gainEl.textContent = gain;
+  const gainBtn = document.getElementById('idle-prestige-gain-btn');
+  if (gainBtn) gainBtn.textContent = gain;
+  document.getElementById('idle-prestige-confirm-view')?.classList.remove('hidden');
+  document.getElementById('idle-prestige-result-view')?.classList.add('hidden');
+  const confirmBtn = document.getElementById('idle-prestige-confirm');
+  if (confirmBtn) confirmBtn.disabled = false;
+  modal.classList.remove('hidden');
+}
+
+async function confirmIdlePrestige() {
+  const confirmBtn = document.getElementById('idle-prestige-confirm');
+  if (confirmBtn) confirmBtn.disabled = true;
+  let r;
   try {
-    await api('/api/idle/prestige', { method: 'POST', body: JSON.stringify({}) });
+    r = await api('/api/idle/prestige', { method: 'POST', body: JSON.stringify({}) });
   } catch (e) {
-    alert(e.message);
+    if (confirmBtn) confirmBtn.disabled = false;
+    idleNotify(e.message, 'error');
     return;
   }
+  renderIdleState(r);
+  const recap = r.prestige || {};
+  const grid = document.getElementById('idle-prestige-result-grid');
+  if (grid) grid.innerHTML = `
+    <span><i class="fas fa-brain"></i><b>+${idleFormatNumber(recap.gained || 0)}</b><small>Sagesse gagnée</small></span>
+    <span><i class="fas fa-flag-checkered"></i><b>${idleFormatNumber(recap.stage || 0)}</b><small>Stage atteint cette run</small></span>
+    ${recap.seals ? `<span><i class="fas fa-ticket"></i><b>+${idleFormatNumber(recap.seals)}</b><small>Sceaux de palier</small></span>` : ''}
+    <span><i class="fas fa-tags"></i><b>Minimum</b><small>Prix d’invocation Essence</small></span>`;
+  document.getElementById('idle-prestige-confirm-view')?.classList.add('hidden');
+  document.getElementById('idle-prestige-result-view')?.classList.remove('hidden');
   if (typeof burstConfetti === 'function') burstConfetti(50);
   if (typeof sfx !== 'undefined' && sfx.win) sfx.win();
-  refreshIdleState();
 }
 
 function initIdleUI() {
@@ -2034,7 +2062,19 @@ function initIdleUI() {
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-wisdom')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-ancients')?.closest('.idle-collapsible')?.querySelector('[data-idle-collapse]')?.click(),80);});
-  document.getElementById('idle-prestige-quick')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-prestige-btn')?.scrollIntoView({behavior:'smooth',block:'center'}),80);});
+  // Ascension prête → confirmation directe ; sinon, montrer les conditions.
+  document.getElementById('idle-prestige-quick')?.addEventListener('click',()=>{
+    if(idleState?.dojo?.prestige?.eligible)return prestigeIdle();
+    idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-prestige-btn')?.scrollIntoView({behavior:'smooth',block:'center'}),80);
+  });
+  const prestigeModal=document.getElementById('idle-prestige-modal');
+  document.getElementById('idle-prestige-confirm')?.addEventListener('click',confirmIdlePrestige);
+  const closePrestigeModal=()=>prestigeModal?.classList.add('hidden');
+  document.getElementById('idle-prestige-modal-close')?.addEventListener('click',closePrestigeModal);
+  document.getElementById('idle-prestige-cancel')?.addEventListener('click',closePrestigeModal);
+  document.getElementById('idle-prestige-result-continue')?.addEventListener('click',()=>{closePrestigeModal();idleShowPanel('home');});
+  document.getElementById('idle-prestige-open-ancients')?.addEventListener('click',()=>{closePrestigeModal();idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-ancients')?.closest('.idle-collapsible')?.classList.remove('collapsed'),80);});
+  prestigeModal?.addEventListener('click',(e)=>{if(e.target===prestigeModal)closePrestigeModal();});
   document.getElementById('idle-coach-action')?.addEventListener('click',()=>idleCoachAction?.());
   document.getElementById('idle-coach-close')?.addEventListener('click',()=>{const coach=document.getElementById('idle-coach');if(coach?.dataset.key)sessionStorage.setItem(coach.dataset.key,'hidden');coach?.classList.add('hidden');});
   document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));

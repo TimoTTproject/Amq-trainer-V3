@@ -450,12 +450,11 @@ function milestoneReward(tier) {
 // multiplicateur automatique : depuis la refonte, c'est aux Ancients de
 // convertir cette Sagesse en puissance, avec de vrais choix à faire.
 const PRESTIGE_MIN_DOJO_LEVEL = 10; // conservé pour compatibilité d'affichage historique
-// Abaissé de 100 à 60 : la première Retraite arrivait trop tard (plusieurs
-// jours de jeu passif) alors qu'elle est LE moment où le jeu change de nature
-// (Sagesse → Ancients). Façon Clicker Heroes : première ascension rapide,
-// les suivantes se méritent — wisdomForRunStage garde sa courbe superlinéaire,
-// simplement recalée sur ce nouveau seuil.
-const PRESTIGE_MIN_STAGE = 60;
+// Stage 100 : choix assumé du créateur (le seuil avait été brièvement abaissé
+// à 60) — la Retraite doit rester un accomplissement qui conclut une vraie
+// run, pas une formalité. wisdomForRunStage est calée sur ce seuil (5 points
+// pile au minimum, superlinéaire au-delà pour récompenser le push).
+const PRESTIGE_MIN_STAGE = 100;
 // Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
 // généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
 // rapporter de nul (toujours au moins 1 point).

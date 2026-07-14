@@ -1517,6 +1517,11 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           wisdomPoints: { increment: prestigeReward },
           idleSeals:{increment:milestoneSeals},
           idlePrestigeMilestone:lastMilestone,
+          // L'Essence retombe à zéro : garder un prix d'invocation gonflé par
+          // l'ancienne run rendait le marché inabordable après chaque
+          // Retraite (retour bêta). Chaque run rouvre un marché au prix de
+          // départ — les Sceaux et la pitié, eux, ne bougent pas.
+          idleEssenceRecruitCount: 0,
         },
       });
     });
@@ -1525,7 +1530,9 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
     throw e;
   }
   void recordIdleEvent(req.user.id,'prestige',{value:prestigeReward,stage:prestigeStage});
-  res.json(await buildState(req.user.id));
+  // `prestige` : bilan de CETTE Retraite (gains + rappel de ce qui est
+  // conservé), affiché par la modale de confirmation côté client.
+  res.json({ ...(await buildState(req.user.id)), prestige: { gained: prestigeReward, stage: prestigeStage, seals: milestoneSeals } });
 });
 
 // Clic manuel : gain instantané indépendant de la production passive (pas de
