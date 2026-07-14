@@ -45,6 +45,7 @@ const RARITY_PASSIVE = {
   mythic: 'Transcendance · +15% de production à toute l’équipe au niveau 10',
 };
 const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
+const HERO_ASCENSION_LEVEL = 100;
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
@@ -141,6 +142,31 @@ function clickUpgradeCost(level) {
   const earlyDiscount=[.35,.45,.60,.75,.90][Math.max(0,level)]??1;
   return Math.round(finiteIdleNumber(60 * Math.pow(1.7, level)*earlyDiscount, 1));
 }
+
+// Amélioration « Instinct » : +1 point de chance critique par niveau.
+// Elle reste une amélioration de run et repart donc à zéro au Prestige.
+const CRIT_LEVEL_BONUS = 0.01;
+const CRIT_LEVEL_MAX = 25;
+function critUpgradeBonus(level) {
+  return Math.min(Math.max(0, level || 0), CRIT_LEVEL_MAX) * CRIT_LEVEL_BONUS;
+}
+function critUpgradeCost(level) {
+  const earlyDiscount=[.4,.5,.65,.8,.9][Math.max(0,level)]??1;
+  return Math.round(finiteIdleNumber(100 * Math.pow(1.78, level) * earlyDiscount, 1));
+}
+
+// Amélioration « Flux » : −2% sur les recharges de l'Ultime et du Combo par
+// niveau. Les Supports s'additionnent à ce bonus côté routes, avec un plafond
+// commun de −70% pour que les compétences ne deviennent jamais permanentes.
+const COOLDOWN_LEVEL_BONUS = 0.02;
+const COOLDOWN_LEVEL_MAX = 20;
+function cooldownUpgradeBonus(level) {
+  return Math.min(Math.max(0, level || 0), COOLDOWN_LEVEL_MAX) * COOLDOWN_LEVEL_BONUS;
+}
+function cooldownUpgradeCost(level) {
+  const earlyDiscount=[.4,.5,.65,.8,.9][Math.max(0,level)]??1;
+  return Math.round(finiteIdleNumber(125 * Math.pow(1.82, level) * earlyDiscount, 1));
+}
 const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood réseau
 
 // Coût pour débloquer l'emplacement d'index `nextSlotIndex` (START_SLOTS..MAX_SLOTS-1).
@@ -165,9 +191,29 @@ const ELITE_WAVE = 5;
 const ELITE_HP_MULTIPLIER = 3;
 const BOSS_TIMER_SECONDS = 30;
 const ENEMY_REWARD_BASE = 2;
-// La récompense augmente moins vite que les PV : progresser exige désormais
-// des investissements au lieu de devenir automatiquement plus facile.
-const ENEMY_REWARD_GROWTH = 1.08;
+// La récompense de base suit les PV afin qu'un monde avancé ne soit jamais
+// moins rentable à farmer que le début du jeu. La difficulté vient du mur de
+// PV à franchir et des coûts qui croissent plus vite, pas d'une incitation à
+// retourner farmer indéfiniment le stage 4.
+const ENEMY_REWARD_GROWTH = 1.131; // +0,1 pt/stage : les mondes récents gagnent légèrement en rendement
+const CAMPAIGN_ACT_LENGTH = 100;
+function campaignDifficulty(stage) {
+  const act = Math.floor((Math.max(1, Math.floor(stage || 1)) - 1) / CAMPAIGN_ACT_LENGTH) + 1;
+  const tiers = [
+    { key:'normal', name:'Normal', power:1 },
+    { key:'heroic', name:'Héroïque', power:1.35 },
+    { key:'nightmare', name:'Cauchemar', power:1.8 },
+    { key:'infernal', name:'Infernal', power:2.4 },
+    { key:'transcendent', name:'Transcendant', power:3.2 },
+  ];
+  const tier = tiers[Math.min(act, tiers.length) - 1];
+  if (act <= tiers.length) return { ...tier, act, reward:Math.pow(tier.power, .9) };
+  return {
+    key:'abyssal', name:`Abyssal ${act - tiers.length}`,
+    power:Math.min(8, 3.2 + (act - tiers.length) * .45),
+    reward:Math.pow(Math.min(8, 3.2 + (act - tiers.length) * .45), .9), act,
+  };
+}
 function isBossStage(stage) {
   return Math.max(1, Math.floor(stage || 1)) % BOSS_INTERVAL === 0;
 }
@@ -177,12 +223,12 @@ function isEliteStage(stage) {
 function enemyMaxHp(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
   const special = isBossStage(s) ? BOSS_HP_MULTIPLIER : isEliteStage(s) ? ELITE_HP_MULTIPLIER : 1;
-  return finiteIdleNumber(ENEMY_HP_BASE * Math.pow(ENEMY_HP_GROWTH, s - 1) * special, 1);
+  return finiteIdleNumber(ENEMY_HP_BASE * Math.pow(ENEMY_HP_GROWTH, s - 1) * special * campaignDifficulty(s).power, 1);
 }
 function enemyReward(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
   const special = isBossStage(s) ? 3 : isEliteStage(s) ? 1.5 : 1;
-  return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special, 1)));
+  return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special * campaignDifficulty(s).reward, 1)));
 }
 const ENEMY_ARCHETYPES = {
   standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
@@ -231,8 +277,12 @@ function enemiesDefeatedBeforeStage(stage) {
   const remainingStages = completedStages % BOSS_INTERVAL;
   return completeWorlds * 91 + remainingStages * 10; // 9 vagues ×10 ennemis + 1 boss.
 }
-function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000 } = {}) {
+const MIN_ENEMY_SECONDS = .12;
+const MIN_BOSS_SECONDS = .5;
+const MAX_STAGE_ADVANCE_PER_SYNC = 3;
+function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000, maxStageAdvance = Infinity } = {}) {
   const normalized = normalizeWaveProgress(stage, waveKills, mode);
+  const startingStage = normalized.stage;
   let currentStage = normalized.stage;
   let currentWaveKills = normalized.waveKills;
   let currentHp = Number(hp);
@@ -242,12 +292,17 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
   let kills = 0;
   let bossFailed = false;
   const farming = mode === 'farm';
+  let progressionCapped = false;
   const maxHp = () => enemyUnitMaxHp(currentStage, currentWaveKills);
   if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
   if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
 
   while (seconds > 0 && kills < maxKills) {
-    const timeToKill = currentHp / damagePerSecond;
+    // Un ennemi doit rester perceptible à l'écran : sans cadence minimale,
+    // 1,5 M DPS au stage 1 convertissait l'overkill en ~10 M Essence/minute.
+    // Le DPS conserve toute sa valeur sur le contenu adapté, mais ne permet
+    // plus de tuer des milliers d'ennemis faibles dans une seule frame.
+    const timeToKill = Math.max(currentHp / damagePerSecond, isBossStage(currentStage) ? MIN_BOSS_SECONDS : MIN_ENEMY_SECONDS);
     // Un boss trop long s'enrage, mais ne renvoie jamais silencieusement le
     // joueur à la vague précédente. L'ancien recul recréait la vague 9 à
     // chaque synchronisation et donnait l'impression que son dixième ennemi
@@ -256,13 +311,13 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
     // plutôt qu'une boucle par kill, indispensable pour plusieurs heures
     // hors-ligne à haut niveau.
     if (farming && !isBossStage(currentStage) && currentWaveKills === 0 && currentHp === maxHp()) {
-      const cycleHp = Array.from({length:10}, (_, index) => enemyUnitMaxHp(currentStage, index)).reduce((sum, value) => sum + value, 0);
+      const cycleTimes = Array.from({length:10}, (_, index) => Math.max(enemyUnitMaxHp(currentStage, index)/damagePerSecond,MIN_ENEMY_SECONDS));
       const cycleReward = Array.from({length:10}, (_, index) => enemyUnitReward(currentStage, index)).reduce((sum, value) => sum + value, 0);
-      const cycles = Math.min(Math.floor((maxKills-kills)/10), Math.floor(seconds/(cycleHp/damagePerSecond)));
-      if (cycles > 0) { essence=finiteIdleNumber(essence+cycles*cycleReward);kills+=cycles*10;seconds-=cycles*cycleHp/damagePerSecond;if(kills>=maxKills)break; }
+      const cycleSeconds=cycleTimes.reduce((sum,value)=>sum+value,0);const cycles = Math.min(Math.floor((maxKills-kills)/10), Math.floor(seconds/cycleSeconds));
+      if (cycles > 0) { essence=finiteIdleNumber(essence+cycles*cycleReward);kills+=cycles*10;seconds-=cycles*cycleSeconds;if(kills>=maxKills)break; }
     }
     if (timeToKill > seconds) {
-      currentHp -= damagePerSecond * seconds;
+      currentHp -= currentHp*(seconds/timeToKill);
       seconds = 0;
       break;
     }
@@ -272,7 +327,10 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
     currentWaveKills++;
     if (currentWaveKills >= enemiesRequiredForStage(currentStage)) {
       currentWaveKills = 0;
-      if (!farming) currentStage++;
+      if (!farming && !progressionCapped) {
+        if(currentStage-startingStage<maxStageAdvance)currentStage++;
+        else progressionCapped=true;
+      }
     }
     currentHp = enemyUnitMaxHp(currentStage, currentWaveKills);
   }
@@ -283,6 +341,7 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
     essence,
     kills,
     bossFailed,
+    progressionCapped,
     elapsedSeconds: Math.max(0, (Number(elapsedSeconds) || 0) - seconds),
   };
 }
@@ -408,7 +467,7 @@ function campaignForStage(stage) {
   const world = DOJO_DECOR[worldIndex];
   const enemyPool = CAMPAIGN_ENEMIES[worldIndex];
   const modifier = WORLD_MODIFIERS[worldIndex];
-  const difficulty = act === 1 ? {key:'normal',name:'Normal',power:1} : act === 2 ? {key:'heroic',name:'Héroïque',power:1.35} : {key:'nightmare',name:'Cauchemar',power:1+Math.min(1.5,(act-1)*.35)};
+  const difficulty = campaignDifficulty(s);
   return {
     index: worldIndex + 1, act, wave, startStage: s - wave + 1, endStage: s - wave + BOSS_INTERVAL,
     name: world.name, theme: world.theme, flavor: world.flavor,
@@ -455,16 +514,64 @@ const PRESTIGE_MIN_DOJO_LEVEL = 10; // conservé pour compatibilité d'affichage
 // run, pas une formalité. wisdomForRunStage est calée sur ce seuil (5 points
 // pile au minimum, superlinéaire au-delà pour récompenser le push).
 const PRESTIGE_MIN_STAGE = 100;
+const PRESTIGE_STAGE_STEP = 20;
+const PRESTIGE_MIN_RUN_BASE_MS = 45*60*1000;
+function prestigeMinimumRunMs(prestigeLevel=0){return PRESTIGE_MIN_RUN_BASE_MS+Math.min(45,Math.max(0,Math.floor(prestigeLevel))*3)*60*1000;}
+// Le roster, les objets et les Ancients sont permanents : garder un seuil fixe
+// rendrait chaque nouvelle retraite plus courte que la précédente. L'objectif
+// monte donc de deux mondes complets par Prestige déjà effectué. Tous les
+// objectifs restent ainsi des stages de boss (100, 120, 140...) : même type
+// de défi pour une récompense comparable.
+function prestigeRequiredStage(prestigeLevel) {
+  return PRESTIGE_MIN_STAGE + PRESTIGE_STAGE_STEP * Math.max(0, Math.floor(Number(prestigeLevel) || 0));
+}
 // Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
 // généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
 // rapporter de nul (toujours au moins 1 point).
 function wisdomForPrestige(dojoLevel) {
   return Math.max(1, Math.floor((dojoLevel || 1) / 5));
 }
-function wisdomForRunStage(stage) {
+function wisdomForRunStage(stage, prestigeLevel = 0) {
   const s = Math.max(0, Number(stage) || 0);
-  if (s < PRESTIGE_MIN_STAGE) return 0;
-  return Math.max(1, Math.floor(5 * Math.pow(s / PRESTIGE_MIN_STAGE, 1.5)));
+  const required = prestigeRequiredStage(prestigeLevel);
+  if (s < required) return 0;
+  // Une retraite au seuil paie un seul Ancient de départ (3 Sagesse pour un
+  // coût initial de 2), au lieu de financer deux niveaux immédiatement.
+  // Dépasser l'objectif reste utile, avec un rendement volontairement doux.
+  return Math.max(1, Math.floor(3 * Math.pow(s / required, 1.35)));
+}
+
+// Bénédictions temporaires : le joueur façonne un build différent à chaque
+// ascension. Chaque pouvoir apporte un avantage net avec un vrai compromis ;
+// la liste entière est remise à zéro au Prestige.
+const RUN_BLESSINGS = [
+  {key:'berserker',name:'Pacte du Berserker',icon:'fa-hand-fist',rarity:'epic',upside:'+25 % DPS d’équipe',downside:'−15 % dégâts de clic',prod:1.25,click:.85},
+  {key:'deadeye',name:'Œil du Destin',icon:'fa-crosshairs',rarity:'rare',upside:'+10 % de critique',downside:'−8 % DPS d’équipe',prod:.92,crit:.10},
+  {key:'overcharge',name:'Surcharge arcanique',icon:'fa-burst',rarity:'legendary',upside:'+40 % dégâts d’Ultime',downside:'Recharge +12 %',burst:1.40,cooldown:1.12},
+  {key:'brotherhood',name:'Serment de la Meute',icon:'fa-people-group',rarity:'epic',upside:'+35 % dégâts de Combo',downside:'−10 % dégâts de clic',team:1.35,click:.90},
+  {key:'tempo',name:'Danse du Temps',icon:'fa-hourglass-half',rarity:'legendary',upside:'Recharges −18 %',downside:'−10 % DPS d’équipe',cooldown:.82,prod:.90},
+  {key:'glass_cannon',name:'Lame de Verre',icon:'fa-khanda',rarity:'epic',upside:'+35 % dégâts de clic',downside:'−15 % DPS d’équipe',click:1.35,prod:.85},
+  {key:'discipline',name:'Discipline parfaite',icon:'fa-yin-yang',rarity:'rare',upside:'+15 % à tous les dégâts',downside:'Recharges +15 %',prod:1.15,click:1.15,burst:1.15,team:1.15,cooldown:1.15},
+  {key:'echo',name:'Écho des héros',icon:'fa-wand-sparkles',rarity:'mythic',upside:'+22 % DPS et Combo',downside:'−6 % de critique',prod:1.22,team:1.22,crit:-.06},
+];
+function parseRunBlessings(value) {
+  const values=Array.isArray(value)?value:String(value||'').split(',');
+  return values.map((key)=>String(key).trim()).filter((key)=>RUN_BLESSINGS.some((item)=>item.key===key)).slice(0,12);
+}
+function runBlessingEffects(value) {
+  const effects={prod:1,click:1,crit:0,cooldown:1,burst:1,team:1};
+  for(const key of parseRunBlessings(value)){
+    const item=RUN_BLESSINGS.find((entry)=>entry.key===key);if(!item)continue;
+    for(const stat of ['prod','click','cooldown','burst','team'])effects[stat]*=item[stat]||1;
+    effects.crit+=item.crit||0;
+  }
+  return effects;
+}
+function runBlessingChoices(userId,prestigeLevel,choiceIndex,owned=[]) {
+  const ownedKeys=parseRunBlessings(owned);const score=(item,salt)=>String(`${userId}:${prestigeLevel}:${choiceIndex}:${salt}:${item.key}`).split('').reduce((n,char)=>((n*33)^char.charCodeAt(0))>>>0,2166136261);
+  const fresh=RUN_BLESSINGS.filter((item)=>!ownedKeys.includes(item.key)).sort((a,b)=>score(a,'fresh')-score(b,'fresh'));
+  const repeats=RUN_BLESSINGS.filter((item)=>ownedKeys.includes(item.key)).sort((a,b)=>score(a,'repeat')-score(b,'repeat'));
+  return [...fresh,...repeats].slice(0,3);
 }
 
 // ── Ancients : arbre de Prestige PERMANENT (jamais reset, y compris par un
@@ -552,6 +659,14 @@ module.exports = {
   CLICK_LEVEL_MAX,
   clickYield,
   clickUpgradeCost,
+  CRIT_LEVEL_BONUS,
+  CRIT_LEVEL_MAX,
+  critUpgradeBonus,
+  critUpgradeCost,
+  COOLDOWN_LEVEL_BONUS,
+  COOLDOWN_LEVEL_MAX,
+  cooldownUpgradeBonus,
+  cooldownUpgradeCost,
   CLICK_COOLDOWN_MS,
   slotUpgradeCost,
   OFFLINE_CAP_MS,
@@ -577,6 +692,9 @@ module.exports = {
   enemyUnitReward,
   enemiesDefeatedBeforeStage,
   simulateCombat,
+  MIN_ENEMY_SECONDS,
+  MIN_BOSS_SECONDS,
+  MAX_STAGE_ADVANCE_PER_SYNC,
   CHAR_LEVEL_BONUS,
   charLevelMultiplier,
   CHAR_LEVEL_BASE_COST,
@@ -586,6 +704,7 @@ module.exports = {
   RARITY_LEVEL_BONUS,
   RARITY_PASSIVE,
   HERO_MILESTONES,
+  HERO_ASCENSION_LEVEL,
   DOJO_XP_BASE,
   DOJO_XP_GROWTH,
   dojoXpForLevel,
@@ -599,6 +718,8 @@ module.exports = {
   stageForXp,
   DOJO_DECOR,
   CAMPAIGN_ENEMIES,
+  CAMPAIGN_ACT_LENGTH,
+  campaignDifficulty,
   WORLD_MODIFIERS,
   campaignForStage,
   decorForLevel,
@@ -609,8 +730,16 @@ module.exports = {
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
   PRESTIGE_MIN_STAGE,
+  PRESTIGE_STAGE_STEP,
+  PRESTIGE_MIN_RUN_BASE_MS,
+  prestigeMinimumRunMs,
+  prestigeRequiredStage,
   wisdomForPrestige,
   wisdomForRunStage,
+  RUN_BLESSINGS,
+  parseRunBlessings,
+  runBlessingEffects,
+  runBlessingChoices,
   ANCIENT_BASE_COST,
   ANCIENT_COST_GROWTH,
   ancientCost,

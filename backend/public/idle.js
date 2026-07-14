@@ -51,6 +51,8 @@ let idleAncientsAutoOpened = false; // la section Ancients ne s'auto-déplie qu'
 let idleOrbTimer = null; // prochain orbe bonus programmé
 let idleComboCount = 0; // frénésie de clic (purement visuelle)
 let idleComboExpireAt = 0;
+let idleChatSocket = null;
+let idleChatBound = false;
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -144,8 +146,70 @@ async function openIdle() {
   idleSyncTicker = setInterval(() => {
     if (idleActivePanel === 'home' && !document.hidden) idleBackgroundSync();
   }, 6000);
+  idleConnectChat();
   await refreshIdleState();
   maybeShowIdleWelcome();
+}
+
+const IDLE_CHAT_REACTIONS=['👏','🔥','💪'];
+function idleChatReactionBar(message){
+  const m=message||{};if(!m.id)return '';
+  return `<div class="idle-chat-reactions" aria-label="Réagir au message">${IDLE_CHAT_REACTIONS.map((emoji)=>`<button type="button" data-chat-react="${emoji}" data-message-id="${escapeHtml(m.id)}" title="Réagir avec ${emoji}">${emoji}<span>${Number(m.reactions?.[emoji])||''}</span></button>`).join('')}</div>`;
+}
+function idleChatLine(message){
+  const m=message||{};const time=m.ts?new Date(m.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  if(m.type==='recruit'&&['legendary','mythic'].includes(m.rarity)){
+    return `<div class="idle-chat-drop r-${m.rarity}" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas ${m.rarity==='mythic'?'fa-star':'fa-crown'}"></i><span><small>INVOCATION ${m.rarity==='mythic'?'MYTHIQUE':'LÉGENDAIRE'}</small><b>${escapeHtml(m.player||'Un joueur')}</b> a recruté <strong>${escapeHtml(m.character||'un héros')}</strong></span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
+  }
+  if(m.type==='prestige')return `<div class="idle-chat-drop r-prestige" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas fa-brain"></i><span><small>NOUVEAU PRESTIGE</small><b>${escapeHtml(m.player||'Un joueur')}</b> atteint le <strong>Prestige ${idleFormatNumber(m.prestigeLevel||1)}</strong><em>Stage ${idleFormatNumber(m.stage||1)} · +${idleFormatNumber(m.reward||0)} Sagesse</em></span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
+  if(m.system)return `<div class="idle-chat-system"><i class="fas fa-bullhorn"></i>${escapeHtml(m.text||'')}<time>${time}</time></div>`;
+  return `<div class="idle-chat-message" data-chat-id="${escapeHtml(m.id||'')}"><span><b>${escapeHtml(m.name||'Joueur')}</b>${escapeHtml(m.text||'')}</span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
+}
+
+function idleAppendChat(message){
+  const feed=document.getElementById('idle-chat-feed');if(!feed)return;
+  feed.insertAdjacentHTML('beforeend',idleChatLine(message));
+  while(feed.children.length>60)feed.firstElementChild?.remove();
+  feed.scrollTop=feed.scrollHeight;
+}
+
+function idleLoadChatHistory(){
+  if(!idleChatSocket)return;
+  idleChatSocket.timeout(5000).emit('mp:gchat:history',(error,data)=>{
+    if(error||!data)return;
+    const feed=document.getElementById('idle-chat-feed');if(feed){feed.innerHTML=(data.messages||[]).map(idleChatLine).join('');feed.scrollTop=feed.scrollHeight;}
+    const online=document.getElementById('idle-chat-online');if(online)online.textContent=`${idleFormatNumber(data.online||0)} en ligne`;
+  });
+}
+
+function idleConnectChat(){
+  if(typeof connectMp!=='function')return;
+  const socket=connectMp();if(!socket)return;
+  idleChatSocket=socket;
+  if(!idleChatBound){
+    idleChatBound=true;
+    socket.on('mp:gchat',idleAppendChat);
+    socket.on('mp:gchat:reaction',(update)=>{
+      const row=Array.from(document.querySelectorAll('#idle-chat-feed [data-chat-id]')).find((item)=>item.dataset.chatId===String(update?.id||''));
+      const bar=row?.querySelector('.idle-chat-reactions');if(bar)bar.outerHTML=idleChatReactionBar(update);
+    });
+    socket.on('connect',idleLoadChatHistory);
+  }
+  if(socket.connected)idleLoadChatHistory();
+}
+
+function idleSendChat(event){
+  event?.preventDefault();const input=document.getElementById('idle-chat-text');const text=(input?.value||'').trim();
+  if(!text)return;
+  if(!idleChatSocket?.connected){idleNotify('Chat en cours de reconnexion…','error');idleConnectChat();return;}
+  idleChatSocket.emit('mp:gchat',text);input.value='';input.focus();
+}
+
+function idleChatCommunityClick(event){
+  const reaction=event.target.closest('[data-chat-react]');
+  if(reaction){if(idleChatSocket?.connected)idleChatSocket.emit('mp:gchat:react',{id:reaction.dataset.messageId,emoji:reaction.dataset.chatReact});else idleNotify('Chat en cours de reconnexion…','error');return;}
+  const quick=event.target.closest('[data-chat-quick]');
+  if(quick){const input=document.getElementById('idle-chat-text');if(input){input.value=quick.dataset.chatQuick;input.focus();}return;}
 }
 
 // Collecte silencieuse (pas de son/animation, contrairement à collectIdle) :
@@ -451,6 +515,7 @@ function renderIdleState(state) {
   renderIdleWorldJump(state.codex,state.battle);
   renderIdleMainHero(state);
   renderIdleTeamStrategy(state);
+  renderIdleRunJourney(state);
   renderIdleInventory(state);
   renderIdleMasteries(state.codex);
   renderIdleMilestone(state.dojo);
@@ -573,6 +638,24 @@ async function openIdleCollectionSeries(series) {
       <span ${c.imageUrl ? `style="background-image:url('${escapeHtml(c.imageUrl)}')"` : ''}></span>
       <figcaption>${c.owned ? `${c.awakened ? '✦ ' : ''}${escapeHtml(c.name)}` : '???'}</figcaption>
     </figure>`).join('');
+}
+
+function renderIdleRunJourney(state){
+  const build=state.run?.build||{};const roles=state.strategy?.roles||[];const counts=roles.reduce((map,role)=>(map[role]=(map[role]||0)+1,map),{});
+  const archetype=roles.length<2?'Escouade novice':new Set(roles).size>=4?'Compagnie légendaire':(counts.attaquant||0)+(counts.assassin||0)>=3?'Avant-garde offensive':(counts.support||0)>=2?'Ordre mystique':(counts.tank||0)>=2?'Bastion du Dojo':(counts.producteur||0)>=2?'Guilde marchande':'Groupe polyvalent';
+  const act=document.getElementById('idle-run-act');if(act)act.textContent=`ACTE ${idleFormatNumber(state.run?.act||1)} · STAGE ${idleFormatNumber(state.run?.stage||1)}`;
+  const archetypeEl=document.getElementById('idle-run-archetype');if(archetypeEl)archetypeEl.textContent=archetype;
+  const power=document.getElementById('idle-run-power');if(power)power.textContent=idleFormatNumber(Math.round((state.totalRate||0)+(state.click?.damage||0)));
+  const next=document.getElementById('idle-run-next');if(next)next.textContent=build.pending?'CHOIX DISPONIBLE':build.nextStage?`Stage ${idleFormatNumber(build.nextStage)}`:'Build complet';
+  const list=document.getElementById('idle-run-blessings');if(list)list.innerHTML=(build.blessings||[]).length?(build.blessings||[]).map((item,index)=>`<article class="r-${escapeHtml(item.rarity)}"><i class="fas ${escapeHtml(item.icon)}"></i><span><small>POUVOIR ${index+1}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(item.upside)} · <strong>${escapeHtml(item.downside)}</strong></em></span></article>`).join(''):`<p><i class="fas fa-route"></i><span><b>Ton build de run commence au stage 21</b><small>Vaincs les gardiens majeurs, choisis parmi 3 pouvoirs et adapte ton équipe aux bonus obtenus.</small></span></p>`;
+  const choice=document.getElementById('idle-run-choice');choice?.classList.toggle('hidden',!build.pending);
+  const choices=document.getElementById('idle-run-choices');if(choices)choices.innerHTML=(build.choices||[]).map((item)=>`<button type="button" data-run-blessing="${escapeHtml(item.key)}" class="r-${escapeHtml(item.rarity)}"><i class="fas ${escapeHtml(item.icon)}"></i><span><small>${escapeHtml(item.rarity).toUpperCase()}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(item.upside)}</em><strong>${escapeHtml(item.downside)}</strong></span><i class="fas fa-chevron-right"></i></button>`).join('');
+}
+
+async function chooseIdleRunBlessing(key){
+  const choice=document.getElementById('idle-run-choice');choice?.classList.add('choosing');
+  try{const state=await api('/api/idle/run-blessing',{method:'POST',body:JSON.stringify({key})});renderIdleState(state);idleSpawnFloat('BÉNÉDICTION ACQUISE','crit');idleNotify('Ton build de run évolue. Cette bénédiction sera retirée au Prestige.','success');}
+  catch(e){idleNotify(e.message,'error');}finally{choice?.classList.remove('choosing');}
 }
 
 function renderIdleOnboarding(onboarding) {
@@ -735,7 +818,7 @@ function renderIdleInventory(state){
   const summary=document.getElementById('idle-item-collection-stats');if(summary){const s=inventory.summary||{};summary.innerHTML=`<span><i class="fas fa-earth-europe"></i><b>${s.worlds||0}</b><small>Mondes pillés</small></span><span><i class="fas fa-wand-sparkles"></i><b>${s.effects||0}</b><small>Effets trouvés</small></span><span><i class="fas fa-layer-group"></i><b>${s.completeFamilies||0}</b><small>Panoplies réunies</small></span><span><i class="fas fa-user-shield"></i><b>${s.equipped||0}</b><small>Pièces équipées</small></span>`;}
   const families=document.getElementById('idle-item-families');if(families)families.innerHTML=(inventory.families||[]).map((family)=>`<span class="${family.complete?'complete':''}"><b>${escapeHtml(family.world)}</b><em>${['weapon','relic','accessory'].map((kind)=>`<i class="fas ${IDLE_ITEM_META[kind].icon} ${family.kinds.includes(kind)?'found':''}"></i>`).join('')}</em>${family.complete?'<small>+10%</small>':''}</span>`).join('');
   const active=(state.slots||[]).filter((s)=>s.character);
-  const loadouts=document.getElementById('idle-loadouts');if(loadouts)loadouts.innerHTML=active.length?active.map((slot)=>{const equipped=inventory.items.filter((x)=>x.equippedSlotIndex===slot.index);const complete=new Set(equipped.map((x)=>x.kind)).size===3&&new Set(equipped.map((x)=>x.sourceWorld)).size===1;return `<article class="idle-loadout ${complete?'complete':''}"><img src="${escapeHtml(slot.character.imageUrl||'')}" alt=""><div><b>${escapeHtml(slot.character.name)}</b><small>Emplacement ${slot.index+1}${complete?` · Panoplie ${escapeHtml(equipped[0].sourceWorld)} +10%`:''}</small></div><span>${['weapon','relic','accessory'].map((kind)=>{const item=equipped.find((x)=>x.kind===kind);return item?`<span title="${escapeHtml(item.name)}">${idleItemArt(item,'mini')}</span>`:`<i class="fas ${IDLE_ITEM_META[kind].icon} empty" title="Vide"></i>`;}).join('')}</span></article>`;}).join(''):'<p class="hint">Assigne un personnage à ton équipe pour pouvoir l’équiper.</p>';
+  const loadouts=document.getElementById('idle-loadouts');if(loadouts)loadouts.innerHTML=active.length?active.map((slot)=>{const equipped=inventory.items.filter((x)=>x.equippedSlotIndex===slot.index);const complete=new Set(equipped.map((x)=>x.kind)).size===3&&new Set(equipped.map((x)=>x.sourceWorld)).size===1;const total=equipped.reduce((sum,item)=>sum+(item.effectiveBonus||item.bonus||0),0)*(complete?1.10:1);return `<article class="idle-loadout ${complete?'complete':''}"><header><img src="${escapeHtml(slot.character.imageUrl||'')}" alt="Portrait de ${escapeHtml(slot.character.name)}"><span><small>${escapeHtml(idleRoleFor(slot.character).name)} · Emplacement ${slot.index+1}</small><b>${escapeHtml(slot.character.name)}</b>${complete?`<em><i class="fas fa-layer-group"></i> Panoplie ${escapeHtml(equipped[0].sourceWorld)} · +10%</em>`:'<em>Panoplie incomplète</em>'}</span><strong title="Bonus DPS cumulé">DPS +${Math.round(total*100)}%</strong></header><div class="idle-loadout-items">${['weapon','relic','accessory'].map((kind)=>{const meta=IDLE_ITEM_META[kind];const item=equipped.find((x)=>x.kind===kind);return item?`<button type="button" data-loadout-item="${escapeHtml(item.id)}" class="r-${item.rarity}" title="Retrouver ${escapeHtml(item.name)} dans l’inventaire">${idleItemArt(item,'mini')}<span><small>${meta.label} · ${escapeHtml(idleRarityLabel(item.rarity))}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(idleItemEffect(item))}</em></span><strong>+${Math.round((item.effectiveBonus||item.bonus||0)*100)}%</strong><i class="fas fa-chevron-down"></i></button>`:`<span class="idle-loadout-empty"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b>Emplacement vide</b></span></span>`;}).join('')}</div></article>`;}).join(''):'<p class="hint">Assigne un personnage à ton équipe pour pouvoir l’équiper.</p>';
   let items=inventory.items.filter((x)=>idleItemFilter==='all'||x.kind===idleItemFilter);
   items=[...items].sort((a,b)=>idleItemSort==='recent'?new Date(b.obtainedAt)-new Date(a.obtainedAt):idleItemSort==='rarity'?(IDLE_RARITY_ORDER[b.rarity]-IDLE_RARITY_ORDER[a.rarity]):((b.effectiveBonus||b.bonus)-(a.effectiveBonus||a.bonus)));
   const salvageableIds=new Set(inventory.items.filter((item)=>!item.locked&&item.equippedSlotIndex===null).map((item)=>item.id));idleSelectedItems=new Set([...idleSelectedItems].filter((id)=>salvageableIds.has(id)));
@@ -747,6 +830,8 @@ function renderIdleInventory(state){
 }
 async function equipIdleItem(itemId,slotIndex){try{renderIdleState(await api('/api/idle/equipment/equip',{method:'POST',body:JSON.stringify({itemId,slotIndex})}));idleSpawnFloat('ÉQUIPEMENT MODIFIÉ','xp');}catch(e){idleNotify(e.message,'error');}}
 async function unequipIdleItem(itemId){try{renderIdleState(await api('/api/idle/equipment/unequip',{method:'POST',body:JSON.stringify({itemId})}));}catch(e){idleNotify(e.message,'error');}}
+async function autoEquipIdleItems(){const button=document.getElementById('idle-auto-equip');if(button){button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i> Optimisation…';}try{const result=await api('/api/idle/equipment/auto-equip',{method:'POST',body:JSON.stringify({})});renderIdleState(result.state);const o=result.optimization||{};if(o.changed){idleSpawnFloat(`${o.changed} ÉQUIPEMENT${o.changed>1?'S':''} OPTIMISÉ${o.changed>1?'S':''}`,'crit');idleNotify(`${o.equipped} pièces réparties selon les rôles et les panoplies.`,'success');}else idleNotify('L’équipement actuel est déjà optimal.','success');}catch(e){idleNotify(e.message,'error');}finally{if(button){button.disabled=false;button.innerHTML='<i class="fas fa-shield-heart"></i> Équiper au mieux';}}}
+function focusIdleInventoryItem(itemId){idleItemFilter='all';document.querySelectorAll('#idle-item-filters [data-item-filter]').forEach((button)=>button.classList.toggle('active',button.dataset.itemFilter==='all'));renderIdleInventory(idleState);requestAnimationFrame(()=>{const card=Array.from(document.querySelectorAll('#idle-inventory-grid [data-item-id]')).find((item)=>item.dataset.itemId===String(itemId));card?.scrollIntoView({behavior:'smooth',block:'center'});card?.classList.add('idle-item-focus');setTimeout(()=>card?.classList.remove('idle-item-focus'),1400);});}
 async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){idleNotify(e.message,'error');}}
 function renderIdleBulkSelection(){const items=(idleState?.inventory?.items||[]).filter((item)=>idleSelectedItems.has(item.id));const summary=document.getElementById('idle-selected-summary');const button=document.getElementById('idle-salvage-selected');const value=items.reduce((sum,item)=>sum+(item.salvageValue||0),0);if(summary)summary.textContent=items.length?`${items.length} objet(s) · ${idleFormatNumber(value)} Essence estimée`:'Aucun objet sélectionné';if(button)button.disabled=!items.length;}
 function toggleIdleItemSelection(itemId){if(idleSelectedItems.has(itemId))idleSelectedItems.delete(itemId);else idleSelectedItems.add(itemId);renderIdleInventory(idleState);}
@@ -1450,18 +1535,21 @@ function renderIdlePrestige(dojo) {
   document.getElementById('idle-prestige-lvl').textContent = `Nv. ${dojo.prestige.level}`;
   const btn = document.getElementById('idle-prestige-btn');
   const hint = document.getElementById('idle-prestige-hint');
+  const stageReady=dojo.prestige.runBestStage>=dojo.prestige.minStage;const remainingMs=Math.max(0,(dojo.prestige.minRunMs||0)-(dojo.prestige.runElapsedMs||0));const remainingMinutes=Math.ceil(remainingMs/60000);
   if (btn) btn.disabled = !dojo.prestige.eligible;
   if (hint) {
     hint.textContent = dojo.prestige.eligible
       ? `Prestige disponible : +${idleFormatNumber(dojo.prestige.reward)} Sagesse.`
-      : `Atteins le stage ${dojo.prestige.minStage} pendant cette run (record : ${dojo.prestige.runBestStage}).`;
+      : !stageReady?`Atteins le stage ${dojo.prestige.minStage} pendant cette run (record : ${dojo.prestige.runBestStage}).`:`Stage atteint · stabilise encore cette run pendant ${remainingMinutes} min avant le Prestige.`;
   }
   const quick=document.getElementById('idle-prestige-quick');
   if(quick){
     quick.classList.toggle('available',!!dojo.prestige.eligible);
-    quick.innerHTML=`<i class="fas fa-brain"></i><span><small>${dojo.prestige.eligible?'ASCENSION DISPONIBLE':'PROCHAINE ASCENSION'}</small><b>+${idleFormatNumber(dojo.prestige.reward)} Sagesse</b><em>${dojo.prestige.eligible?'Voir et confirmer':'Record '+idleFormatNumber(dojo.prestige.runBestStage)+' / '+idleFormatNumber(dojo.prestige.minStage)}</em></span><i class="fas fa-arrow-right"></i>`;
+    quick.innerHTML=`<i class="fas fa-brain"></i><span><small>${dojo.prestige.eligible?'ASCENSION DISPONIBLE':'PROCHAINE ASCENSION'}</small><b>+${idleFormatNumber(dojo.prestige.reward)} Sagesse</b><em>${dojo.prestige.eligible?'Voir et confirmer':stageReady?`Stage validé · encore ${remainingMinutes} min`:'Record '+idleFormatNumber(dojo.prestige.runBestStage)+' / '+idleFormatNumber(dojo.prestige.minStage)}</em></span><i class="fas fa-arrow-right"></i>`;
   }
   const paths=document.getElementById('idle-prestige-paths');if(paths)paths.innerHTML=(dojo.prestige.paths||[]).map((p)=>`<button data-prestige-path="${p.key}" class="${p.selected?'active':''}" ${dojo.prestige.level<1?'disabled':''}><i class="fas ${p.key==='fist'?'fa-hand-fist':p.key==='army'?'fa-users':p.key==='time'?'fa-clock':'fa-scale-balanced'}"></i><b>${escapeHtml(p.name)}</b><small>Équipe ×${p.prod.toFixed(2)} · Clic ×${p.click.toFixed(2)}</small></button>`).join('');
+  const preview=document.getElementById('idle-prestige-preview');const details=dojo.prestige.preview;
+  if(preview&&details){const value=(v)=>typeof v==='number'?idleFormatNumber(v):escapeHtml(String(v));preview.innerHTML=`<section class="reset"><header><i class="fas fa-rotate-left"></i><span><b>RÉINITIALISÉ</b><small>Progression de cette run</small></span></header>${details.reset.map((item)=>`<p><span>${escapeHtml(item.label)}</span><strong>${value(item.before)} <i class="fas fa-arrow-right"></i> ${value(item.after)}</strong></p>`).join('')}</section><section class="kept"><header><i class="fas fa-shield-heart"></i><span><b>CONSERVÉ</b><small>Progression permanente</small></span></header>${details.kept.map((item)=>`<p><span>${escapeHtml(item.label)}</span><strong>${value(item.value)}</strong></p>`).join('')}</section><aside><i class="fas fa-circle-info"></i>${escapeHtml(details.note)}</aside>`;}
 }
 
 // Description lisible d'un Ancient selon son `kind` (cf. ANCIENTS côté serveur,
@@ -1518,7 +1606,7 @@ function renderIdleAncients(ancients) {
 function idleHeroMilestonesHTML(character, sheet = false) {
   const milestones=character?.milestones||[];if(!milestones.length)return'';
   const next=milestones.find((item)=>!item.reached);
-  return `<section class="idle-hero-milestone-guide ${sheet?'sheet':''}"><header><span><i class="fas fa-flag-checkered"></i><b>Paliers de puissance</b></span><small>Chaque palier atteint double la production du personnage. Les bonus se cumulent.</small></header><div>${milestones.map((item)=>`<span class="${item.reached?'reached':item===next?'next':''}" title="${escapeHtml(item.effect)} · multiplicateur cumulé ×${item.cumulativeMultiplier}"><b>Niv. ${item.target}</b><em>${item.target===10?'×2 + passif':item.target===500?'×2 + Ascension':'Production ×2'}</em>${item.reached?'<i class="fas fa-check"></i>':''}</span>`).join('')}</div>${next?`<p><i class="fas fa-arrow-trend-up"></i> Prochain : <b>niveau ${next.target}</b> · ${escapeHtml(next.effect)} · multiplicateur total des paliers <strong>×${next.cumulativeMultiplier}</strong></p>`:'<p><i class="fas fa-circle-check"></i> Tous les paliers sont atteints · Ascension disponible.</p>'}</section>`;
+  return `<section class="idle-hero-milestone-guide ${sheet?'sheet':''}"><header><span><i class="fas fa-flag-checkered"></i><b>Paliers de puissance</b></span><small>Chaque palier atteint double la production du personnage. Les bonus se cumulent.</small></header><div>${milestones.map((item)=>`<span class="${item.reached?'reached':item===next?'next':''}" title="${escapeHtml(item.effect)} · multiplicateur cumulé ×${item.cumulativeMultiplier}"><b>Niv. ${item.target}</b><em>${item.target===10?'×2 + passif':item.target===(c.ascensionLevel||100)?'×2 + Ascension':'Production ×2'}</em>${item.reached?'<i class="fas fa-check"></i>':''}</span>`).join('')}</div>${next?`<p><i class="fas fa-arrow-trend-up"></i> Prochain : <b>niveau ${next.target}</b> · ${escapeHtml(next.effect)} · multiplicateur total des paliers <strong>×${next.cumulativeMultiplier}</strong></p>`:'<p><i class="fas fa-circle-check"></i> Tous les paliers sont atteints.</p>'}</section>`;
 }
 
 // Ligne de héros compacte façon Clicker Heroes — volontairement PAS cardHTML()
@@ -1565,7 +1653,7 @@ function idleSlotHTML(slot) {
     <div class="idle-equipment-title"><i class="fas fa-shield-halved"></i> ÉQUIPEMENT <small>Arme · Relique · Accessoire</small></div>
     <div class="idle-equipment">${equipment}</div>
     <div class="idle-level-buys">${[1,5,10,100,'max'].map((n) => {const cost=n==='max'?c.levelUpCost:c.levelCosts[n];return `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="${n==='max'?'Acheter le maximum abordable':`Monter de ${n} niveaux · coût ${idleFormatNumber(cost)}`}"${idleState && idleState.essence < cost ? ' disabled' : ''}><b>${n==='max'?'MAX':`×${n}`}</b><small>${n==='max'?'budget':idleFormatNumber(cost)}</small></button>`;}).join('')}</div>
-    ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau 500 · prochain multiplicateur ×${c.ascensionMultiplier * 2}</span>`}
+    ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" title="Double la puissance pour cette run · réinitialisée au Prestige" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= 5 ? '<span class="idle-ascend-max">ASCENSION MAXIMALE · ×32 · RESET AU PRESTIGE</span>' : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau ${c.ascensionLevel||100} · prochain ×${c.ascensionMultiplier * 2} · reset au Prestige</span>`}
   </div>`;
 }
 
@@ -1593,6 +1681,14 @@ function renderIdleUpgrades(state) {
     {
       type: 'slot', icon: 'fa-square-plus', title: 'Nouvel emplacement', level: state.slotsUnlocked, maxed: state.slotsUnlocked >= state.maxSlots, cost: nextSlotCost,
       label:'Héros actifs',before:`${state.slotsUnlocked}/${state.maxSlots}`,after:`${Math.min(state.maxSlots,state.slotsUnlocked+1)}/${state.maxSlots}`,desc:'Ajoute une place pour un producteur et ses bonus de rôle, talent et équipement.',
+    },
+    {
+      type:'crit',icon:'fa-bullseye',title:'Instinct',level:state.crit.level,maxed:state.crit.maxed,cost:state.crit.nextCost,
+      label:'Chance de coup critique',before:`${Math.round(state.crit.chance*100)}%`,after:`${Math.round((state.crit.nextChance??state.crit.chance)*100)}%`,desc:'Ajoute +1 point de chance critique aux frappes manuelles par niveau. Un critique inflige ×2 dégâts.',
+    },
+    {
+      type:'cooldown',icon:'fa-stopwatch',title:'Flux',level:state.cooldown.level,maxed:state.cooldown.maxed,cost:state.cooldown.nextCost,
+      label:'Recharge des compétences',before:`${state.cooldown.burstSeconds}s · ${state.cooldown.teamSeconds}s`,after:`${state.cooldown.nextBurstSeconds??state.cooldown.burstSeconds}s · ${state.cooldown.nextTeamSeconds??state.cooldown.teamSeconds}s`,desc:'Réduit de 2% par niveau la recharge de l’Ultime et du Combo. Se cumule avec les Supports.',
     },
   ];
   const available=items.filter((item)=>!item.maxed&&Number.isFinite(item.cost));
@@ -1789,6 +1885,7 @@ async function unassignIdleSlot(slotIndex) {
 
 async function openIdlePicker(slotIndex) {
   idlePickerSlot = slotIndex;
+  const slotLabel=document.getElementById('idle-picker-slot-label');if(slotLabel)slotLabel.textContent=String(slotIndex+1);
   document.getElementById('idle-picker').classList.remove('hidden');
   await refreshIdlePickerList();
 }
@@ -1835,11 +1932,11 @@ function renderIdleRosterList(){
     if(idleRosterSort==='level')return (b.level||1)-(a.level||1)||(b.rate||0)-(a.rate||0);
     const pa=idleRosterProjection(a),pb=idleRosterProjection(b);return idleRosterSort==='synergy'?pb.synergyBonus-pa.synergyBonus||pb.formationBonus-pa.formationBonus:pb.score-pa.score;
   });
-  hint.textContent=idleRosterAvailable.length?`${available.length} personnage(s) affiché(s) sur ${idleRosterAvailable.length} · le tri “Recommandé” privilégie synergie, formation, rareté puis production.`:'Aucun personnage disponible — utilise l’espace Invocation de la page Équipe.';
+  hint.innerHTML=idleRosterAvailable.length?`<i class="fas fa-users"></i><span><b>${available.length}</b> personnage${available.length>1?'s':''} affiché${available.length>1?'s':''} sur ${idleRosterAvailable.length}<small>Le tri recommandé compare synergie, formation, rareté et production.</small></span>`:'<i class="fas fa-circle-info"></i><span>Aucun personnage disponible<small>Utilise l’espace Invocation de la page Équipe.</small></span>';
   list.innerHTML=available.length?available.map(idleRosterCardHTML).join(''):'<p class="idle-roster-empty"><i class="fas fa-filter"></i>Aucun héros ne correspond à ces filtres.</p>';
 }
 
-function idleRosterCardHTML(c){const role=idleRoleFor(c);const rarity=idleRarityLabel(c.rarity);const projection=idleRosterProjection(c);const badges=[projection.synergyBonus?`${projection.sameSeries>=3?'Alliance':'Synergie'} +${Math.round(projection.synergyBonus*100)}%`:'',projection.formationBonus?`Formation +${Math.round(projection.formationBonus*100)}%`:''].filter(Boolean);return `<article class="idle-roster-card r-${escapeHtml(c.rarity)} ${c.awakened?'is-awakened':''}" data-cid="${c.id}"><span class="idle-roster-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}></span><span class="idle-roster-main"><span class="idle-roster-heading"><b>${c.awakened?'✦ ':''}${escapeHtml(c.name)}</b><em>${escapeHtml(rarity)}</em></span><small>${escapeHtml(c.series||'Univers inconnu')} · Nv. ${idleFormatNumber(c.level||1)}</small>${badges.length?`<span class="idle-roster-fit">${badges.map((badge)=>`<b><i class="fas fa-link"></i>${escapeHtml(badge)}</b>`).join('')}</span>`:''}<span class="idle-roster-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><b>${role.name}</b><small>${role.description}</small></span><span class="idle-roster-details"><span><i class="fas fa-fingerprint"></i><b>${escapeHtml(c.talent?.name||'Talent')}</b><small>${escapeHtml(c.talent?.description||'')}</small></span><span><i class="fas fa-bolt"></i><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><small>${escapeHtml(c.combatSkill?.description||'')}</small></span></span></span><span class="idle-roster-actions"><b>+${idleFormatNumber(c.rate||c.baseRate||0)}/s</b><button type="button" class="btn-secondary" data-character-details><i class="fas fa-circle-info"></i> Fiche</button><button type="button" class="btn-primary" data-character-pick>Choisir</button></span></article>`;}
+function idleRosterCardHTML(c,index){const role=idleRoleFor(c);const rarity=idleRarityLabel(c.rarity);const projection=idleRosterProjection(c);const recommended=idleRosterSort==='meta'&&index===0;const badges=[projection.synergyBonus?`${projection.sameSeries>=3?'Alliance':'Synergie'} +${Math.round(projection.synergyBonus*100)}%`:'',projection.formationBonus?`Formation +${Math.round(projection.formationBonus*100)}%`:''].filter(Boolean);return `<article class="idle-roster-card r-${escapeHtml(c.rarity)} ${recommended?'recommended':''} ${c.awakened?'is-awakened':''}" data-cid="${c.id}"><span class="idle-roster-portrait" ${c.imageUrl?`style="background-image:url('${escapeHtml(c.imageUrl)}')"`:''}><em>${c.awakened?'✦ ':''}${escapeHtml(rarity)}</em></span><span class="idle-roster-main"><span class="idle-roster-heading"><span><b>${c.awakened?'✦ ':''}${escapeHtml(c.name)}</b><small>${escapeHtml(c.series||'Univers inconnu')}</small></span>${recommended?'<em><i class="fas fa-star"></i> Meilleur choix</em>':''}</span><span class="idle-roster-overview"><span class="idle-roster-role" style="--role:${role.color}"><i class="fas ${role.icon}"></i><span><small>RÔLE</small><b>${role.name}</b><em>${escapeHtml(role.description)}</em></span></span><span class="idle-roster-power"><small>PRODUCTION · NIV. ${idleFormatNumber(c.level||1)}</small><b>+${idleFormatNumber(c.rate||c.baseRate||0)}<em>/s</em></b></span></span>${badges.length?`<span class="idle-roster-fit">${badges.map((badge)=>`<b><i class="fas fa-link"></i>${escapeHtml(badge)}</b>`).join('')}</span>`:'<span class="idle-roster-fit neutral"><b><i class="fas fa-circle-minus"></i>Aucun bonus d’équipe immédiat</b></span>'}<span class="idle-roster-details"><span><i class="fas fa-fingerprint"></i><span><small>TALENT</small><b>${escapeHtml(c.talent?.name||'Talent')}</b><em>${escapeHtml(c.talent?.description||'Aucun détail disponible.')}</em></span></span><span><i class="fas fa-bolt"></i><span><small>TECHNIQUE</small><b>${escapeHtml(c.combatSkill?.name||'Technique')}</b><em>${escapeHtml(c.combatSkill?.description||'Aucun détail disponible.')}</em></span></span></span></span><span class="idle-roster-actions"><button type="button" class="btn-secondary" data-character-details><i class="fas fa-circle-info"></i> Voir la fiche</button><button type="button" class="btn-primary" data-character-pick><i class="fas fa-user-plus"></i> Choisir</button></span></article>`;}
 
 async function recruitIdle(currency = 'seals') {
   let r;
@@ -2034,6 +2131,11 @@ function initIdleUI() {
   document.getElementById('idle-challenges')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-challenge-claim]');if(b&&!b.disabled)claimIdleChallenge(b.dataset.challengeClaim);});
   document.getElementById('idle-telemetry-load')?.addEventListener('click',loadIdleTelemetry);
   document.getElementById('idle-feedback-form')?.addEventListener('submit',sendIdleFeedback);
+  document.getElementById('idle-chat-form')?.addEventListener('submit',idleSendChat);
+  document.getElementById('idle-run-choice')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-run-blessing]');if(button&&!button.disabled)chooseIdleRunBlessing(button.dataset.runBlessing);});
+  document.querySelector('.idle-community-chat')?.addEventListener('click',idleChatCommunityClick);
+  document.getElementById('idle-community-ranking')?.addEventListener('click',openIdleRanking);
+  document.getElementById('idle-community-friends')?.addEventListener('click',()=>document.getElementById('friends-popover-btn')?.click());
   document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-ranking-btn')?.addEventListener('click',openIdleRanking);document.getElementById('idle-ranking-close')?.addEventListener('click',()=>document.getElementById('idle-ranking-modal')?.classList.add('hidden'));document.getElementById('idle-ranking-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-ranking-modal')e.currentTarget.classList.add('hidden');});
   const settingsModal=document.getElementById('idle-settings-modal');document.getElementById('idle-settings-btn')?.addEventListener('click',()=>{applyIdleComfortSettings();settingsModal?.classList.remove('hidden');document.getElementById('idle-volume')?.focus();});document.getElementById('idle-settings-close')?.addEventListener('click',()=>settingsModal?.classList.add('hidden'));settingsModal?.addEventListener('click',(e)=>{if(e.target===settingsModal)settingsModal.classList.add('hidden');});document.getElementById('idle-volume')?.addEventListener('input',(e)=>sfx?.setIdleVolume?.(e.target.value));document.getElementById('idle-effects-reduced')?.addEventListener('change',(e)=>{sfx?.setIdleEffectsReduced?.(!e.target.checked);applyIdleComfortSettings();});
@@ -2049,6 +2151,8 @@ function initIdleUI() {
   document.getElementById('idle-item-filters')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-item-filter]');if(!b)return;idleItemFilter=b.dataset.itemFilter;document.querySelectorAll('[data-item-filter]').forEach((x)=>x.classList.toggle('active',x===b));renderIdleInventory(idleState);});
   document.getElementById('idle-item-sort')?.addEventListener('change',(e)=>{idleItemSort=e.target.value;renderIdleInventory(idleState);});
   document.getElementById('idle-select-recyclable')?.addEventListener('click',()=>{const candidates=(idleState?.inventory?.items||[]).filter((item)=>item.rarity==='rare'&&!item.locked&&item.equippedSlotIndex===null);idleSelectedItems=new Set(candidates.map((item)=>item.id));renderIdleInventory(idleState);});
+  document.getElementById('idle-auto-equip')?.addEventListener('click',autoEquipIdleItems);
+  document.getElementById('idle-loadouts')?.addEventListener('click',(e)=>{const item=e.target.closest('[data-loadout-item]');if(item)focusIdleInventoryItem(item.dataset.loadoutItem);});
   document.getElementById('idle-salvage-selected')?.addEventListener('click',()=>salvageIdleItems([...idleSelectedItems]));
   document.getElementById('idle-inventory-grid')?.addEventListener('change',(e)=>{const select=e.target.closest('[data-item-target]');if(!select)return;const card=select.closest('[data-item-id]');const item=idleState?.inventory?.items?.find((x)=>x.id===card?.dataset.itemId);const comparison=card?.querySelector('[data-item-comparison]');if(item&&comparison)comparison.innerHTML=idleItemComparison(item,Number(select.value));});
   document.getElementById('idle-inventory-grid')?.addEventListener('click',(e)=>{const card=e.target.closest('[data-item-id]');if(!card)return;const itemId=card.dataset.itemId;const item=idleState.inventory.items.find((x)=>x.id===itemId);const lock=e.target.closest('[data-item-lock]');if(lock)return lockIdleItem(itemId,!item.locked);if(e.target.closest('[data-item-select]'))return toggleIdleItemSelection(itemId);if(e.target.closest('[data-item-enhance]'))return enhanceIdleEquipment(item.equippedSlotIndex,item.kind);if(e.target.closest('[data-item-equip]'))return equipIdleItem(itemId,Number(card.querySelector('[data-item-target]')?.value));if(e.target.closest('[data-item-unequip]'))return unequipIdleItem(itemId);if(e.target.closest('[data-item-salvage]'))return salvageIdleItem(itemId);});

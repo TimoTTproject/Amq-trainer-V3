@@ -7,11 +7,11 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
 const {
-  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, charLevelUpCost,
-  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, wisdomForRunStage, enemyMaxHp,
-  ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, enemiesDefeatedBeforeStage,
+  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, charLevelUpCost,
+  milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
+  ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -19,7 +19,7 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, essenceEarnedTotal: 0, idleRunEssenceEarned:0,
+    idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleRunBlessings:'',idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
@@ -140,6 +140,15 @@ test('inventaire : une panoplie des trois types accorde le bonus complet',()=>{
   assert.equal(equipmentSetMultiplier([{kind:'weapon'},{kind:'relic'}]),1);
   assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'A'},{kind:'accessory',sourceWorld:'A'}]),1.10);
   assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'B'},{kind:'accessory',sourceWorld:'A'}]),1);
+});
+
+test('équipement automatique : privilégie le rôle et une panoplie réellement plus forte sans dégrader le build',()=>{
+  const character={id:1,name:'Sakura',series:'Naruto',rarity:'epic'};const slot={id:10,slotIndex:0,characterId:1,character};
+  const item=(id,kind,bonus,sourceWorld='Konoha',effectKey='assault',effectValue=0,equippedSlotId=null)=>({id,kind,bonus,sourceWorld,effectKey,effectValue,rarity:'epic',equippedSlotId});
+  const set=[item('w-set','weapon',.10),item('r-set','relic',.10),item('a-set','accessory',.10),item('w-off','weapon',.125,'Namek')];
+  const plan=buildAutoEquipmentPlan([slot],set);assert.deepEqual(new Set(plan.assignments.map((x)=>x.itemId)),new Set(['w-set','r-set','a-set']));assert.ok(plan.afterScore>0);
+  const current=set.slice(0,3).map((x)=>({...x,equippedSlotId:10}));const stable=buildAutoEquipmentPlan([slot],[...current,item('weak','weapon',.01,'Namek')]);assert.equal(stable.changed,0);
+  assert.ok(equipmentItemScore(item('team','relic',.10,'Konoha','resonance',.05),'support')>equipmentItemScore(item('plain','relic',.13,'Konoha','assault',0),'support'));
 });
 
 test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{
@@ -556,6 +565,27 @@ test('slot-level : refuse un emplacement vide, sinon débite selon charLevelUpCo
   assert.equal(writes[0].data.level.increment, 1);
 });
 
+test('slot-ascend : déblocage au niveau 100, puis retour niveau 1 pour la run', async () => {
+  const user = dbUser({ essence: 1_000_000 });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.idleSlot.findUnique = async () => ({ id:9,userId:'u1',slotIndex:0,characterId:7,level:HERO_ASCENSION_LEVEL-1,ascension:0,character:{rarity:'rare'} });
+  const locked = await app.request('/api/idle/slot-ascend', {method:'POST',cookie:app.authCookie('u1'),body:{slotIndex:0}});
+  assert.equal(locked.status,400);
+  assert.match(locked.json.error,/Niveau 100 requis/);
+
+  prisma.idleSlot.findUnique = async () => ({ id:9,userId:'u1',slotIndex:0,characterId:7,level:HERO_ASCENSION_LEVEL,ascension:0,character:{rarity:'rare'} });
+  let slotWrite=null,recruitWrite=null;
+  prisma.idleSlot.update = async (args) => { slotWrite=args;return {}; };
+  prisma.dojoRecruit.update = async (args) => { recruitWrite=args;return {}; };
+  const ok = await app.request('/api/idle/slot-ascend', {method:'POST',cookie:app.authCookie('u1'),body:{slotIndex:0}});
+  assert.equal(ok.status,200);
+  assert.equal(slotWrite.data.level,1);
+  assert.equal(slotWrite.data.ascension.increment,1);
+  assert.equal(recruitWrite.data.trainingLevel,1);
+  assert.equal(recruitWrite.data.idleAscension.increment,1);
+});
+
 test('assign : refuse un emplacement verrouillé', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
@@ -744,6 +774,22 @@ test('upgrade click : coût suit clickUpgradeCost', async () => {
   assert.equal(updateData.essence.decrement, cost);
 });
 
+test('upgrade crit : débite le coût et augmente Instinct', async () => {
+  const cost=critUpgradeCost(0);const user=dbUser({essence:cost});let updateData=null;
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async(args)=>{if(args.data.idleCritLevel)updateData=args.data;return user;};
+  const res=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'crit'}});
+  assert.equal(res.status,200);assert.equal(updateData.essence.decrement,cost);assert.equal(updateData.idleCritLevel.increment,1);
+});
+
+test('upgrade cooldown : débite le coût et augmente Flux', async () => {
+  const cost=cooldownUpgradeCost(0);const user=dbUser({essence:cost});let updateData=null;
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async(args)=>{if(args.data.idleCooldownLevel)updateData=args.data;return user;};
+  const res=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'cooldown'}});
+  assert.equal(res.status,200);assert.equal(updateData.essence.decrement,cost);assert.equal(updateData.idleCooldownLevel.increment,1);
+});
+
 test('collect : crédite la production en attente et avance idleLastCollectAt', async () => {
   const anHourAgo = new Date(Date.now() - 3600 * 1000);
   const user = dbUser({ idleLastCollectAt: anHourAgo });
@@ -885,27 +931,36 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(lowRes.status, 400);
 
   const eligible = dbUser({
-    idleRunBestStage:PRESTIGE_MIN_STAGE, idleBestStage:PRESTIGE_MIN_STAGE, essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
+    idleRunBestStage:prestigeRequiredStage(1), idleBestStage:prestigeRequiredStage(1), essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
   });
   prisma.user.findUnique = async () => eligible;
   let slotsReset = null;
+  let recruitsReset = null;
   let userUpdate = null;
   prisma.idleSlot.updateMany = async (args) => { slotsReset = args; return { count: 3 }; };
+  prisma.dojoRecruit.updateMany = async (args) => { recruitsReset = args; return { count: 3 }; };
   prisma.user.update = async (args) => { userUpdate = args.data; return eligible; };
   const okRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(okRes.status, 200);
   assert.equal(slotsReset.where.userId, 'u1');
   assert.equal(slotsReset.data.characterId, null);
   assert.equal(slotsReset.data.level, 1);
+  assert.equal(slotsReset.data.ascension, 0);
+  assert.equal(recruitsReset.data.trainingLevel, 1);
+  assert.equal(recruitsReset.data.idleAscension, 0);
   assert.equal(userUpdate.essence, 0);
   assert.equal(userUpdate.idleSlotsUnlocked, START_SLOTS);
   assert.equal(userUpdate.idleProdLevel, 0);
   assert.equal(userUpdate.idleClickLevel, 0);
+  assert.equal(userUpdate.idleCritLevel, 0);
+  assert.equal(userUpdate.idleCooldownLevel, 0);
+  assert.equal(userUpdate.idleRunBlessings, '');
+  assert.ok(userUpdate.idleRunStartedAt instanceof Date);
   assert.equal(userUpdate.prestigeLevel.increment, 1);
   assert.equal(userUpdate.essenceEarnedTotal, undefined); // le niveau du Dojo (le lieu) n'est jamais reset
   // Plus de multiplicateur automatique : la Sagesse gagnée dépend du niveau
   // du Dojo AU MOMENT du Prestige, à dépenser ensuite dans les Ancients.
-  assert.equal(userUpdate.wisdomPoints.increment, wisdomForRunStage(PRESTIGE_MIN_STAGE));
+  assert.equal(userUpdate.wisdomPoints.increment, wisdomForRunStage(prestigeRequiredStage(1),1));
   assert.equal(userUpdate.idleStage,1);
   assert.equal(userUpdate.idleRunBestStage,1);
 });
@@ -947,6 +1002,26 @@ test('prestige : une même run ne peut pas être encaissée deux fois', async ()
   assert.equal(second.status, 400);
   assert.equal(user.prestigeLevel, 1);
   assert.equal(user.wisdomPoints, wisdomForRunStage(PRESTIGE_MIN_STAGE));
+});
+
+test('prestige : refuse une run trop courte même si le stage requis est déjà atteint',async()=>{
+  const rushed=dbUser({id:'u2',idleStage:PRESTIGE_MIN_STAGE,idleRunBestStage:PRESTIGE_MIN_STAGE,idleBestStage:PRESTIGE_MIN_STAGE,idleRunStartedAt:new Date()});
+  prisma.user.findUnique=async()=>rushed;prisma.user.update=async()=>rushed;prisma.idleSlot.updateMany=async()=>({count:0});
+  const res=await app.request('/api/idle/prestige',{method:'POST',cookie:app.authCookie('u2'),body:{}});
+  assert.equal(res.status,400);assert.match(res.json.error,/encore .* min/i);
+});
+
+test('roguelike : un choix se débloque au stage 21 et seuls les trois pouvoirs proposés sont acceptés',async()=>{
+  let user=dbUser({idleStage:21,idleRunBestStage:21,idleBestStage:21});let written=null;
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async({data})=>{written=data;if(typeof data.idleRunBlessings==='string')user={...user,idleRunBlessings:data.idleRunBlessings};return user;};
+  const rejected=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:'pouvoir_triche'}});
+  assert.equal(rejected.status,400);
+  const {runBlessingChoices}=require('../src/idle/idle');const key=runBlessingChoices('u1',0,0,[])[0].key;
+  const accepted=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key}});
+  assert.equal(accepted.status,200);assert.equal(written.idleRunBlessings,key);
+  const duplicate=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key}});
+  assert.equal(duplicate.status,400);
 });
 
 test('ancient : refuse une clé inconnue', async () => {
