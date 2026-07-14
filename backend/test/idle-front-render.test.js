@@ -4,6 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+test('chat Idle : le tiroir reste vertical et seul le fil de messages défile', () => {
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  assert.match(styles, /\.idle-community-chat\{[^}]*flex-direction:column!important[^}]*overflow:hidden!important/);
+  assert.match(styles, /\.idle-community-chat \.idle-chat-feed\{[^}]*flex:1 1 auto[^}]*overflow-x:hidden/);
+  assert.match(styles, /\.idle-community-chat \.idle-chat-form\{[^}]*position:relative!important[^}]*width:calc\(100% \+ 28px\)/);
+});
+
 test('combat Idle : les paliers d\'un héros actif se rendent sans interrompre toute la scène', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
   const start = source.indexOf('function idleHeroMilestonesHTML');

@@ -6965,7 +6965,16 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-collapse-badge{margin-left:8px;padding:3px 8px;border-radius:9px;background:#7c3aed;color:#fff;font-size:8.5px;font-weight:900;letter-spacing:.04em}
 .idle-main-hero.no-team .idle-main-hero-avatar{border-style:dashed!important;background-color:#0b1018!important;color:#64748b;filter:saturate(.72);box-shadow:0 10px 24px #000b!important}.idle-main-hero.no-team .idle-main-hero-name{border-color:#64748b66;background:#0b1018f2}.idle-main-hero.no-team .idle-main-hero-name small{color:#94a3b8}.idle-main-hero.no-team>button{border-color:#e11d4866;background:#2a0d16;color:#fda4af}
 .idle-chat-launcher,.idle-community-chat{bottom:78px}
-/* Le chat reste un panneau latéral lisible sans écraser la zone de combat. */
-.idle-community-chat .idle-community-links{grid-template-columns:1fr!important}.idle-community-chat .idle-community-links button{min-width:0}.idle-community-chat .idle-community-links button span{min-width:0}.idle-community-chat .idle-community-links button b,.idle-community-chat .idle-community-links button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:1200px){.idle-community-chat{width:min(340px,calc(100vw - 28px))}}
-@media(max-width:700px){.idle-chat-launcher{bottom:132px}.idle-community-chat{bottom:72px}}
+/* Le tiroir est une vraie colonne : seul le fil défile, jamais le panneau complet. */
+.idle-community-chat{box-sizing:border-box;flex-direction:column!important;height:min(590px,calc(100vh - 112px));min-width:0;overflow:hidden!important}
+.idle-community-chat>*{box-sizing:border-box;min-width:0;width:100%;flex:0 0 auto}
+.idle-community-chat>header{position:relative!important;top:auto!important;width:calc(100% + 28px);flex:none;margin:-14px -14px 0!important;padding:12px 14px!important}
+.idle-community-chat>header>span{min-width:0}.idle-community-chat>header h3{font-size:.92rem}.idle-community-chat>header>strong{padding:4px 7px;border:1px solid #22c55e35;border-radius:999px;background:#22c55e0e;font-size:.61rem}
+.idle-community-chat>p{margin:9px 0!important;color:#7f8da1!important;font-size:.68rem!important;line-height:1.35}
+.idle-community-chat .idle-community-links{grid-template-columns:1fr 1fr!important;gap:6px;margin-bottom:8px}.idle-community-chat .idle-community-links button{min-width:0;padding:7px 8px}.idle-community-chat .idle-community-links button>i{width:25px;height:25px;flex:none}.idle-community-chat .idle-community-links button span{min-width:0}.idle-community-chat .idle-community-links button b,.idle-community-chat .idle-community-links button small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.idle-community-chat .idle-community-links button b{font-size:.68rem}.idle-community-chat .idle-community-links button small{font-size:.58rem}
+.idle-community-chat .idle-chat-feed{width:100%;height:auto!important;min-height:150px;flex:1 1 auto;overflow-x:hidden;overscroll-behavior:contain}
+.idle-community-chat .idle-chat-quick{width:100%;flex:none}
+.idle-community-chat .idle-chat-form{position:relative!important;bottom:auto!important;width:calc(100% + 28px);flex:none;margin:8px -14px -14px!important;padding:9px 14px 14px!important}.idle-community-chat .idle-chat-form input{width:0;min-width:0;height:40px}.idle-community-chat .idle-chat-form button{height:40px;flex:none}
+@media(max-width:1200px){.idle-community-chat{width:min(360px,calc(100vw - 28px))}}
+@media(max-width:700px){.idle-chat-launcher{bottom:132px}.idle-community-chat{right:7px;bottom:72px;width:calc(100vw - 14px);height:min(560px,calc(100vh - 86px))}.idle-community-chat>header{width:calc(100% + 22px);margin:-11px -11px 0!important;padding:10px 11px!important}.idle-community-chat .idle-chat-form{width:calc(100% + 22px);margin:8px -11px -11px!important;padding:8px 11px 11px!important}}
+@media(max-width:420px){.idle-community-chat .idle-community-links{grid-template-columns:1fr!important}.idle-community-chat>p{display:none}.idle-community-chat>header>strong{font-size:.56rem}}
