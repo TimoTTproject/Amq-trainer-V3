@@ -72,6 +72,7 @@ const {
   AWAKENED_BONUS,
   ORB_COOLDOWN_SECONDS,
   ORB_SEAL_CHANCE,
+  ORB_JACKPOT_CHANCE,
   orbReward,
   RUN_BLESSINGS,
   parseRunBlessings,
@@ -204,7 +205,7 @@ function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods()
   const variants=[
     {key:'iron',name:'Armure astrale',description:'Les ennemis possèdent 35% de PV supplémentaires.',multiplier:1.35},
     {key:'haste',name:'Course du temps',description:'Chaque salle doit tomber en 15 secondes.',multiplier:20/15},
-    {key:'void',name:'Instabilité du Néant',description:'La résistance augmente de 55% par salle.',multiplier:1.18},
+    {key:'void',name:'Instabilité du Néant',description:'Toutes les salles sont 18% plus résistantes.',multiplier:1.18},
   ];
   const variant=variants[Math.abs(Math.floor(Date.parse(`${periods.week}T00:00:00Z`)/604800000))%variants.length];
   const baseHp=enemyMaxHp(Math.max(1,bestStage||1));
@@ -747,6 +748,16 @@ async function withSettle(userId, mutate) {
     ));
     const stage = Math.max(1, Math.min(1e9, Math.floor(Number(combat.stage) || 1)));
     const hp = safeIdleNumber(combat.hp, enemyMaxHp(stage));
+    // `simulateCombat` borne son propre travail (maxKills, cf. combat.js) pour
+    // rester rapide même sur un très gros écart hors-ligne : sur une équipe
+    // très puissante, l'écart réel (elapsedMs) peut donc dépasser ce que la
+    // simulation a effectivement consommé (combat.elapsedSeconds). Avancer
+    // idleLastCollectAt seulement du temps RÉELLEMENT consommé — jamais
+    // jusqu'à « maintenant » — garantit que le reliquat non simulé reste dû et
+    // sera comptabilisé aux prochaines synchronisations, au lieu d'être perdu
+    // silencieusement pour les joueurs les plus avancés.
+    const consumedMs = Math.min(elapsedMs, Math.max(0, Math.round((Number(combat.elapsedSeconds) || 0) * 1000)));
+    const nextCollectAt = new Date(new Date(user.idleLastCollectAt).getTime() + consumedMs);
     let settledUser;
     try {
       settledUser = await prisma.user.update({
@@ -764,7 +775,7 @@ async function withSettle(userId, mutate) {
           idleWaveKills: combat.waveKills,
           idleBossProgress:stage!==(user.idleStage||1)?0:user.idleBossProgress,
           idleBossStartedAt:isBossStage(stage)?(isBossStage(user.idleStage||1)&&user.idleBossStartedAt?user.idleBossStartedAt:new Date()):null,
-          idleLastCollectAt: new Date(),
+          idleLastCollectAt: nextCollectAt,
         },
       });
     } catch (error) {
@@ -1024,7 +1035,7 @@ async function buildState(userId) {
     totalRate,
     economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,offlineCapMs},
     run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,pending:blessingPending,choices:blessingChoices,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
-    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
+    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     rank:{...rank,startedAt:user.idleRankStartedAt?.toISOString()||null},
     collection:{recruits:recruitCount,masteries,worldsDiscovered},
@@ -1096,6 +1107,7 @@ async function buildState(userId) {
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
       nextMultiplier: user.idleProdLevel < PROD_LEVEL_MAX ? prodMultiplier(user.idleProdLevel+1,prodAncientBonus) : null,
       nextCost: user.idleProdLevel < PROD_LEVEL_MAX ? prodUpgradeCost(user.idleProdLevel) : null,
+      bulkCosts: bulkUpgradeCosts(user.idleProdLevel, PROD_LEVEL_MAX, prodUpgradeCost),
       maxed: user.idleProdLevel >= PROD_LEVEL_MAX,
     },
     click: {
@@ -1104,6 +1116,7 @@ async function buildState(userId) {
       damage: clickDamage,
       nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round(clickYield(user.idleClickLevel+1,clickAncientBonus)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*prestigeClick*mechanicMultiplier*blessingEffects.click)) : null,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
+      bulkCosts: bulkUpgradeCosts(user.idleClickLevel, CLICK_LEVEL_MAX, clickUpgradeCost),
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
     },
     crit: {
@@ -1111,6 +1124,7 @@ async function buildState(userId) {
       chance:critChance,
       nextChance:user.idleCritLevel<CRIT_LEVEL_MAX?Math.min(.95,critChance+critUpgradeBonus(1)):null,
       nextCost:user.idleCritLevel<CRIT_LEVEL_MAX?critUpgradeCost(user.idleCritLevel):null,
+      bulkCosts: bulkUpgradeCosts(user.idleCritLevel||0, CRIT_LEVEL_MAX, critUpgradeCost),
       maxed:user.idleCritLevel>=CRIT_LEVEL_MAX,
     },
     cooldown: {
@@ -1122,6 +1136,7 @@ async function buildState(userId) {
       teamSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/1000),
       nextTeamSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown)/1000):null,
       nextCost:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?cooldownUpgradeCost(user.idleCooldownLevel):null,
+      bulkCosts: bulkUpgradeCosts(user.idleCooldownLevel||0, COOLDOWN_LEVEL_MAX, cooldownUpgradeCost),
       maxed:user.idleCooldownLevel>=COOLDOWN_LEVEL_MAX,
     },
     ancients: {
@@ -1328,7 +1343,11 @@ router.post('/recruit', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
         const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost }, idleRecruitPity: pityUpdate, idleEssenceRecruitCount:{increment:1} } });
         if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
       } else {
-        await tx.user.update({ where: { id: user.id }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });
+        // Même garde que la branche Essence ci-dessus : sans elle, deux requêtes
+        // quasi simultanées avec un seul Sceau en poche décrémentaient chacune
+        // sans se voir, livrant deux recrues pour un solde passant en négatif.
+        const debit = await tx.user.updateMany({ where: { id: user.id, idleSeals: { gte: cost } }, data: { idleSeals: { decrement: cost }, idleRecruitPity: pityUpdate } });
+        if (!debit.count) throw new IdleError(400, 'Sceaux insuffisants');
       }
       try {
         await tx.dojoRecruit.create({ data: { userId: user.id, characterId: picked.id, awakened } });
@@ -1408,32 +1427,75 @@ router.post('/unassign', requireAuth, requireIdleBeta, rateLimit({ max: 120, nam
   res.json(await buildState(req.user.id));
 });
 
+// Aperçu (lecture seule, pour buildState) du coût des lots ×5/×10/×100 d'une
+// amélioration plafonnée — même esprit que `levelCosts` sur les héros
+// (charLevelBulkCost), pour que le client affiche le prix exact avant achat.
+// `count` peut être < n si le plafond de niveau est atteint avant le lot entier.
+function bulkUpgradeCosts(level, maxLevel, costFn) {
+  const current = level || 0;
+  const remaining = Math.max(0, maxLevel - current);
+  const out = {};
+  for (const n of [5, 10, 100]) {
+    const count = Math.min(n, remaining);
+    if (!count) { out[n] = null; continue; }
+    let total = 0;
+    for (let i = 0; i < count; i++) total += costFn(current + i);
+    out[n] = { count, cost: total };
+  }
+  return out;
+}
+
+// Achète jusqu'à `amount` niveaux d'une amélioration plafonnée d'un coup —
+// même contrat que charLevelBulkCost (héros) : quantité fixe (1/5/10/100) =
+// tout ou rien au prix exact ; 'max' = autant que le budget permet, borné au
+// plafond de niveau. Clampe silencieusement sur le plafond plutôt que de
+// refuser un achat qui aurait de toute façon atteint le maximum.
+function buyBulkUpgrade(user, { level, maxLevel, costFn, amount }) {
+  const current = level || 0;
+  if (current >= maxLevel) throw new IdleError(400, 'Niveau maximum atteint');
+  if (amount === 'max') {
+    let total = 0, bought = 0;
+    while (current + bought < maxLevel) {
+      const next = costFn(current + bought);
+      if (total + next > user.essence) break;
+      total += next; bought++;
+    }
+    if (!bought) throw new IdleError(400, 'Essence insuffisante');
+    return { bought, total: safeIdleNumber(total) };
+  }
+  const count = Math.min(amount, Math.max(0, maxLevel - current));
+  let total = 0;
+  for (let i = 0; i < count; i++) total += costFn(current + i);
+  if (user.essence < total) throw new IdleError(400, 'Essence insuffisante');
+  return { bought: count, total: safeIdleNumber(total) };
+}
+
 router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const type = req.body?.type;
   if (!['prod', 'click', 'slot', 'crit', 'cooldown'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
+  const requestedAmount = req.body?.amount;
+  const amount = type === 'slot' ? 1 : (requestedAmount === 'max' ? 'max' : Number(requestedAmount || 1));
+  if (type !== 'slot' && amount !== 'max' && ![1, 5, 10, 100].includes(amount)) return res.status(400).json({ error: 'Quantité invalide' });
 
+  let purchasedLevels = 1;
   try {
     await withSettle(req.user.id, async (tx, user) => {
       if (type === 'prod') {
-        if (user.idleProdLevel >= PROD_LEVEL_MAX) throw new IdleError(400, 'Niveau maximum atteint');
-        const cost = prodUpgradeCost(user.idleProdLevel);
-        if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
-        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost }, idleProdLevel: { increment: 1 } } });
+        const { bought, total } = buyBulkUpgrade(user, { level: user.idleProdLevel, maxLevel: PROD_LEVEL_MAX, costFn: prodUpgradeCost, amount });
+        purchasedLevels = bought;
+        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleProdLevel: { increment: bought } } });
       } else if (type === 'click') {
-        if (user.idleClickLevel >= CLICK_LEVEL_MAX) throw new IdleError(400, 'Niveau maximum atteint');
-        const cost = clickUpgradeCost(user.idleClickLevel);
-        if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
-        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost }, idleClickLevel: { increment: 1 } } });
+        const { bought, total } = buyBulkUpgrade(user, { level: user.idleClickLevel, maxLevel: CLICK_LEVEL_MAX, costFn: clickUpgradeCost, amount });
+        purchasedLevels = bought;
+        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleClickLevel: { increment: bought } } });
       } else if (type === 'crit') {
-        if ((user.idleCritLevel||0) >= CRIT_LEVEL_MAX) throw new IdleError(400, 'Niveau maximum atteint');
-        const cost=critUpgradeCost(user.idleCritLevel||0);
-        if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');
-        await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost},idleCritLevel:{increment:1}}});
+        const { bought, total } = buyBulkUpgrade(user, { level: user.idleCritLevel || 0, maxLevel: CRIT_LEVEL_MAX, costFn: critUpgradeCost, amount });
+        purchasedLevels = bought;
+        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleCritLevel: { increment: bought } } });
       } else if (type === 'cooldown') {
-        if ((user.idleCooldownLevel||0) >= COOLDOWN_LEVEL_MAX) throw new IdleError(400, 'Niveau maximum atteint');
-        const cost=cooldownUpgradeCost(user.idleCooldownLevel||0);
-        if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');
-        await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost},idleCooldownLevel:{increment:1}}});
+        const { bought, total } = buyBulkUpgrade(user, { level: user.idleCooldownLevel || 0, maxLevel: COOLDOWN_LEVEL_MAX, costFn: cooldownUpgradeCost, amount });
+        purchasedLevels = bought;
+        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleCooldownLevel: { increment: bought } } });
       } else if (type === 'slot') {
         if (user.idleSlotsUnlocked >= MAX_SLOTS) throw new IdleError(400, 'Tous les emplacements sont débloqués');
         const cost = slotUpgradeCost(user.idleSlotsUnlocked);
@@ -1445,7 +1507,7 @@ router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     throw e;
   }
-  await incrementIdleCounter(req.user.id,'upgrade',1);
+  await incrementIdleCounter(req.user.id,'upgrade',purchasedLevels);
   res.json(await buildState(req.user.id));
 });
 
@@ -1885,6 +1947,74 @@ router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'
 });
 router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
+// Réclame en un seul appel tout ce qui est complété et pas encore réclamé :
+// missions, défis, succès, paliers de saison et convergence hebdomadaire.
+// Rejoue les mêmes règles que les routes individuelles (mêmes définitions,
+// même table idleMissionClaim comme registre anti-doublon) — juste groupées
+// pour éviter au joueur de cliquer une dizaine de boutons « Réclamer » un par un.
+router.post('/claim-all', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-claim-all' }), async (req, res) => {
+  const periods = idlePeriods();
+  const counters = await loadIdleCounters(req.user.id);
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) return res.status(404).json({ error: 'Compte introuvable' });
+  const [recruitCount, slots] = await Promise.all([
+    prisma.dojoRecruit.count({ where: { userId: user.id } }),
+    loadSlots(prisma, user.id),
+  ]);
+  const activeSlots = slots.filter((s) => s.characterId).length;
+  const stage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
+  const teamLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
+  const worlds = Math.min(DOJO_DECOR.length, Math.floor((stage - 1) / 10) + 1);
+
+  const missions = idleMissionList(user, recruitCount, activeSlots, stage, counters);
+  const achievements = idleAchievementDefs({ stage, recruits: recruitCount, teamLevels, worlds, prestige: user.prestigeLevel });
+  const challenges = idleChallengeList(counters, slots, periods);
+  const seasonActivity = seasonActivityScore(counters, periods.month);
+  const weekly = weeklyConvergence(counters, periods);
+  const seasonPeriod = `season-${periods.month}`;
+
+  let claimedRows = [];
+  try {
+    claimedRows = await prisma.idleMissionClaim.findMany({
+      where: {
+        userId: user.id,
+        OR: [
+          ...missions.map((m) => ({ missionKey: m.key, period: m.period })),
+          ...achievements.map((a) => ({ missionKey: `achievement_${a.key}`, period: 'lifetime' })),
+          ...challenges.map((c) => ({ missionKey: `challenge_${c.key}`, period: c.period })),
+          ...SEASON_TIERS.map((t) => ({ missionKey: `season_tier_${t.tier}`, period: seasonPeriod })),
+          { missionKey: 'weekly_convergence', period: periods.week },
+        ],
+      },
+      select: { missionKey: true, period: true },
+    });
+  } catch (e) { if (e?.code && e.code !== 'P2021') throw e; }
+  const claimedSet = new Set(claimedRows.map((c) => `${c.missionKey}:${c.period}`));
+
+  const toClaim = [];
+  let seals = 0, essence = 0;
+  for (const m of missions) if (m.progress >= m.target && !claimedSet.has(`${m.key}:${m.period}`)) { toClaim.push({ missionKey: m.key, period: m.period }); seals += m.reward; }
+  for (const a of achievements) if (a.progress >= a.target && !claimedSet.has(`achievement_${a.key}:lifetime`)) { toClaim.push({ missionKey: `achievement_${a.key}`, period: 'lifetime' }); seals += a.reward; }
+  for (const c of challenges) if (c.completed && !claimedSet.has(`challenge_${c.key}:${c.period}`)) { toClaim.push({ missionKey: `challenge_${c.key}`, period: c.period }); seals += c.reward; }
+  for (const t of SEASON_TIERS) if (seasonActivity.score >= t.level && !claimedSet.has(`season_tier_${t.tier}:${seasonPeriod}`)) { toClaim.push({ missionKey: `season_tier_${t.tier}`, period: seasonPeriod }); seals += t.reward; essence += t.essence || 0; }
+  if (weekly.completed && !claimedSet.has(`weekly_convergence:${periods.week}`)) { toClaim.push({ missionKey: 'weekly_convergence', period: periods.week }); seals += weekly.reward; essence += weekly.essence || 0; }
+
+  if (!toClaim.length) return res.json({ ok: true, claimed: 0, seals: 0, essence: 0, state: await buildState(req.user.id) });
+
+  await prisma.$transaction([
+    prisma.idleMissionClaim.createMany({ data: toClaim.map((c) => ({ userId: user.id, ...c })), skipDuplicates: true }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        idleSeals: { increment: seals },
+        ...(essence ? { essence: { increment: essence }, essenceEarnedTotal: { increment: essence } } : {}),
+      },
+    }),
+  ]);
+  void recordIdleEvent(req.user.id, 'claim_all', { value: seals });
+  res.json({ ok: true, claimed: toClaim.length, seals, essence, state: await buildState(req.user.id) });
+});
+
 router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowMs:60000,name:'idle-rift'}),async(req,res)=>{
   await withSettle(req.user.id);
   const state=await buildState(req.user.id);const rift=state.rift;
@@ -1942,19 +2072,22 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
 
 // ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un
 // orbe cliquable dans la scène toutes les 2 à 5 minutes ; le cliquer paie
-// ~45 s de production d'un coup (rarement +1 Sceau). Le serveur reste
-// autoritaire sur la fréquence : un jeton anti-rejeu de ORB_COOLDOWN_SECONDS
-// borne le gain, quoi que fasse le client.
+// ~45 s de production d'un coup (rarement +1 Sceau, plus rarement un JACKPOT
+// à ~4× la production, façon « Frenzy » de Cookie Clicker). Le serveur reste
+// autoritaire sur la fréquence ET le tirage : un jeton anti-rejeu de
+// ORB_COOLDOWN_SECONDS borne le gain, quoi que fasse le client.
 router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-orb' }), async (req, res) => {
   const fresh = await store.setIfAbsent(`idle:orb:${req.user.id}`, ORB_COOLDOWN_SECONDS);
   if (!fresh) return res.status(429).json({ error: 'L’orbe s’est déjà dissipé — le prochain arrive bientôt.' });
   let reward = 0;
   let seal = false;
+  let jackpot = false;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const [slots, recruitCount] = await Promise.all([loadSlots(tx, user.id), tx.dojoRecruit.count({ where: { userId: user.id } })]);
       const rate = computeTotalRate(slots, user.idleProdLevel, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idlePrestigePath, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
-      reward = Math.min(orbReward(rate), ROUTE_NUMBER_CAP - safeIdleNumber(user.essence));
+      jackpot = Math.random() < ORB_JACKPOT_CHANCE;
+      reward = Math.min(orbReward(rate, jackpot), ROUTE_NUMBER_CAP - safeIdleNumber(user.essence));
       seal = Math.random() < ORB_SEAL_CHANCE;
       await tx.user.update({
         where: { id: user.id },
@@ -1971,7 +2104,7 @@ router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, nam
     throw e;
   }
   void recordIdleEvent(req.user.id, 'bonus_orb', { value: reward });
-  res.json({ ok: true, reward, seal, cooldownSeconds: ORB_COOLDOWN_SECONDS });
+  res.json({ ok: true, reward, seal, jackpot, cooldownSeconds: ORB_COOLDOWN_SECONDS });
 });
 
 // Détail d'une licence pour l'écran collection : personnages possédés en

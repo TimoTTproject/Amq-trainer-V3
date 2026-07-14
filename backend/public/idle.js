@@ -90,7 +90,7 @@ function idleRecordStrikeBatch(count, damage, kills = 0, passiveKills = 0) {
   entry.damage += damage || 0;
   entry.kills += kills || 0;
   entry.passiveKills += passiveKills || 0;
-  entry.message = `${entry.count} frappe${entry.count>1?'s':''}/s · ${idleFormatNumber(entry.damage)} dégâts · ${idleFormatNumber(entry.damage)} DPS${entry.kills?` · ${entry.kills} élimination${entry.kills>1?'s':''}`:''}${entry.passiveKills?` · équipe : ${entry.passiveKills}`:''}`;
+  entry.message = `${entry.count} frappe${entry.count>1?'s':''}/s · ${idleFormatNumber(entry.damage)} dégâts${entry.kills?` · ${entry.kills} élimination${entry.kills>1?'s':''}`:''}${entry.passiveKills?` · équipe : ${entry.passiveKills}`:''}`;
   idleCombatEntries = idleCombatEntries.slice(0, 4);
   idleRenderCombatLog();
 }
@@ -141,14 +141,16 @@ async function openIdle() {
   idleWelcomeChecked = false;
   idleTicker = setInterval(idleTick, 400);
   idleScheduleOrb(true);
-  // Sync serveur périodique (6 s) : GET /state ne fait que LIRE l'état (il ne
-  // solde jamais la production en attente en base) — sans ce collecte
-  // périodique, essenceEarnedTotal ne bougerait jamais entre deux clics et le
-  // stage resterait figé indéfiniment, même avec la barre qui semble baisser
-  // (illusion purement visuelle côté client, cf. idleTickInterpolateBattle).
+  // Sync serveur périodique : sans elle, essenceEarnedTotal ne bougerait
+  // jamais entre deux clics et le stage resterait figé indéfiniment, même
+  // avec la barre qui semble baisser (illusion purement visuelle côté
+  // client, cf. idleTickInterpolateBattle). Relevé de 6 s à 15 s : la
+  // production réelle n'a pas besoin d'un aller-retour serveur aussi
+  // fréquent pour rester crédible à l'écran, et ça réduit d'un facteur 2,5
+  // la charge sur le serveur générée par chaque joueur actif.
   idleSyncTicker = setInterval(() => {
     if (idleActivePanel === 'home' && !document.hidden) idleBackgroundSync();
-  }, 6000);
+  }, 15000);
   idleConnectChat();
   idleMountChatDrawer();
   if(window.innerWidth>=1050&&!sessionStorage.getItem('idle-chat-manually-closed'))idleSetChatOpen(true);
@@ -251,6 +253,11 @@ function idleShowPanel(name) {
     t.setAttribute('aria-selected',active?'true':'false');
     t.tabIndex=active?0:-1;
   });
+  // renderIdleState ne reconstruit que les blocs de l'onglet actif (cf. plus
+  // bas) — un changement d'onglet doit donc forcer un rendu complet avec le
+  // dernier état connu, sinon l'onglet qu'on vient d'ouvrir affiche des
+  // données périmées depuis la dernière fois qu'il était actif.
+  if (idleState) renderIdleState(idleState);
 }
 
 // Nombre flottant dans la scène (+essence, façon dégâts/gains d'un jeu mobile).
@@ -352,11 +359,12 @@ function idleSpawnOrb(kind = 'orb') {
       const r = await api('/api/idle/bonus-orb', { method: 'POST', body: JSON.stringify({}) });
       idleOrbCooldownUntil = Date.now() + (Number(r.cooldownSeconds) || 90) * 1000;
       orb.remove();
-      idleSpawnFloat(`ORBE +${idleFormatNumber(r.reward)}`, 'crit huge');
+      idleSpawnFloat(r.jackpot ? `JACKPOT +${idleFormatNumber(r.reward)}` : `ORBE +${idleFormatNumber(r.reward)}`, 'crit huge');
       if (r.seal) idleSpawnFloat('+1 SCEAU', 'crit');
-      idleAddCombatLog(`Orbe bonus attrapé : +${idleFormatNumber(r.reward)} Essence${r.seal ? ' · +1 Sceau' : ''}`, 'fa-circle-notch');
-      if (typeof burstConfetti === 'function') burstConfetti(20);
+      idleAddCombatLog(`${r.jackpot ? 'JACKPOT — orbe bonus' : 'Orbe bonus attrapé'} : +${idleFormatNumber(r.reward)} Essence${r.seal ? ' · +1 Sceau' : ''}`, r.jackpot ? 'fa-burst' : 'fa-circle-notch');
+      if (typeof burstConfetti === 'function') burstConfetti(r.jackpot ? 60 : 20);
       if (typeof sfx !== 'undefined' && sfx.idleChest) sfx.idleChest();
+      if (r.jackpot) idleNotify(`JACKPOT ! Cet orbe a payé ×4 : +${idleFormatNumber(r.reward)} Essence.`, 'success');
       await refreshIdleState();
     } catch (e) {
       orb.remove();
@@ -473,6 +481,13 @@ async function refreshIdleState() {
   renderIdleState(state);
 }
 
+// Certains blocs sont coûteux à reconstruire (listes de dizaines d'objets,
+// grilles d'inventaire) et invisibles hors de leur onglet — les limiter à
+// l'onglet actif évite de les reconstruire à chaque synchro (idleBackgroundSync
+// tourne uniquement pendant que l'onglet Combat est affiché, cf. openIdle).
+// idleShowPanel force un rendu complet à l'entrée sur un onglet : aucune
+// donnée ne peut donc rester périmée, seule la fréquence de reconstruction
+// hors de l'onglet actif diminue.
 function renderIdleState(state) {
   const prev = idleState;
   idleState = state;
@@ -486,19 +501,21 @@ function renderIdleState(state) {
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-rotate"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en synchronisation.</b> Elle sera créditée automatiquement.` : '<i class="fas fa-check"></i> Les gains sont crédités automatiquement. Ton équipe continue à produire hors ligne.';
   document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.damage ?? state.click.yield)} dégâts`;
-  document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
-  document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
-  renderIdleRank(state.rank);
-  renderIdleMissions(state.missions || [],state.rank);
-  renderIdleChallenges(state.challenges||[]);
-  renderIdleEvent(state.event);
-  renderIdleRift(state.rift);
-  renderIdleAchievements(state.achievements || [], state.achievementsBonus);
-  renderIdleQuickBuy(state);
+  if (idleActivePanel === 'team') document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
+  if (idleActivePanel === 'upgrades') document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
+  if (idleActivePanel === 'progression') { renderIdleRank(state.rank); renderIdleRoadmap(state.codex,state.battle); }
+  if (idleActivePanel === 'activities') {
+    renderIdleMissions(state.missions || [],state.rank);
+    renderIdleChallenges(state.challenges||[]);
+    renderIdleEvent(state.event);
+    renderIdleRift(state.rift);
+    renderIdleSeason(state.season);
+  }
+  if (idleActivePanel === 'upgrades') renderIdleAchievements(state.achievements || [], state.achievementsBonus);
+  if (idleActivePanel === 'home') renderIdleQuickBuy(state);
   renderIdleTabBadges(state);
-  renderIdleCollection(state.codex);
+  if (idleActivePanel === 'progression') renderIdleCollection(state.codex);
   renderIdleGuide(state.guide);
-  renderIdleSeason(state.season);
   const hudLevel = document.getElementById('idle-hud-level');
   if (hudLevel) hudLevel.textContent = `Nv. ${idleFormatNumber(state.dojo.level)}`;
   const xpTotal = document.getElementById('idle-xptotal-val');
@@ -521,27 +538,32 @@ function renderIdleState(state) {
   if (combatTeam) combatTeam.textContent = `${idleFormatNumber(state.totalRate)}/s`;
   const primaryDps = document.getElementById('idle-primary-dps');
   if (primaryDps) primaryDps.textContent = idleFormatNumber(state.totalRate);
-  renderIdleDecor(state.dojo, prev?.dojo, state.battle, prev?.battle);
-  renderIdleBattle(state.battle, state.dojo, prev?.battle);
-  renderIdleBattleSpeed(state.battle?.speed);
-  renderIdleBattleMode(state.battle?.mode);
-  renderIdleAutoSkills(state.battle?.autoSkills);
   idleBurstReadyAt=state.battle?.skills?.burstReadyAt?new Date(state.battle.skills.burstReadyAt).getTime():0;
   idleTeamSkillReadyAt=state.battle?.skills?.teamReadyAt?new Date(state.battle.skills.teamReadyAt).getTime():0;
-  idleRenderSkillCooldown();
-  renderIdleBossChest(state.battle?.bossChest);
-  renderIdleRoadmap(state.codex,state.battle);
-  renderIdleWorldJump(state.codex,state.battle);
-  renderIdleMainHero(state);
-  renderIdleTeamStrategy(state);
-  renderIdleRunJourney(state);
-  renderIdleInventory(state);
-  renderIdleMasteries(state.codex);
-  renderIdleMilestone(state.dojo);
-  renderIdlePrestige(state.dojo);
-  renderIdleAncients(state.ancients);
+  if (idleActivePanel === 'home') {
+    renderIdleDecor(state.dojo, prev?.dojo, state.battle, prev?.battle);
+    renderIdleBattle(state.battle, state.dojo, prev?.battle);
+    renderIdleBattleSpeed(state.battle?.speed);
+    renderIdleBattleMode(state.battle?.mode);
+    renderIdleAutoSkills(state.battle?.autoSkills);
+    idleRenderSkillCooldown();
+    renderIdleBossChest(state.battle?.bossChest);
+    renderIdleWorldJump(state.codex,state.battle);
+    renderIdleMainHero(state);
+  }
+  if (idleActivePanel === 'team') {
+    renderIdleTeamStrategy(state);
+    renderIdleRunJourney(state);
+    renderIdleMasteries(state.codex);
+    renderIdleRecruitHistory(state.recruitHistory || []);
+  }
+  if (idleActivePanel === 'equipment') renderIdleInventory(state);
+  if (idleActivePanel === 'upgrades') {
+    renderIdleMilestone(state.dojo);
+    renderIdlePrestige(state.dojo);
+    renderIdleAncients(state.ancients);
+  }
   renderIdleRecruit(state.recruit);
-  renderIdleRecruitHistory(state.recruitHistory || []);
 }
 
 // ── Dock d'achats rapides (écran Combat) : la boucle « tuer → encaisser →
@@ -562,8 +584,12 @@ function chooseIdleBuyAmount(amount) {
   if (!IDLE_BUY_AMOUNTS.includes(amount)) return;
   idleBuyAmount = amount;
   localStorage.setItem('idle-buy-amount', amount);
-  if (idleState) { renderIdleQuickBuy(idleState); }
+  if (idleState) {
+    renderIdleQuickBuy(idleState);
+    const upgrades=document.getElementById('idle-upgrades');if(upgrades)upgrades.innerHTML=renderIdleUpgrades(idleState);
+  }
   renderIdleBuyAmountControl('idle-buy-amount');
+  renderIdleBuyAmountControl('idle-upgrade-buy-amount');
 }
 function renderIdleQuickBuy(state) {
   const box = document.getElementById('idle-quick-buy');
@@ -1204,6 +1230,30 @@ async function claimIdleMission(key) {
   catch (e) { alert(e.message); }
 }
 
+// Réclame en un appel tout ce qui est déjà complété (missions, défis, succès,
+// paliers de saison, convergence hebdomadaire) — évite de cliquer chaque
+// bouton « Réclamer » un par un une fois qu'on a plusieurs objectifs en attente.
+async function claimAllIdle() {
+  const btn = document.getElementById('idle-claim-all');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Réclamation…'; }
+  try {
+    const r = await api('/api/idle/claim-all', { method: 'POST', body: JSON.stringify({}) });
+    if (r.claimed > 0) {
+      idleSpawnFloat(`TOUT RÉCLAMÉ · +${idleFormatNumber(r.seals)} SCEAUX${r.essence ? ` · +${idleFormatNumber(r.essence)} ESSENCE` : ''}`, 'crit huge');
+      idleNotify(`${r.claimed} récompense${r.claimed > 1 ? 's' : ''} réclamée${r.claimed > 1 ? 's' : ''} : +${idleFormatNumber(r.seals)} Sceaux${r.essence ? ` · +${idleFormatNumber(r.essence)} Essence` : ''}.`, 'success');
+      if (typeof burstConfetti === 'function') burstConfetti(30);
+      if (typeof sfx !== 'undefined' && sfx.idleChest) sfx.idleChest();
+    } else {
+      idleNotify('Rien à réclamer pour l’instant.', 'info');
+    }
+    renderIdleState(r.state);
+  } catch (e) {
+    idleNotify(e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double"></i> Tout réclamer'; }
+  }
+}
+
 function idleBump(el) {
   el.classList.remove('token-bump');
   void el.offsetWidth;
@@ -1689,6 +1739,17 @@ function renderIdleSlots(slots) {
     ${compact.length?`<section class="idle-slot-management"><h4><i class="fas fa-table-cells-large"></i> Gestion des emplacements <span>${slots.length-compact.filter((slot)=>slot.locked).length}/${slots.length} débloqués</span></h4><div class="idle-slot-grid idle-slot-compact">${compact.map(idleSlotHTML).join('')}</div></section>`:''}`;
 }
 
+// Coût/quantité à afficher pour une carte d'amélioration selon la quantité
+// d'achat globale sélectionnée (idleBuyAmount, cf. dock ×1/×5/×10/×100/MAX
+// déjà utilisé pour l'entraînement des héros — même sélecteur, mêmes achats
+// groupés, ici pour Discipline/Concentration/Instinct/Flux).
+function idleUpgradeBuyPlan(item) {
+  if (idleBuyAmount === '1' || !item.bulkCosts) return { amount: 1, cost: item.cost, count: 1 };
+  if (idleBuyAmount === 'max') return { amount: 'max', cost: null, count: null }; // coût inconnu tant que non acheté (dépend du budget au moment de l'achat)
+  const bulk = item.bulkCosts[idleBuyAmount];
+  if (!bulk) return { amount: 1, cost: item.cost, count: 1 }; // déjà au plafond sur ce lot : retombe sur ×1
+  return { amount: idleBuyAmount === '5' ? 5 : idleBuyAmount === '10' ? 10 : 100, cost: bulk.cost, count: bulk.count };
+}
 function renderIdleUpgrades(state) {
   const nextSlotCost = state.slots.find((s) => s.locked)?.unlockCost ?? null;
   const rate=Math.max(0,state.totalRate||0);
@@ -1696,11 +1757,11 @@ function renderIdleUpgrades(state) {
   const waitLabel=(cost)=>cost<=essence?'Achetable maintenant':rate>0?`Environ ${Math.ceil((cost-essence)/rate)}s de production`:'Assigne un producteur';
   const items = [
     {
-      type: 'prod', icon: 'fa-brain', title: 'Discipline', level: state.prod.level, maxed: state.prod.maxed, cost: state.prod.nextCost,
+      type: 'prod', icon: 'fa-brain', title: 'Discipline', level: state.prod.level, maxed: state.prod.maxed, cost: state.prod.nextCost, bulkCosts: state.prod.bulkCosts, bulk: true,
       label:'Production automatique',before:`×${state.prod.multiplier.toFixed(2)}`,after:`×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,desc:'Augmente toute la production de l’équipe, en ligne et hors ligne.',
     },
     {
-      type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost,
+      type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost, bulkCosts: state.click.bulkCosts, bulk: true,
       label:'Dégâts par clic',before:idleFormatNumber(state.click.damage ?? state.click.yield),after:idleFormatNumber(state.click.nextDamage ?? state.click.damage ?? state.click.yield),desc:'Renforce les frappes manuelles et la base de dégâts de l’Ultime.',
     },
     {
@@ -1708,11 +1769,11 @@ function renderIdleUpgrades(state) {
       label:'Héros actifs',before:`${state.slotsUnlocked}/${state.maxSlots}`,after:`${Math.min(state.maxSlots,state.slotsUnlocked+1)}/${state.maxSlots}`,desc:'Ajoute une place pour un producteur et ses bonus de rôle, talent et équipement.',
     },
     {
-      type:'crit',icon:'fa-bullseye',title:'Instinct',level:state.crit.level,maxed:state.crit.maxed,cost:state.crit.nextCost,
+      type:'crit',icon:'fa-bullseye',title:'Instinct',level:state.crit.level,maxed:state.crit.maxed,cost:state.crit.nextCost, bulkCosts: state.crit.bulkCosts, bulk: true,
       label:'Chance de coup critique',before:`${Math.round(state.crit.chance*100)}%`,after:`${Math.round((state.crit.nextChance??state.crit.chance)*100)}%`,desc:'Ajoute +1 point de chance critique aux frappes manuelles par niveau. Un critique inflige ×2 dégâts.',
     },
     {
-      type:'cooldown',icon:'fa-stopwatch',title:'Flux',level:state.cooldown.level,maxed:state.cooldown.maxed,cost:state.cooldown.nextCost,
+      type:'cooldown',icon:'fa-stopwatch',title:'Flux',level:state.cooldown.level,maxed:state.cooldown.maxed,cost:state.cooldown.nextCost, bulkCosts: state.cooldown.bulkCosts, bulk: true,
       label:'Recharge des compétences',before:`${state.cooldown.burstSeconds}s · ${state.cooldown.teamSeconds}s`,after:`${state.cooldown.nextBurstSeconds??state.cooldown.burstSeconds}s · ${state.cooldown.nextTeamSeconds??state.cooldown.teamSeconds}s`,desc:'Réduit de 2% par niveau la recharge de l’Ultime et du Combo. Se cumule avec les Supports.',
     },
   ];
@@ -1722,7 +1783,13 @@ function renderIdleUpgrades(state) {
   const productionEl=document.getElementById('idle-upgrade-production');if(productionEl)productionEl.textContent=`${idleFormatNumber(rate)}/s`;
   const clickEl=document.getElementById('idle-upgrade-click');if(clickEl)clickEl.textContent=idleFormatNumber(state.click.damage??state.click.yield);
   const recommendation=document.getElementById('idle-upgrade-recommendation');if(recommendation)recommendation.textContent=recommended?`${recommended.title} · ${waitLabel(recommended.cost)}`:'Toutes les améliorations sont au maximum';
-  return items.map((it) => `
+  renderIdleBuyAmountControl('idle-upgrade-buy-amount');
+  return items.map((it) => {
+    const plan = it.bulk ? idleUpgradeBuyPlan(it) : { amount: 1, cost: it.cost, count: 1 };
+    const label = plan.amount === 'max' ? 'MAX' : plan.count && plan.count !== 1 ? `×${plan.count}` : 'Améliorer';
+    const affordable = plan.amount === 'max' ? essence >= (it.cost || Infinity) : plan.cost != null && essence >= plan.cost;
+    const costLabel = plan.amount === 'max' ? 'budget' : idleFormatNumber(plan.cost);
+    return `
     <div class="idle-upgrade-card idle-upgrade-${it.type} ${recommended===it?'recommended':''}">
       ${recommended===it?'<span class="idle-upgrade-best"><i class="fas fa-star"></i> CONSEILLÉ</span>':''}
       <div class="idle-upgrade-ico"><i class="fas ${it.icon}"></i></div>
@@ -1733,8 +1800,9 @@ function renderIdleUpgrades(state) {
       </div>
       ${it.maxed
         ? '<span class="idle-upgrade-maxed">MAX</span>'
-        : `<div class="idle-upgrade-buy"><small>${waitLabel(it.cost)}</small><button class="btn-secondary idle-upgrade-btn${state.essence >= it.cost ? ' idle-affordable' : ''}" data-upgrade="${it.type}"${state.essence < it.cost ? ' disabled' : ''}>Améliorer · ${idleFormatNumber(it.cost)} <i class="fas fa-mortar-pestle"></i></button></div>`}
-    </div>`).join('');
+        : `<div class="idle-upgrade-buy"><small>${plan.amount===1?waitLabel(it.cost):costLabel+' Essence'}</small><button class="btn-secondary idle-upgrade-btn${affordable ? ' idle-affordable' : ''}" data-upgrade="${it.type}" data-upgrade-amount="${plan.amount}"${affordable ? '' : ' disabled'}>${label} · ${costLabel} <i class="fas fa-mortar-pestle"></i></button></div>`}
+    </div>`;
+  }).join('');
 }
 
 async function collectIdle() {
@@ -1871,17 +1939,19 @@ async function ascendIdleSlot(slotIndex) {
 async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});const o=state.optimization||{};const improved=Number(o.gainPercent||0)>0;idleSpawnFloat(improved?`COMPOSITION · +${o.gainPercent}% DPS`:'COMPOSITION DÉJÀ OPTIMALE','crit');idleAddCombatLog(improved?`${o.changed} remplacement${o.changed>1?'s':''} · ${idleFormatNumber(o.beforeRate)} → ${idleFormatNumber(o.afterRate)} DPS`:'Tes meilleurs héros sont déjà bien placés','fa-users-gear');idleNotify(improved?`Équipe optimisée gratuitement : +${o.gainPercent}% DPS`:'Ta composition est déjà optimale','success');if(typeof sfx!=='undefined'&&sfx.idleUpgrade)sfx.idleUpgrade();renderIdleState(state);}catch(e){idleNotify(e.message,'error');}finally{if(btn)btn.disabled=false;}}
 async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 
-async function buyIdleUpgrade(type, cardEl) {
+async function buyIdleUpgrade(type, cardEl, amount = 1) {
+  let result;
   try {
-    await api('/api/idle/upgrade', { method: 'POST', body: JSON.stringify({ type }) });
+    result = await api('/api/idle/upgrade', { method: 'POST', body: JSON.stringify({ type, amount }) });
   } catch (e) {
     alert(e.message);
     return;
   }
   if (typeof sfx !== 'undefined' && sfx.idleUpgrade) sfx.idleUpgrade();
-  idleAddCombatLog(`${type==='click'?'Concentration':type==='prod'?'Discipline':'Emplacement'} amélioré`,'fa-arrow-trend-up');
+  const label={click:'Concentration',prod:'Discipline',crit:'Instinct',cooldown:'Flux'}[type]||'Emplacement';
+  idleAddCombatLog(amount!==1&&amount!=='1'?`${label} amélioré (lot ${amount==='max'?'max':`×${amount}`})`:`${label} amélioré`,'fa-arrow-trend-up');
   if (cardEl) idleCardBump(cardEl);
-  refreshIdleState();
+  renderIdleState(result);
 }
 
 // Achète (ou monte) un Ancient — payé en Sagesse (wisdomPoints), jamais en
@@ -2154,6 +2224,7 @@ function initIdleUI() {
   document.getElementById('idle-presets')?.addEventListener('click',(e)=>{const save=e.target.closest('[data-preset-save]');if(save)return saveIdlePreset();const load=e.target.closest('[data-preset-load]');if(load)return loadIdlePreset(load.dataset.presetLoad);});
   document.getElementById('idle-prestige-paths')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-prestige-path]');if(b&&!b.disabled)chooseIdlePrestigePath(b.dataset.prestigePath);});
   document.getElementById('idle-challenges')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-challenge-claim]');if(b&&!b.disabled)claimIdleChallenge(b.dataset.challengeClaim);});
+  document.getElementById('idle-claim-all')?.addEventListener('click',claimAllIdle);
   document.getElementById('idle-telemetry-load')?.addEventListener('click',loadIdleTelemetry);
   document.getElementById('idle-feedback-form')?.addEventListener('submit',sendIdleFeedback);
   document.getElementById('idle-chat-form')?.addEventListener('submit',idleSendChat);
@@ -2251,8 +2322,10 @@ function initIdleUI() {
     if (pickBtn) return openIdlePicker(Number(pickBtn.dataset.slot));
   });
   document.getElementById('idle-upgrades')?.addEventListener('click', (e) => {
+    const amountBtn = e.target.closest('#idle-upgrade-buy-amount [data-buy-amount]');
+    if (amountBtn) { chooseIdleBuyAmount(amountBtn.dataset.buyAmount); return; }
     const btn = e.target.closest('.idle-upgrade-btn');
-    if (btn) buyIdleUpgrade(btn.dataset.upgrade, btn.closest('.idle-upgrade-card'));
+    if (btn) buyIdleUpgrade(btn.dataset.upgrade, btn.closest('.idle-upgrade-card'), btn.dataset.upgradeAmount==='max'?'max':Number(btn.dataset.upgradeAmount||1));
   });
   document.getElementById('idle-ancients')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.idle-ancient-btn');

@@ -538,10 +538,14 @@ function wisdomForRunStage(stage, prestigeLevel = 0) {
   const s = Math.max(0, Number(stage) || 0);
   const required = prestigeRequiredStage(prestigeLevel);
   if (s < required) return 0;
-  // Une retraite au seuil paie un seul Ancient de départ (3 Sagesse pour un
-  // coût initial de 2), au lieu de financer deux niveaux immédiatement.
-  // Dépasser l'objectif reste utile, avec un rendement volontairement doux.
-  return Math.max(1, Math.floor(3 * Math.pow(s / required, 1.35)));
+  // Relevé de 3→4 (base) et .35→.5 (exposant) : le stage requis grimpe de
+  // +20 à chaque Retraite (prestigeRequiredStage) alors que le coût d'un
+  // Ancient grimpe, lui, sans plafond (cf. ANCIENT_COST_GROWTH) — sans cette
+  // hausse, la Sagesse gagnée par Retraite restait quasi plate pendant que le
+  // prix des Ancients suivants continuait de grimper, rendant chaque nouvelle
+  // Retraite moins rentable que la précédente. Dépasser l'objectif reste
+  // utile, avec un rendement qui récompense mieux le push qu'avant.
+  return Math.max(1, Math.floor(4 * Math.pow(s / required, 1.5)));
 }
 
 // Bénédictions temporaires : le joueur façonne un build différent à chaque
@@ -583,7 +587,10 @@ function runBlessingChoices(userId,prestigeLevel,choiceIndex,owned=[]) {
 // `clickYield`, `pendingEssence`, `rollRecruitRarity`, `recruitCost`) — pas
 // de nouvelle couche de calcul, juste un bonus de plus par-dessus.
 const ANCIENT_BASE_COST = 2;
-const ANCIENT_COST_GROWTH = 1.3; // pas de plafond : puits de Sagesse à très long terme
+// Assoupli de 1.3→1.25 (avec le relevé de wisdomForRunStage ci-dessus) : reste
+// un puits de Sagesse à très long terme (pas de plafond), mais sans faire
+// décrocher la rentabilité marginale d'un Ancient après une dizaine de niveaux.
+const ANCIENT_COST_GROWTH = 1.25;
 function ancientCost(level) {
   return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)), 1));
 }
@@ -636,8 +643,15 @@ const ORB_COOLDOWN_SECONDS = 90;
 const ORB_PRODUCTION_SECONDS = 45;
 const ORB_MIN_REWARD = 10;
 const ORB_SEAL_CHANCE = 0.05;
-function orbReward(totalRate) {
-  return Math.max(ORB_MIN_REWARD, Math.round(finiteIdleNumber(Math.max(0, totalRate) * ORB_PRODUCTION_SECONDS)));
+// Jackpot rare (façon golden cookie « Frenzy ») : même geste (cliquer l'orbe),
+// mais un tirage serveur imprévisible paie ~4× plus de production d'un coup.
+// Reste un simple multiplicateur ponctuel (pas un buff temporaire à suivre
+// côté état) — un pic mémorable sans état supplémentaire à persister.
+const ORB_JACKPOT_CHANCE = 0.08;
+const ORB_JACKPOT_SECONDS = ORB_PRODUCTION_SECONDS * 4;
+function orbReward(totalRate, jackpot = false) {
+  const seconds = jackpot ? ORB_JACKPOT_SECONDS : ORB_PRODUCTION_SECONDS;
+  return Math.max(ORB_MIN_REWARD, Math.round(finiteIdleNumber(Math.max(0, totalRate) * seconds)));
 }
 
 module.exports = {
@@ -756,5 +770,7 @@ module.exports = {
   ORB_COOLDOWN_SECONDS,
   ORB_PRODUCTION_SECONDS,
   ORB_SEAL_CHANCE,
+  ORB_JACKPOT_CHANCE,
+  ORB_JACKPOT_SECONDS,
   orbReward,
 };

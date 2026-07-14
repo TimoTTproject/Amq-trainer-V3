@@ -210,10 +210,10 @@ test('Prestige : le seuil progresse à chaque retraite et la Sagesse récompense
   assert.equal(prestigeRequiredStage(1),PRESTIGE_MIN_STAGE+PRESTIGE_STAGE_STEP);
   assert.equal(prestigeRequiredStage(10),PRESTIGE_MIN_STAGE+10*PRESTIGE_STAGE_STEP);
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE-1),0);
-  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),3);
+  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),4);
   assert.ok(wisdomForRunStage(200)>wisdomForRunStage(100));
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE,1),0);
-  assert.equal(wisdomForRunStage(prestigeRequiredStage(1),1),3);
+  assert.equal(wisdomForRunStage(prestigeRequiredStage(1),1),4);
   for(let prestige=0;prestige<=50;prestige++){
     assert.equal(isBossStage(prestigeRequiredStage(prestige)),true);
   }
@@ -241,7 +241,7 @@ test('long terme : le dernier décor ne peut pas être épuisé en 10 h de jeu a
 });
 
 test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gardiens exposés',()=>{
-  const {achievementProdMultiplier,orbReward,AWAKENED_BONUS,AWAKENED_CHANCE}=require('../src/idle/idle');
+  const {achievementProdMultiplier,orbReward,AWAKENED_BONUS,AWAKENED_CHANCE,ORB_JACKPOT_CHANCE,ORB_JACKPOT_SECONDS,ORB_PRODUCTION_SECONDS}=require('../src/idle/idle');
   assert.ok(ANCIENTS.some((a)=>a.kind==='autoClickRate'));
   assert.ok(ANCIENTS.some((a)=>a.kind==='startStage'));
   assert.ok(ANCIENTS.some((a)=>a.kind==='bossRewardMult'));
@@ -249,6 +249,10 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.equal(achievementProdMultiplier(10),1.10);
   assert.equal(orbReward(0),10); // petit plancher, sans court-circuiter le farm initial
   assert.equal(orbReward(100),4500); // 45 s : précieux sans remplacer plusieurs minutes de farm
+  // Jackpot rare (façon golden cookie « Frenzy ») : même appel, ~4x la production.
+  assert.equal(ORB_JACKPOT_SECONDS,ORB_PRODUCTION_SECONDS*4);
+  assert.equal(orbReward(100,true),orbReward(100)*4);
+  assert.ok(ORB_JACKPOT_CHANCE>0&&ORB_JACKPOT_CHANCE<.2);
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 

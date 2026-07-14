@@ -460,8 +460,9 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
 
   const rich = dbUser({ idleSeals: cost });
   prisma.user.findUnique = async () => rich;
+  prisma.user.update = async () => rich;
   let sealDebit=null;
-  prisma.user.update = async (args) => { sealDebit=args.data;return rich; };
+  prisma.user.updateMany = async (args) => { sealDebit=args.data; return { count: 1 }; };
   prisma.dojoRecruit.findMany = async () => [];
   prisma.character.findMany = async () => [{ id: 5, name: 'Nouvelle Recrue', imageUrl: null, rarity: 'common' }];
   let created = null;
@@ -472,6 +473,25 @@ test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost e
   assert.equal(created.characterId, 5);
   assert.equal(okRes.json.recruited.name, 'Nouvelle Recrue');
   assert.equal(sealDebit.idleEssenceRecruitCount,undefined);
+});
+
+test('recruit : la débite des Sceaux est atomique (refuse si une autre requête a déjà consommé le solde)', async () => {
+  // Couvre la garde ajoutée (idleSeals:{gte:cost}) : si updateMany ne trouve
+  // plus de ligne correspondante (solde déjà consommé par une requête
+  // concurrente), la recrue ne doit jamais être créée.
+  const cost = recruitCost(0);
+  const rich = dbUser({ idleSeals: cost });
+  prisma.user.findUnique = async () => rich;
+  prisma.user.update = async () => rich;
+  prisma.user.updateMany = async () => ({ count: 0 });
+  prisma.dojoRecruit.findMany = async () => [];
+  prisma.character.findMany = async () => [{ id: 5, name: 'Nouvelle Recrue', imageUrl: null, rarity: 'common' }];
+  let created = false;
+  prisma.dojoRecruit.create = async () => { created = true; return {}; };
+  const res = await app.request('/api/idle/recruit', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /insuffisants?/);
+  assert.equal(created, false);
 });
 
 test('recruit : accepte l Essence et la débite atomiquement', async () => {
@@ -804,6 +824,36 @@ test('upgrade cooldown : débite le coût et augmente Flux', async () => {
   assert.equal(res.status,200);assert.equal(updateData.essence.decrement,cost);assert.equal(updateData.idleCooldownLevel.increment,1);
 });
 
+test('upgrade prod : amount=5 achète 5 niveaux au prix exact, tout ou rien', async () => {
+  const exactCost=[0,1,2,3,4].reduce((sum,lvl)=>sum+prodUpgradeCost(lvl),0);
+  const poor=dbUser({essence:exactCost-1});let updateData=null;
+  prisma.user.findUnique=async()=>poor;
+  prisma.user.update=async(args)=>{if(args.data.idleProdLevel)updateData=args.data;return poor;};
+  const poorRes=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'prod',amount:5}});
+  assert.equal(poorRes.status,400); // pas de niveau partiel : le lot de 5 coûte tout ou rien
+  assert.equal(updateData,null);
+
+  const rich=dbUser({essence:exactCost});
+  prisma.user.findUnique=async()=>rich;
+  prisma.user.update=async(args)=>{if(args.data.idleProdLevel)updateData=args.data;return rich;};
+  const res=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'prod',amount:5}});
+  assert.equal(res.status,200);
+  assert.equal(updateData.essence.decrement,exactCost);
+  assert.equal(updateData.idleProdLevel.increment,5);
+});
+
+test('upgrade click : amount=max achète autant de niveaux que le budget permet', async () => {
+  const twoLevels=clickUpgradeCost(0)+clickUpgradeCost(1);
+  const user=dbUser({essence:twoLevels+5}); // pas assez pour un 3e niveau
+  let updateData=null;
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async(args)=>{if(args.data.idleClickLevel)updateData=args.data;return user;};
+  const res=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'click',amount:'max'}});
+  assert.equal(res.status,200);
+  assert.equal(updateData.idleClickLevel.increment,2);
+  assert.equal(updateData.essence.decrement,twoLevels);
+});
+
 test('collect : crédite la production en attente et avance idleLastCollectAt', async () => {
   const anHourAgo = new Date(Date.now() - 3600 * 1000);
   const user = dbUser({ idleLastCollectAt: anHourAgo });
@@ -1091,4 +1141,41 @@ test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas 
   });
   assert.equal(res.status, 200);
   assert.equal(userDecrement, ancientCost(4));
+});
+
+test('claim-all : réclame en un appel tous les succès complétés et crédite les Sceaux une seule fois', async () => {
+  // Stage 25 : complète « Chasseur de boss I » (cible 25) et « Voyageur des
+  // mondes I » (cible 3 mondes découverts), sans toucher aux autres systèmes
+  // (compteurs vides → aucune mission/défi/saison n'est complet).
+  const user = dbUser({ idleBestStage: 25, idleStage: 25, prestigeLevel: 0 });
+  prisma.user.findUnique = async () => user;
+  prisma.idleMissionClaim.findMany = async () => [];
+  let createManyData = null;
+  prisma.idleMissionClaim.createMany = async (args) => { createManyData = args.data; return { count: args.data.length }; };
+  let userUpdate = null;
+  prisma.user.update = async (args) => { userUpdate = args.data; return user; };
+  const res = await app.request('/api/idle/claim-all', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.claimed, 2);
+  assert.equal(res.json.seals, 2);
+  assert.equal(userUpdate.idleSeals.increment, 2);
+  assert.equal(createManyData.length, 2);
+  assert.ok(createManyData.every((c) => c.userId === 'u1'));
+  assert.ok(createManyData.some((c) => c.missionKey === 'achievement_boss_hunter_1' && c.period === 'lifetime'));
+  assert.ok(createManyData.some((c) => c.missionKey === 'achievement_explorer_1' && c.period === 'lifetime'));
+});
+
+test('claim-all : ne réclame rien de plus si tout est déjà réclamé', async () => {
+  const user = dbUser({ idleBestStage: 25, idleStage: 25 });
+  prisma.user.findUnique = async () => user;
+  prisma.idleMissionClaim.findMany = async () => [
+    { missionKey: 'achievement_boss_hunter_1', period: 'lifetime' },
+    { missionKey: 'achievement_explorer_1', period: 'lifetime' },
+  ];
+  let updateCalled = false;
+  prisma.idleMissionClaim.createMany = async () => { updateCalled = true; return { count: 0 }; };
+  const res = await app.request('/api/idle/claim-all', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.claimed, 0);
+  assert.equal(updateCalled, false);
 });
