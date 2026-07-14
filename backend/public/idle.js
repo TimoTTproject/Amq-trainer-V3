@@ -53,6 +53,8 @@ let idleComboCount = 0; // frénésie de clic (purement visuelle)
 let idleComboExpireAt = 0;
 let idleChatSocket = null;
 let idleChatBound = false;
+let idleChatUnread = 0;
+let idleChatDrawerOpened = false;
 
 function idleNotify(message,type='info'){
   const box=document.getElementById('idle-toasts');if(!box)return;
@@ -147,11 +149,17 @@ async function openIdle() {
     if (idleActivePanel === 'home' && !document.hidden) idleBackgroundSync();
   }, 6000);
   idleConnectChat();
+  idleMountChatDrawer();
+  if(window.innerWidth>=1050&&!sessionStorage.getItem('idle-chat-manually-closed'))idleSetChatOpen(true);
   await refreshIdleState();
   maybeShowIdleWelcome();
 }
 
 const IDLE_CHAT_REACTIONS=['👏','🔥','💪'];
+function idleMountChatDrawer(){const view=document.getElementById('view-idle');const chat=document.getElementById('idle-community-chat');if(view&&chat&&chat.parentElement!==view)view.appendChild(chat);}
+function idleRenderChatUnread(){const badge=document.getElementById('idle-chat-unread');if(!badge)return;badge.textContent=idleChatUnread>99?'99+':String(idleChatUnread);badge.classList.toggle('hidden',!idleChatUnread);}
+function idleSetChatOpen(open){idleMountChatDrawer();idleChatDrawerOpened=!!open;const chat=document.getElementById('idle-community-chat');const toggle=document.getElementById('idle-chat-toggle');chat?.classList.toggle('is-open',idleChatDrawerOpened);toggle?.classList.toggle('is-open',idleChatDrawerOpened);toggle?.setAttribute('aria-expanded',String(idleChatDrawerOpened));if(idleChatDrawerOpened){idleChatUnread=0;idleRenderChatUnread();requestAnimationFrame(()=>{const feed=document.getElementById('idle-chat-feed');if(feed)feed.scrollTop=feed.scrollHeight;document.getElementById('idle-chat-text')?.focus({preventScroll:true});});}}
+function idleToggleChat(){idleSetChatOpen(!idleChatDrawerOpened);if(!idleChatDrawerOpened)sessionStorage.setItem('idle-chat-manually-closed','1');else sessionStorage.removeItem('idle-chat-manually-closed');}
 function idleChatReactionBar(message){
   const m=message||{};if(!m.id)return '';
   return `<div class="idle-chat-reactions" aria-label="Réagir au message">${IDLE_CHAT_REACTIONS.map((emoji)=>`<button type="button" data-chat-react="${emoji}" data-message-id="${escapeHtml(m.id)}" title="Réagir avec ${emoji}">${emoji}<span>${Number(m.reactions?.[emoji])||''}</span></button>`).join('')}</div>`;
@@ -171,6 +179,7 @@ function idleAppendChat(message){
   feed.insertAdjacentHTML('beforeend',idleChatLine(message));
   while(feed.children.length>60)feed.firstElementChild?.remove();
   feed.scrollTop=feed.scrollHeight;
+  if(!idleChatDrawerOpened){idleChatUnread++;idleRenderChatUnread();}
 }
 
 function idleLoadChatHistory(){
@@ -178,7 +187,7 @@ function idleLoadChatHistory(){
   idleChatSocket.timeout(5000).emit('mp:gchat:history',(error,data)=>{
     if(error||!data)return;
     const feed=document.getElementById('idle-chat-feed');if(feed){feed.innerHTML=(data.messages||[]).map(idleChatLine).join('');feed.scrollTop=feed.scrollHeight;}
-    const online=document.getElementById('idle-chat-online');if(online)online.textContent=`${idleFormatNumber(data.online||0)} en ligne`;
+    const onlineText=`${idleFormatNumber(data.online||0)} en ligne`;const online=document.getElementById('idle-chat-online');if(online)online.textContent=onlineText;const launcher=document.getElementById('idle-chat-launcher-status');if(launcher)launcher.textContent=onlineText;
   });
 }
 
@@ -883,21 +892,25 @@ function renderIdleWorldJump(codex,battle){
 // sa puissance vient de Concentration. Les recrues restent une équipe passive.
 function renderIdleMainHero(state) {
   const hero = document.getElementById('idle-main-hero');
-  if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'} hair-${state.heroStyle?.hair || 'short'} outfit-${state.heroStyle?.outfit || 'dojo'} energy-${state.heroStyle?.color || 'red'}`; }
   const avatar = document.getElementById('idle-main-hero-avatar');
   const active=(state.slots||[]).filter((slot)=>slot.character);
   const leader=(active.find((slot)=>slot.character.id===state.strategy?.leaderCharacterId)||active[0])?.character;
+  if (hero) { hero.className = `idle-main-hero aura-${state.heroStyle?.aura || 'none'} stance-${state.heroStyle?.stance || 'balanced'} hair-${state.heroStyle?.hair || 'short'} outfit-${state.heroStyle?.outfit || 'dojo'} energy-${state.heroStyle?.color || 'red'} ${leader?'':'no-team'}`;hero.setAttribute('aria-label',leader?'Personnaliser le personnage principal':'Choisir un héros pour l’équipe'); }
   if (avatar) {
     avatar.className='idle-main-hero-avatar';
-    avatar.innerHTML=leader?.imageUrl?'':`<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i>`;
+    avatar.innerHTML=leader?.imageUrl?'':`<i class="fas ${leader?(state.heroClass?.icon || 'fa-shield-halved'):'fa-user-plus'}"></i>`;
     avatar.style.backgroundImage=leader?.imageUrl?`url('${leader.imageUrl}')`:'none';
   }
   const name = document.getElementById('idle-main-hero-name');
-  if (name) name.textContent = leader?.name || currentUser?.displayName || 'Héros AMQ';
+  if (name) name.textContent = leader?.name || 'Aucun héros assigné';
   const power = document.getElementById('idle-main-hero-power');
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
-  if (power) power.innerHTML = `<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance${state.heroClass?.passiveStatus?`<strong class="idle-class-passive-status ${state.heroClass.passiveActive?'active':''}">${escapeHtml(state.heroClass.passiveStatus)}</strong>`:''}`;
+  const canRestore=!leader&&Number(state.collection?.recruits||0)>0;
+  if (power) power.innerHTML = leader?`<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance${state.heroClass?.passiveStatus?`<strong class="idle-class-passive-status ${state.heroClass.passiveActive?'active':''}">${escapeHtml(state.heroClass.passiveStatus)}</strong>`:''}`:canRestore?'Tes héros sont encore recrutés · restaure ta formation':'Ouvre l’onglet Équipe pour commencer';
+  const action=document.getElementById('idle-customize-hero');if(action){action.title=leader?'Personnaliser mon personnage principal':canRestore?'Restaurer automatiquement mon équipe':'Choisir un héros';action.innerHTML=leader?'<i class="fas fa-palette"></i><span>Personnaliser</span>':canRestore?'<i class="fas fa-users-gear"></i><span>Restaurer l’équipe</span>':'<i class="fas fa-user-plus"></i><span>Choisir un héros</span>';}
 }
+
+function openIdleMainHeroAction(){if(!document.getElementById('idle-main-hero')?.classList.contains('no-team'))return openIdleClassPicker();if(Number(idleState?.collection?.recruits||0)>0)return optimizeIdleTeam();idleShowPanel('team');}
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
 // chaîne vide si rien ne produit (aucun coéquipier assigné) — pas de fausse
@@ -2132,6 +2145,8 @@ function initIdleUI() {
   document.getElementById('idle-telemetry-load')?.addEventListener('click',loadIdleTelemetry);
   document.getElementById('idle-feedback-form')?.addEventListener('submit',sendIdleFeedback);
   document.getElementById('idle-chat-form')?.addEventListener('submit',idleSendChat);
+  document.getElementById('idle-chat-toggle')?.addEventListener('click',idleToggleChat);
+  document.getElementById('idle-chat-close')?.addEventListener('click',()=>{sessionStorage.setItem('idle-chat-manually-closed','1');idleSetChatOpen(false);});
   document.getElementById('idle-run-choice')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-run-blessing]');if(button&&!button.disabled)chooseIdleRunBlessing(button.dataset.runBlessing);});
   document.querySelector('.idle-community-chat')?.addEventListener('click',idleChatCommunityClick);
   document.getElementById('idle-community-ranking')?.addEventListener('click',openIdleRanking);
@@ -2258,10 +2273,10 @@ function initIdleUI() {
   document.getElementById('idle-prestige-btn')?.addEventListener('click', prestigeIdle);
   document.getElementById('idle-customize-hero')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    openIdleClassPicker();
+    openIdleMainHeroAction();
   });
-  document.getElementById('idle-main-hero')?.addEventListener('click',(e)=>{e.stopPropagation();if(!e.target.closest('#idle-customize-hero'))openIdleClassPicker();});
-  document.getElementById('idle-main-hero')?.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();openIdleClassPicker();}});
+  document.getElementById('idle-main-hero')?.addEventListener('click',(e)=>{e.stopPropagation();if(!e.target.closest('#idle-customize-hero'))openIdleMainHeroAction();});
+  document.getElementById('idle-main-hero')?.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();openIdleMainHeroAction();}});
   document.getElementById('idle-class-close')?.addEventListener('click', () => document.getElementById('idle-class-picker').classList.add('hidden'));
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-class-picker') e.currentTarget.classList.add('hidden'); const b = e.target.closest('[data-hero-class]'); if (b) chooseIdleHeroClass(b.dataset.heroClass); });
   document.getElementById('idle-class-picker')?.addEventListener('click', (e) => { const b=e.target.closest('[data-style-key]'); if(b&&!b.disabled) chooseIdleHeroStyle(b.dataset.styleType,b.dataset.styleKey); });

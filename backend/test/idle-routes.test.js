@@ -934,18 +934,21 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
     idleRunBestStage:prestigeRequiredStage(1), idleBestStage:prestigeRequiredStage(1), essence: 5000, idleProdLevel: 10, idleClickLevel: 5, idleSlotsUnlocked: 8, prestigeLevel: 1,
   });
   prisma.user.findUnique = async () => eligible;
-  let slotsReset = null;
+  const slotsReset = [];
   let recruitsReset = null;
   let userUpdate = null;
-  prisma.idleSlot.updateMany = async (args) => { slotsReset = args; return { count: 3 }; };
+  prisma.idleSlot.updateMany = async (args) => { slotsReset.push(args); return { count: 3 }; };
   prisma.dojoRecruit.updateMany = async (args) => { recruitsReset = args; return { count: 3 }; };
   prisma.user.update = async (args) => { userUpdate = args.data; return eligible; };
   const okRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(okRes.status, 200);
-  assert.equal(slotsReset.where.userId, 'u1');
-  assert.equal(slotsReset.data.characterId, null);
-  assert.equal(slotsReset.data.level, 1);
-  assert.equal(slotsReset.data.ascension, 0);
+  assert.equal(slotsReset.length, 2);
+  assert.deepEqual(slotsReset[0].where, { userId:'u1', slotIndex:{ lt:START_SLOTS } });
+  assert.equal(slotsReset[0].data.characterId, undefined);
+  assert.equal(slotsReset[0].data.level, 1);
+  assert.equal(slotsReset[0].data.ascension, 0);
+  assert.deepEqual(slotsReset[1].where, { userId:'u1', slotIndex:{ gte:START_SLOTS } });
+  assert.equal(slotsReset[1].data.characterId, null);
   assert.equal(recruitsReset.data.trainingLevel, 1);
   assert.equal(recruitsReset.data.idleAscension, 0);
   assert.equal(userUpdate.essence, 0);

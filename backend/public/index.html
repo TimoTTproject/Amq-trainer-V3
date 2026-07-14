@@ -1636,6 +1636,8 @@
         <button class="idle-guide-btn" id="idle-settings-btn" title="Réglages de confort" aria-label="Réglages de confort"><i class="fas fa-sliders"></i><span>Réglages</span></button>
       </header>
 
+      <button type="button" class="idle-chat-launcher" id="idle-chat-toggle" aria-controls="idle-community-chat" aria-expanded="false"><i class="fas fa-comments"></i><span><small>CHAT MONDE</small><b>Communauté</b><em id="idle-chat-launcher-status">Connexion…</em></span><strong class="hidden" id="idle-chat-unread">0</strong></button>
+
       <div class="idle-content">
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel" role="tabpanel" aria-labelledby="idle-tab-home" tabindex="0">
@@ -1741,8 +1743,8 @@
             <div class="idle-run-choice hidden" id="idle-run-choice"><header><i class="fas fa-wand-sparkles"></i><span><small>GARDIEN MAJEUR VAINCU</small><b>Choisis une bénédiction pour cette run</b><em>Le choix est définitif jusqu’au prochain Prestige.</em></span></header><div id="idle-run-choices"></div></div>
           </section>
 
-          <section class="profile-section idle-community-chat" aria-labelledby="idle-chat-title">
-            <header><span><small>COMMUNAUTÉ</small><h3 id="idle-chat-title"><i class="fas fa-comments"></i> Chat des joueurs</h3></span><strong id="idle-chat-online">Connexion…</strong></header>
+          <section class="profile-section idle-community-chat" id="idle-community-chat" aria-labelledby="idle-chat-title">
+            <header><span><small>CHAT MONDE</small><h3 id="idle-chat-title"><i class="fas fa-comments"></i> Chat des joueurs</h3></span><strong id="idle-chat-online">Connexion…</strong><button type="button" id="idle-chat-close" aria-label="Réduire le chat" title="Réduire"><i class="fas fa-chevron-right"></i></button></header>
             <p>Discute avec tous les joueurs connectés. Les recrutements précieux et les nouveaux Prestiges sont annoncés automatiquement.</p>
             <div class="idle-community-links"><button type="button" id="idle-community-ranking"><i class="fas fa-ranking-star"></i><span><b>Classement du Dojo</b><small>Voir les meilleurs joueurs</small></span></button><button type="button" id="idle-community-friends"><i class="fas fa-user-group"></i><span><b>Mes amis</b><small>Voir qui est connecté</small></span></button></div>
             <div class="idle-chat-feed" id="idle-chat-feed" aria-live="polite"></div>
@@ -1908,7 +1910,7 @@
             <section class="idle-prestige-reset"><h4><i class="fas fa-rotate-left"></i> Repart à zéro</h4><ul>
               <li>L’Essence de la run</li>
               <li>Discipline et Concentration</li>
-              <li>Les emplacements (retour à 3)</li>
+              <li>Les emplacements (retour à 3, formation conservée)</li>
               <li>Les niveaux d’entraînement des héros</li>
               <li>La progression des vagues</li>
             </ul></section>
@@ -1916,7 +1918,7 @@
               <li>Tous tes héros recrutés (Éveillés inclus)</li>
               <li>Tes objets et leur équipement</li>
               <li>Tes Sceaux et la garantie Épique</li>
-              <li>Ton niveau de compte et les décors</li>
+              <li>Ton niveau de compte, tes zones découvertes et les décors</li>
               <li>Tes Ancients et ta Sagesse</li>
               <li>Les coffres déjà réclamés</li>
             </ul></section>

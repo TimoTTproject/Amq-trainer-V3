@@ -1159,7 +1159,7 @@ async function buildState(userId) {
             {key:'essence',label:'Essence disponible',before:safeIdleNumber(user.essence),after:0},
             {key:'stage',label:'Stage et record de la run',before:user.idleRunBestStage||1,after:1},
             {key:'training',label:'Niveaux et Ascensions des héros',before:'Niveaux et Ascensions actuels',after:'Niveau 1 · A0'},
-            {key:'team',label:'Équipe et emplacements',before:`${user.idleSlotsUnlocked}/${MAX_SLOTS} débloqués`,after:`${START_SLOTS}/${MAX_SLOTS}, équipe à refaire`},
+            {key:'team',label:'Équipe et emplacements',before:`${user.idleSlotsUnlocked}/${MAX_SLOTS} débloqués`,after:`${START_SLOTS}/${MAX_SLOTS}, formation conservée`},
             {key:'upgrades',label:'Niveaux des améliorations',before:`Niv. ${user.idleProdLevel||0} · ${user.idleClickLevel||0} · ${user.idleCritLevel||0} · ${user.idleCooldownLevel||0}`,after:'Tous au niveau 0'},
             {key:'blessings',label:'Bénédictions roguelike',before:`${runBlessingKeys.length} pouvoir${runBlessingKeys.length!==1?'s':''} de run`,after:'Toutes retirées'},
           ],
@@ -1647,7 +1647,18 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
       // jamais directement sur un boss (stage suivant le cas échéant).
       let startStage = Math.max(1, Math.min(1 + Math.floor(ancientBonus(ancientLevelsByKey, 'startStage')), user.idleBestStage || 1));
       if (isBossStage(startStage)) startStage += 1;
-      await tx.idleSlot.updateMany({ where: { userId: user.id }, data: { characterId: null, assignedAt: null, level: 1, ascension: 0 } });
+      // Le Prestige recommence la progression de la run, pas la corvée de
+      // composition. Les trois premiers héros restent assignés et visibles.
+      // Les emplacements qui redeviennent verrouillés sont vidés pour qu'un
+      // héros invisible ne continue pas à produire derrière une place fermée.
+      await tx.idleSlot.updateMany({
+        where: { userId: user.id, slotIndex: { lt: START_SLOTS } },
+        data: { level: 1, ascension: 0 },
+      });
+      await tx.idleSlot.updateMany({
+        where: { userId: user.id, slotIndex: { gte: START_SLOTS } },
+        data: { characterId: null, assignedAt: null, level: 1, ascension: 0 },
+      });
       await tx.dojoRecruit.updateMany({where:{userId:user.id},data:{trainingLevel:1,idleAscension:0}});
       await tx.user.update({
         where: { id: user.id },
