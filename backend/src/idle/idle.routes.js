@@ -563,7 +563,7 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
   },0);
   const teamPassive = slots.reduce((mult, s) => {
     if (!s.character || (s.level || 1) < 10) return mult;
-    return mult + ({ epic: .03, legendary: .08, mythic: .15 }[s.character.rarity] || 0);
+    return mult + ({ epic: .02, legendary: .04, mythic: .06 }[s.character.rarity] || 0);
   }, 1);
   // battleSpeed ne modifie volontairement plus l'économie : c'est un réglage
   // d'animation et non un multiplicateur obligatoire de classement.
@@ -666,7 +666,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const roleBonus=count('attaquant')*.08+count('producteur')*.05;
   const reserveBonus=Math.min(.20,Math.max(0,recruitCount-active.length)*.01);
   const teamTalentBonus=active.reduce((sum,slot)=>sum+characterTalent(slot.character).team,0);
-  const passiveBonus=active.reduce((sum,slot)=>sum+((slot.level||1)>=10?({epic:.03,legendary:.08,mythic:.15}[slot.character.rarity]||0):0),0);
+  const passiveBonus=active.reduce((sum,slot)=>sum+((slot.level||1)>=10?({epic:.02,legendary:.04,mythic:.06}[slot.character.rarity]||0):0),0);
   const synergy=synergyForSlots(slots);
   const selectedFormation=FORMATIONS[formation]||FORMATIONS.balanced;
   const formationMultiplier=selectedFormation.bonus(roles);
@@ -1939,7 +1939,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
 
 // ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un
 // orbe cliquable dans la scène toutes les 2 à 5 minutes ; le cliquer paie
-// ~90 s de production d'un coup (parfois +1 Sceau). Le serveur reste
+// ~20 s de production d'un coup (rarement +1 Sceau). Le serveur reste
 // autoritaire sur la fréquence : un jeton anti-rejeu de ORB_COOLDOWN_SECONDS
 // borne le gain, quoi que fasse le client.
 router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-orb' }), async (req, res) => {
