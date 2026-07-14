@@ -1013,7 +1013,10 @@ async function buildState(userId) {
     setBonus:{required:3,multiplier:1.10,label:'Trois pièces du même monde : +10% DPS sur le héros'},
   };
   const runBestStage=Math.max(user.idleRunBestStage||1,stage);const blessingSlots=Math.min(12,Math.floor((runBestStage-1)/20));const blessingPending=runBlessingKeys.length<blessingSlots;
-  const blessingChoices=blessingPending?runBlessingChoices(user.id,user.prestigeLevel,runBlessingKeys.length,runBlessingKeys):[];
+  // `buildState` charge volontairement une projection sans `id`. La graine
+  // doit donc utiliser l'identifiant reçu par la fonction ; sinon l'interface
+  // affiche l'offre de `undefined` que la route de choix refuse ensuite.
+  const blessingChoices=blessingPending?runBlessingChoices(userId,user.prestigeLevel,runBlessingKeys.length,runBlessingKeys):[];
   const selectedBlessings=runBlessingKeys.map((key)=>RUN_BLESSINGS.find((item)=>item.key===key)).filter(Boolean);
   return {
     essence: user.essence,

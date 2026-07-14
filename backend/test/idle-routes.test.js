@@ -1030,14 +1030,15 @@ test('prestige : refuse une run trop courte même si le stage requis est déjà 
 
 test('roguelike : un choix se débloque au stage 21 et seuls les trois pouvoirs proposés sont acceptés',async()=>{
   let user=dbUser({idleStage:21,idleRunBestStage:21,idleBestStage:21});let written=null;
-  prisma.user.findUnique=async()=>user;
+  prisma.user.findUnique=async(args={})=>args.select?Object.fromEntries(Object.keys(args.select).map((key)=>[key,user[key]])):user;
   prisma.user.update=async({data})=>{written=data;if(typeof data.idleRunBlessings==='string')user={...user,idleRunBlessings:data.idleRunBlessings};return user;};
+  const state=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(state.status,200);const displayedKey=state.json.run.build.choices[0].key;
   const rejected=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:'pouvoir_triche'}});
   assert.equal(rejected.status,400);
-  const {runBlessingChoices}=require('../src/idle/idle');const key=runBlessingChoices('u1',0,0,[])[0].key;
-  const accepted=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key}});
-  assert.equal(accepted.status,200);assert.equal(written.idleRunBlessings,key);
-  const duplicate=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key}});
+  const accepted=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:displayedKey}});
+  assert.equal(accepted.status,200);assert.equal(written.idleRunBlessings,displayedKey);
+  const duplicate=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:displayedKey}});
   assert.equal(duplicate.status,400);
 });
 
