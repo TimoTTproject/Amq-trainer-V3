@@ -633,7 +633,7 @@ const AWAKENED_BONUS = 1.10;
 // minutes (équivalent golden cookie). Le serveur borne la fréquence
 // (ORB_COOLDOWN_SECONDS) et paie ORB_PRODUCTION_SECONDS de production.
 const ORB_COOLDOWN_SECONDS = 90;
-const ORB_PRODUCTION_SECONDS = 20;
+const ORB_PRODUCTION_SECONDS = 45;
 const ORB_MIN_REWARD = 10;
 const ORB_SEAL_CHANCE = 0.05;
 function orbReward(totalRate) {

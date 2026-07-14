@@ -1939,7 +1939,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
 
 // ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un
 // orbe cliquable dans la scène toutes les 2 à 5 minutes ; le cliquer paie
-// ~20 s de production d'un coup (rarement +1 Sceau). Le serveur reste
+// ~45 s de production d'un coup (rarement +1 Sceau). Le serveur reste
 // autoritaire sur la fréquence : un jeton anti-rejeu de ORB_COOLDOWN_SECONDS
 // borne le gain, quoi que fasse le client.
 router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-orb' }), async (req, res) => {
@@ -1968,7 +1968,7 @@ router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, nam
     throw e;
   }
   void recordIdleEvent(req.user.id, 'bonus_orb', { value: reward });
-  res.json({ ok: true, reward, seal });
+  res.json({ ok: true, reward, seal, cooldownSeconds: ORB_COOLDOWN_SECONDS });
 });
 
 // Détail d'une licence pour l'écran collection : personnages possédés en

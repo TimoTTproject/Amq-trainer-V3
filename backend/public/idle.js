@@ -49,6 +49,7 @@ let idleMissionWeekKey = null;
 let idleBuyAmount = localStorage.getItem('idle-buy-amount') || '1';
 let idleAncientsAutoOpened = false; // la section Ancients ne s'auto-déplie qu'une fois par session
 let idleOrbTimer = null; // prochain orbe bonus programmé
+let idleOrbCooldownUntil = 0; // empêche un coffre de combat d'apparaître pendant l'anti-rejeu serveur
 let idleComboCount = 0; // frénésie de clic (purement visuelle)
 let idleComboExpireAt = 0;
 let idleChatSocket = null;
@@ -316,7 +317,7 @@ function idleStopTicker() {
 }
 
 // ── Orbes bonus (équivalent « golden cookie ») : un orbe traverse la scène
-// toutes les 2 à 5 minutes ; le cliquer paie ~20 s de production d'un coup
+// toutes les 2 à 5 minutes ; le cliquer paie ~45 s de production d'un coup
 // (le serveur borne la fréquence, cf. POST /api/idle/bonus-orb). Récompense
 // la présence active sans jamais la rendre obligatoire.
 function idleScheduleOrb(firstOfSession = false) {
@@ -328,6 +329,7 @@ function idleSpawnOrb(kind = 'orb') {
   if (kind === 'orb') idleScheduleOrb();
   const scene = document.getElementById('idle-scene');
   if (!scene || idleActivePanel !== 'home' || document.hidden) return; // l'orbe raté reviendra
+  if (Date.now() < idleOrbCooldownUntil) return; // ne montre jamais une récompense encore refusée par le serveur
   if (scene.querySelector('.idle-bonus-orb')) return; // jamais deux à la fois
   const orb = document.createElement('button');
   orb.type = 'button';
@@ -336,16 +338,20 @@ function idleSpawnOrb(kind = 'orb') {
   orb.innerHTML = `<i class="fas ${kind === 'chest' ? 'fa-box-open' : 'fa-circle-notch'}"></i>`;
   orb.style.setProperty('--orb-top', `${Math.round(18 + Math.random() * 45)}%`);
   orb.style.setProperty('--orb-duration', `${(11 + Math.random() * 4).toFixed(1)}s`);
-  // La scène écoute pointerdown pour frapper : attraper l'orbe ne doit pas
-  // compter comme une frappe sur l'ennemi.
-  orb.addEventListener('pointerdown', (event) => event.stopPropagation());
   const expire = setTimeout(() => orb.remove(), 16000);
-  orb.addEventListener('click', async (event) => {
+  let claiming = false;
+  const claim = async (event) => {
+    event.preventDefault();
     event.stopPropagation(); // ne compte pas comme une frappe sur la scène
+    if (claiming) return;
+    claiming = true;
     clearTimeout(expire);
-    orb.remove();
+    orb.disabled = true;
+    orb.classList.add('is-claiming');
     try {
       const r = await api('/api/idle/bonus-orb', { method: 'POST', body: JSON.stringify({}) });
+      idleOrbCooldownUntil = Date.now() + (Number(r.cooldownSeconds) || 90) * 1000;
+      orb.remove();
       idleSpawnFloat(`ORBE +${idleFormatNumber(r.reward)}`, 'crit huge');
       if (r.seal) idleSpawnFloat('+1 SCEAU', 'crit');
       idleAddCombatLog(`Orbe bonus attrapé : +${idleFormatNumber(r.reward)} Essence${r.seal ? ' · +1 Sceau' : ''}`, 'fa-circle-notch');
@@ -353,10 +359,14 @@ function idleSpawnOrb(kind = 'orb') {
       if (typeof sfx !== 'undefined' && sfx.idleChest) sfx.idleChest();
       await refreshIdleState();
     } catch (e) {
-      // 429 = déjà encaissé côté serveur il y a peu : silencieux, pas une erreur du joueur.
-      if (!String(e.message).includes('dissipé')) idleNotify(e.message, 'error');
+      orb.remove();
+      idleNotify(e.message || 'La bulle n’a pas pu être récupérée.', 'error');
     }
-  }, { once: true });
+  };
+  // Pointerdown valide immédiatement la prise : sur mobile, l'animation ne
+  // peut plus déplacer la bulle entre l'appui et le relâchement du doigt.
+  orb.addEventListener('pointerdown', claim);
+  orb.addEventListener('click', claim); // accessibilité clavier
   scene.appendChild(orb);
 }
 

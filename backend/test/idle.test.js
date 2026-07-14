@@ -248,7 +248,7 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.equal(achievementProdMultiplier(0),1);
   assert.equal(achievementProdMultiplier(10),1.10);
   assert.equal(orbReward(0),10); // petit plancher, sans court-circuiter le farm initial
-  assert.equal(orbReward(100),2000); // 20 s de production
+  assert.equal(orbReward(100),4500); // 45 s : précieux sans remplacer plusieurs minutes de farm
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 
