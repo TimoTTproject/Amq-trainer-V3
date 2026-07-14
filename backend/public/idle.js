@@ -47,6 +47,7 @@ let idleMissionWeekKey = null;
 // Quantité d'achat GLOBALE (×1/×5/×10/×100/MAX) façon Clicker Heroes —
 // partagée entre le dock d'achats rapides du Combat et l'onglet Équipe.
 let idleBuyAmount = localStorage.getItem('idle-buy-amount') || '1';
+let idleAncientsAutoOpened = false; // la section Ancients ne s'auto-déplie qu'une fois par session
 let idleOrbTimer = null; // prochain orbe bonus programmé
 let idleComboCount = 0; // frénésie de clic (purement visuelle)
 let idleComboExpireAt = 0;
@@ -1484,6 +1485,22 @@ function renderIdleAncients(ancients) {
   const points = document.getElementById('idle-wisdom-points');
   if (points) points.textContent = idleFormatNumber(ancients.points);
   if (!box) return;
+  // De la Sagesse à dépenser : la section repliée se déplie toute seule (une
+  // fois par session, pour ne pas lutter contre le joueur qui la referme),
+  // un compteur s'affiche sur son titre et le bouton SAGESSE du HUD pulse.
+  const affordable = ancients.items.filter((it) => ancients.points >= it.cost).length;
+  const section = box.closest('.idle-collapsible');
+  if (section && affordable && !idleAncientsAutoOpened) { section.classList.remove('collapsed'); idleAncientsAutoOpened = true; }
+  const title = section?.querySelector('.idle-collapse-title > span');
+  if (title) {
+    let badge = title.querySelector('.idle-collapse-badge');
+    if (!affordable) badge?.remove();
+    else {
+      if (!badge) { badge = document.createElement('b'); badge.className = 'idle-collapse-badge'; title.appendChild(badge); }
+      badge.textContent = `${affordable} achetable${affordable > 1 ? 's' : ''}`;
+    }
+  }
+  document.getElementById('idle-spend-wisdom')?.classList.toggle('idle-affordable', affordable > 0);
   box.innerHTML = ancients.items.map((it) => {
     const desc = (IDLE_ANCIENT_DESC[it.kind] || (() => ''))(it.effectPerLevel);
     return `
@@ -2061,7 +2078,10 @@ function initIdleUI() {
   document.querySelectorAll('[data-open-idle-summon]').forEach((button)=>button.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden')));
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
-  document.getElementById('idle-spend-wisdom')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>document.getElementById('idle-ancients')?.closest('.idle-collapsible')?.querySelector('[data-idle-collapse]')?.click(),80);});
+  // OUVRE toujours la section Ancients (jamais de bascule qui pourrait la
+  // refermer) et défile jusqu'à elle : « j'ai de la Sagesse mais je ne peux
+  // pas l'utiliser » venait de là — la section restait repliée hors écran.
+  document.getElementById('idle-spend-wisdom')?.addEventListener('click',()=>{idleShowPanel('upgrades');setTimeout(()=>{const section=document.getElementById('idle-ancients')?.closest('.idle-collapsible');section?.classList.remove('collapsed');section?.scrollIntoView({behavior:'smooth',block:'start'});},80);});
   // Ascension prête → confirmation directe ; sinon, montrer les conditions.
   document.getElementById('idle-prestige-quick')?.addEventListener('click',()=>{
     if(idleState?.dojo?.prestige?.eligible)return prestigeIdle();
