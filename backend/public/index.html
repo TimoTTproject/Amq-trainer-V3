@@ -1734,6 +1734,22 @@
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
           </div>
 
+          <section class="profile-section idle-run-journey" aria-labelledby="idle-run-title">
+            <header><span><small>AVENTURE ROGUELIKE</small><h3 id="idle-run-title"><i class="fas fa-dice-d20"></i> Expédition actuelle</h3></span><strong id="idle-run-act">ACTE 1</strong></header>
+            <div class="idle-run-rpg-stats"><span><small>ARCHÉTYPE</small><b id="idle-run-archetype">Escouade novice</b></span><span><small>PUISSANCE</small><b id="idle-run-power">0</b></span><span><small>PROCHAIN CHOIX</small><b id="idle-run-next">Stage 21</b></span></div>
+            <div class="idle-run-blessings" id="idle-run-blessings"></div>
+            <div class="idle-run-choice hidden" id="idle-run-choice"><header><i class="fas fa-wand-sparkles"></i><span><small>GARDIEN MAJEUR VAINCU</small><b>Choisis une bénédiction pour cette run</b><em>Le choix est définitif jusqu’au prochain Prestige.</em></span></header><div id="idle-run-choices"></div></div>
+          </section>
+
+          <section class="profile-section idle-community-chat" aria-labelledby="idle-chat-title">
+            <header><span><small>COMMUNAUTÉ</small><h3 id="idle-chat-title"><i class="fas fa-comments"></i> Chat des joueurs</h3></span><strong id="idle-chat-online">Connexion…</strong></header>
+            <p>Discute avec tous les joueurs connectés. Les recrutements précieux et les nouveaux Prestiges sont annoncés automatiquement.</p>
+            <div class="idle-community-links"><button type="button" id="idle-community-ranking"><i class="fas fa-ranking-star"></i><span><b>Classement du Dojo</b><small>Voir les meilleurs joueurs</small></span></button><button type="button" id="idle-community-friends"><i class="fas fa-user-group"></i><span><b>Mes amis</b><small>Voir qui est connecté</small></span></button></div>
+            <div class="idle-chat-feed" id="idle-chat-feed" aria-live="polite"></div>
+            <div class="idle-chat-quick" aria-label="Messages rapides"><span>Message rapide</span><button type="button" data-chat-quick="GG !">👏 GG !</button><button type="button" data-chat-quick="Besoin d’aide sur mon équipe">🤝 Besoin d’aide</button><button type="button" data-chat-quick="Quel build vous conseillez ?">⚔️ Quel build ?</button></div>
+            <form class="idle-chat-form" id="idle-chat-form"><input id="idle-chat-text" type="text" maxlength="200" autocomplete="off" placeholder="Écrire un message…" aria-label="Message pour le chat"><button class="btn-primary" type="submit" aria-label="Envoyer le message"><i class="fas fa-paper-plane"></i></button></form>
+          </section>
+
         </section>
 
         <section id="idle-panel-progression" class="idle-panel hidden" role="tabpanel" aria-labelledby="idle-tab-progression" tabindex="0">
@@ -1791,8 +1807,10 @@
         <section id="idle-panel-equipment" class="idle-panel hidden" role="tabpanel" aria-labelledby="idle-tab-equipment" tabindex="0">
           <div class="idle-page-head"><i class="fas fa-shield-halved"></i><div><small>ARSENAL</small><h2>Équipement</h2></div></div>
           <div class="idle-inventory-intro"><i class="fas fa-boxes-stacked"></i><div><b>Construis les panoplies de ton équipe</b><span>Les coffres ajoutent maintenant leurs objets dans ton inventaire. Compare, équipe, verrouille ou recycle chaque pièce.</span></div><strong id="idle-inventory-capacity">0 / 120</strong></div>
+          <div class="idle-auto-equipment"><div><i class="fas fa-wand-magic-sparkles"></i><span><b>Optimisation automatique</b><small>Distribue les meilleures pièces selon le rôle de chaque héros et les bonus de panoplie.</small></span></div><button class="btn-primary" id="idle-auto-equip"><i class="fas fa-shield-heart"></i> Équiper au mieux</button></div>
           <div class="idle-item-collection-stats" id="idle-item-collection-stats"></div>
           <div class="idle-item-families" id="idle-item-families"></div>
+          <div class="idle-equipment-section-head"><span><small>ÉQUIPE ACTIVE</small><h3>Objets équipés par personnage</h3></span><p>Clique sur une pièce pour la retrouver dans l’inventaire.</p></div>
           <div class="idle-loadouts" id="idle-loadouts"></div>
           <div class="idle-inventory-toolbar"><div id="idle-item-filters"><button class="active" data-item-filter="all">Tout</button><button data-item-filter="weapon"><i class="fas fa-khanda"></i> Armes</button><button data-item-filter="relic"><i class="fas fa-gem"></i> Reliques</button><button data-item-filter="accessory"><i class="fas fa-ring"></i> Accessoires</button></div><label>Trier <select id="idle-item-sort"><option value="power">Puissance</option><option value="recent">Plus récents</option><option value="rarity">Rareté</option></select></label></div>
           <div class="idle-inventory-bulk" id="idle-inventory-bulk"><button class="btn-secondary" id="idle-select-recyclable"><i class="fas fa-filter-circle-dollar"></i> Sélectionner les objets rares inutilisés</button><span id="idle-selected-summary">Aucun objet sélectionné</span><button class="btn-secondary danger" id="idle-salvage-selected" disabled><i class="fas fa-recycle"></i> Recycler la sélection</button></div>
@@ -1810,10 +1828,11 @@
           <div class="idle-prestige-card">
             <div class="idle-prestige-info">
               <b>Retraite du Maître <span id="idle-prestige-lvl" class="idle-upgrade-lvl">Nv. 0</span></b>
-              <p>Repars de zéro (essence, emplacements, améliorations) contre de la <b>Sagesse</b> (<span id="idle-wisdom-points">0</span> actuellement) — à dépenser ci-dessous dans les Ancients, des bonus permanents. Le niveau de l'Idle, les coffres réclamés et les Ancients déjà achetés sont conservés.</p>
+              <p>Recommence une run contre de la <b>Sagesse</b> (<span id="idle-wisdom-points">0</span> actuellement), à dépenser dans les Ancients permanents. Vérifie précisément les changements ci-dessous avant de confirmer.</p>
               <p class="hint" id="idle-prestige-hint"></p>
             </div>
             <button class="btn-secondary admin-danger" id="idle-prestige-btn"><i class="fas fa-arrows-rotate"></i> Prestiger</button>
+            <div class="idle-prestige-preview" id="idle-prestige-preview" aria-label="Conséquences du Prestige"></div>
           </div>
           <div class="idle-prestige-paths" id="idle-prestige-paths"></div>
 
@@ -1926,16 +1945,15 @@
 
     <!-- Sélecteur de personnage pour un emplacement du Dojo -->
     <div id="idle-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Choisir un personnage">
-      <div class="modal-card wide">
+      <div class="modal-card wide idle-picker-card">
         <button class="modal-close" id="idle-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
-        <h3><i class="fas fa-hand-fist"></i> Choisis un personnage</h3>
-        <p class="hint">Choisis ou compare une recrue déjà obtenue. Les nouvelles invocations se font dans leur espace dédié.</p>
+        <header class="idle-picker-head"><i class="fas fa-people-group"></i><span><small>COMPOSITION · EMPLACEMENT <b id="idle-picker-slot-label">1</b></small><h3>Choisir un personnage</h3><p>Compare tes recrues puis sélectionne celle qui complète le mieux ton équipe.</p></span></header>
         <div class="idle-roster-toolbar" aria-label="Trier et filtrer les personnages">
           <label><span>Trier par</span><select id="idle-roster-sort"><option value="meta">Recommandé pour l’équipe</option><option value="synergy">Synergie</option><option value="role">Rôle</option><option value="rarity">Rareté</option><option value="power">Production</option><option value="level">Niveau</option><option value="name">Nom</option></select></label>
           <label><span>Rôle</span><select id="idle-roster-role"><option value="all">Tous les rôles</option><option value="attaquant">Attaquant</option><option value="producteur">Producteur</option><option value="support">Support</option><option value="tank">Tank</option><option value="assassin">Assassin</option></select></label>
           <label><span>Rareté</span><select id="idle-roster-rarity"><option value="all">Toutes les raretés</option><option value="mythic">Mythique</option><option value="legendary">Légendaire</option><option value="epic">Épique</option><option value="rare">Rare</option></select></label>
         </div>
-        <p class="hint" id="idle-picker-hint"></p>
+        <p class="idle-picker-summary" id="idle-picker-hint"></p>
         <div id="idle-picker-list" class="idle-roster-grid"></div>
       </div>
     </div>

@@ -10,6 +10,12 @@ const {
   clickYield,
   clickUpgradeCost,
   CLICK_LEVEL_MAX,
+  critUpgradeBonus,
+  critUpgradeCost,
+  CRIT_LEVEL_MAX,
+  cooldownUpgradeBonus,
+  cooldownUpgradeCost,
+  COOLDOWN_LEVEL_MAX,
   slotUpgradeCost,
   OFFLINE_CAP_MS,
   pendingEssence,
@@ -45,10 +51,41 @@ const {
   enemyUnitMaxHp,
   enemyArchetype,
   PRESTIGE_MIN_STAGE,
+  PRESTIGE_STAGE_STEP,
+  prestigeRequiredStage,
   wisdomForRunStage,
+  prestigeMinimumRunMs,
+  MAX_STAGE_ADVANCE_PER_SYNC,
   campaignForStage,
+  campaignDifficulty,
+  isBossStage,
   isEliteStage,
+  RUN_BLESSINGS,
+  parseRunBlessings,
+  runBlessingEffects,
+  runBlessingChoices,
 } = require('../src/idle/idle');
+
+test('roguelike : les choix de bénédictions sont stables, variés et cumulent leurs compromis',()=>{
+  const first=runBlessingChoices('u1',2,0,[]);const again=runBlessingChoices('u1',2,0,[]);
+  assert.deepEqual(first,again);assert.equal(first.length,3);assert.equal(new Set(first.map((item)=>item.key)).size,3);
+  const effects=runBlessingEffects('berserker,deadeye');
+  assert.equal(effects.prod,1.25*.92);assert.equal(effects.click,.85);assert.equal(effects.crit,.10);
+  assert.deepEqual(parseRunBlessings('inconnu,berserker'),['berserker']);
+  assert.ok(RUN_BLESSINGS.every((item)=>item.upside&&item.downside));
+  const almostAll=RUN_BLESSINGS.slice(0,6).map((item)=>item.key);const late=runBlessingChoices('u1',2,6,almostAll);
+  assert.ok(RUN_BLESSINGS.slice(6).every((item)=>late.some((choice)=>choice.key===item.key)));
+});
+
+test('améliorations de run : critique et recharge progressent et plafonnent', () => {
+  assert.equal(critUpgradeBonus(0),0);
+  assert.equal(critUpgradeBonus(1),.01);
+  assert.equal(critUpgradeBonus(CRIT_LEVEL_MAX+10),.25);
+  assert.ok(critUpgradeCost(1)>critUpgradeCost(0));
+  assert.equal(cooldownUpgradeBonus(1),.02);
+  assert.equal(cooldownUpgradeBonus(COOLDOWN_LEVEL_MAX+10),.4);
+  assert.ok(cooldownUpgradeCost(1)>cooldownUpgradeCost(0));
+});
 
 test('campagne : 10 mondes par acte, boss tous les 10 stages et élite au milieu', () => {
   assert.deepEqual([campaignForStage(1).index,campaignForStage(1).wave,campaignForStage(1).act],[1,1,1]);
@@ -66,6 +103,33 @@ test('campagne : 10 mondes par acte, boss tous les 10 stages et élite au milieu
   assert.equal(campaignForStage(201).difficulty.name,'Cauchemar');
 });
 
+test('post-stage 100 : chaque acte renforce réellement les ennemis, avec un butin qui progresse moins vite', () => {
+  assert.deepEqual(
+    [campaignDifficulty(100).name,campaignDifficulty(101).name,campaignDifficulty(201).name],
+    ['Normal','Héroïque','Cauchemar'],
+  );
+  assert.equal(campaignDifficulty(101).power,1.35);
+  assert.ok(campaignDifficulty(201).power>campaignDifficulty(101).power);
+  assert.ok(campaignDifficulty(201).reward<campaignDifficulty(201).power);
+  const naturalHpAt101=20*Math.pow(1.13,100);
+  assert.ok(enemyMaxHp(101)>=naturalHpAt101*1.349);
+});
+
+test('économie : progresser ne rend jamais le farm moins rentable que le stage 4', () => {
+  const cycleEfficiency=(stage)=>{
+    let hp=0,reward=0;
+    for(let enemy=0;enemy<enemiesRequiredForStage(stage);enemy++){
+      hp+=enemyUnitMaxHp(stage,enemy);
+      reward+=enemyUnitReward(stage,enemy);
+    }
+    return reward/hp;
+  };
+  const early=cycleEfficiency(4);
+  assert.ok(cycleEfficiency(99)>=early*.95);
+  assert.ok(cycleEfficiency(199)>=early*.90);
+  assert.ok(cycleEfficiency(299)>=early*.85);
+});
+
 test('simulateCombat : progresse et ne rétrograde plus devant un boss trop fort', () => {
   const push = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:10,elapsedSeconds:30,mode:'progress'});
   assert.ok(push.stage > 1);
@@ -73,6 +137,13 @@ test('simulateCombat : progresse et ne rétrograde plus devant un boss trop fort
   assert.equal(wall.stage,10);
   assert.equal(wall.bossFailed,false);
   assert.ok(wall.hp<enemyMaxHp(10));
+});
+
+test('anti-overkill : un DPS extrême ne saute plus plusieurs mondes ni des milliers de cibles faibles',()=>{
+  const result=simulateCombat({stage:1,hp:enemyMaxHp(1),dps:1_500_000,elapsedSeconds:60,mode:'progress',maxStageAdvance:MAX_STAGE_ADVANCE_PER_SYNC});
+  assert.ok(result.stage<=1+MAX_STAGE_ADVANCE_PER_SYNC);assert.equal(result.progressionCapped,true);assert.ok(result.kills<=500);
+  const farm=simulateCombat({stage:1,hp:enemyMaxHp(1),dps:1_500_000,elapsedSeconds:60,mode:'farm'});
+  assert.ok(farm.kills<=500);assert.ok(farm.essence<=2000);assert.ok(farm.hp>0);
 });
 
 test('le dixième ennemi de la vague 9 ouvre le boss même avec un DPS insuffisant', () => {
@@ -119,9 +190,9 @@ test('les archétypes ennemis changent réellement les PV et le butin',()=>{
   assert.ok(enemyUnitReward(1,9)>enemyReward(1));
 });
 
-test('équilibrage : les murs croissent plus vite que les récompenses et les achats restent espacés', () => {
+test('équilibrage : les coûts croissent plus vite que les récompenses et les achats restent espacés', () => {
   assert.equal(enemyMaxHp(1), 20);
-  assert.ok(enemyMaxHp(50) / enemyMaxHp(10) > enemyReward(50) / enemyReward(10));
+  assert.ok(charLevelUpCost('mythic',50)/charLevelUpCost('mythic',10)>enemyReward(50)/enemyReward(10));
   assert.equal(clickUpgradeCost(0), 21);
   assert.equal(prodUpgradeCost(0), 26);
   assert.ok(clickUpgradeCost(5)>clickUpgradeCost(4));
@@ -133,11 +204,40 @@ test('équilibrage : les murs croissent plus vite que les récompenses et les ac
   assert.ok(slotRate('rare', 25) / slotRate('rare', 24) < 2.25);
 });
 
-test('wisdomForRunStage : exige une nouvelle run au seuil de Prestige et récompense le push',()=>{
+test('Prestige : le seuil progresse à chaque retraite et la Sagesse récompense le push sans emballement',()=>{
   assert.equal(PRESTIGE_MIN_STAGE,100); // la Retraite conclut une vraie run (choix du créateur)
+  assert.equal(prestigeRequiredStage(0),PRESTIGE_MIN_STAGE);
+  assert.equal(prestigeRequiredStage(1),PRESTIGE_MIN_STAGE+PRESTIGE_STAGE_STEP);
+  assert.equal(prestigeRequiredStage(10),PRESTIGE_MIN_STAGE+10*PRESTIGE_STAGE_STEP);
   assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE-1),0);
-  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),5);
+  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE),3);
   assert.ok(wisdomForRunStage(200)>wisdomForRunStage(100));
+  assert.equal(wisdomForRunStage(PRESTIGE_MIN_STAGE,1),0);
+  assert.equal(wisdomForRunStage(prestigeRequiredStage(1),1),3);
+  for(let prestige=0;prestige<=50;prestige++){
+    assert.equal(isBossStage(prestigeRequiredStage(prestige)),true);
+  }
+});
+
+test('Prestige : la durée minimale bloque les retraites en chaîne et augmente progressivement',()=>{
+  assert.equal(prestigeMinimumRunMs(0),45*60*1000);
+  assert.equal(prestigeMinimumRunMs(5),60*60*1000);
+  assert.equal(prestigeMinimumRunMs(99),90*60*1000);
+});
+
+test('long terme : le dernier décor ne peut pas être épuisé en 10 h de jeu actif',()=>{
+  let requiredClicks=0,requiredKills=0,requiredUpgrades=0;
+  for(let level=1;level<1000;level++){
+    for(const quest of rankQuestSeries({level}).quests){
+      if(quest.key==='clicks')requiredClicks+=quest.target;
+      if(quest.key==='kills')requiredKills+=quest.target;
+      if(quest.key==='upgrades')requiredUpgrades+=quest.target;
+    }
+  }
+  // Le serveur accepte au maximum 30 frappes comptabilisées par seconde.
+  assert.ok(requiredClicks/(30*3600)>30);
+  assert.ok(requiredKills>3_000_000);
+  assert.ok(requiredUpgrades>150_000);
 });
 
 test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gardiens exposés',()=>{

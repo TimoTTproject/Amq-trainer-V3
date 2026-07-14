@@ -109,6 +109,10 @@ model User {
   idleSlotsUnlocked      Int       @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
   idleProdLevel          Int       @default(0) // amélioration « Discipline » : multiplicateur de production globale
   idleClickLevel         Int       @default(0) // amélioration « Concentration » : puissance du clic manuel
+  idleCritLevel          Int       @default(0) // amélioration « Instinct » : chance de critique de la run
+  idleCooldownLevel      Int       @default(0) // amélioration « Flux » : recharge Ultime et Combo de la run
+  idleRunBlessings       String    @default("") // choix roguelike temporaires, séparés par des virgules ; reset au Prestige
+  idleRunStartedAt       DateTime  @default(now()) // durée minimale et transparence de la run courante
   // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
   // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
   // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
@@ -998,6 +1002,8 @@ model DojoRecruit {
   characterId   Int
   recruitedAt   DateTime @default(now())
   trainingLevel Int      @default(1)
+  // Puissance temporaire de la run : double le rendement par palier et repart
+  // à 0 au Prestige, contrairement au recrutement du héros qui est permanent.
   idleAscension Int      @default(0)
   // Recrue « Éveillée » (équivalent shiny) : tirée à l'invocation (~2,5%),
   // bordure dorée + petit bonus de production personnelle permanent.

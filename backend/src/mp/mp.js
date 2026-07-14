@@ -1147,6 +1147,43 @@ async function isMutedNow(socket) {
 // pas de socket), sourdine de modération appliquée, petit débit anti-spam.
 const globalChat = [];
 const GCHAT_MIN_INTERVAL_MS = 2000;
+const GCHAT_REACTIONS = ['👏','🔥','💪'];
+const globalChatReactionVoters = new Map();
+let globalChatSequence = 0;
+function nextGlobalChatId() { return `${Date.now().toString(36)}-${(++globalChatSequence).toString(36)}`; }
+function pushGlobalChatMessage(message) {
+  const m={id:nextGlobalChatId(),reactions:{},...message};
+  globalChat.push(m);
+  if(globalChat.length>80){
+    const removed=globalChat.splice(0,globalChat.length-50);
+    for(const old of removed)for(const emoji of GCHAT_REACTIONS)globalChatReactionVoters.delete(`${old.id}:${emoji}`);
+  }
+  if(io)io.emit('mp:gchat',m);
+  return m;
+}
+function publishGlobalChatSystem({ type='system', text='', rarity=null, player=null, character=null, prestigeLevel=null, stage=null, reward=null } = {}) {
+  const cleanText=String(text||'').trim().slice(0,200);
+  if(!cleanText)return null;
+  const m={system:true,type, text:cleanText,ts:Date.now()};
+  if(['legendary','mythic'].includes(rarity))m.rarity=rarity;
+  if(player)m.player=String(player).slice(0,80);
+  if(character)m.character=String(character).slice(0,120);
+  if(Number.isInteger(prestigeLevel)&&prestigeLevel>0)m.prestigeLevel=prestigeLevel;
+  if(Number.isFinite(stage)&&stage>0)m.stage=Math.floor(stage);
+  if(Number.isFinite(reward)&&reward>0)m.reward=Math.floor(reward);
+  return pushGlobalChatMessage(m);
+}
+function reactGlobalChatMessage({messageId,emoji,userId}={}) {
+  const id=String(messageId||'');const reaction=String(emoji||'');const uid=String(userId||'');
+  if(!id||!uid||!GCHAT_REACTIONS.includes(reaction))return null;
+  const message=globalChat.find((item)=>item.id===id);if(!message)return null;
+  const key=`${id}:${reaction}`;const voters=globalChatReactionVoters.get(key)||new Set();
+  if(voters.has(uid))voters.delete(uid);else voters.add(uid);
+  if(voters.size)globalChatReactionVoters.set(key,voters);else globalChatReactionVoters.delete(key);
+  message.reactions={...(message.reactions||{}),[reaction]:voters.size};
+  if(!voters.size)delete message.reactions[reaction];
+  return {id,reactions:{...message.reactions}};
+}
 async function globalChatSend(socket, text) {
   const t = String(text || '').trim().slice(0, 200);
   if (!t) return;
@@ -1156,10 +1193,13 @@ async function globalChatSend(socket, text) {
   }
   if (await isMutedNow(socket)) return;
   socket.data.lastGchatAt = now;
-  const m = { name: socket.data.user.displayName, text: t, ts: now };
-  globalChat.push(m);
-  if (globalChat.length > 80) globalChat.splice(0, globalChat.length - 50);
-  io.emit('mp:gchat', m);
+  pushGlobalChatMessage({ name: socket.data.user.displayName, text: t, ts: now });
+}
+function globalChatReact(socket, payload) {
+  const now=Date.now();if(now-(socket.data.lastGchatReactionAt||0)<350)return;
+  socket.data.lastGchatReactionAt=now;
+  const update=reactGlobalChatMessage({messageId:payload?.id,emoji:payload?.emoji,userId:socket.data.user.id});
+  if(update)io.emit('mp:gchat:reaction',update);
 }
 
 async function chat(socket, text) {
@@ -1321,6 +1361,7 @@ function initMp(server) {
     socket.on('mp:leave', () => leaveRoom(socket));
     socket.on('mp:chat', (t) => chat(socket, t));
     socket.on('mp:gchat', (t) => globalChatSend(socket, t));
+    socket.on('mp:gchat:react', (payload) => globalChatReact(socket, payload));
     socket.on('mp:gchat:history', (ack) => { if (typeof ack === 'function') ack({ messages: globalChat.slice(-50), online: online.size }); });
     socket.on('mp:emote', (e) => {
       emote(socket, e).catch((err) => console.error('mp emote error:', err && err.message));
@@ -1341,4 +1382,5 @@ function initMp(server) {
 module.exports = {
   initMp, getCurrentVideo, isOnline, notifyUser, broadcastAll, everyoneResolved, availableSongWhere, videoForRound,
   rawReward, unlockedEmoteSymbols, MP_GAME_CAP, skipVotesNeeded, skipVoteCount, mpCapState, MP_REWARD_CAP,
+  publishGlobalChatSystem, reactGlobalChatMessage,
 };

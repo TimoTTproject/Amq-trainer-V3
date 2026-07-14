@@ -2,8 +2,27 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   everyoneResolved, availableSongWhere, videoForRound, rawReward, unlockedEmoteSymbols, MP_GAME_CAP,
-  skipVotesNeeded, skipVoteCount,
+  skipVotesNeeded, skipVoteCount, publishGlobalChatSystem, reactGlobalChatMessage,
 } = require('../src/mp/mp');
+
+test('chat global : une annonce de recrutement précieux est structurée côté serveur',()=>{
+  const message=publishGlobalChatSystem({type:'recruit',rarity:'mythic',player:'Melfisk',character:'Rustang',text:'Melfisk a recruté Rustang · MYTHIQUE'});
+  assert.equal(message.system,true);
+  assert.equal(message.type,'recruit');
+  assert.equal(message.rarity,'mythic');
+  assert.equal(message.player,'Melfisk');
+  assert.equal(message.character,'Rustang');
+  assert.ok(Number.isFinite(message.ts));
+});
+
+test('chat global : les réactions communautaires sont validées et basculent par joueur',()=>{
+  const message=publishGlobalChatSystem({type:'prestige',player:'Parialo',prestigeLevel:3,stage:140,reward:4,text:'Parialo atteint le Prestige 3'});
+  assert.ok(message.id);
+  assert.deepEqual(reactGlobalChatMessage({messageId:message.id,emoji:'🔥',userId:'u1'}).reactions,{'🔥':1});
+  assert.deepEqual(reactGlobalChatMessage({messageId:message.id,emoji:'🔥',userId:'u2'}).reactions,{'🔥':2});
+  assert.deepEqual(reactGlobalChatMessage({messageId:message.id,emoji:'🔥',userId:'u1'}).reactions,{'🔥':1});
+  assert.equal(reactGlobalChatMessage({messageId:message.id,emoji:'💀',userId:'u3'}),null);
+});
 
 test('rawReward = bonnes réponses ×2 + bonus de placement, plafonné par partie', () => {
   assert.equal(rawReward({ correct: 0 }, 1), 20); // 0 + bonus 1er
