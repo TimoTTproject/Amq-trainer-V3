@@ -25,9 +25,9 @@ function finiteIdleNumber(value, minimum = 0) {
 const RARITY_RATE = {
   common: 0.3,
   rare: 1,
-  epic: 1.8,
-  legendary: 3.2,
-  mythic: 5.5,
+  epic: 1.12,
+  legendary: 1.28,
+  mythic: 1.45,
 };
 
 // Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité, remis
@@ -38,18 +38,21 @@ const RARITY_RATE = {
 // Le gain reste perceptible à chaque achat, mais la base et la croissance du
 // coût empêchent désormais d'enchaîner des dizaines de niveaux sans choix.
 const CHAR_LEVEL_BONUS = 0.12;
-const RARITY_LEVEL_BONUS = { common: .03, rare: .04, epic: .055, legendary: .07, mythic: .085 };
+// La rareté apporte un avantage initial contenu, mais ne creuse plus un
+// gouffre exponentiel à chaque niveau. Ainsi, rôles, talents, synergies et
+// personnages favoris restent des choix viables jusqu'en fin de run.
+const RARITY_LEVEL_BONUS = { common: .03, rare: .05, epic: .05, legendary: .05, mythic: .05 };
 const RARITY_PASSIVE = {
   common: 'Apprenti · progression économique', rare: 'Endurance · +5% de production personnelle au niveau 10',
-  epic: 'Aura · +3% de production à toute l’équipe au niveau 10', legendary: 'Domination · +8% de production à toute l’équipe au niveau 10',
-  mythic: 'Transcendance · +15% de production à toute l’équipe au niveau 10',
+  epic: 'Aura · +2% de production à toute l’équipe au niveau 10', legendary: 'Domination · +4% de production à toute l’équipe au niveau 10',
+  mythic: 'Transcendance · +6% de production à toute l’équipe au niveau 10',
 };
 const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 const HERO_ASCENSION_LEVEL = 100;
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
-const CHAR_LEVEL_BASE_COST = { common: 12, rare: 28, epic: 65, legendary: 155, mythic: 400 };
+const CHAR_LEVEL_BASE_COST = { common: 12, rare: 28, epic: 34, legendary: 42, mythic: 52 };
 const CHAR_LEVEL_GROWTH = 1.16;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
@@ -629,10 +632,10 @@ const AWAKENED_BONUS = 1.10;
 // ── Orbes bonus : un orbe cliquable traverse la scène toutes les quelques
 // minutes (équivalent golden cookie). Le serveur borne la fréquence
 // (ORB_COOLDOWN_SECONDS) et paie ORB_PRODUCTION_SECONDS de production.
-const ORB_COOLDOWN_SECONDS = 70;
-const ORB_PRODUCTION_SECONDS = 90;
-const ORB_MIN_REWARD = 40;
-const ORB_SEAL_CHANCE = 0.12;
+const ORB_COOLDOWN_SECONDS = 90;
+const ORB_PRODUCTION_SECONDS = 20;
+const ORB_MIN_REWARD = 10;
+const ORB_SEAL_CHANCE = 0.05;
 function orbReward(totalRate) {
   return Math.max(ORB_MIN_REWARD, Math.round(finiteIdleNumber(Math.max(0, totalRate) * ORB_PRODUCTION_SECONDS)));
 }

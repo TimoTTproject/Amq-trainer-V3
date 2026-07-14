@@ -247,9 +247,19 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.ok(ANCIENTS.some((a)=>a.kind==='bossRewardMult'));
   assert.equal(achievementProdMultiplier(0),1);
   assert.equal(achievementProdMultiplier(10),1.10);
-  assert.ok(orbReward(0)>=40); // plancher : un orbe rapporte toujours quelque chose
-  assert.equal(orbReward(100),9000); // 90 s de production
+  assert.equal(orbReward(0),10); // petit plancher, sans court-circuiter le farm initial
+  assert.equal(orbReward(100),2000); // 20 s de production
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
+});
+
+test('raretés : un personnage favori reste viable face à un Mythique', () => {
+  for (const level of [1, 10, 50, 100, 500]) {
+    const rare=slotRate('rare',level);
+    const mythic=slotRate('mythic',level);
+    assert.ok(mythic>rare,`le Mythique garde un avantage au niveau ${level}`);
+    assert.ok(mythic/rare<=1.5,`l'écart reste contenu au niveau ${level}`);
+  }
+  assert.ok(charLevelUpCost('mythic',1)/charLevelUpCost('rare',1)<2);
 });
 
 test('les courbes restent finies aux niveaux extrêmes', () => {
