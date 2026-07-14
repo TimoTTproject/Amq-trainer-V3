@@ -4,6 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+test('bulle Idle : la prise se fait dès pointerdown et tout refus reste visible', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+
+  assert.match(source, /orb\.addEventListener\('pointerdown', claim\)/);
+  assert.match(source, /idleOrbCooldownUntil = Date\.now\(\)/);
+  assert.doesNotMatch(source, /includes\('dissipé'\)/);
+});
+
 test('chat Idle : le tiroir reste vertical et seul le fil de messages défile', () => {
   const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
 
