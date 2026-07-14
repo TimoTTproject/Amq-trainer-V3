@@ -6894,3 +6894,27 @@ body.idle-fullscreen #app { padding-top: 0; }
 @keyframes idlePrestigeReady{0%,100%{box-shadow:0 0 0 0 #a78bfa33}50%{box-shadow:0 0 16px 3px #a78bfa55}}
 .idle-effects-reduced .idle-prestige-quick.available{animation:none;box-shadow:0 0 0 1px #a78bfa66}
 @media(max-width:700px){.idle-quick-buy-head{align-items:flex-start;flex-direction:column}.idle-buy-amount{width:100%;justify-content:space-between}.idle-quick-hero{grid-template-columns:38px 1fr auto}.idle-quick-portrait{width:38px;height:38px}.idle-collection{grid-template-columns:1fr}}
+
+/* ── Bilan de Prestige : deux colonnes « repart à zéro / conservé » ── */
+.idle-prestige-modal-card{max-width:560px}
+.idle-prestige-kicker{display:block;margin-bottom:2px;color:#a78bfa;font-size:8px;font-weight:900;letter-spacing:.14em}
+.idle-prestige-gain-line{margin:6px 0 12px;color:#c7cdd8;font-size:12px}
+.idle-prestige-gain-line b{color:#a78bfa}
+.idle-prestige-columns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.idle-prestige-columns section{padding:10px 12px;border-radius:12px}
+.idle-prestige-reset{border:1px solid #fb718544;background:#1c0a10}
+.idle-prestige-kept{border:1px solid #3ec98a44;background:#07160f}
+.idle-prestige-columns h4{display:flex;align-items:center;gap:7px;margin:0 0 7px;font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.idle-prestige-reset h4{color:#fda4af}
+.idle-prestige-kept h4{color:#6ee7b7}
+.idle-prestige-columns ul{margin:0;padding:0;list-style:none;display:grid;gap:5px}
+.idle-prestige-columns li{position:relative;padding-left:14px;color:#c7cdd8;font-size:10.5px;line-height:1.35}
+.idle-prestige-reset li::before{content:'−';position:absolute;left:0;color:#fb7185;font-weight:900}
+.idle-prestige-kept li::before{content:'✓';position:absolute;left:0;color:#3ec98a;font-weight:900}
+.idle-prestige-note{display:flex;align-items:center;gap:8px;margin:10px 0 0;padding:8px 11px;border:1px solid #b4830f44;border-radius:10px;background:#1c1303;color:#fbbf24;font-size:10px}
+.idle-prestige-result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px;margin-top:10px}
+.idle-prestige-result-grid span{display:grid;justify-items:center;gap:2px;padding:11px 8px;border:1px solid #2a303b;border-radius:11px;background:#10141b;text-align:center}
+.idle-prestige-result-grid i{color:#a78bfa;font-size:15px}
+.idle-prestige-result-grid b{font-size:14px;font-variant-numeric:tabular-nums}
+.idle-prestige-result-grid small{color:#8f99a7;font-size:8.5px;font-weight:800;letter-spacing:.04em}
+@media(max-width:560px){.idle-prestige-columns{grid-template-columns:1fr}}

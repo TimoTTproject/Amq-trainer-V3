@@ -1872,6 +1872,52 @@
     <div id="idle-settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-settings-title"><div class="modal-card idle-settings-card"><button class="modal-close" id="idle-settings-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-settings-title"><i class="fas fa-sliders"></i> Confort de jeu</h3><label class="idle-setting-row" for="idle-volume"><span><b>Volume de l’Idle</b><small>Impacts, victoires et récompenses</small></span><input id="idle-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label class="idle-setting-toggle" for="idle-effects-reduced"><span><b>Animations et effets visuels</b><small>Affiche les impacts, mouvements, particules et célébrations</small></span><input id="idle-effects-reduced" type="checkbox" checked></label></div></div>
     <div id="idle-character-sheet" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-character-sheet-title"><div class="modal-card wide idle-character-sheet-card"><button class="modal-close" id="idle-character-sheet-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-character-sheet-body"></div></div></div>
     <div id="idle-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-collection-title"><div class="modal-card wide idle-collection-card"><button class="modal-close" id="idle-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-collection-title"><i class="fas fa-book-open"></i> Collection</h3><p class="hint" id="idle-collection-hint"></p><div class="idle-collection-grid" id="idle-collection-grid"></div></div></div>
+
+    <!-- Bilan de Prestige : remplace le confirm() navigateur — le joueur doit
+         voir EXACTEMENT ce qui repart à zéro et ce qui est conservé (retour
+         bêta : « jsp si les sceaux sont reset ou non »). -->
+    <div id="idle-prestige-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-prestige-modal-title">
+      <div class="modal-card idle-prestige-modal-card">
+        <button class="modal-close" id="idle-prestige-modal-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <div id="idle-prestige-confirm-view">
+          <small class="idle-prestige-kicker">RETRAITE DU MAÎTRE</small>
+          <h3 id="idle-prestige-modal-title"><i class="fas fa-brain"></i> Prestiger maintenant ?</h3>
+          <p class="idle-prestige-gain-line">Cette run te rapporte <b>+<span id="idle-prestige-gain">0</span> Sagesse</b> à dépenser dans les Ancients (bonus permanents).</p>
+          <div class="idle-prestige-columns">
+            <section class="idle-prestige-reset"><h4><i class="fas fa-rotate-left"></i> Repart à zéro</h4><ul>
+              <li>L’Essence de la run</li>
+              <li>Discipline et Concentration</li>
+              <li>Les emplacements (retour à 3)</li>
+              <li>Les niveaux d’entraînement des héros</li>
+              <li>La progression des vagues</li>
+            </ul></section>
+            <section class="idle-prestige-kept"><h4><i class="fas fa-lock"></i> Conservé pour toujours</h4><ul>
+              <li>Tous tes héros recrutés (Éveillés inclus)</li>
+              <li>Tes objets et leur équipement</li>
+              <li>Tes Sceaux et la garantie Épique</li>
+              <li>Ton niveau de compte et les décors</li>
+              <li>Tes Ancients et ta Sagesse</li>
+              <li>Les coffres déjà réclamés</li>
+            </ul></section>
+          </div>
+          <p class="idle-prestige-note"><i class="fas fa-tags"></i> Bonus : le prix des invocations en Essence revient à son minimum pour la nouvelle run.</p>
+          <div class="modal-actions">
+            <button class="btn-secondary" id="idle-prestige-cancel">Pas maintenant</button>
+            <button class="btn-primary" id="idle-prestige-confirm"><i class="fas fa-brain"></i> Prestiger · +<span id="idle-prestige-gain-btn">0</span> Sagesse</button>
+          </div>
+        </div>
+        <div id="idle-prestige-result-view" class="hidden">
+          <small class="idle-prestige-kicker">RETRAITE ACCOMPLIE</small>
+          <h3><i class="fas fa-brain"></i> Nouvelle run lancée !</h3>
+          <div class="idle-prestige-result-grid" id="idle-prestige-result-grid"></div>
+          <p class="idle-prestige-note"><i class="fas fa-circle-check"></i> Héros, objets, Sceaux, niveau de compte et Ancients sont toujours là. Dépense ta Sagesse dans les Ancients pour repartir plus fort.</p>
+          <div class="modal-actions">
+            <button class="btn-secondary" id="idle-prestige-open-ancients"><i class="fas fa-landmark"></i> Voir les Ancients</button>
+            <button class="btn-primary" id="idle-prestige-result-continue"><i class="fas fa-play"></i> Reprendre le combat</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="idle-toasts" id="idle-toasts" aria-live="polite" aria-atomic="false"></div>
     <div id="idle-boss-reveal" class="modal-overlay hidden idle-boss-reveal" role="dialog" aria-modal="true" aria-labelledby="idle-boss-reveal-title"><div class="modal-card idle-boss-reveal-card"><button class="modal-close" id="idle-boss-reveal-close"><i class="fas fa-times"></i></button><small>VICTOIRE SUR UN GARDIEN</small><h2 id="idle-boss-reveal-title"><i class="fas fa-box-open"></i> Coffre de boss</h2><div id="idle-boss-reveal-body"></div><button class="btn-primary" id="idle-boss-reveal-continue">Continuer l’ascension</button></div></div>
     <div id="idle-class-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Personnaliser le chef d'équipe"><div class="modal-card idle-class-card"><button class="modal-close" id="idle-class-close"><i class="fas fa-times"></i></button><h3><i class="fas fa-wand-magic-sparkles"></i> Style du chef d'équipe</h3><p class="hint">Le personnage placé dans le premier emplacement est ton chef. Personnalise son énergie, sa classe et son titre.</p><h4>Couleur d’énergie</h4><div class="idle-style-grid" id="idle-color-grid"></div><h4>Classe de combat</h4><div class="idle-class-grid" id="idle-class-grid"></div><h4>Spécialisation</h4><div class="idle-style-grid" id="idle-spec-grid"></div><h4>Aura</h4><div class="idle-style-grid" id="idle-aura-grid"></div><h4>Posture</h4><div class="idle-style-grid" id="idle-stance-grid"></div><h4>Titre</h4><div class="idle-style-grid" id="idle-title-grid"></div><div class="hidden" id="idle-hair-grid"></div><div class="hidden" id="idle-outfit-grid"></div></div></div>
