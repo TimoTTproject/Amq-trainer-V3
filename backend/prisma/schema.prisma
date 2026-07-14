@@ -999,6 +999,9 @@ model DojoRecruit {
   recruitedAt   DateTime @default(now())
   trainingLevel Int      @default(1)
   idleAscension Int      @default(0)
+  // Recrue « Éveillée » (équivalent shiny) : tirée à l'invocation (~2,5%),
+  // bordure dorée + petit bonus de production personnelle permanent.
+  awakened      Boolean  @default(false)
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
