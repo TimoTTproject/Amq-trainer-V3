@@ -17,6 +17,12 @@
   --red: #ff6b6b;
   --orange: #ffb648;
   --radius: 8px;
+  /* Or premium (cf. passe « polish idle » 2026-07) : réservé au liseré/glow
+     des éléments qui doivent lire comme précieux (cadres de héros, paliers,
+     bordures de carte) — jamais en fond plein, pour rester un accent rare. */
+  --idle-gold: #f0b93d;
+  --idle-gold-deep: #a9761d;
+  --idle-gold-soft: color-mix(in srgb, var(--idle-gold) 22%, transparent);
   color-scheme: dark;
 }
 
@@ -6993,3 +6999,219 @@ body.idle-fullscreen .feedback-fab { display: none; }
    visible) sans jamais recouvrir un bouton de jeu sur toute sa largeur. */
 @media(max-width:700px){.idle-chat-launcher{right:10px;bottom:90px;width:44px;height:44px;min-width:0;padding:0;grid-template-columns:1fr;justify-items:center}.idle-chat-launcher>span{display:none}.idle-chat-launcher>i{width:auto;height:auto;font-size:16px;background:none}.idle-community-chat{right:7px;bottom:72px;width:calc(100vw - 14px);height:min(560px,calc(100vh - 86px))}.idle-community-chat>header{width:calc(100% + 22px);margin:-11px -11px 0!important;padding:10px 11px!important}.idle-community-chat .idle-chat-form{width:calc(100% + 22px);margin:8px -11px -11px!important;padding:8px 11px 11px!important}}
 @media(max-width:420px){.idle-community-chat .idle-community-links{grid-template-columns:1fr!important}.idle-community-chat>p{display:none}.idle-community-chat>header>strong{font-size:.56rem}}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PASSE « POLISH » 2026-07 — rendu premium façon gacha/RPG idle de
+   référence (AFK Arena, Idle Heroes) : cadres à liseré or, profondeur en
+   couches sur les panneaux, boutons plus tactiles, scène de combat mieux
+   cadrée. Uniquement du chrome partagé (cartes, boutons, monnaies, scène) —
+   scope #view-idle pour ne rien changer ailleurs sur le site. Aucun
+   changement de logique de jeu.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Typo : les titres/valeurs de l'Idle utilisaient la police système alors
+   que le reste du site réserve 'Barlow Condensed' à l'affichage (hub,
+   stats) — un des décalages qui donnait un rendu générique/interne. */
+#view-idle .idle-page-head h2,
+#view-idle .idle-scene-head h2,
+#view-idle .idle-currency-item b,
+#view-idle .idle-main-hero-name b,
+#view-idle .idle-boss-name,
+#view-idle .profile-section h3,
+#view-idle .idle-team-primary-stats b,
+#view-idle .idle-recruit-reveal-name {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+/* Panneaux/cartes : une bordure 1px + ombre plate uniforme lit comme un
+   <div> d'admin. Un léger dégradé de surface (plus clair en haut) + un
+   liseré interne façon bevel + une ombre plus profonde suffisent à faire
+   lire un panneau comme un objet physique, sans toucher aux couleurs. */
+#view-idle .profile-section,
+#view-idle .idle-currency-item,
+#view-idle .idle-upgrade-card,
+#view-idle .idle-prestige-card,
+#view-idle .idle-achievement,
+#view-idle .idle-mastery,
+#view-idle .idle-mission,
+#view-idle .idle-item-card,
+#view-idle .idle-loadout,
+#view-idle .idle-roster-card {
+  background-image: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0) 40%);
+  box-shadow: inset 0 1px rgba(255,255,255,.07), 0 10px 26px rgba(0,0,0,.32);
+}
+
+/* En-tête de page (icône de section) : anneau or fin façon sceau, plutôt
+   qu'un simple rond de couleur — un seul repère précieux par écran. */
+#view-idle .idle-page-head>i {
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 -5px 9px rgba(0,0,0,.32), 0 4px 10px rgba(0,0,0,.35);
+}
+#view-idle .idle-page-head>i::after {
+  content: ''; position: absolute; inset: -3px; z-index: -1; border-radius: inherit;
+  background: conic-gradient(from 220deg, var(--idle-gold), transparent 30%, transparent 70%, var(--idle-gold));
+  opacity: .6;
+}
+
+/* Médaillons de monnaies : garde la couleur propre à chaque monnaie, mais
+   ajoute un biseau (inset) + un halo dans SA propre couleur pour lire comme
+   un jeton en relief plutôt qu'un pictogramme plat. */
+#view-idle .idle-currency-ico {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 -5px 8px rgba(0,0,0,.3), 0 0 14px color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Boutons Idle : ajoute un reflet diagonal (façon verre/laque) + une ombre
+   plus prononcée + un relief au survol/clic — les boutons plats en aplat de
+   couleur sont ce qui lit le plus vite comme "site vitrine", pas "jeu". */
+#view-idle .btn-primary,
+#view-idle .btn-secondary,
+#view-idle .idle-click-btn,
+#view-idle .idle-skill,
+#view-idle .idle-nav-summon {
+  position: relative; overflow: hidden;
+  box-shadow: inset 0 1px rgba(255,255,255,.22), inset 0 -2px 4px rgba(0,0,0,.28), 0 6px 16px rgba(0,0,0,.38);
+  transition: filter .12s ease, transform .12s ease, box-shadow .12s ease;
+}
+#view-idle .btn-primary::before,
+#view-idle .idle-click-btn::before,
+#view-idle .idle-skill::before,
+#view-idle .idle-nav-summon::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.06) 28%, transparent 45%);
+}
+#view-idle .btn-primary>*, #view-idle .idle-click-btn>*, #view-idle .idle-skill>*, #view-idle .idle-nav-summon>* { position: relative; z-index: 1; }
+#view-idle .btn-primary:hover,
+#view-idle .idle-click-btn:not(:disabled):hover,
+#view-idle .idle-skill:not(:disabled):hover,
+#view-idle .idle-nav-summon:hover {
+  filter: brightness(1.1); transform: translateY(-1px);
+  box-shadow: inset 0 1px rgba(255,255,255,.26), inset 0 -2px 4px rgba(0,0,0,.28), 0 9px 20px rgba(0,0,0,.42);
+}
+#view-idle .btn-primary:active,
+#view-idle .idle-click-btn:not(:disabled):active,
+#view-idle .idle-skill:not(:disabled):active,
+#view-idle .idle-nav-summon:active {
+  transform: translateY(1px); filter: brightness(.96);
+  box-shadow: inset 0 1px rgba(255,255,255,.14), inset 0 2px 6px rgba(0,0,0,.35);
+}
+
+/* Onglets : l'onglet actif n'avait qu'un aplat de couleur — ajoute un liseré
+   or au pied + une légère élévation pour qu'il lise comme "sélectionné",
+   pas juste "coloré". */
+#view-idle .idle-tab.active {
+  position: relative;
+  box-shadow: inset 0 1px rgba(255,255,255,.2), 0 7px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+#view-idle .idle-tab.active::after {
+  content: ''; position: absolute; left: 14%; right: 14%; bottom: 2px; height: 2px; border-radius: 2px;
+  background: var(--idle-gold); box-shadow: 0 0 6px var(--idle-gold);
+}
+#view-idle .idle-tab:not(.active):hover { background: rgba(255,255,255,.05); }
+
+/* Cadre du héros principal : anneau or fin autour du cadre existant (au lieu
+   d'une simple bordure pleine) façon médaillon de personnage, plus une
+   ombre portée au sol pour l'ancrer dans le décor au lieu de flotter. */
+#view-idle .idle-main-hero-avatar {
+  box-shadow: 0 0 0 3px var(--idle-gold-soft), 0 0 26px color-mix(in srgb, var(--energy, var(--accent-2)) 55%, transparent), 0 14px 18px -6px rgba(0,0,0,.75);
+}
+#view-idle .idle-main-hero:not(.no-team)::before {
+  content: ''; position: absolute; left: 50%; bottom: -6px; width: 70%; height: 14px; z-index: -1;
+  transform: translateX(-50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.55), transparent);
+}
+#view-idle .idle-main-hero-name {
+  box-shadow: inset 0 1px rgba(255,255,255,.1), 0 6px 14px rgba(0,0,0,.4);
+}
+
+/* Portrait du gardien/boss : même traitement de médaillon, teinté danger au
+   lieu d'or (garde la distinction ami/ennemi lisible d'un coup d'œil). */
+#view-idle .idle-boss-portrait {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #ff5d8f 45%, transparent), 0 0 26px #ff5d8f55, 0 14px 18px -6px rgba(0,0,0,.75);
+}
+#view-idle .idle-boss-name {
+  box-shadow: inset 0 1px rgba(255,255,255,.1), 0 6px 14px rgba(0,0,0,.4);
+}
+
+/* Alliés en scène : biseau + ombre au lieu d'un simple contour blanc plat. */
+#view-idle .idle-stage-ally {
+  box-shadow: inset 0 1px rgba(255,255,255,.35), 0 8px 16px rgba(0,0,0,.5), 0 0 0 3px rgba(17,24,39,.65);
+}
+
+/* Piste de vague : des cases plates numérotées lisaient comme une jauge de
+   debug. Des pastilles plus rondes, un dégradé sur les cases franchies, et
+   un pip final « boss » doré-écarlate en forme de blason referment la
+   scène sur une vraie mécanique de jeu plutôt qu'un indicateur brut. */
+#view-idle .idle-wave-track {
+  gap: 5px;
+}
+#view-idle .idle-wave-track>span {
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.1)), rgba(3,7,18,.72);
+  box-shadow: inset 0 1px rgba(255,255,255,.08), inset 0 -3px 5px rgba(0,0,0,.3);
+}
+#view-idle .idle-wave-track>span.done {
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.05)), linear-gradient(180deg, #22c55e, #15803d);
+  box-shadow: inset 0 1px rgba(255,255,255,.3), inset 0 -3px 5px rgba(0,0,0,.25), 0 0 8px #22c55e44;
+}
+#view-idle .idle-wave-track>span.current {
+  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(0,0,0,.05)), linear-gradient(180deg, #fbbf24, #b45309);
+  box-shadow: inset 0 1px rgba(255,255,255,.35), 0 0 12px #f59e0b88;
+}
+#view-idle .idle-wave-track .idle-wave-boss {
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--idle-gold), #7f1d1d);
+  box-shadow: inset 0 1px rgba(255,255,255,.3), 0 0 14px color-mix(in srgb, var(--idle-gold) 55%, transparent);
+}
+
+/* Coffre de boss / bandeau de récompense : liseré or animé pour signaler
+   "précieux" sans dépendre d'une icône externe. */
+#view-idle .idle-boss-chest {
+  box-shadow: inset 0 1px rgba(255,255,255,.1), 0 0 0 1px var(--idle-gold-soft), 0 10px 24px rgba(0,0,0,.4);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #view-idle .idle-nav-summon, #view-idle .idle-boss-chest:not(.hidden) {
+    animation: idlePolishShimmer 3.4s ease-in-out infinite;
+  }
+}
+@keyframes idlePolishShimmer {
+  0%, 100% { box-shadow: inset 0 1px rgba(255,255,255,.1), 0 0 0 1px var(--idle-gold-soft), 0 10px 24px rgba(0,0,0,.4); }
+  50% { box-shadow: inset 0 1px rgba(255,255,255,.16), 0 0 0 1px color-mix(in srgb, var(--idle-gold) 45%, transparent), 0 10px 26px rgba(0,0,0,.42); }
+}
+
+/* Ambiance générale : sans texture derrière les panneaux, le noir plat entre
+   les cartes lit comme un fond inachevé plutôt qu'une scène. Un halo très
+   discret centré sur la scène de combat suffit à donner de la profondeur
+   sans distraire (aucune texture/image ajoutée, juste des dégradés CSS). */
+#view-idle {
+  background:
+    radial-gradient(900px 500px at 30% 120px, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    radial-gradient(700px 420px at 85% 480px, color-mix(in srgb, var(--idle-gold) 5%, transparent), transparent 70%);
+}
+
+/* HUD supérieur : bandeau plat -> liseré or au pied + léger dégradé de
+   profondeur, dans le même esprit « un seul repère précieux par écran ». */
+#view-idle .idle-hud {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-2) 96%, #000), var(--bg-2));
+  border-bottom: 1px solid transparent;
+  box-shadow: 0 1px 0 var(--idle-gold-soft), 0 8px 20px rgba(0,0,0,.35);
+}
+#view-idle .idle-hud-logo { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-size: 1.3rem; }
+#view-idle .idle-back,
+#view-idle .idle-hud-badge {
+  box-shadow: inset 0 1px rgba(255,255,255,.08), inset 0 -3px 6px rgba(0,0,0,.25);
+}
+
+/* Rail latéral (bureau) : profondeur + accent or au survol/actif pour que la
+   sélection lise comme un choix de menu de jeu, pas une simple liste. */
+@media(min-width:901px) {
+  #view-idle .idle-tab { position: relative; }
+  #view-idle .idle-tab:not(.active):hover { background: rgba(255,255,255,.05); color: var(--text); }
+  #view-idle .idle-tab.active { padding-left: 15px; }
+  #view-idle .idle-tab.active::before {
+    content: ''; position: absolute; left: 3px; top: 20%; bottom: 20%; width: 3px; border-radius: 2px;
+    background: var(--idle-gold); box-shadow: 0 0 6px var(--idle-gold);
+  }
+  #view-idle .idle-tab.active::after { display: none; }
+}
