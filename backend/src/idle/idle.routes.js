@@ -60,6 +60,7 @@ const {
   wisdomForRunStage,
   prestigeMinimumRunMs,
   ANCIENTS,
+  ANCIENT_BRANCHES,
   ancientByKey,
   ancientCost,
   ancientBonus,
@@ -1186,9 +1187,11 @@ async function buildState(userId) {
     },
     ancients: {
       points: user.wisdomPoints,
+      branches: ANCIENT_BRANCHES,
       items: ANCIENTS.map((a) => {
         const level = ancientLevelsByKey.get(a.key) || 0;
-        return { key: a.key, name: a.name, icon: a.icon, kind: a.kind, level, effectPerLevel: a.effectPerLevel, cost: ancientCost(level) };
+        const unlocked = !a.requires || (ancientLevelsByKey.get(a.requires) || 0) > 0;
+        return { key: a.key, name: a.name, icon: a.icon, kind: a.kind, level, effectPerLevel: a.effectPerLevel, cost: ancientCost(level), branch: a.branch, tier: a.tier, requires: a.requires, unlocked };
       }),
     },
     dojo: {
@@ -2189,11 +2192,16 @@ router.get('/collection', requireAuth, requireIdleBeta, rateLimit({ max: 60, nam
 // ni de l'essence, pas besoin de solder quoi que ce soit avant.
 router.post('/ancient', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const key = String(req.body?.key || '');
-  if (!ancientByKey(key)) return res.status(400).json({ error: 'Ancient invalide' });
+  const ancient = ancientByKey(key);
+  if (!ancient) return res.status(400).json({ error: 'Ancient invalide' });
   try {
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id }, select: { wisdomPoints: true } });
       if (!user) throw new IdleError(404, 'Compte introuvable');
+      if (ancient.requires) {
+        const prereq = await tx.ancientLevel.findUnique({ where: { userId_ancientKey: { userId: req.user.id, ancientKey: ancient.requires } } });
+        if (!prereq?.level) throw new IdleError(400, `Talent requis : ${ancientByKey(ancient.requires)?.name || ancient.requires}`);
+      }
       const existing = await tx.ancientLevel.findUnique({ where: { userId_ancientKey: { userId: req.user.id, ancientKey: key } } });
       const level = existing?.level || 0;
       const cost = ancientCost(level);
