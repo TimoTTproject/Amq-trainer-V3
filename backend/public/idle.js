@@ -555,6 +555,11 @@ function renderIdleState(state) {
     renderIdleBossChest(state.battle?.bossChest);
     renderIdleWorldJump(state.codex,state.battle);
     renderIdleMainHero(state);
+    // La ligne d'alliés (#idle-stage-team) vit dans la scène de combat, pas
+    // dans l'onglet Équipe : sans cet appel ici, elle restait figée sur son
+    // dernier état tant qu'on ne visitait pas l'onglet Équipe (alliés
+    // obsolètes qui se chevauchaient avec la vague en cours à l'écran).
+    renderIdleTeamStrategy(state);
   }
   if (idleActivePanel === 'team') {
     renderIdleTeamStrategy(state);

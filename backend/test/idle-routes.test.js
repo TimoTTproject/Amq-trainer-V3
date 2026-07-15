@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -246,7 +246,9 @@ test('GET /state : joueur neuf → 3 emplacements libres, le reste verrouillé a
   assert.equal(res.json.economy.essence, 0);
   assert.equal(res.json.permanentProgress.prestige, 0);
   assert.equal(res.json.click.yield, 5);
-  assert.equal(res.json.click.damage, 8); // Guerrier : 5 × 1,5, arrondi
+  // Guerrier : 5 × 1,5, puis l'événement quotidien (rotation par date réelle,
+  // cf. currentIdleEvent) peut ajouter son propre multiplicateur de frappe.
+  assert.equal(res.json.click.damage, Math.round(5 * 1.5 * currentIdleEvent().click));
   assert.ok(res.json.battle.skills.burstDamage > res.json.click.damage);
   assert.equal(res.json.battle.skills.teamDamage, 0);
   assert.equal(res.json.battle.stage, 1);

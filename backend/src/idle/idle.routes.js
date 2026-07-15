@@ -2193,6 +2193,7 @@ module.exports = {
   ULTIMATE_CLICK_MULTIPLIER,
   ULTIMATE_TEAM_SECONDS,
   SEASON_TIERS,
+  currentIdleEvent,
   // Exportés pour la route admin de génération de portraits IA
   // (src/admin/admin.routes.js) — même sélection déterministe du gardien
   // que celle utilisée pour l'affichage, une seule source de vérité.
