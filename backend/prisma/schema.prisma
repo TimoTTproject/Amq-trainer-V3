@@ -206,6 +206,7 @@ model User {
   idleTelemetry        IdleTelemetry[]
   idleProgressCounters IdleProgressCounter[]
   idleTeamPresets      IdleTeamPreset[]
+  idleRiftRuns         IdleRiftRun[]
   idleFeedback         IdleFeedback[]
   dailyStats           DailyStat[]
   coopWeekly           CoopWeeklyScore[]
@@ -965,6 +966,26 @@ model IdleProgressCounter {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key, period])
+  @@index([userId, period])
+}
+
+// Reliques choisies pendant la Faille hebdomadaire (voir weeklyRift/RIFT_RELICS
+// dans idle.routes.js) : une ligne par joueur et par semaine, réinitialisée
+// naturellement par le changement de `period` — même convention que le
+// compteur `rift_floor` (IdleProgressCounter), pas de reset explicite à coder.
+// `relics` = clés déjà choisies (effet actif toute la semaine), `pendingChoice`
+// = 3 options en attente pendant qu'un choix reste à faire (jamais bloquant :
+// la progression continue même sans avoir tranché).
+model IdleRiftRun {
+  id            Int      @id @default(autoincrement())
+  userId        String
+  period        String
+  relics        Json     @default("[]")
+  pendingChoice Json     @default("[]")
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
   @@index([userId, period])
 }
 

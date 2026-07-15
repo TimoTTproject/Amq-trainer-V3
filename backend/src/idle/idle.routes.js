@@ -201,7 +201,44 @@ function weeklyConvergence(counters, periods=idlePeriods()) {
   return {title:'Convergence suprême',description:'Accomplis les quatre objectifs avant la fin de la semaine.',requirements,...challengeProgress(requirements),reward:7,essence:100000,rewardCurrency:'seals'};
 }
 
-function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods()) {
+// Reliques de la Faille : choix roguelike offerts tous les 5 paliers franchis
+// (voir POST /rift/attempt), actifs pour le reste de la semaine (reset
+// naturel au changement de `period`, comme le record lui-même). De vrais
+// choix risque/récompense plutôt qu'un pur pourcentage — certaines paires
+// sont volontairement symétriques (miroir DPS/Essence) pour que le choix
+// dépende du style de jeu, pas d'une réponse strictement dominante.
+const RIFT_RELICS = {
+  lame_aiguisee: { name: 'Lame Aiguisée', icon: 'fa-khanda', description: '+25% DPS en Faille, mais −10% d’Essence gagnée.', dpsMult: 1.25, rewardMult: .90 },
+  coffre_beni: { name: 'Coffre Béni', icon: 'fa-sack-dollar', description: '+50% d’Essence gagnée, mais −10% DPS en Faille.', dpsMult: .90, rewardMult: 1.50 },
+  rage_abyssale: { name: 'Rage Abyssale', icon: 'fa-fire', description: '+35% DPS en Faille, mais −20% d’Essence gagnée.', dpsMult: 1.35, rewardMult: .80 },
+  fortune_ecarlate: { name: 'Fortune Écarlate', icon: 'fa-gem', description: '+35% d’Essence gagnée, mais −20% DPS en Faille.', dpsMult: .80, rewardMult: 1.35 },
+  souffle_continu: { name: 'Souffle Continu', icon: 'fa-wind', description: '+15% DPS et +15% Essence en Faille — un choix sûr, sans contrepartie.', dpsMult: 1.15, rewardMult: 1.15 },
+  focalisation: { name: 'Focalisation', icon: 'fa-crosshairs', description: '+15% DPS en Faille, sans contrepartie.', dpsMult: 1.15, rewardMult: 1 },
+  instinct_econome: { name: 'Instinct d’Économe', icon: 'fa-piggy-bank', description: '+20% d’Essence gagnée en Faille, sans contrepartie.', dpsMult: 1, rewardMult: 1.20 },
+  ombre_furtive: { name: 'Ombre Furtive', icon: 'fa-user-ninja', description: 'Les salles de la Faille résistent 8% de moins.', dpsMult: 1, rewardMult: 1, resistanceMult: .92 },
+  echo_temporel: { name: 'Écho Temporel', icon: 'fa-clock-rotate-left', description: '+8% DPS en Faille par relique déjà choisie cette semaine (celle-ci comprise) — monte en puissance avec le build.', dpsMult: 1, rewardMult: 1 },
+};
+function riftRelicModifiers(relicKeys = []) {
+  let dpsMult = 1, rewardMult = 1, resistanceMult = 1;
+  for (const key of relicKeys) {
+    const relic = RIFT_RELICS[key]; if (!relic) continue;
+    dpsMult *= key === 'echo_temporel' ? (1 + .08 * Math.max(1, relicKeys.length)) : (relic.dpsMult ?? 1);
+    rewardMult *= relic.rewardMult ?? 1;
+    resistanceMult *= relic.resistanceMult ?? 1;
+  }
+  return { dpsMult, rewardMult, resistanceMult };
+}
+function rollRiftRelics(existingKeys = [], count = 3) {
+  const available = Object.keys(RIFT_RELICS).filter((k) => !existingKeys.includes(k));
+  const picked = [];
+  for (let i = 0; i < count && available.length; i++) picked.push(available.splice(Math.floor(Math.random() * available.length), 1)[0]);
+  return picked;
+}
+function riftRelicDetails(keys = []) {
+  return keys.filter((k) => RIFT_RELICS[k]).map((k) => ({ key: k, name: RIFT_RELICS[k].name, icon: RIFT_RELICS[k].icon, description: RIFT_RELICS[k].description }));
+}
+
+function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods(),relicKeys=[]) {
   const best=Math.max(0,counters.get(`rift_floor:${periods.week}`)||0);
   const variants=[
     {key:'iron',name:'Armure astrale',description:'Les ennemis possèdent 35% de PV supplémentaires.',multiplier:1.35},
@@ -209,10 +246,12 @@ function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods()
     {key:'void',name:'Instabilité du Néant',description:'Toutes les salles sont 18% plus résistantes.',multiplier:1.18},
   ];
   const variant=variants[Math.abs(Math.floor(Date.parse(`${periods.week}T00:00:00Z`)/604800000))%variants.length];
+  const mods=riftRelicModifiers(relicKeys);
+  const effectiveRate=totalRate*mods.dpsMult;
   const baseHp=enemyMaxHp(Math.max(1,bestStage||1));
-  const targetFor=(floor)=>Math.round(baseHp*Math.pow(1.48,Math.max(0,floor-1))*variant.multiplier);
-  let projected=0;for(let floor=1;floor<=20;floor++){if(totalRate*20<targetFor(floor))break;projected=floor;}
-  return {period:periods.week,unlocked:(rankLevel||1)>=20,unlockLevel:20,maxFloor:20,bestFloor:best,projectedFloor:projected,nextFloor:Math.min(20,best+1),nextTarget:targetFor(Math.min(20,best+1)),variant,reward:{essence:Math.max(0,250*projected*projected-250*best*best),seals:Math.max(0,Math.floor(projected/5)-Math.floor(best/5))}};
+  const targetFor=(floor)=>Math.round(baseHp*Math.pow(1.48,Math.max(0,floor-1))*variant.multiplier*mods.resistanceMult);
+  let projected=0;for(let floor=1;floor<=20;floor++){if(effectiveRate*20<targetFor(floor))break;projected=floor;}
+  return {period:periods.week,unlocked:(rankLevel||1)>=20,unlockLevel:20,maxFloor:20,bestFloor:best,projectedFloor:projected,nextFloor:Math.min(20,best+1),nextTarget:targetFor(Math.min(20,best+1)),variant,relics:riftRelicDetails(relicKeys),reward:{essence:Math.max(0,Math.round((250*projected*projected-250*best*best)*mods.rewardMult)),seals:Math.max(0,Math.floor(projected/5)-Math.floor(best/5))}};
 }
 
 function bossChestRewards(tier) {
@@ -1042,7 +1081,9 @@ async function buildState(userId) {
   const challengeDefs=idleChallengeList(missionCounters,slots,periods);
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
   const challenges=challengeDefs.map((c)=>({...c,progress:Math.min(c.progress,c.target),completed:c.progress>=c.target,claimed:claimedChallenges.has(`challenge_${c.key}:${c.period}`)}));
-  const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods);
+  let riftRun=null;try{riftRun=await prisma.idleRiftRun.findUnique({where:{userId_period:{userId,period:periods.week}}});}catch(e){if(e?.code)throw e;}
+  const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods,riftRun?.relics||[]);
+  rift.pendingChoice=riftRelicDetails(riftRun?.pendingChoice||[]);
   const guide=[
     {key:'recruit',title:'Invoque ton premier héros',description:'Utilise 1 Sceau ou de l’Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
@@ -2068,10 +2109,38 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
   const state=await buildState(req.user.id);const rift=state.rift;
   if(!rift.unlocked)return res.status(403).json({error:`Faille débloquée au niveau ${rift.unlockLevel}`});
   if(rift.projectedFloor<=rift.bestFloor)return res.status(400).json({error:'Ton équipe manque encore de puissance pour battre ton record'});
-  const floor=rift.projectedFloor;const essence=Math.max(0,250*floor*floor-250*rift.bestFloor*rift.bestFloor);const seals=Math.max(0,Math.floor(floor/5)-Math.floor(rift.bestFloor/5));
-  try{await prisma.$transaction(async(tx)=>{const existing=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}}});if((existing?.value||0)!==rift.bestFloor)throw new IdleError(409,'La Faille a déjà été actualisée');await tx.idleProgressCounter.upsert({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}},create:{userId:req.user.id,key:'rift_floor',period:rift.period,value:floor},update:{value:floor}});await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals}}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  const floor=rift.projectedFloor;const essence=rift.reward.essence;const seals=rift.reward.seals;
+  const currentRelicKeys=rift.relics.map((r)=>r.key);
+  // Choix de relique : tous les 5 paliers franchis pour la première fois cette
+  // semaine (et tant qu'aucun choix n'est déjà en attente), propose 3 options —
+  // jamais bloquant, la progression continue même sans avoir tranché.
+  const crossedThreshold=Math.floor(floor/5)>Math.floor(rift.bestFloor/5);
+  const offerRelicChoice=crossedThreshold&&!rift.pendingChoice.length&&currentRelicKeys.length<Math.floor(rift.maxFloor/5);
+  const offeredKeys=offerRelicChoice?rollRiftRelics(currentRelicKeys,3):null;
+  try{await prisma.$transaction(async(tx)=>{
+    const existing=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}}});
+    if((existing?.value||0)!==rift.bestFloor)throw new IdleError(409,'La Faille a déjà été actualisée');
+    await tx.idleProgressCounter.upsert({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}},create:{userId:req.user.id,key:'rift_floor',period:rift.period,value:floor},update:{value:floor}});
+    await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals}}});
+    if(offeredKeys)await tx.idleRiftRun.upsert({where:{userId_period:{userId:req.user.id,period:rift.period}},create:{userId:req.user.id,period:rift.period,relics:currentRelicKeys,pendingChoice:offeredKeys},update:{pendingChoice:offeredKeys}});
+  });}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void recordIdleEvent(req.user.id,'rift_record',{value:floor,stage:state.battle.stage});
   res.json({ok:true,floor,essence,seals,state:await buildState(req.user.id)});
+});
+
+router.post('/rift/relic',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-rift-relic'}),async(req,res)=>{
+  const key=String(req.body?.key||'');
+  if(!RIFT_RELICS[key])return res.status(400).json({error:'Relique invalide'});
+  const period=idlePeriods().week;
+  try{await prisma.$transaction(async(tx)=>{
+    const run=await tx.idleRiftRun.findUnique({where:{userId_period:{userId:req.user.id,period}}});
+    const pending=run?.pendingChoice||[];
+    if(!pending.includes(key))throw new IdleError(400,'Cette relique n’est pas proposée');
+    const relics=[...(run?.relics||[]),key];
+    await tx.idleRiftRun.upsert({where:{userId_period:{userId:req.user.id,period}},create:{userId:req.user.id,period,relics,pendingChoice:[]},update:{relics,pendingChoice:[]}});
+  });}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  void recordIdleEvent(req.user.id,'rift_relic_chosen',{value:1});
+  res.json({ok:true,state:await buildState(req.user.id)});
 });
 
 router.get('/telemetry/beta', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-telemetry' }), async (req, res) => {
@@ -2230,6 +2299,9 @@ module.exports = {
   idleChallengeList,
   weeklyConvergence,
   weeklyRift,
+  RIFT_RELICS,
+  riftRelicModifiers,
+  rollRiftRelics,
   bossChestRewards,
   idleItemDrop,
   rollItemAffixes,
