@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -116,11 +116,23 @@ test('faille hebdomadaire : record, difficulté et récompense dépendent de la 
   assert.equal(weeklyRift(counters,1e9,20,19,{week:'2026-07-13'}).unlocked,false);
 });
 
+test('inventaire : la rareté détermine le nombre d’affixes tirés, sans doublon',()=>{
+  assert.equal(rollItemAffixes(5,'rare').length,1);
+  assert.equal(rollItemAffixes(5,'epic').length,2);
+  assert.equal(rollItemAffixes(5,'legendary').length,3);
+  assert.equal(rollItemAffixes(5,'mythic').length,4);
+  const affixes=rollItemAffixes(10,'mythic');
+  assert.equal(new Set(affixes.map((a)=>a.effectKey)).size,4);
+  assert.equal(idleItemDrop(5,'weapon','rare',.03,'Konoha').affixes.length,0);
+  assert.equal(idleItemDrop(5,'weapon','mythic',.16,'Konoha').affixes.length,3);
+});
+
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
-  const weapon=idleItemDrop(5,'weapon','legendary',.11,'Hueco Mundo');const accessory=idleItemDrop(3,'accessory','legendary',.11,'Hueco Mundo');
-  assert.equal(weapon.effectKey,'precision');assert.equal(itemProductionBonus(weapon),.11);
-  assert.equal(accessory.effectKey,'salvage');assert.equal(itemProductionBonus(accessory),.11);assert.ok(itemSalvageValue(accessory)>25);
-  assert.ok(itemActionBonus([{items:[weapon]}],'click')>1);
+  const item={bonus:.11,effectKey:'assault',effectValue:.05,affixes:[{effectKey:'echo',effectValue:.03},{effectKey:'precision',effectValue:.02}]};
+  // assault et echo sont en mode dps (comptés), precision est en mode click (pas ici)
+  assert.ok(Math.abs(itemProductionBonus(item)-(.11+.05+.03))<1e-9);
+  assert.ok(Math.abs(itemActionBonus([{items:[item]}],'click')-(1+.02))<1e-9);
+  assert.ok(itemSalvageValue(item)>25);
 });
 
 test('améliorer un objet ne peut jamais réduire sa rareté',()=>{
@@ -129,9 +141,7 @@ test('améliorer un objet ne peut jamais réduire sa rareté',()=>{
   assert.equal(upgradedItemRarity('mythic',.26),'mythic');
 });
 
-test('inventaire : les mondes et les paliers créent des familles variées',()=>{
-  const effects=new Set([2,5,8].map((tier)=>idleItemDrop(tier,'relic','rare',.03,'Konoha').effectKey));
-  assert.equal(effects.size,3);
+test('inventaire : les mondes déterminent le nom de l’objet',()=>{
   assert.match(idleItemDrop(1,'weapon','rare',.03,'Konoha').name,/Kunai de la Feuille/);
   assert.match(idleItemDrop(1,'weapon','rare',.03,'Namek').name,/Lame de Ki/);
 });

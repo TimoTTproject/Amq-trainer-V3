@@ -1,0 +1,1 @@
+ALTER TABLE "IdleItem" ADD COLUMN "affixes" JSONB NOT NULL DEFAULT '[]';

@@ -912,6 +912,12 @@ model IdleItem {
   bonus          Float
   effectKey      String
   effectValue    Float
+  // Affixes secondaires (0 à 3), tirés aléatoirement en plus de l'affixe
+  // primaire ci-dessus (effectKey/effectValue) — voir idleItemDrop() dans
+  // idle.routes.js. Additif : les objets créés avant cette colonne ont
+  // simplement un tableau vide, donc un seul affixe visible (comportement
+  // identique à avant, pas de backfill nécessaire).
+  affixes        Json     @default("[]")
   sourceWorld    String
   locked         Boolean  @default(false)
   obtainedAt     DateTime @default(now())
