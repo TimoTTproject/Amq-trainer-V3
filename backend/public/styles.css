@@ -7422,3 +7422,28 @@ body.idle-fullscreen .feedback-fab { display: none; }
   #view-idle .idle-stage-team { bottom: 128px; gap: 6px; }
   #view-idle .idle-stage-ally { width: 38px; height: 50px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CLARTÉ / GUIDAGE 2026-07 — retour : trop de systèmes affichés en détail
+   avant d'être pertinents (record de Faille pour un niveau 1, voies de
+   Prestige avant le premier Prestige...) — un joueur qui débute ne doit
+   voir en détail que ce qu'il peut déjà utiliser. Les sections encore
+   verrouillées passent en aperçu compact (icône + nom + condition), pas
+   masquées : le joueur sait que la fonctionnalité existe et sait ce qui la
+   débloque, sans la complexité de sa version complète. ══════════════════ */
+#view-idle .idle-locked-teaser {
+  display: flex; align-items: center; gap: 14px; padding: 16px;
+  border: 1px dashed color-mix(in srgb, var(--text-2) 45%, transparent);
+  border-radius: 12px; background: rgba(255,255,255,.02);
+}
+#view-idle .idle-locked-teaser>i {
+  display: grid; width: 38px; height: 38px; flex: none; place-items: center;
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  background: color-mix(in srgb, var(--text-2) 16%, transparent); color: var(--text-2); font-size: 15px;
+}
+#view-idle .idle-locked-teaser>div { display: flex; flex-direction: column; gap: 2px; }
+#view-idle .idle-locked-teaser small { color: var(--text-2); font-size: 8px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; opacity: .8; }
+#view-idle .idle-locked-teaser b { font-size: 13px; color: var(--text); }
+#view-idle .idle-locked-teaser span { color: var(--idle-gold); font-size: 10.5px; font-weight: 700; }
+#view-idle .idle-rift-card.locked,
+#view-idle .idle-prestige-paths.locked { box-shadow: none; background: transparent; border: 0; }
