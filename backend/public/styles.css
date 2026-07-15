@@ -7239,6 +7239,7 @@ body.idle-fullscreen .feedback-fab { display: none; }
    clip-path retire aussi les coins des ombres/bordures — les éléments qui
    en avaient besoin passent en drop-shadow (cf. règles dédiées plus bas). */
 #view-idle .btn-primary,
+#view-idle .btn-secondary,
 #view-idle .idle-click-btn,
 #view-idle .idle-skill,
 #view-idle .idle-nav-summon,
@@ -7246,6 +7247,14 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-main-hero-name,
 #view-idle .idle-boss-name {
   clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+  border-radius: 0 !important;
+}
+/* Petits boutons (secondaires, denses dans les listes) : chanfrein réduit
+   pour ne pas manger le texte sur les paddings serrés. */
+#view-idle .idle-upgrade-btn,
+#view-idle .idle-item-card footer button,
+#view-idle .idle-roster-actions button {
+  clip-path: polygon(var(--chamfer-sm) 0, 100% 0, 100% calc(100% - var(--chamfer-sm)), calc(100% - var(--chamfer-sm)) 100%, 0 100%, 0 var(--chamfer-sm));
   border-radius: 0 !important;
 }
 /* .idle-chip / .idle-guide-btn / .idle-milestone-btn restent des pilules
@@ -7304,3 +7313,38 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-page-head small { opacity: .75; }
 #view-idle .idle-main-hero-name b { font-size: .92rem; }
 #view-idle .idle-page-head h2 { font-size: 22px; }
+
+/* Dock de quantité (×1/×5/×10/×100/MAX) : pilule complète au lieu d'un
+   rectangle à peine arrondi, accent or sur le montant actif (au lieu du
+   violet isolé qui ne suit pas le reste de la palette). */
+#view-idle .idle-buy-amount { border-radius: 999px; }
+#view-idle .idle-buy-amount button { border-radius: 999px; }
+#view-idle .idle-buy-amount button.active {
+  background: linear-gradient(135deg, var(--idle-gold), var(--idle-gold-deep));
+  color: #241a04;
+}
+
+/* Emplacements d'équipement vides/remplis : hexagone au lieu du carré à
+   coins à peine arrondis, cohérent avec les autres médaillons d'icône. */
+#view-idle .idle-loadout-empty>i,
+#view-idle .idle-auto-equipment>div>i {
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  border: 0; border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 -4px 7px rgba(0,0,0,.3);
+}
+
+/* Cartes stats de collection (mondes pillés, effets trouvés...) et chips de
+   famille : même traitement de profondeur que le reste des panneaux. */
+#view-idle .idle-item-collection-stats>span,
+#view-idle .idle-item-families>span {
+  background-image: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0) 40%);
+  box-shadow: inset 0 1px rgba(255,255,255,.07), 0 6px 16px rgba(0,0,0,.28);
+}
+
+/* Icônes de mission/quête (Niveaux, Activités) : même hexagone que les
+   autres médaillons de repère, plutôt qu'un rond/carré à peine arrondi. */
+#view-idle .idle-mission-icon,
+#view-idle .idle-rank-quest-icon {
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  border-radius: 0;
+}
