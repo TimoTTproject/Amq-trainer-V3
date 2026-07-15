@@ -245,7 +245,13 @@ const ITEM_EFFECTS={
   aura:{label:'Aura',mode:'dps',description:'Présence amplifiée'},
   pact:{label:'Pacte',mode:'dps',description:'Lien de puissance'},
 };
-const ITEM_EFFECT_POOLS={weapon:['assault','precision','overdrive'],relic:['resonance','focus','echo'],accessory:['salvage','aura','pact']};
+// Nombre d'affixes selon la rareté (façon ARPG : plus un objet est rare, plus
+// il porte de lignes) — le premier tiré reste l'affixe primaire de l'objet
+// (effectKey/effectValue, colonnes historiques), les suivants vont dans
+// IdleItem.affixes. Retiré : la restriction par nature d'objet (ITEM_EFFECT_POOLS)
+// — n'importe quel affixe peut tomber sur n'importe quel type d'objet, c'est ce
+// qui rend le tirage excitant (une arme peut sortir « Fortune »).
+const ITEM_AFFIX_COUNT_BY_RARITY={rare:1,epic:2,legendary:3,mythic:4};
 const WORLD_ITEM_NAMES={
   'Konoha':{weapon:'Kunai de la Feuille',relic:'Parchemin du Hokage',accessory:'Talisman du Feu'},
   'Namek':{weapon:'Lame de Ki',relic:'Cristal namek',accessory:'Capsule Senzu'},
@@ -261,27 +267,61 @@ const WORLD_ITEM_NAMES={
 const ITEM_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
 function upgradedItemRarity(currentRarity,bonus){const earned=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';return (ITEM_RARITY_ORDER[earned]||1)>(ITEM_RARITY_ORDER[currentRarity]||1)?earned:currentRarity;}
 
+// Tire N affixes sans remise dans la totalité de ITEM_EFFECTS (N selon la
+// rareté, voir ITEM_AFFIX_COUNT_BY_RARITY). Chaque magnitude reçoit une
+// variance aléatoire (±15%) : deux objets du même palier/rareté n'ont donc
+// jamais exactement le même rendement — c'est ce qui fait qu'un joueur a une
+// raison de garder plusieurs objets de même rareté (« reroll chase »).
+function rollItemAffixes(tier,rarity) {
+  const count=ITEM_AFFIX_COUNT_BY_RARITY[rarity]||1;
+  const pool=Object.keys(ITEM_EFFECTS);
+  const picked=[];
+  for(let i=0;i<count&&pool.length;i++){
+    const index=Math.floor(Math.random()*pool.length);
+    const key=pool.splice(index,1)[0];
+    const effect=ITEM_EFFECTS[key];
+    const base=effect.mode==='salvage'?(.05+Math.min(.25,tier*.005)):(.01+Math.min(.09,tier*.002));
+    const variance=.85+Math.random()*.3;
+    picked.push({effectKey:key,effectValue:Number((base*variance).toFixed(3))});
+  }
+  return picked;
+}
+
 function idleItemDrop(tier,kind,rarity,bonus,sourceWorld='Dojo ancestral') {
   const def=ITEM_KINDS[kind];
-  const pool=ITEM_EFFECT_POOLS[kind]||[def.effectKey];
-  const effectKey=pool[Math.floor(Math.max(0,tier-1)/3)%pool.length];
-  const effect=ITEM_EFFECTS[effectKey];
-  const effectValue=effect.mode==='salvage'?Number((.05+Math.min(.25,tier*.005)).toFixed(3)):Number((.01+Math.min(.09,tier*.002)).toFixed(3));
+  const [primary,...affixes]=rollItemAffixes(tier,rarity);
   const adjectives={rare:'Affûté',epic:'Héroïque',legendary:'Légendaire',mythic:'Transcendant'};
   const world=String(sourceWorld).split(' · ')[0];
   const family=Object.entries(WORLD_ITEM_NAMES).find(([name])=>world.startsWith(name))?.[1];
   const baseName=family?.[kind]||`${def.label} de ${world}`;
-  return {kind,rarity,bonus,name:`${baseName} · ${adjectives[rarity]}`,effectKey,effectValue,sourceWorld:world};
+  return {kind,rarity,bonus,name:`${baseName} · ${adjectives[rarity]}`,effectKey:primary.effectKey,effectValue:primary.effectValue,affixes,sourceWorld:world};
+}
+
+// Liste affichable (primaire + secondaires) pour l'UI — un objet pré-affixes
+// (colonne affixes absente/vide) retombe simplement sur sa seule ligne
+// historique, sans backfill nécessaire.
+function describeItemAffixes(item) {
+  const all=[{effectKey:item.effectKey,effectValue:item.effectValue},...(Array.isArray(item.affixes)?item.affixes:[])];
+  return all.map(({effectKey,effectValue})=>({key:effectKey,value:effectValue,label:ITEM_EFFECTS[effectKey]?.label||effectKey,description:ITEM_EFFECTS[effectKey]?.description||'',mode:ITEM_EFFECTS[effectKey]?.mode||'dps'}));
+}
+
+// Affixe primaire (effectKey/effectValue) + affixes secondaires réunis en une
+// seule liste brute {effectKey,effectValue} — base commune aux fonctions de
+// bonus ci-dessous, pour que primaire et secondaires soient toujours traités
+// identiquement (un affixe secondaire vaut autant que le primaire).
+function itemAffixList(item) {
+  return [{effectKey:item.effectKey,effectValue:item.effectValue},...(Array.isArray(item.affixes)?item.affixes:[])];
 }
 
 function itemProductionBonus(item) {
-  return item.bonus+(ITEM_EFFECTS[item.effectKey]?.mode==='dps'?item.effectValue:0);
+  return item.bonus+itemAffixList(item).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='dps').reduce((sum,a)=>sum+(a.effectValue||0),0);
 }
 
 function itemActionBonus(slots, mode) {
   return 1 + slots.flatMap((slot)=>(slot.items?.length?slot.items:slot.equipments)||[])
-    .filter((item)=>ITEM_EFFECTS[item.effectKey]?.mode===mode)
-    .reduce((sum,item)=>sum+(item.effectValue||0),0);
+    .flatMap((item)=>itemAffixList(item))
+    .filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode===mode)
+    .reduce((sum,a)=>sum+(a.effectValue||0),0);
 }
 
 function equipmentSetMultiplier(items=[]) {
@@ -301,11 +341,16 @@ const EQUIPMENT_ROLE_WEIGHTS={
   producteur:{dps:1.35,burst:.7,team:.8,click:.65,boss:.75,salvage:1.5},
 };
 function equipmentItemScore(item,role='attaquant'){
-  if(!item)return 0;const mode=ITEM_EFFECTS[item.effectKey]?.mode||'dps';const weight=(EQUIPMENT_ROLE_WEIGHTS[role]||EQUIPMENT_ROLE_WEIGHTS.attaquant)[mode]||1;
-  // Le bonus de base sert toujours au DPS du porteur. L'effet spécialisé est
-  // pondéré selon son rôle afin que l'auto-équipement construise de vrais
-  // profils RPG au lieu de distribuer uniquement par couleur de rareté.
-  return Number(item.bonus||0)+(mode==='dps'?Number(item.effectValue||0):Number(item.effectValue||0)*.65*weight)+(ITEM_RARITY_ORDER[item.rarity]||1)*1e-6;
+  if(!item)return 0;const weights=EQUIPMENT_ROLE_WEIGHTS[role]||EQUIPMENT_ROLE_WEIGHTS.attaquant;
+  // Le bonus de base sert toujours au DPS du porteur. Chaque affixe (primaire
+  // + secondaires) est pondéré selon son rôle afin que l'auto-équipement
+  // construise de vrais profils RPG au lieu de distribuer uniquement par
+  // couleur de rareté ou nombre d'affixes.
+  const affixScore=itemAffixList(item).reduce((sum,a)=>{
+    const mode=ITEM_EFFECTS[a.effectKey]?.mode||'dps';const weight=weights[mode]||1;
+    return sum+(mode==='dps'?Number(a.effectValue||0):Number(a.effectValue||0)*.65*weight);
+  },0);
+  return Number(item.bonus||0)+affixScore+(ITEM_RARITY_ORDER[item.rarity]||1)*1e-6;
 }
 function equipmentPlanScore(assignments=[]){
   const bySlot=new Map();for(const assignment of assignments){const list=bySlot.get(assignment.slotId)||[];list.push(assignment);bySlot.set(assignment.slotId,list);}
@@ -887,7 +932,7 @@ async function buildState(userId) {
         ascensionLevel: HERO_ASCENSION_LEVEL,
         canAscend: level >= HERO_ASCENSION_LEVEL && (row.ascension || 0) < 5,
         ascensionCost: Math.round(({ rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 }[row.character.rarity] || 25000) * Math.pow(3, row.ascension || 0)),
-        equipments: ['weapon', 'relic', 'accessory'].map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind); return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',enhanceCost:Math.max(100,Math.round(250*Math.pow(1+e.bonus,6))),powerLevel:Math.max(1,Math.round(e.bonus*100))}:{kind,empty:true}; }),
+        equipments: ['weapon', 'relic', 'accessory'].map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind); return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+e.bonus,6))),powerLevel:Math.max(1,Math.round(e.bonus*100))}:{kind,empty:true}; }),
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
@@ -1008,7 +1053,7 @@ async function buildState(userId) {
   const slotById=new Map(slots.map((s)=>[s.id,s]));
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const equipped=slotById.get(item.equippedSlotId);
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+item.bonus,6))),powerLevel:Math.max(1,Math.round(item.bonus*100)),equippedSlotIndex:equipped?.slotIndex??null,equippedCharacter:equipped?.character?.name||null};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+item.bonus,6))),powerLevel:Math.max(1,Math.round(item.bonus*100)),equippedSlotIndex:equipped?.slotIndex??null,equippedCharacter:equipped?.character?.name||null};
   });
   const inventoryFamilies=[...new Set(preparedInventoryItems.map((item)=>item.sourceWorld))].filter(Boolean).map((world)=>{
     const familyItems=preparedInventoryItems.filter((item)=>item.sourceWorld===world);
@@ -1019,7 +1064,7 @@ async function buildState(userId) {
     capacity:IDLE_ITEM_CAPACITY,
     count:inventoryItems.length,
     items:preparedInventoryItems,
-    summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.map((item)=>item.effectKey)).size,equipped:preparedInventoryItems.filter((item)=>item.equippedSlotIndex!==null).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
+    summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.flatMap((item)=>item.affixesDetailed.map((a)=>a.key))).size,equipped:preparedInventoryItems.filter((item)=>item.equippedSlotIndex!==null).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
     families:inventoryFamilies,
     setBonus:{required:3,multiplier:1.10,label:'Trois pièces du même monde : +10% DPS sur le héros'},
   };
@@ -2062,7 +2107,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
       const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
       if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
-      else{const equippedFortune=await tx.idleItem.findMany({where:{userId:user.id,equippedSlotId:{not:null},effectKey:'salvage'},select:{effectValue:true}});const salvage=Math.round(itemSalvageValue(drop)*(1+equippedFortune.reduce((sum,x)=>sum+x.effectValue,0)));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
+      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedSlotId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
       return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
@@ -2179,6 +2224,8 @@ module.exports = {
   weeklyRift,
   bossChestRewards,
   idleItemDrop,
+  rollItemAffixes,
+  describeItemAffixes,
   itemProductionBonus,
   upgradedItemRarity,
   itemActionBonus,
