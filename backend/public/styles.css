@@ -6281,9 +6281,18 @@ body.idle-fullscreen #app { padding-top: 0; }
 #view-idle .idle-main-hero-avatar{display:grid;width:92px;height:142px;place-items:center;border:2px solid var(--energy)!important;border-radius:42px 42px 18px 18px!important;background-color:#111827;background-position:center 18%;background-size:cover;clip-path:none!important;box-shadow:0 13px 24px #000b,0 0 18px color-mix(in srgb,var(--energy) 55%,transparent)!important;font-size:34px;color:var(--energy);animation:idleHeroReady 2.8s ease-in-out infinite}
 #view-idle .idle-main-hero-name{min-width:150px;margin-top:-9px;border-color:color-mix(in srgb,var(--energy) 65%,transparent);background:linear-gradient(180deg,#101827f2,#070b12f2);box-shadow:0 7px 16px #0008}
 #view-idle .idle-main-hero{cursor:pointer;outline:none}#view-idle .idle-main-hero:focus-visible{filter:drop-shadow(0 0 10px #38bdf8)}
-#view-idle .idle-main-hero>button{top:auto;right:50%;bottom:-30px;display:flex;width:auto;min-width:112px;height:30px;align-items:center;justify-content:center;gap:6px;padding:0 10px;transform:translateX(50%);border-radius:7px;border-color:#38bdf877;background:#0b1724ee;font-size:9px;font-weight:900;white-space:nowrap;box-shadow:0 6px 14px #0009}
-#view-idle .idle-main-hero>button:hover{transform:translateX(50%) scale(1.04);background:#0c4a6e}#view-idle .idle-main-hero>button span{display:inline!important}
-@media(max-width:700px){#view-idle .idle-main-hero{left:24%;transform:translate(-50%,-42%) scale(.78)}#view-idle .idle-main-hero>button{min-width:126px;height:34px;font-size:10px}}
+/* Bouton "Personnaliser" : la version en pilule sous la plaque de nom
+   (vérifiée via getBoundingClientRect) débordait sur la piste de vague et
+   le nom de l'ennemi — la scène n'a tout simplement pas la hauteur pour
+   empiler avatar + plaque de nom + pilule + piste de vague + nom d'ennemi
+   + barre de PV. Remis en pastille sur le coin de l'avatar (hors du flux
+   vertical, donc ne peut plus entrer en collision avec ce qui est en
+   dessous) ; l'intitulé texte reste dans le DOM pour les lecteurs d'écran,
+   seule l'icône est visible (le `title` fait office d'infobulle). */
+#view-idle .idle-main-hero>button{top:4px;right:-6px;bottom:auto;left:auto;display:grid;width:30px;height:30px;min-width:0;place-items:center;padding:0;transform:none;border-radius:50%;border-color:#38bdf877;background:#0b1724ee;font-size:13px;box-shadow:0 4px 10px #0009}
+#view-idle .idle-main-hero>button:hover{transform:scale(1.08);background:#0c4a6e}
+#view-idle .idle-main-hero>button span{position:absolute;overflow:hidden;width:1px;height:1px;clip:rect(0,0,0,0);white-space:nowrap}
+@media(max-width:700px){#view-idle .idle-main-hero{left:24%;transform:translate(-50%,-42%) scale(.78)}#view-idle .idle-main-hero>button{width:32px;height:32px;font-size:14px}}
 
 .idle-world-modifier{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:4px 8px;border:1px solid #ffffff30;border-radius:7px;background:#050910a8;color:#dbeafe;font-size:10px}.idle-world-modifier i{color:#fbbf24}.idle-world-modifier b{color:#fff}
 .idle-next-objective{display:flex;align-items:center;gap:10px;margin:10px 0 8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent-2) 32%,var(--border));border-radius:10px;background:linear-gradient(100deg,color-mix(in srgb,var(--accent-2) 10%,var(--bg-2)),var(--bg-2))}.idle-next-objective>i{color:var(--accent-2);font-size:18px}.idle-next-objective>span{display:flex;min-width:0;flex:1;flex-direction:column}.idle-next-objective b{font-size:11px}.idle-next-objective small{color:var(--text-2);font-size:9px}.idle-next-objective>strong{color:var(--text-2);font-size:10px}
@@ -7390,4 +7399,26 @@ body.idle-fullscreen .feedback-fab { display: none; }
    posée sur l'en-tête (.idle-character-sheet-head.r-*). */
 .modal-overlay[id^="idle-"] .idle-character-sheet-portrait {
   box-shadow: 0 0 0 3px var(--idle-gold-soft), 0 10px 20px -6px rgba(0,0,0,.7);
+}
+
+/* Alliés en scène : la ligne (left:5%) et la plaque de nom du héros
+   (centrée sur son avatar, ~21-24% de la scène) se chevauchaient — texte du
+   nom du héros et de sa classe partiellement recouvert par les icônes
+   d'alliés, vérifié via getBoundingClientRect() sur bureau ET mobile, pas
+   seulement à l'écran. Deux résolutions différentes car l'espace
+   disponible diffère radicalement entre les deux :
+   - Bureau (scène large) : la ligne d'alliés a la place de se décaler dans
+     la zone neutre entre le héros et le gardien, sans toucher ni l'un ni
+     l'autre.
+   - Mobile (scène étroite, ~354px) : héros et gardien occupent déjà
+     quasiment toute la largeur, aucune zone neutre n'existe. Alliés
+     réduits et remontés pour chevaucher le haut de l'avatar du héros
+     (superposition d'illustrations, acceptable) plutôt que sa plaque de
+     nom en dessous (superposition de texte, illisible). */
+@media(min-width:901px) {
+  #view-idle .idle-stage-team { left: 34%; }
+}
+@media(max-width:700px) {
+  #view-idle .idle-stage-team { bottom: 128px; gap: 6px; }
+  #view-idle .idle-stage-ally { width: 38px; height: 50px; }
 }
