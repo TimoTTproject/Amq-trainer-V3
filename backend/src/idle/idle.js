@@ -594,22 +594,56 @@ const ANCIENT_COST_GROWTH = 1.25;
 function ancientCost(level) {
   return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)), 1));
 }
+// Arbre de talents (Ancients) : 4 branches × 6 paliers, chaque palier N exige
+// le palier N-1 de LA MÊME branche acheté (`requires`, chaîne linéaire —
+// volontairement pas un graphe complexe, pour rester lisible d'un coup d'œil).
+// Les 8 clés historiques sont conservées telles quelles (mêmes `key`, mêmes
+// `kind`/`effectPerLevel`) : les niveaux déjà achetés par les joueurs restent
+// valables, seule leur position dans l'arbre change. `ancientBonus` continue
+// de sommer par `kind` sur TOUTE la liste, branche confondue — une branche
+// peut donc réutiliser un `kind` déjà présent ailleurs sans rien changer au
+// calcul (ex. clickMult apparaît 4 fois dans Offensive).
 const ANCIENTS = [
-  { key: 'discipline_eternelle', name: 'Discipline Éternelle', icon: 'fa-infinity', kind: 'prodMult', effectPerLevel: 0.02 },
-  { key: 'poigne_maitre', name: 'Poigne du Maître', icon: 'fa-hand-back-fist', kind: 'clickMult', effectPerLevel: 0.03 },
-  { key: 'bourse_profonde', name: 'Bourse Profonde', icon: 'fa-vault', kind: 'offlineCapMs', effectPerLevel: 20 * 60 * 1000 },
-  { key: 'oeil_recruteur', name: 'Œil du Recruteur', icon: 'fa-eye', kind: 'recruitLuck', effectPerLevel: 0.015 },
-  { key: 'marche_facile', name: 'Marché Facile', icon: 'fa-hand-holding-dollar', kind: 'recruitDiscount', effectPerLevel: 0.015 },
-  // « Game-changers » façon Clicker Heroes : ils changent la façon de jouer,
-  // pas seulement un pourcentage — c'est ce qui donne envie de re-prestiger.
-  // Frappe Fantôme : `effectPerLevel` frappes automatiques/s, converties en
-  // DPS via clickYield au moment du calcul (voir autoClickDps côté routes).
-  { key: 'frappe_fantome', name: 'Frappe Fantôme', icon: 'fa-hand-sparkles', kind: 'autoClickRate', effectPerLevel: 1 },
-  // Pas du Conquérant : chaque run après Prestige démarre 5 stages plus loin
-  // (borné au meilleur stage jamais atteint — jamais de contenu sauté).
-  { key: 'pas_conquerant', name: 'Pas du Conquérant', icon: 'fa-person-hiking', kind: 'startStage', effectPerLevel: 5 },
+  // ── Offensive : puissance de frappe (clic manuel + frappes automatiques).
+  { key: 'frappe_affutee', name: 'Frappe Affûtée', icon: 'fa-hand-fist', kind: 'clickMult', effectPerLevel: 0.02, branch: 'offensive', tier: 1, requires: null },
+  { key: 'poigne_maitre', name: 'Poigne du Maître', icon: 'fa-hand-back-fist', kind: 'clickMult', effectPerLevel: 0.03, branch: 'offensive', tier: 2, requires: 'frappe_affutee' },
+  { key: 'rythme_combat', name: 'Rythme de Combat', icon: 'fa-drum', kind: 'clickMult', effectPerLevel: 0.03, branch: 'offensive', tier: 3, requires: 'poigne_maitre' },
+  // « Game-changer » façon Clicker Heroes : change la façon de jouer, pas
+  // seulement un pourcentage. `effectPerLevel` = frappes automatiques/s,
+  // converties en DPS via clickYield au moment du calcul (autoClickDps).
+  { key: 'frappe_fantome', name: 'Frappe Fantôme', icon: 'fa-hand-sparkles', kind: 'autoClickRate', effectPerLevel: 1, branch: 'offensive', tier: 4, requires: 'rythme_combat' },
+  { key: 'tempete_coups', name: 'Tempête de Coups', icon: 'fa-wind', kind: 'autoClickRate', effectPerLevel: 1, branch: 'offensive', tier: 5, requires: 'frappe_fantome' },
+  { key: 'apex_predateur', name: 'Apex Prédateur', icon: 'fa-crown', kind: 'clickMult', effectPerLevel: 0.10, branch: 'offensive', tier: 6, requires: 'tempete_coups' },
+  // ── Résilience : continuité de la run (hors-ligne + reprise après Prestige).
+  { key: 'bourse_profonde', name: 'Bourse Profonde', icon: 'fa-vault', kind: 'offlineCapMs', effectPerLevel: 20 * 60 * 1000, branch: 'resilience', tier: 1, requires: null },
+  // Pas du Conquérant : chaque run après Prestige démarre plus loin (borné au
+  // meilleur stage jamais atteint — jamais de contenu sauté).
+  { key: 'pas_conquerant', name: 'Pas du Conquérant', icon: 'fa-person-hiking', kind: 'startStage', effectPerLevel: 5, branch: 'resilience', tier: 2, requires: 'bourse_profonde' },
+  { key: 'sommeil_profond', name: 'Sommeil Profond', icon: 'fa-moon', kind: 'offlineCapMs', effectPerLevel: 20 * 60 * 1000, branch: 'resilience', tier: 3, requires: 'pas_conquerant' },
+  { key: 'foulee_ancestrale', name: 'Foulée Ancestrale', icon: 'fa-shoe-prints', kind: 'startStage', effectPerLevel: 5, branch: 'resilience', tier: 4, requires: 'sommeil_profond' },
+  { key: 'sanctuaire', name: 'Sanctuaire', icon: 'fa-house-chimney', kind: 'offlineCapMs', effectPerLevel: 30 * 60 * 1000, branch: 'resilience', tier: 5, requires: 'foulee_ancestrale' },
+  { key: 'eternite', name: 'Éternité', icon: 'fa-hourglass', kind: 'offlineCapMs', effectPerLevel: 60 * 60 * 1000, branch: 'resilience', tier: 6, requires: 'sanctuaire' },
+  // ── Croissance : chance et coût de recrutement.
+  { key: 'oeil_recruteur', name: 'Œil du Recruteur', icon: 'fa-eye', kind: 'recruitLuck', effectPerLevel: 0.015, branch: 'croissance', tier: 1, requires: null },
+  { key: 'marche_facile', name: 'Marché Facile', icon: 'fa-hand-holding-dollar', kind: 'recruitDiscount', effectPerLevel: 0.015, branch: 'croissance', tier: 2, requires: 'oeil_recruteur' },
+  { key: 'instinct_chasseur', name: 'Instinct du Chasseur', icon: 'fa-crosshairs', kind: 'recruitLuck', effectPerLevel: 0.015, branch: 'croissance', tier: 3, requires: 'marche_facile' },
+  { key: 'negociateur', name: 'Négociateur', icon: 'fa-comments-dollar', kind: 'recruitDiscount', effectPerLevel: 0.015, branch: 'croissance', tier: 4, requires: 'instinct_chasseur' },
+  { key: 'flair_legendaire', name: 'Flair Légendaire', icon: 'fa-wand-magic-sparkles', kind: 'recruitLuck', effectPerLevel: 0.02, branch: 'croissance', tier: 5, requires: 'negociateur' },
+  { key: 'oracle', name: 'Oracle', icon: 'fa-hat-wizard', kind: 'recruitLuck', effectPerLevel: 0.03, branch: 'croissance', tier: 6, requires: 'flair_legendaire' },
+  // ── Économie : production passive et butin de boss.
+  { key: 'discipline_eternelle', name: 'Discipline Éternelle', icon: 'fa-infinity', kind: 'prodMult', effectPerLevel: 0.02, branch: 'economie', tier: 1, requires: null },
   // Fortune des Gardiens : +25% d'Essence sur les coffres de boss par niveau.
-  { key: 'fortune_gardiens', name: 'Fortune des Gardiens', icon: 'fa-coins', kind: 'bossRewardMult', effectPerLevel: 0.25 },
+  { key: 'fortune_gardiens', name: 'Fortune des Gardiens', icon: 'fa-coins', kind: 'bossRewardMult', effectPerLevel: 0.25, branch: 'economie', tier: 2, requires: 'discipline_eternelle' },
+  { key: 'flux_constant', name: 'Flux Constant', icon: 'fa-water', kind: 'prodMult', effectPerLevel: 0.02, branch: 'economie', tier: 3, requires: 'fortune_gardiens' },
+  { key: 'butin_genereux', name: 'Butin Généreux', icon: 'fa-gem', kind: 'bossRewardMult', effectPerLevel: 0.25, branch: 'economie', tier: 4, requires: 'flux_constant' },
+  { key: 'abondance', name: 'Abondance', icon: 'fa-seedling', kind: 'prodMult', effectPerLevel: 0.025, branch: 'economie', tier: 5, requires: 'butin_genereux' },
+  { key: 'corne_abondance', name: 'Corne d’Abondance', icon: 'fa-mound', kind: 'prodMult', effectPerLevel: 0.04, branch: 'economie', tier: 6, requires: 'abondance' },
+];
+const ANCIENT_BRANCHES = [
+  { key: 'offensive', name: 'Offensive', icon: 'fa-hand-fist', description: 'Puissance de clic et frappes automatiques.' },
+  { key: 'resilience', name: 'Résilience', icon: 'fa-shield-halved', description: 'Continuité de la run : hors-ligne et reprise après Prestige.' },
+  { key: 'croissance', name: 'Croissance', icon: 'fa-seedling', description: 'Chance et coût de recrutement.' },
+  { key: 'economie', name: 'Économie', icon: 'fa-coins', description: 'Production passive et butin de boss.' },
 ];
 function ancientByKey(key) {
   return ANCIENTS.find((a) => a.key === key) || null;
@@ -761,6 +795,7 @@ module.exports = {
   ANCIENT_COST_GROWTH,
   ancientCost,
   ANCIENTS,
+  ANCIENT_BRANCHES,
   ancientByKey,
   ancientBonus,
   ACHIEVEMENT_PROD_BONUS,

@@ -1155,6 +1155,34 @@ test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas 
   assert.equal(userDecrement, ancientCost(4));
 });
 
+test('ancient : un palier verrouillé refuse l’achat tant que le prérequis de branche n’est pas acheté',async()=>{
+  const node=ANCIENTS.find((a)=>a.requires);assert.ok(node,'attendu au moins un palier avec prérequis');
+  const user=dbUser({wisdomPoints:ancientCost(0)});prisma.user.findUnique=async()=>user;
+  prisma.ancientLevel.findUnique=async({where})=>where.userId_ancientKey.ancientKey===node.requires?null:{level:0};
+  const res=await app.request('/api/idle/ancient',{method:'POST',cookie:app.authCookie('u1'),body:{key:node.key}});
+  assert.equal(res.status,400);assert.match(res.json.error,/requis/i);
+});
+
+test('ancient : un palier verrouillé s’achète normalement une fois le prérequis possédé',async()=>{
+  const node=ANCIENTS.find((a)=>a.requires);
+  const user=dbUser({wisdomPoints:ancientCost(0)});prisma.user.findUnique=async()=>user;
+  prisma.ancientLevel.findUnique=async({where})=>where.userId_ancientKey.ancientKey===node.requires?{level:1}:null;
+  let upsertArgs=null;prisma.user.update=async()=>user;prisma.ancientLevel.upsert=async(args)=>{upsertArgs=args;return{};};
+  const res=await app.request('/api/idle/ancient',{method:'POST',cookie:app.authCookie('u1'),body:{key:node.key}});
+  assert.equal(res.status,200);assert.equal(upsertArgs.create.ancientKey,node.key);
+});
+
+test('GET /state : chaque palier verrouillé indique son prérequis, tier1 toujours débloqué',async()=>{
+  const user=dbUser({wisdomPoints:0});prisma.user.findUnique=async()=>user;
+  prisma.ancientLevel.findMany=async()=>[];
+  const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(res.status,200);
+  const tier1=res.json.ancients.items.filter((it)=>!it.requires);
+  assert.ok(tier1.length>0);tier1.forEach((it)=>assert.equal(it.unlocked,true));
+  const locked=res.json.ancients.items.filter((it)=>it.requires);
+  assert.ok(locked.length>0);locked.forEach((it)=>assert.equal(it.unlocked,false)); // rien acheté
+});
+
 test('claim-all : réclame en un appel tous les succès complétés et crédite les Sceaux une seule fois', async () => {
   // Stage 25 : complète « Chasseur de boss I » (cible 25) et « Voyageur des
   // mondes I » (cible 3 mondes découverts), sans toucher aux autres systèmes

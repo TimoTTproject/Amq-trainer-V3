@@ -1673,9 +1673,12 @@ const IDLE_ANCIENT_DESC = {
   startStage: (v) => `Chaque run démarre ${v} niveaux de combat plus loin / niveau`,
   bossRewardMult: (v) => `+${(v * 100).toFixed(0)}% d'Essence des coffres de boss / niveau`,
 };
-// Ancients : arbre de Prestige PERMANENT (jamais reset), payé en Sagesse —
-// pas en essence. Mêmes cartes visuelles que renderIdleUpgrades (idle-upgrade-card),
-// bouton distinct (data-ancient) pour router vers /api/idle/ancient.
+// Ancients : arbre de talents PERMANENT (jamais reset), payé en Sagesse — pas
+// en essence. 4 branches × 6 paliers (voir ANCIENT_BRANCHES/ANCIENTS côté
+// serveur, src/idle/idle.js) : chaque palier exige le précédent DE LA MÊME
+// BRANCHE acheté (`it.unlocked`, déjà résolu côté serveur) — une chaîne
+// linéaire par branche plutôt qu'un graphe, pour rester lisible d'un coup
+// d'œil. `data-ancient` reste le point de routage vers /api/idle/ancient.
 function renderIdleAncients(ancients) {
   const box = document.getElementById('idle-ancients');
   const points = document.getElementById('idle-wisdom-points');
@@ -1684,7 +1687,7 @@ function renderIdleAncients(ancients) {
   // De la Sagesse à dépenser : la section repliée se déplie toute seule (une
   // fois par session, pour ne pas lutter contre le joueur qui la referme),
   // un compteur s'affiche sur son titre et le bouton SAGESSE du HUD pulse.
-  const affordable = ancients.items.filter((it) => ancients.points >= it.cost).length;
+  const affordable = ancients.items.filter((it) => it.unlocked && ancients.points >= it.cost).length;
   const section = box.closest('.idle-collapsible');
   if (section && affordable && !idleAncientsAutoOpened) { section.classList.remove('collapsed'); idleAncientsAutoOpened = true; }
   const title = section?.querySelector('.idle-collapse-title > span');
@@ -1697,18 +1700,26 @@ function renderIdleAncients(ancients) {
     }
   }
   document.getElementById('idle-spend-wisdom')?.classList.toggle('idle-affordable', affordable > 0);
-  box.innerHTML = ancients.items.map((it) => {
-    const desc = (IDLE_ANCIENT_DESC[it.kind] || (() => ''))(it.effectPerLevel);
-    return `
-    <div class="idle-upgrade-card">
-      <div class="idle-upgrade-ico"><i class="fas ${it.icon}"></i></div>
-      <div class="idle-upgrade-info">
-        <h4>${escapeHtml(it.name)} <span class="idle-upgrade-lvl">Nv. ${it.level}</span></h4>
-        <p>${desc}</p>
-      </div>
-      <button class="btn-secondary idle-ancient-btn${ancients.points >= it.cost ? ' idle-affordable' : ''}" data-ancient="${it.key}"${ancients.points < it.cost ? ' disabled' : ''}>${idleFormatNumber(it.cost)} <i class="fas fa-brain"></i></button>
+  const byKey = new Map(ancients.items.map((it) => [it.key, it]));
+  box.innerHTML = `<div class="idle-talent-tree">${(ancients.branches || []).map((branch) => {
+    const nodes = ancients.items.filter((it) => it.branch === branch.key).sort((a, b) => a.tier - b.tier);
+    return `<div class="idle-talent-branch">
+      <header><i class="fas ${branch.icon}"></i><div><b>${escapeHtml(branch.name)}</b><small>${escapeHtml(branch.description)}</small></div></header>
+      <div class="idle-talent-column">${nodes.map((it, idx) => {
+        const desc = (IDLE_ANCIENT_DESC[it.kind] || (() => ''))(it.effectPerLevel);
+        const affordableNode = it.unlocked && ancients.points >= it.cost;
+        const prereqName = it.requires ? byKey.get(it.requires)?.name : null;
+        return `${idx > 0 ? `<div class="idle-talent-connector ${nodes[idx - 1].level > 0 ? 'active' : ''}"></div>` : ''}<div class="idle-talent-node${it.unlocked ? '' : ' locked'}${it.level > 0 ? ' owned' : ''}${it.tier === 6 ? ' capstone' : ''}">
+          <div class="idle-talent-node-ico"><i class="fas ${it.unlocked ? it.icon : 'fa-lock'}"></i>${it.level > 0 ? `<span class="idle-talent-node-lvl">${it.level}</span>` : ''}</div>
+          <div class="idle-talent-node-info">
+            <h4>${escapeHtml(it.name)}</h4>
+            <p>${it.unlocked ? desc : `Nécessite ${escapeHtml(prereqName || 'le talent précédent')}`}</p>
+          </div>
+          <button class="btn-secondary idle-ancient-btn${affordableNode ? ' idle-affordable' : ''}" data-ancient="${it.key}" ${(!it.unlocked || ancients.points < it.cost) ? 'disabled' : ''}>${idleFormatNumber(it.cost)} <i class="fas fa-brain"></i></button>
+        </div>`;
+      }).join('')}</div>
     </div>`;
-  }).join('');
+  }).join('')}</div>`;
 }
 
 function idleHeroMilestonesHTML(character, sheet = false) {
