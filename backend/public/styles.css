@@ -7014,7 +7014,8 @@ body.idle-fullscreen .feedback-fab { display: none; }
    stats) — un des décalages qui donnait un rendu générique/interne. */
 #view-idle .idle-page-head h2,
 #view-idle .idle-scene-head h2,
-#view-idle .idle-currency-item b,
+#view-idle .idle-dps-primary b,
+#view-idle .idle-spend-dock>button b,
 #view-idle .idle-main-hero-name b,
 #view-idle .idle-boss-name,
 #view-idle .profile-section h3,
@@ -7030,7 +7031,6 @@ body.idle-fullscreen .feedback-fab { display: none; }
    liseré interne façon bevel + une ombre plus profonde suffisent à faire
    lire un panneau comme un objet physique, sans toucher aux couleurs. */
 #view-idle .profile-section,
-#view-idle .idle-currency-item,
 #view-idle .idle-upgrade-card,
 #view-idle .idle-prestige-card,
 #view-idle .idle-achievement,
@@ -7043,23 +7043,26 @@ body.idle-fullscreen .feedback-fab { display: none; }
   box-shadow: inset 0 1px rgba(255,255,255,.07), 0 10px 26px rgba(0,0,0,.32);
 }
 
-/* En-tête de page (icône de section) : anneau or fin façon sceau, plutôt
-   qu'un simple rond de couleur — un seul repère précieux par écran. */
-#view-idle .idle-page-head>i {
+/* En-tête de page (icône de section) et médaillons de ressource (DPS,
+   Sagesse, Sceaux) : hexagone façon jeton/gemme au lieu d'un rond ou d'un
+   carré arrondi — un repère qui se remarque par sa silhouette, pas
+   seulement sa couleur. Un filter au lieu d'un box-shadow externe : le
+   clip-path découpe aussi les ombres classiques, drop-shadow épouse la
+   silhouette hexagonale. */
+#view-idle .idle-page-head>i,
+#view-idle .idle-dps-primary>i,
+#view-idle .idle-spend-dock>button>i {
   position: relative;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 -5px 9px rgba(0,0,0,.32), 0 4px 10px rgba(0,0,0,.35);
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  border-radius: 0; border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), inset 0 -6px 9px rgba(0,0,0,.32);
 }
-#view-idle .idle-page-head>i::after {
-  content: ''; position: absolute; inset: -3px; z-index: -1; border-radius: inherit;
-  background: conic-gradient(from 220deg, var(--idle-gold), transparent 30%, transparent 70%, var(--idle-gold));
-  opacity: .6;
+#view-idle .idle-page-head>i {
+  filter: drop-shadow(0 3px 7px rgba(0,0,0,.4)) drop-shadow(0 0 7px var(--idle-gold-soft));
 }
-
-/* Médaillons de monnaies : garde la couleur propre à chaque monnaie, mais
-   ajoute un biseau (inset) + un halo dans SA propre couleur pour lire comme
-   un jeton en relief plutôt qu'un pictogramme plat. */
-#view-idle .idle-currency-ico {
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), inset 0 -5px 8px rgba(0,0,0,.3), 0 0 14px color-mix(in srgb, currentColor 45%, transparent);
+#view-idle .idle-dps-primary>i,
+#view-idle .idle-spend-dock>button>i {
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)) drop-shadow(0 0 8px color-mix(in srgb, currentColor 45%, transparent));
 }
 
 /* Boutons Idle : ajoute un reflet diagonal (façon verre/laque) + une ombre
@@ -7215,3 +7218,89 @@ body.idle-fullscreen .feedback-fab { display: none; }
   }
   #view-idle .idle-tab.active::after { display: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   PASSE « FORMES + HIÉRARCHIE » 2026-07 (suite du polish) — retour : trop
+   de rectangles à coins ronds identiques, texte pas assez hiérarchisé.
+   Deux axes, toujours en CSS seul sous #view-idle :
+   1. Un vocabulaire de formes : coins chanfreinés sur les actions/plaques
+      de nom (au lieu du rectangle arrondi générique), hexagones sur les
+      médaillons d'icône (cf. règle idle-page-head/idle-dps-primary/
+      idle-spend-dock plus haut), pastilles réellement rondes sur la piste
+      de vague.
+   2. Une échelle typographique plus marquée : la valeur qui compte (nombre,
+      nom de monde, nom de héros) doit sauter aux yeux à côté de son
+      libellé, pas juste être "un peu plus grande".
+   ══════════════════════════════════════════════════════════════════════ */
+
+#view-idle { --chamfer: 10px; --chamfer-sm: 5px; }
+
+/* Coins chanfreinés : boutons d'action, bannière de coffre, plaques de nom.
+   clip-path retire aussi les coins des ombres/bordures — les éléments qui
+   en avaient besoin passent en drop-shadow (cf. règles dédiées plus bas). */
+#view-idle .btn-primary,
+#view-idle .idle-click-btn,
+#view-idle .idle-skill,
+#view-idle .idle-nav-summon,
+#view-idle .idle-boss-chest,
+#view-idle .idle-main-hero-name,
+#view-idle .idle-boss-name {
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+  border-radius: 0 !important;
+}
+/* .idle-chip / .idle-guide-btn / .idle-milestone-btn restent des pilules
+   pleinement arrondies (aucune règle nécessaire, cf. leurs styles propres
+   plus haut) : chanfrein = action/plaque, pilule = tag — deux familles de
+   formes distinctes plutôt qu'un chanfrein appliqué à tout.
+
+   Piste de vague : pastilles réellement rondes (au lieu de rectangles à
+   coins à peine arrondis) — dégradés déjà posés par le premier passage de
+   polish, on ne touche ici qu'à la silhouette. */
+#view-idle .idle-wave-track { gap: 6px; }
+#view-idle .idle-wave-track>span { border-radius: 999px; }
+#view-idle .idle-wave-track .idle-wave-boss { border-radius: 999px; }
+
+/* Hiérarchie typographique : la valeur d'une ressource (DPS, Sagesse,
+   Sceaux) doit dominer son libellé, pas juste être "un peu plus grande" —
+   écart de taille/poids net, chiffres tabulaires pour que la valeur ne
+   "danse" pas quand elle change. Ne touche qu'à la typo : la disposition
+   icône+colonne de texte existante reste inchangée. */
+#view-idle .idle-dps-primary b {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-size: 1.7rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: .01em;
+}
+#view-idle .idle-spend-dock>button b {
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-size: 1.35rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+#view-idle .idle-spend-title small,
+#view-idle .idle-spend-dock>button small {
+  font-size: .62rem; letter-spacing: .09em; opacity: .82;
+}
+
+/* Titre de scène (nom du monde) : nettement plus affirmé que le bandeau
+   "ACTE 1 · NORMAL · ..." au-dessus, qui redescend d'un cran en poids et en
+   opacité pour bien lire comme un sous-titre, pas une deuxième ligne de
+   titre du même poids visuel. */
+#view-idle .idle-scene-head h2 { font-size: 1.85rem; letter-spacing: 0; }
+#view-idle .idle-battle-kicker { opacity: .78; font-weight: 700; }
+@media(max-width:700px) {
+  /* Sur écran étroit, 1.85rem tronquait le nom du monde plus tôt qu'avant
+     cette passe — on garde un gain de hiérarchie net sans sacrifier autant
+     de texte visible. */
+  #view-idle .idle-scene-head h2 { font-size: 1.5rem; }
+}
+
+/* Chips secondaires (niveau, multiplicateur) : en retrait derrière le tag
+   de danger/zone qui doit rester le seul repère "chaud" de la rangée. */
+#view-idle .idle-scene-chips>.idle-chip:not(.idle-chip-danger):not(.idle-chip-gold) {
+  opacity: .72; font-weight: 600; background: rgba(0,0,0,.4);
+}
+
+/* Nom du héros/monde de page : même logique, libellé nettement en retrait. */
+#view-idle .idle-main-hero-name small,
+#view-idle .idle-page-head small { opacity: .75; }
+#view-idle .idle-main-hero-name b { font-size: .92rem; }
+#view-idle .idle-page-head h2 { font-size: 22px; }
