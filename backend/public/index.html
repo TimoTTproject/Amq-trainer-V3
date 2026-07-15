@@ -1896,6 +1896,18 @@
     <div id="idle-settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-settings-title"><div class="modal-card idle-settings-card"><button class="modal-close" id="idle-settings-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-settings-title"><i class="fas fa-sliders"></i> Confort de jeu</h3><label class="idle-setting-row" for="idle-volume"><span><b>Volume de l’Idle</b><small>Impacts, victoires et récompenses</small></span><input id="idle-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label class="idle-setting-toggle" for="idle-effects-reduced"><span><b>Animations et effets visuels</b><small>Affiche les impacts, mouvements, particules et célébrations</small></span><input id="idle-effects-reduced" type="checkbox" checked></label></div></div>
     <div id="idle-character-sheet" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-character-sheet-title"><div class="modal-card wide idle-character-sheet-card"><button class="modal-close" id="idle-character-sheet-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-character-sheet-body"></div></div></div>
     <div id="idle-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-collection-title"><div class="modal-card wide idle-collection-card"><button class="modal-close" id="idle-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-collection-title"><i class="fas fa-book-open"></i> Collection</h3><p class="hint" id="idle-collection-hint"></p><div class="idle-collection-grid" id="idle-collection-grid"></div></div></div>
+    <!-- Choix de relique de Faille : offert tous les 5 paliers franchis dans la
+         semaine, jamais bloquant (le joueur peut fermer et revenir plus tard
+         via le badge sur la carte de la Faille). -->
+    <div id="idle-relic-choice" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-relic-choice-title">
+      <div class="modal-card idle-relic-choice-card">
+        <button class="modal-close" id="idle-relic-choice-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+        <small class="idle-prestige-kicker">FAILLE DIMENSIONNELLE</small>
+        <h3 id="idle-relic-choice-title"><i class="fas fa-gift"></i> Choisis une relique</h3>
+        <p class="hint">Son effet reste actif pour le reste de la semaine, en plus de celles déjà choisies.</p>
+        <div class="idle-relic-choice-options" id="idle-relic-choice-options"></div>
+      </div>
+    </div>
 
     <!-- Bilan de Prestige : remplace le confirm() navigateur — le joueur doit
          voir EXACTEMENT ce qui repart à zéro et ce qui est conservé (retour

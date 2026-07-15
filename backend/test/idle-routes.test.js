@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -57,6 +57,7 @@ test.beforeEach(() => {
   prisma.idleProgressCounter.findMany = async () => [];
   prisma.idleProgressCounter.upsert = async () => ({});
   prisma.idleItem.findMany = async () => [];
+  prisma.idleRiftRun.findUnique = async () => null;
   idleRoutes.decorArtCache.clear();
 });
 
@@ -114,6 +115,36 @@ test('faille hebdomadaire : record, difficulté et récompense dépendent de la 
   const counters=new Map([['rift_floor:2026-07-13',3]]);const rift=weeklyRift(counters,1e9,20,20,{week:'2026-07-13'});
   assert.equal(rift.unlocked,true);assert.equal(rift.bestFloor,3);assert.ok(rift.projectedFloor>3);assert.ok(rift.reward.essence>0);
   assert.equal(weeklyRift(counters,1e9,20,19,{week:'2026-07-13'}).unlocked,false);
+});
+
+test('faille hebdomadaire : les reliques modifient le palier projeté et la récompense',()=>{
+  const counters=new Map([['rift_floor:2026-07-13',3]]);
+  const base=weeklyRift(counters,1000,20,20,{week:'2026-07-13'});
+  const buffed=weeklyRift(counters,1000,20,20,{week:'2026-07-13'},['rage_abyssale']);
+  assert.ok(buffed.projectedFloor>=base.projectedFloor); // +35% DPS : jamais moins de paliers
+  assert.ok(buffed.reward.essence<=base.reward.essence*1.01||buffed.projectedFloor>base.projectedFloor); // -20% Essence à palier égal
+  assert.equal(buffed.relics.length,1);assert.equal(buffed.relics[0].key,'rage_abyssale');
+  assert.equal(weeklyRift(counters,1000,20,20,{week:'2026-07-13'},['inexistant']).relics.length,0); // clé invalide ignorée
+});
+
+test('reliques de Faille : modificateurs cumulatifs, Écho Temporel monte en puissance avec le nombre de reliques',()=>{
+  const solo=riftRelicModifiers(['souffle_continu']);
+  assert.ok(Math.abs(solo.dpsMult-1.15)<1e-9);assert.ok(Math.abs(solo.rewardMult-1.15)<1e-9);
+  const stacked=riftRelicModifiers(['lame_aiguisee','coffre_beni']);
+  assert.ok(Math.abs(stacked.dpsMult-1.25*.90)<1e-9);assert.ok(Math.abs(stacked.rewardMult-.90*1.50)<1e-9);
+  const echoAlone=riftRelicModifiers(['echo_temporel']);const echoWithTwo=riftRelicModifiers(['echo_temporel','focalisation','instinct_econome']);
+  assert.ok(echoWithTwo.dpsMult>echoAlone.dpsMult); // le bonus scale avec le nombre total de reliques
+  assert.deepEqual(riftRelicModifiers([]),{dpsMult:1,rewardMult:1,resistanceMult:1});
+});
+
+test('reliques de Faille : le tirage ne propose jamais une relique déjà possédée, respecte le nombre demandé',()=>{
+  const owned=Object.keys(RIFT_RELICS).slice(0,3);
+  const offered=rollRiftRelics(owned,3);
+  assert.equal(offered.length,3);
+  assert.equal(offered.filter((k)=>owned.includes(k)).length,0);
+  assert.equal(new Set(offered).size,3); // pas de doublon dans le tirage lui-même
+  const allButOne=Object.keys(RIFT_RELICS).slice(0,Object.keys(RIFT_RELICS).length-1);
+  assert.equal(rollRiftRelics(allButOne,3).length,1); // ne peut pas inventer une relique si le pool est presque épuisé
 });
 
 test('inventaire : la rareté détermine le nombre d’affixes tirés, sans doublon',()=>{
@@ -1181,6 +1212,24 @@ test('GET /state : chaque palier verrouillé indique son prérequis, tier1 toujo
   assert.ok(tier1.length>0);tier1.forEach((it)=>assert.equal(it.unlocked,true));
   const locked=res.json.ancients.items.filter((it)=>it.requires);
   assert.ok(locked.length>0);locked.forEach((it)=>assert.equal(it.unlocked,false)); // rien acheté
+});
+
+test('rift/relic : refuse une relique qui n’est pas proposée, accepte celle qui l’est et vide l’offre',async()=>{
+  const user=dbUser();prisma.user.findUnique=async()=>user;
+  const relicKey=Object.keys(RIFT_RELICS)[0];const otherKey=Object.keys(RIFT_RELICS)[1];
+  prisma.idleRiftRun.findUnique=async()=>({relics:[],pendingChoice:[relicKey,otherKey]});
+  const rejected=await app.request('/api/idle/rift/relic',{method:'POST',cookie:app.authCookie('u1'),body:{key:Object.keys(RIFT_RELICS)[5]}});
+  assert.equal(rejected.status,400);assert.match(rejected.json.error,/pas proposée/);
+  let upsertArgs=null;prisma.idleRiftRun.upsert=async(args)=>{upsertArgs=args;return{};};
+  const accepted=await app.request('/api/idle/rift/relic',{method:'POST',cookie:app.authCookie('u1'),body:{key:relicKey}});
+  assert.equal(accepted.status,200);
+  assert.deepEqual(upsertArgs.update.relics,[relicKey]);
+  assert.deepEqual(upsertArgs.update.pendingChoice,[]);
+});
+
+test('rift/relic : refuse une clé de relique inconnue',async()=>{
+  const res=await app.request('/api/idle/rift/relic',{method:'POST',cookie:app.authCookie('u1'),body:{key:'inexistant'}});
+  assert.equal(res.status,400);assert.match(res.json.error,/invalide/);
 });
 
 test('claim-all : réclame en un appel tous les succès complétés et crédite les Sceaux une seule fois', async () => {
