@@ -6641,6 +6641,8 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-team-page-head{display:grid;grid-template-columns:42px minmax(0,1fr) auto;padding-bottom:12px;border-bottom:1px solid #2a303b}
 #view-idle .idle-team-page-head p{margin:4px 0 0;color:var(--text-2);font-size:11px}
 #view-idle .idle-team-page-head>button{align-self:center;padding-inline:18px}
+#view-idle .idle-team-page-actions{display:flex;align-items:center;gap:8px}
+#view-idle .idle-team-page-actions>button{padding-inline:18px}
 #view-idle .idle-team-primary{margin:12px 0 8px;padding:16px;border:1px solid #e11d4855;border-radius:14px;background:#0f1218;box-shadow:0 12px 30px #0004}
 #view-idle .idle-team-primary>header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:12px}
 #view-idle .idle-team-primary>header small,#view-idle .idle-team-secondary>header small{color:#fb7185;font-size:9px;font-weight:900;letter-spacing:.12em}
@@ -6655,7 +6657,7 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-team-secondary{margin:18px 0 8px;padding-top:2px}
 #view-idle .idle-team-secondary>header{margin-bottom:7px}
 #view-idle .idle-summon-entry-secondary{margin-top:14px}
-@media(max-width:760px){#view-idle .idle-team-page-head{grid-template-columns:38px 1fr}#view-idle .idle-team-page-head>button{grid-column:1/-1;width:100%;justify-content:center}#view-idle .idle-team-primary{padding:11px}#view-idle .idle-team-primary>header{align-items:stretch;flex-direction:column}#view-idle .idle-team-primary-stats{display:grid;grid-template-columns:repeat(3,1fr)}#view-idle .idle-team-primary-stats>span{min-width:0;padding:7px}#view-idle .idle-team-primary-stats b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}}
+@media(max-width:760px){#view-idle .idle-team-page-head{grid-template-columns:38px 1fr}#view-idle .idle-team-page-head>button,#view-idle .idle-team-page-actions{grid-column:1/-1;width:100%}#view-idle .idle-team-page-actions{flex-direction:column}#view-idle .idle-team-page-actions>button{width:100%;justify-content:center}#view-idle .idle-team-primary{padding:11px}#view-idle .idle-team-primary>header{align-items:stretch;flex-direction:column}#view-idle .idle-team-primary-stats{display:grid;grid-template-columns:repeat(3,1fr)}#view-idle .idle-team-primary-stats>span{min-width:0;padding:7px}#view-idle .idle-team-primary-stats b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}}
 
 /* Hiérarchie sans boîtes imbriquées : les séparateurs structurent la page. */
 #view-idle .idle-team-primary{padding:12px 0 16px;border:0;border-bottom:1px solid #2a303b;border-radius:0;background:transparent;box-shadow:none}

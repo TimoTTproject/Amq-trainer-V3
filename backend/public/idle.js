@@ -956,10 +956,15 @@ function renderIdleMainHero(state) {
   const titleChoice = state.heroStyle?.choices?.titles?.find((x)=>x.selected);
   const canRestore=!leader&&Number(state.collection?.recruits||0)>0;
   if (power) power.innerHTML = leader?`<i class="fas ${state.heroClass?.icon || 'fa-shield-halved'}"></i> ${escapeHtml(titleChoice?.name || 'Novice d’Ascension')} · ${escapeHtml(state.heroClass?.name || 'Guerrier')} · ${idleFormatNumber(state.click.damage ?? state.click.yield)} puissance${state.heroClass?.passiveStatus?`<strong class="idle-class-passive-status ${state.heroClass.passiveActive?'active':''}">${escapeHtml(state.heroClass.passiveStatus)}</strong>`:''}`:canRestore?'Tes héros sont encore recrutés · restaure ta formation':'Ouvre l’onglet Équipe pour commencer';
-  const action=document.getElementById('idle-customize-hero');if(action){action.title=leader?'Personnaliser mon personnage principal':canRestore?'Restaurer automatiquement mon équipe':'Choisir un héros';action.innerHTML=leader?'<i class="fas fa-palette"></i><span>Personnaliser</span>':canRestore?'<i class="fas fa-users-gear"></i><span>Restaurer l’équipe</span>':'<i class="fas fa-user-plus"></i><span>Choisir un héros</span>';}
+  // Une fois un chef actif, le bouton de personnalisation disparaît de la
+  // scène : posé sur le héros au centre du combat, il se faisait déclencher
+  // par erreur en tapant pour attaquer les mobs/orbes (retour testeur).
+  // L'accès reste dans l'onglet Équipe (#idle-open-hero-style) ; ici, le
+  // bouton ne sert plus qu'aux deux états d'onboarding (pas encore de chef).
+  const action=document.getElementById('idle-customize-hero');if(action){action.classList.toggle('hidden',!!leader);action.title=canRestore?'Restaurer automatiquement mon équipe':'Choisir un héros';action.innerHTML=canRestore?'<i class="fas fa-users-gear"></i><span>Restaurer l’équipe</span>':'<i class="fas fa-user-plus"></i><span>Choisir un héros</span>';}
 }
 
-function openIdleMainHeroAction(){if(!document.getElementById('idle-main-hero')?.classList.contains('no-team'))return openIdleClassPicker();if(Number(idleState?.collection?.recruits||0)>0)return optimizeIdleTeam();idleShowPanel('team');}
+function openIdleMainHeroAction(){if(!document.getElementById('idle-main-hero')?.classList.contains('no-team'))return;if(Number(idleState?.collection?.recruits||0)>0)return optimizeIdleTeam();idleShowPanel('team');}
 
 // Temps restant avant le prochain niveau de Dojo, formaté (« · 1m 30s ») ou
 // chaîne vide si rien ne produit (aucun coéquipier assigné) — pas de fausse
@@ -1770,7 +1775,7 @@ function idleSlotHTML(slot) {
   const role=idleRoleFor(c);
   const isLeader=idleState?.strategy?.leaderCharacterId===c.id;
   const img = c.imageUrl ? ` style="background-image:url('${c.imageUrl}')"` : '';
-  const equipment=c.equipments.map((e)=>{const meta=IDLE_ITEM_META[e.kind]||IDLE_ITEM_META.accessory;return e.empty?`<span class="empty" title="${meta.label} non équipé"><i class="fas ${meta.icon}"></i><div><small>${meta.label}</small><b>Vide</b></div></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-slot="${slot.index}" data-kind="${e.kind}" title="Améliorer ${meta.label.toLowerCase()} · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b>+${Math.round(e.bonus*100)}%</b><em>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</em></span></button>`;}).join('');
+  const equipment=c.equipments.map((e)=>{const meta=IDLE_ITEM_META[e.kind]||IDLE_ITEM_META.accessory;return e.empty?`<span class="empty" title="${meta.label} non équipé"><i class="fas ${meta.icon}"></i><div><small>${meta.label}</small><b>Vide</b></div></span>`:`<button class="r-${e.rarity}" data-action="enhance-equipment" data-item-enhance-id="${e.id}" title="Améliorer ${meta.label.toLowerCase()} · coût ${idleFormatNumber(e.enhanceCost)}"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b>+${Math.round(e.bonus*100)}%</b><em>Niv. ${e.powerLevel} · ${idleFormatNumber(e.enhanceCost)}</em></span></button>`;}).join('');
   // data-action="pick" sur le conteneur : cliquer la carte propose de la
   // remplacer (un seul geste, au lieu de retirer puis réassigner). Les
   // boutons ×/niveau matchent leur propre data-action en premier dans la
@@ -2004,7 +2009,7 @@ async function ascendIdleSlot(slotIndex) {
   catch (e) { alert(e.message); }
 }
 async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});const o=state.optimization||{};const improved=Number(o.gainPercent||0)>0;idleSpawnFloat(improved?`COMPOSITION · +${o.gainPercent}% DPS`:'COMPOSITION DÉJÀ OPTIMALE','crit');idleAddCombatLog(improved?`${o.changed} remplacement${o.changed>1?'s':''} · ${idleFormatNumber(o.beforeRate)} → ${idleFormatNumber(o.afterRate)} DPS`:'Tes meilleurs héros sont déjà bien placés','fa-users-gear');idleNotify(improved?`Équipe optimisée gratuitement : +${o.gainPercent}% DPS`:'Ta composition est déjà optimale','success');if(typeof sfx!=='undefined'&&sfx.idleUpgrade)sfx.idleUpgrade();renderIdleState(state);}catch(e){idleNotify(e.message,'error');}finally{if(btn)btn.disabled=false;}}
-async function enhanceIdleEquipment(slotIndex,kind){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({slotIndex,kind})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
+async function enhanceIdleEquipment(itemId){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({itemId})});idleSpawnFloat('ÉQUIPEMENT +1%','xp');renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 
 async function buyIdleUpgrade(type, cardEl, amount = 1) {
   let result;
@@ -2321,7 +2326,7 @@ function initIdleUI() {
   document.getElementById('idle-loadouts')?.addEventListener('click',(e)=>{const item=e.target.closest('[data-loadout-item]');if(item)focusIdleInventoryItem(item.dataset.loadoutItem);});
   document.getElementById('idle-salvage-selected')?.addEventListener('click',()=>salvageIdleItems([...idleSelectedItems]));
   document.getElementById('idle-inventory-grid')?.addEventListener('change',(e)=>{const select=e.target.closest('[data-item-target]');if(!select)return;const card=select.closest('[data-item-id]');const item=idleState?.inventory?.items?.find((x)=>x.id===card?.dataset.itemId);const comparison=card?.querySelector('[data-item-comparison]');if(item&&comparison)comparison.innerHTML=idleItemComparison(item,Number(select.value));});
-  document.getElementById('idle-inventory-grid')?.addEventListener('click',(e)=>{const card=e.target.closest('[data-item-id]');if(!card)return;const itemId=card.dataset.itemId;const item=idleState.inventory.items.find((x)=>x.id===itemId);const lock=e.target.closest('[data-item-lock]');if(lock)return lockIdleItem(itemId,!item.locked);if(e.target.closest('[data-item-select]'))return toggleIdleItemSelection(itemId);if(e.target.closest('[data-item-enhance]'))return enhanceIdleEquipment(item.equippedSlotIndex,item.kind);if(e.target.closest('[data-item-equip]'))return equipIdleItem(itemId,Number(card.querySelector('[data-item-target]')?.value));if(e.target.closest('[data-item-unequip]'))return unequipIdleItem(itemId);if(e.target.closest('[data-item-salvage]'))return salvageIdleItem(itemId);});
+  document.getElementById('idle-inventory-grid')?.addEventListener('click',(e)=>{const card=e.target.closest('[data-item-id]');if(!card)return;const itemId=card.dataset.itemId;const item=idleState.inventory.items.find((x)=>x.id===itemId);const lock=e.target.closest('[data-item-lock]');if(lock)return lockIdleItem(itemId,!item.locked);if(e.target.closest('[data-item-select]'))return toggleIdleItemSelection(itemId);if(e.target.closest('[data-item-enhance]'))return enhanceIdleEquipment(itemId);if(e.target.closest('[data-item-equip]'))return equipIdleItem(itemId,Number(card.querySelector('[data-item-target]')?.value));if(e.target.closest('[data-item-unequip]'))return unequipIdleItem(itemId);if(e.target.closest('[data-item-salvage]'))return salvageIdleItem(itemId);});
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('pointerdown', clickIdle);
@@ -2345,6 +2350,7 @@ function initIdleUI() {
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
   document.getElementById('idle-open-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
+  document.getElementById('idle-open-hero-style')?.addEventListener('click',openIdleClassPicker);
   document.querySelectorAll('[data-open-idle-summon]').forEach((button)=>button.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden')));
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
@@ -2383,7 +2389,7 @@ function initIdleUI() {
     if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-hero'), levelBtn.dataset.amount==='max'?'max':Number(levelBtn.dataset.amount || 1));
     const ascendBtn = e.target.closest('[data-action="ascend"]');
     if (ascendBtn) return ascendIdleSlot(Number(ascendBtn.dataset.slot));
-    const equipmentBtn=e.target.closest('[data-action="enhance-equipment"]');if(equipmentBtn)return enhanceIdleEquipment(Number(equipmentBtn.dataset.slot),equipmentBtn.dataset.kind);
+    const equipmentBtn=e.target.closest('[data-action="enhance-equipment"]');if(equipmentBtn)return enhanceIdleEquipment(equipmentBtn.dataset.itemEnhanceId);
     const unlockBtn = e.target.closest('.idle-unlock-btn');
     if (unlockBtn) return buyIdleUpgrade('slot', unlockBtn.closest('.idle-hero'));
     const pickBtn = e.target.closest('[data-action="pick"]');
