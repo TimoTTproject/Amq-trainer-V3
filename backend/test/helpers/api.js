@@ -83,7 +83,10 @@ async function createApp(mount) {
   app.use(attachUser);
   mount(app);
   // Même contrat qu'en prod : JSON générique, jamais de stack au client.
+  // DEBUG_TEST_ERRORS=1 imprime la stack — indispensable pour diagnostiquer
+  // un 500 inattendu dans un test de route (sinon avalé en silence).
   app.use((err, req, res, next) => {
+    if (process.env.DEBUG_TEST_ERRORS) console.error('[test 500]', req.method, req.originalUrl, '\n', err && (err.stack || err));
     if (res.headersSent) return;
     res.status(500).json({ error: 'Erreur serveur. Réessaie dans un instant.' });
   });

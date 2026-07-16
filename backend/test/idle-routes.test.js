@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,SQUAD_SLOT_DEFS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,SQUAD_SLOT_DEFS }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -111,6 +111,29 @@ test.beforeEach(() => {
   prisma.idleItem.findMany = async () => [];
   prisma.idleRiftRun.findUnique = async () => null;
   idleRoutes.decorArtCache.clear();
+  idleRoutes.invalidateStarterPool();
+});
+
+test('GET /state : reste fonctionnel avec un héros assigné ET des objets en inventaire (régression TDZ)', async () => {
+  // Régression : la fiche héros référençait `stage` avant sa déclaration —
+  // /state tombait en 500 pour TOUT joueur avec un héros assigné, mais les
+  // tests n'utilisaient que des comptes aux emplacements vides.
+  prisma.user.findUnique = async () => dbUser({ idleBestStage: 42, idleStage: 40 });
+  prisma.user.update = async () => dbUser();
+  const character = { id: 7, name: 'Rem', series: 'Re:Zero', rarity: 'epic' };
+  prisma.idleSlot.findMany = async () => [{ id: 1, userId: 'u1', slotIndex: 0, characterId: 7, level: 12, ascension: 0, character }];
+  prisma.idleItem.findMany = async ({ where }) => {
+    const equipped = { id: 'eq-1', kind: 'rune1', rarity: 'epic', bonus: .06, effectKey: 'assault', effectValue: .02, equippedCharacterId: 7, setKey: 'energy', enhancementLevel: 2, affixes: [], subStats: {} };
+    const bag = { id: 'bag-1', kind: 'rune2', rarity: 'rare', bonus: .03, effectKey: 'echo', effectValue: .01, equippedCharacterId: null, setKey: 'blade', enhancementLevel: 0, affixes: [], subStats: {} };
+    return where?.equippedCharacterId?.in ? [equipped] : [equipped, bag];
+  };
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  const hero = res.json.slots.find((slot) => slot.character?.id === 7)?.character;
+  assert.ok(hero, 'le héros assigné doit être présent dans l’état');
+  assert.ok(hero.equipments.some((e) => e.id === 'eq-1' && e.enhanceCost > 0));
+  const bagItem = res.json.inventory.items.find((item) => item.id === 'bag-1');
+  assert.ok(bagItem.salvageValue > 0 && bagItem.enhanceCost > 0 && bagItem.rerollCost > 0);
 });
 
 test('difficulté longue durée : missions tournantes et hebdomadaires renforcées', () => {
@@ -264,13 +287,29 @@ test('inventaire : chaque set possède un effet réel différent et respecte son
   assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'rage'},{kind:'rune2',setKey:'rage'},{kind:'rune3',setKey:'rage'}]),1);
 });
 
-test('équipement automatique : privilégie le rôle et une panoplie réellement plus forte sans dégrader le build',()=>{
-  const character={id:1,name:'Sakura',series:'Naruto',rarity:'epic'};const slot={id:10,slotIndex:0,characterId:1,character};
-  const item=(id,kind,bonus,sourceWorld='Konoha',effectKey='assault',effectValue=0,equippedCharacterId=null)=>({id,kind,bonus,sourceWorld,effectKey,effectValue,rarity:'epic',equippedCharacterId});
-  const set=[{...item('w-set','rune1',.10),setKey:'energy'},{...item('r-set','rune2',.10),setKey:'energy'},{...item('a-set','rune3',.10),setKey:'blade'},{...item('w-off','rune1',.105,'Namek'),setKey:'hunter'}];
-  const plan=buildAutoEquipmentPlan([slot],set);assert.deepEqual(new Set(plan.assignments.map((x)=>x.itemId)),new Set(['w-set','r-set','a-set']));assert.ok(plan.afterScore>0);
-  const current=set.slice(0,3).map((x)=>({...x,equippedCharacterId:1}));const stable=buildAutoEquipmentPlan([slot],[...current,{...item('weak','rune4',.01,'Namek'),setKey:'blade'}]);assert.ok(stable.afterScore>=stable.beforeScore);assert.ok(stable.assignments.some((x)=>x.itemId==='weak'));
-  assert.ok(equipmentItemScore(item('team','rune2',.10,'Konoha','resonance',.05),'support')>equipmentItemScore(item('plain','rune2',.13,'Konoha','assault',0),'support'));
+test('équipement automatique : comble uniquement les emplacements vides, sans jamais déséquiper',async()=>{
+  // Nerf volontaire : l'auto-équipement ne construit plus le meilleur build
+  // (sets/rôles ignorés) — il place le meilleur objet LIBRE (rareté puis
+  // bonus) dans chaque emplacement de rune vide d'un héros actif.
+  const user=dbUser();
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async()=>user;
+  const character={id:1,name:'Sakura',series:'Naruto',rarity:'epic'};
+  prisma.idleSlot.findMany=async()=>[{id:10,userId:'u1',slotIndex:0,characterId:1,level:1,ascension:0,character}];
+  const worn={id:'worn',kind:'rune1',rarity:'rare',bonus:.02,effectKey:'assault',effectValue:.01,equippedCharacterId:1,setKey:'energy'};
+  const freeWeak={id:'free-weak',kind:'rune2',rarity:'rare',bonus:.03,effectKey:'assault',effectValue:.01,equippedCharacterId:null,setKey:'energy'};
+  const freeStrong={id:'free-strong',kind:'rune2',rarity:'mythic',bonus:.02,effectKey:'assault',effectValue:.01,equippedCharacterId:null,setKey:'blade'};
+  prisma.idleItem.findMany=async({where})=>where?.equippedCharacterId?.in?[worn]:[worn,freeWeak,freeStrong];
+  const updates=[];
+  prisma.idleItem.update=async(args)=>{updates.push(args);return{};};
+  const res=await app.request('/api/idle/equipment/auto-equip',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(res.status,200);
+  // rune1 déjà porté : jamais retiré ; rune2 vide : le mythique gagne (rareté
+  // avant bonus brut) ; un seul objet équipé au total.
+  assert.equal(updates.length,1);
+  assert.equal(updates[0].where.id,'free-strong');
+  assert.equal(updates[0].data.equippedCharacterId,1);
+  assert.equal(res.json.optimization.equipped,1);
 });
 
 test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{

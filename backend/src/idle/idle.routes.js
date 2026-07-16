@@ -561,43 +561,11 @@ function enhancedRuneSubStats(item,nextLevel){
   return stats;
 }
 
-const EQUIPMENT_ROLE_WEIGHTS={
-  attaquant:{dps:1.15,burst:1.55,team:.8,click:1,boss:1.05,salvage:.1},
-  assassin:{dps:1.05,burst:1.05,team:.75,click:1.6,boss:1.45,salvage:.1},
-  support:{dps:1,burst:.85,team:1.65,click:.7,boss:.9,salvage:.2},
-  tank:{dps:1,burst:.8,team:1.05,click:.75,boss:1.55,salvage:.15},
-  producteur:{dps:1.35,burst:.7,team:.8,click:.65,boss:.75,salvage:1.5},
-};
-function equipmentItemScore(item,role='attaquant'){
-  if(!item)return 0;const weights=EQUIPMENT_ROLE_WEIGHTS[role]||EQUIPMENT_ROLE_WEIGHTS.attaquant;
-  // Le bonus de base sert toujours au DPS du porteur. Chaque affixe (primaire
-  // + secondaires) est pondéré selon son rôle afin que l'auto-équipement
-  // construise de vrais profils RPG au lieu de distribuer uniquement par
-  // couleur de rareté ou nombre d'affixes.
-  const affixScore=itemAffixList(item).reduce((sum,a)=>{
-    const mode=ITEM_EFFECTS[a.effectKey]?.mode||'dps';const weight=weights[mode]||1;
-    return sum+(mode==='dps'?Number(a.effectValue||0):Number(a.effectValue||0)*.65*weight);
-  },0);
-  return Number(item.bonus||0)+affixScore+(ITEM_RARITY_ORDER[item.rarity]||1)*1e-6;
-}
-function equipmentPlanScore(assignments=[]){
-  const byCharacter=new Map();for(const assignment of assignments){const list=byCharacter.get(assignment.characterId)||[];list.push(assignment);byCharacter.set(assignment.characterId,list);}
-  let total=0;for(const list of byCharacter.values()){const role=list[0]?.role||'attaquant';const weights=EQUIPMENT_ROLE_WEIGHTS[role]||EQUIPMENT_ROLE_WEIGHTS.attaquant;const items=list.map((x)=>x.item);const raw=list.reduce((sum,x)=>sum+equipmentItemScore(x.item,x.role),0);const counts=new Map();for(const item of items)counts.set(item.setKey,(counts.get(item.setKey)||0)+1);const setUtility=[...counts.entries()].reduce((sum,[key,count])=>{const set=RUNE_SETS[key]||RUNE_SETS.energy;const stacks=Math.floor(count/set.required);return sum+stacks*set.bonus*(set.mode==='dps'?1:.65*(weights[set.mode]||1));},0);total+=raw*equipmentSetMultiplier(items)+setUtility;}return total;
-}
-function buildAutoEquipmentPlan(slots=[],items=[]){
-  const active=slots.filter((slot)=>slot.characterId&&slot.character);if(!active.length)return {assignments:[],beforeScore:0,afterScore:0,changed:0};
-  const current=items.filter((item)=>item.equippedCharacterId&&active.some((slot)=>slot.characterId===item.equippedCharacterId)).map((item)=>{const slot=active.find((x)=>x.characterId===item.equippedCharacterId);return {characterId:slot.characterId,slotIndex:slot.slotIndex,itemId:item.id,item,role:roleForCharacter(slot.character)};});
-  const orders=[active,[...active].reverse(),...active.map((_,index)=>[...active.slice(index),...active.slice(0,index)])];let best=current;let bestScore=equipmentPlanScore(current);
-  for(const order of orders){const remaining=new Map(items.map((item)=>[item.id,item]));const candidate=[];
-    for(const slot of order){const role=roleForCharacter(slot.character);const available=[...remaining.values()];const singles=RUNE_KINDS.map((kind)=>available.filter((item)=>item.kind===kind).sort((a,b)=>equipmentItemScore(b,role)-equipmentItemScore(a,role))[0]).filter(Boolean);let chosen=singles;let chosenScore=equipmentPlanScore(singles.map((item)=>({characterId:slot.characterId,item,role})));
-      for(const setKey of RUNE_SET_KEYS){const set=RUNE_SETS[setKey];const candidates=available.filter((item)=>item.setKey===setKey).sort((a,b)=>equipmentItemScore(b,role)-equipmentItemScore(a,role));if(candidates.length<set.required)continue;const bestByKind=[];for(const item of candidates){if(!bestByKind.some((chosenItem)=>chosenItem.kind===item.kind))bestByKind.push(item);}if(bestByKind.length<set.required)continue;const bundle=[...singles.filter((item)=>!bestByKind.slice(0,set.required).some((setItem)=>setItem.kind===item.kind)),...bestByKind.slice(0,set.required)];const score=equipmentPlanScore(bundle.map((item)=>({characterId:slot.characterId,item,role})));if(score>chosenScore){chosen=bundle;chosenScore=score;}}
-      for(const item of chosen){remaining.delete(item.id);candidate.push({characterId:slot.characterId,slotIndex:slot.slotIndex,itemId:item.id,item,role});}
-    }
-    const score=equipmentPlanScore(candidate);if(score>bestScore+1e-9){best=candidate;bestScore=score;}
-  }
-  const currentByItem=new Map(current.map((x)=>[x.itemId,x.characterId]));const changed=best.filter((x)=>currentByItem.get(x.itemId)!==x.characterId).length+current.filter((x)=>!best.some((y)=>y.itemId===x.itemId)).length;
-  return {assignments:best,beforeScore:equipmentPlanScore(current),afterScore:bestScore,changed};
-}
+// (L'ancien plan d'auto-équipement — score pondéré par rôle
+// (EQUIPMENT_ROLE_WEIGHTS), recherche de panoplies sur plusieurs ordres —
+// a été supprimé : il construisait quasiment le meilleur build possible en
+// un clic, vidant sets et rôles de tout intérêt. Voir la nouvelle route
+// /equipment/auto-equip : simple comblement des emplacements vides.)
 
 function progressionBossesCrossed(startStage, endStage, mode='progress') {
   if (mode === 'farm' || endStage <= startStage) return 0;
@@ -659,6 +627,32 @@ async function loadSeriesTotals() {
   seriesTotalsCache = { at: Date.now(), data };
   return data;
 }
+// Choix de départ (onboarding) : les 6 personnages RARES les plus populaires
+// du catalogue (favoris AniList, la même donnée qui fixe les raretés) — une
+// vitrine de visages connus plutôt que « les 6 premiers importés par id ».
+// Cache mémoire 30 min (le catalogue ne bouge qu'aux imports admin) ; la
+// même liste sert à VALIDER le choix côté /onboarding, pour qu'on ne puisse
+// pas démarrer avec un rare hors vitrine en forgeant la requête.
+const STARTER_POOL_TTL_MS = 30 * 60 * 1000;
+let starterPoolCache = null; // { at, data }
+async function starterChoicePool() {
+  if (starterPoolCache && Date.now() - starterPoolCache.at < STARTER_POOL_TTL_MS) return starterPoolCache.data;
+  let data = [];
+  try {
+    data = await prisma.character.findMany({
+      where: { rarity: 'rare', imageUrl: { not: null } },
+      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true },
+      orderBy: [{ favourites: 'desc' }, { id: 'asc' }],
+      take: 6,
+    });
+  } catch { return data; } // échec non mis en cache : nouvel essai à la prochaine requête
+  // Liste vide jamais mise en cache : catalogue pas encore importé (ou stub de
+  // test) — on retente à la prochaine requête plutôt que de bloquer 30 min.
+  if (data.length) starterPoolCache = { at: Date.now(), data };
+  return data;
+}
+function invalidateStarterPool() { starterPoolCache = null; }
+
 async function decorArtForTheme(theme) {
   const cached = decorArtCache.get(theme);
   if (cached && Date.now() - cached.at < DECOR_ART_TTL_MS) return cached.data;
@@ -1223,12 +1217,7 @@ async function buildState(userId) {
   // d'onboarding alors qu'un ancien reset avait supprimé leur roster. Un
   // joueur sans aucune recrue doit toujours pouvoir récupérer un starter.
   const needsStarter=!user.idleOnboardingComplete||recruitCount===0;
-  const starterChoices = needsStarter ? await prisma.character.findMany({
-    where: { rarity: 'rare', imageUrl: { not: null } },
-    select: { id:true, name:true, imageUrl:true, rarity:true, series:true },
-    orderBy: { id:'asc' },
-    take: 6,
-  }) : [];
+  const starterChoices = needsStarter ? await starterChoicePool() : [];
   let recruits = [];let presets=[];
   try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { name:true, series: true, rarity: true } } }, orderBy:{recruitedAt:'desc'} }); } catch (e) { if (e?.code) throw e; }
   try{presets=await prisma.idleTeamPreset.findMany({where:{userId},select:{name:true,formation:true,slots:true},orderBy:{updatedAt:'desc'},take:SQUAD_PRESET_LIMIT});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
@@ -1255,6 +1244,11 @@ async function buildState(userId) {
   });
   const pending = Math.floor(combatPreview.essence);
 
+  // Stage de référence pour les coûts indexés sur la progression (recyclage,
+  // amélioration, meulage) — déclaré AVANT la boucle des emplacements : la
+  // fiche héros y référençait `stage` (déclaré bien plus bas), et cette TDZ
+  // faisait tomber /state en 500 pour tout joueur avec un héros assigné.
+  const progressionStage = Math.max(user.idleBestStage || 1, Math.max(1, Math.floor(Number(combatPreview.stage) || 1)));
   const bySlot = new Map(slots.map((s) => [s.slotIndex, s]));
   const slotsOut = [];
   for (let i = 0; i < MAX_SLOTS; i++) {
@@ -1297,7 +1291,7 @@ async function buildState(userId) {
         ascensionMax: HERO_ASCENSION_MAX,
         canAscend: level >= heroAscensionRequiredLevel(row.ascension) && (row.ascension || 0) < HERO_ASCENSION_MAX,
         ascensionCost: heroAscensionCost(row.character.rarity, row.ascension),
-        equipments: RUNE_KINDS.map((kind) => { const e=(row.items||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e,Math.max(user.idleBestStage||1,stage)),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus}:{kind,empty:true}; }),
+        equipments: RUNE_KINDS.map((kind) => { const e=(row.items||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e,progressionStage),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus}:{kind,empty:true}; }),
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
@@ -1459,7 +1453,7 @@ async function buildState(userId) {
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
     const set=RUNE_SETS[item.setKey]||RUNE_SETS.energy;
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item,Math.max(user.idleBestStage||1,stage)),enhanceCost:runeEnhanceCost(item,Math.max(user.idleBestStage||1,stage)),rerollCost:runeRerollCost(item,Math.max(user.idleBestStage||1,stage)),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item,progressionStage),enhanceCost:runeEnhanceCost(item,progressionStage),rerollCost:runeRerollCost(item,progressionStage),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
   const inventoryFamilies=RUNE_SET_KEYS.map((key)=>{const set=RUNE_SETS[key];const count=preparedInventoryItems.filter((item)=>(item.setKey||'energy')===key).length;return {key,world:set.name,count,kinds:[],complete:count>=set.required,required:set.required,description:set.description,mode:set.mode,bonus:set.bonus};}).filter((set)=>set.count).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
   const inventory={
@@ -1662,6 +1656,19 @@ async function buildState(userId) {
   };
 }
 
+// Diagnostic admin : exécute buildState et renvoie l'erreur EXACTE (message +
+// stack) au lieu du 500 générique — pour localiser en prod un throw dans la
+// construction de l'état sans accès direct aux logs.
+router.get('/diagnostics/state', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const state = await buildState(req.user.id);
+    res.json({ ok: true, hasState: !!state, keys: state ? Object.keys(state) : [] });
+  } catch (e) {
+    console.error('diagnostics/state:', e?.stack || e);
+    res.json({ ok: false, name: e?.name || null, code: e?.code || null, message: e?.message || String(e), stack: String(e?.stack || '').split('\n').slice(0, 12) });
+  }
+});
+
 // Le diagnostic reste administrateur ; le jeu est accessible aux admins et aux
 // joueurs portant `idle_beta`. Retirer requireIdleBeta à la sortie publique.
 router.get('/diagnostics/simulation',requireAuth,requireAdmin,(req,res)=>{
@@ -1718,8 +1725,11 @@ router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, na
       ]);
       if(!user)throw new IdleError(404,'Compte introuvable');
       if(user.idleOnboardingComplete&&recruitCount>0)throw new IdleError(409,'Ton aventure a déjà commencé');
-      const character=await prisma.character.findFirst({where:{id:characterId,rarity:'rare',imageUrl:{not:null}},select:{id:true}});
-      if(!character)throw new IdleError(400,'Ce personnage de départ n’est pas disponible');
+      // Le choix doit appartenir à la vitrine réellement proposée (top 6
+      // populaires) — l'ancienne validation acceptait N'IMPORTE quel rare du
+      // catalogue, il suffisait de forger la requête.
+      const pool=await starterChoicePool();
+      if(!pool.some((starter)=>starter.id===characterId))throw new IdleError(400,'Ce personnage de départ n’est pas disponible');
       await prisma.$transaction(async(tx)=>{
         await tx.dojoRecruit.upsert({
           where:{userId_characterId:{userId:req.user.id,characterId}},
@@ -2069,31 +2079,32 @@ router.post('/hero-awaken', requireAuth, requireIdleBeta, rateLimit({ max: 30, n
   res.json({ ...(await buildState(req.user.id)), awaken: { characterId, stars, cost, multiplier: awakenStarMultiplier(stars) } });
 });
 
+// Remplissage automatique de l'équipe — VOLONTAIREMENT simple. L'ancienne
+// version (beam search sur computeTotalRate) trouvait la composition
+// quasi-optimale en un clic : synergies, formations et rôles n'étaient plus
+// des choix, le theorycraft n'avait aucun intérêt. Désormais : ne touche
+// JAMAIS aux héros déjà assignés, remplit seulement les emplacements vides
+// avec les recrues libres les plus entraînées (niveau, puis rareté, puis
+// éveil) — un remplissage « pas débile », pas une optimisation.
 router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
-  let optimization={changed:0,beforeRate:0,afterRate:0,gainPercent:0,selected:[]};
+  let optimization={placed:0,changed:0,selected:[]};
   try {
-    await withSettle(req.user.id,async(tx,user,levels)=>{
-      const [loadedSlots,recruits]=await Promise.all([loadSlots(tx,user.id),tx.dojoRecruit.findMany({where:{userId:user.id},include:{character:{select:{id:true,name:true,imageUrl:true,rarity:true,series:true}}}})]);
+    await withSettle(req.user.id,async(tx,user)=>{
+      const [loadedSlots,recruits]=await Promise.all([loadSlots(tx,user.id),tx.dojoRecruit.findMany({where:{userId:user.id},include:{character:{select:{id:true,name:true,rarity:true}}}})]);
       if(!recruits.length)throw new IdleError(400,'Aucun héros recruté');
       const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
-      const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,items:[]});
-      const rateFor=(picks)=>{const mapped=slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened}:{...slot,characterId:null,character:null,level:1,ascension:0,awakened:false};});return computeTotalRate(mapped,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,mapped,recruits.length,levels));};
-      const currentPicks=slots.map((slot)=>recruits.find((recruit)=>recruit.characterId===slot.characterId)||null);
-      const beforeRate=rateFor(currentPicks);const teamSize=Math.min(unlocked,recruits.length);
-      let beam=[{picks:[],used:new Set(),score:0}];
-      for(let index=0;index<teamSize;index++){
-        const next=[];
-        for(const state of beam)for(const recruit of recruits){if(state.used.has(recruit.characterId))continue;const picks=[...state.picks,recruit];next.push({picks,used:new Set([...state.used,recruit.characterId]),score:rateFor(picks)});}
-        next.sort((a,b)=>b.score-a.score);beam=next.slice(0,40);
-      }
-      const selected=beam[0]?.picks;if(!selected)throw new IdleError(400,'Composition impossible');
-      const changed=slots.reduce((total,slot,index)=>total+(slot.characterId!==(selected[index]?.characterId||null)?1:0),0);
-      await tx.idleSlot.updateMany({where:{userId:user.id,slotIndex:{lt:unlocked}},data:{characterId:null,assignedAt:null}});
-      for(let slotIndex=0;slotIndex<selected.length;slotIndex++){const recruit=selected[slotIndex];await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0},create:{userId:user.id,slotIndex,characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}});}
-      const selectedIds=new Set(selected.map((recruit)=>recruit.characterId));if(!selectedIds.has(user.idleLeaderCharacterId))await tx.user.update({where:{id:user.id},data:{idleLeaderCharacterId:selected[0]?.characterId||null}});
-      const afterRate=rateFor(selected);optimization={changed,beforeRate,afterRate,gainPercent:beforeRate>0?Math.max(0,Math.round((afterRate/beforeRate-1)*1000)/10):0,selected:selected.map((recruit)=>recruit.character.name)};
+      const assignedIds=new Set(loadedSlots.filter((slot)=>slot.characterId).map((slot)=>slot.characterId));
+      const emptySlots=Array.from({length:unlocked},(_,slotIndex)=>slotIndex).filter((slotIndex)=>{const slot=loadedSlots.find((s)=>s.slotIndex===slotIndex);return !slot||!slot.characterId;});
+      if(!emptySlots.length)throw new IdleError(400,'Aucun emplacement vide — compose ton équipe toi-même pour optimiser');
+      const rarityOrder={rare:1,epic:2,legendary:3,mythic:4};
+      const available=recruits.filter((recruit)=>!assignedIds.has(recruit.characterId))
+        .sort((a,b)=>(b.trainingLevel||1)-(a.trainingLevel||1)||(rarityOrder[b.character?.rarity]||0)-(rarityOrder[a.character?.rarity]||0)||(b.awakenStars||0)-(a.awakenStars||0)||Number(b.awakened)-Number(a.awakened));
+      const picks=available.slice(0,emptySlots.length);
+      if(!picks.length)throw new IdleError(400,'Toutes tes recrues sont déjà assignées');
+      for(let i=0;i<picks.length;i++){const recruit=picks[i];const slotIndex=emptySlots[i];await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0},create:{userId:user.id,slotIndex,characterId:recruit.characterId,assignedAt:new Date(),level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0}});}
+      optimization={placed:picks.length,changed:picks.length,selected:picks.map((recruit)=>recruit.character.name)};
     });
-    void recordIdleEvent(req.user.id,'team_optimize',{changed:optimization.changed,gainPercent:optimization.gainPercent});
+    void recordIdleEvent(req.user.id,'team_fill',{value:optimization.placed});
     res.json({...(await buildState(req.user.id)),optimization});
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
@@ -2231,18 +2242,35 @@ router.post('/equipment/reroll',requireAuth,requireIdleBeta,rateLimit({max:30,na
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
+// Remplissage automatique de l'équipement — VOLONTAIREMENT simple. L'ancien
+// plan (score pondéré par rôle + recherche de panoplies sur plusieurs ordres)
+// construisait quasiment le meilleur build possible en un clic : les sets et
+// les rôles n'étaient plus des choix. Désormais : ne déséquipe JAMAIS rien,
+// comble seulement les emplacements de runes vides des héros actifs avec le
+// meilleur objet libre du bon type (rareté puis bonus brut) — sans regarder
+// les panoplies ni les rôles. Construire un vrai set reste un travail manuel.
 router.post('/equipment/auto-equip',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-equipment-auto'}),async(req,res)=>{
-  let optimization={changed:0,beforeScore:0,afterScore:0,equipped:0};
+  let optimization={changed:0,equipped:0};
   try{
     await withSettle(req.user.id,async()=>{
-      const [slots,items]=await Promise.all([loadSlots(prisma,req.user.id),prisma.idleItem.findMany({where:{userId:req.user.id}})]);const plan=buildAutoEquipmentPlan(slots,items);
-      optimization={changed:plan.changed,beforeScore:plan.beforeScore,afterScore:plan.afterScore,equipped:plan.assignments.length};
-      if(!plan.changed||plan.afterScore<=plan.beforeScore+1e-9)return;
-      // Ne libère que l'équipement des personnages ACTIFS (candidats au
-      // réagencement) : un héros laissé au repos garde son équipement
-      // réservé, l'optimisation ne doit pas le déséquiper en silence.
-      const activeCharacterIds=slots.filter((s)=>s.characterId).map((s)=>s.characterId);
-      await prisma.$transaction(async(tx)=>{await tx.idleItem.updateMany({where:{userId:req.user.id,equippedCharacterId:{in:activeCharacterIds}},data:{equippedCharacterId:null}});for(const assignment of plan.assignments)await tx.idleItem.update({where:{id:assignment.itemId},data:{equippedCharacterId:assignment.characterId}});});
+      const [slots,items]=await Promise.all([loadSlots(prisma,req.user.id),prisma.idleItem.findMany({where:{userId:req.user.id}})]);
+      const rarityOrder={rare:1,epic:2,legendary:3,mythic:4};
+      const free=items.filter((item)=>!item.equippedCharacterId)
+        .sort((a,b)=>(rarityOrder[b.rarity]||0)-(rarityOrder[a.rarity]||0)||itemProductionBonus(b)-itemProductionBonus(a));
+      const assignments=[];
+      for(const slot of slots.filter((s)=>s.characterId&&s.character)){
+        const wornKinds=new Set((slot.items||[]).map((item)=>item.kind));
+        for(const kind of RUNE_KINDS){
+          if(wornKinds.has(kind))continue;
+          const index=free.findIndex((item)=>item.kind===kind);
+          if(index<0)continue;
+          const [item]=free.splice(index,1);
+          assignments.push({itemId:item.id,characterId:slot.characterId});
+        }
+      }
+      optimization={changed:assignments.length,equipped:assignments.length};
+      if(!assignments.length)return;
+      await prisma.$transaction(async(tx)=>{for(const assignment of assignments)await tx.idleItem.update({where:{id:assignment.itemId},data:{equippedCharacterId:assignment.characterId}});});
     });
     const state=await buildState(req.user.id);res.json({ok:true,optimization,state});
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
@@ -2870,6 +2898,7 @@ router.post('/ancient', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
 module.exports = {
   router,
   decorArtCache,
+  invalidateStarterPool,
   idleMissionList,
   seasonActivityScore,
   idleChallengeList,
@@ -2890,8 +2919,6 @@ module.exports = {
   equipmentSetMultiplier,
   RUNE_SETS,
   itemSalvageValue,
-  equipmentItemScore,
-  buildAutoEquipmentPlan,
   progressionBossesCrossed,
   synergyForSlots,
   SQUAD_SLOT_DEFS,

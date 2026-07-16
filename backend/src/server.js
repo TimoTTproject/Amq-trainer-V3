@@ -201,7 +201,9 @@ app.use(express.static(FRONTEND_DIR, {
 // générique (jamais de stack au client). Express 5 capture aussi les rejets des
 // handlers async, donc une route qui oublie son try/catch ne tue plus le process.
 app.use((err, req, res, next) => {
-  console.error('Erreur non gérée:', req.method, req.originalUrl, '-', err && err.message);
+  // Stack complète dans les logs (jamais au client) : le message seul ne
+  // permettait pas de localiser un throw dans une grosse route comme /state.
+  console.error('Erreur non gérée:', req.method, req.originalUrl, '-', err && (err.stack || err.message));
   if (res.headersSent) return next(err);
   res.status(500).json({ error: 'Erreur serveur. Réessaie dans un instant.' });
 });
