@@ -344,8 +344,14 @@ function slotUpgradeCost(nextSlotIndex) {
 }
 
 // Plafond de production hors-ligne : au-delà, le surplus n'est plus compté —
-// encourage à revenir régulièrement sans punir une grosse pause.
-const OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // 12h
+// encourage à revenir régulièrement sans punir une grosse pause. Abaissé de
+// 12h à 8h (retour testeur : trop généreux — au-delà du plafond de +3 stages
+// par synchronisation, le combat continue de farmer de l'Essence au stage
+// figé pendant TOUT le reste de la fenêtre, donc la durée seule peut déjà
+// représenter un gain énorme si le DPS a beaucoup progressé entretemps).
+// Toujours extensible via les Ancients de résilience (Bourse Profonde,
+// Sommeil Profond, Sanctuaire, Éternité), sans plafond sur cette extension.
+const OFFLINE_CAP_MS = 8 * 60 * 60 * 1000; // 8h
 
 // Combat de run : contrairement à l'ancien affichage, un stage possède
 // maintenant de vrais PV. L'équipe inflige son taux de production sous forme
