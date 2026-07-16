@@ -693,6 +693,7 @@ model Character {
   promotionVotes PromotionVote[]
   marketListings MarketListing[]
   idleSlots      IdleSlot[]
+  idleItems      IdleItem[]
   dojoRecruits   DojoRecruit[]
   dojoBossArts   DojoBossArt[]
 
@@ -881,7 +882,6 @@ model IdleSlot {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   character  Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
   equipments IdleEquipment[]
-  items      IdleItem[]
 
   @@unique([userId, slotIndex])
   @@index([userId])
@@ -904,31 +904,40 @@ model IdleEquipment {
 // équipé sur un héros ; contrairement à l'ancien IdleEquipment, plusieurs
 // objets d'un même type peuvent donc coexister et être comparés.
 model IdleItem {
-  id             String   @id @default(cuid())
-  userId         String
-  equippedSlotId Int?
-  kind           String
-  rarity         String
-  name           String
-  bonus          Float
-  effectKey      String
-  effectValue    Float
+  id     String @id @default(cuid())
+  userId String
+  // Équipé sur un PERSONNAGE (recruté), pas sur un emplacement d'équipe : un
+  // héros retiré de l'équipe active garde son équipement (réservé, inutilisé)
+  // au lieu de le faire « hériter » au prochain personnage placé dans le même
+  // emplacement — même logique que DojoRecruit.trainingLevel/idleAscension,
+  // déjà attachés au personnage plutôt qu'à un slot. Retour testeur : « les
+  // objets devraient être liés au perso plutôt qu'à un slot ».
+  equippedCharacterId Int?
+  kind                String
+  rarity              String
+  name                String
+  bonus               Float
+  effectKey           String
+  effectValue         Float
   // Affixes secondaires (0 à 3), tirés aléatoirement en plus de l'affixe
   // primaire ci-dessus (effectKey/effectValue) — voir idleItemDrop() dans
   // idle.routes.js. Additif : les objets créés avant cette colonne ont
   // simplement un tableau vide, donc un seul affixe visible (comportement
   // identique à avant, pas de backfill nécessaire).
-  affixes        Json     @default("[]")
-  sourceWorld    String
-  locked         Boolean  @default(false)
-  obtainedAt     DateTime @default(now())
+  affixes    Json     @default("[]")
+  sourceWorld String
+  locked      Boolean  @default(false)
+  obtainedAt  DateTime @default(now())
 
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  equippedSlot IdleSlot? @relation(fields: [equippedSlotId], references: [id], onDelete: SetNull)
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equippedCharacter Character? @relation(fields: [equippedCharacterId], references: [id], onDelete: SetNull)
 
-  @@unique([equippedSlotId, kind])
+  // Un personnage n'a qu'une arme/relique/accessoire à la fois, mais
+  // `characterId` seul n'est pas unique par joueur (catalogue partagé entre
+  // tous les comptes) — d'où `userId` dans la contrainte.
+  @@unique([userId, equippedCharacterId, kind])
   @@index([userId, obtainedAt])
-  @@index([equippedSlotId])
+  @@index([equippedCharacterId])
 }
 
 model IdleMissionClaim {

@@ -185,10 +185,10 @@ test('inventaire : une panoplie des trois types accorde le bonus complet',()=>{
 
 test('équipement automatique : privilégie le rôle et une panoplie réellement plus forte sans dégrader le build',()=>{
   const character={id:1,name:'Sakura',series:'Naruto',rarity:'epic'};const slot={id:10,slotIndex:0,characterId:1,character};
-  const item=(id,kind,bonus,sourceWorld='Konoha',effectKey='assault',effectValue=0,equippedSlotId=null)=>({id,kind,bonus,sourceWorld,effectKey,effectValue,rarity:'epic',equippedSlotId});
+  const item=(id,kind,bonus,sourceWorld='Konoha',effectKey='assault',effectValue=0,equippedCharacterId=null)=>({id,kind,bonus,sourceWorld,effectKey,effectValue,rarity:'epic',equippedCharacterId});
   const set=[item('w-set','weapon',.10),item('r-set','relic',.10),item('a-set','accessory',.10),item('w-off','weapon',.125,'Namek')];
   const plan=buildAutoEquipmentPlan([slot],set);assert.deepEqual(new Set(plan.assignments.map((x)=>x.itemId)),new Set(['w-set','r-set','a-set']));assert.ok(plan.afterScore>0);
-  const current=set.slice(0,3).map((x)=>({...x,equippedSlotId:10}));const stable=buildAutoEquipmentPlan([slot],[...current,item('weak','weapon',.01,'Namek')]);assert.equal(stable.changed,0);
+  const current=set.slice(0,3).map((x)=>({...x,equippedCharacterId:1}));const stable=buildAutoEquipmentPlan([slot],[...current,item('weak','weapon',.01,'Namek')]);assert.equal(stable.changed,0);
   assert.ok(equipmentItemScore(item('team','relic',.10,'Konoha','resonance',.05),'support')>equipmentItemScore(item('plain','relic',.13,'Konoha','assault',0),'support'));
 });
 
@@ -202,7 +202,7 @@ test('inventaire : le verrouillage vérifie que l objet appartient au joueur',as
 
 test('équipement : améliorer cible l’objet par itemId, pas par slot+kind (jamais le mauvais objet équipé)',async()=>{
   const user=dbUser({essence:1000});prisma.user.findUnique=async()=>user;prisma.user.update=async()=>user;
-  prisma.idleItem.findFirst=async({where})=>where.id==='item-1'&&where.userId==='u1'?{id:'item-1',userId:'u1',bonus:.05,rarity:'rare',equippedSlotId:7}:null;
+  prisma.idleItem.findFirst=async({where})=>where.id==='item-1'&&where.userId==='u1'?{id:'item-1',userId:'u1',bonus:.05,rarity:'rare',equippedCharacterId:7}:null;
   let updateArgs=null;prisma.idleItem.update=async(args)=>{updateArgs=args;return{};};
   const res=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1'}});
   assert.equal(res.status,200);
@@ -212,16 +212,41 @@ test('équipement : améliorer cible l’objet par itemId, pas par slot+kind (ja
 
 test('équipement : améliorer refuse un objet non équipé ou appartenant à un autre joueur',async()=>{
   const user=dbUser({essence:1000});prisma.user.findUnique=async()=>user;prisma.user.update=async()=>user;
-  prisma.idleItem.findFirst=async({where})=>where.id==='unequipped'&&where.userId==='u1'?{id:'unequipped',userId:'u1',bonus:.05,rarity:'rare',equippedSlotId:null}:null;
+  prisma.idleItem.findFirst=async({where})=>where.id==='unequipped'&&where.userId==='u1'?{id:'unequipped',userId:'u1',bonus:.05,rarity:'rare',equippedCharacterId:null}:null;
   const unequipped=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'unequipped'}});
   assert.equal(unequipped.status,400);assert.match(unequipped.json.error,/équipé/);
   const notOwned=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'not-mine'}});
   assert.equal(notOwned.status,404);
 });
 
+test('équipement : lié au personnage — échanger le héros d’un slot ne transfère pas son équipement au nouveau (retour testeur)',async()=>{
+  const user=dbUser();prisma.user.findUnique=async()=>user;
+  prisma.dojoRecruit.findMany=async()=>[{characterId:1,character:{name:'Ancien Héros'}},{characterId:2,character:{name:'Nouveau Héros'}}];
+  const equippedItem={id:'w1',userId:'u1',kind:'weapon',rarity:'epic',name:'Épée',bonus:.1,effectKey:'assault',effectValue:0,affixes:[],sourceWorld:'Konoha',equippedCharacterId:1,obtainedAt:new Date(),locked:false};
+  prisma.idleItem.findMany=async({where})=>{
+    if(where?.equippedCharacterId?.in)return where.equippedCharacterId.in.includes(1)?[equippedItem]:[];
+    return [equippedItem];
+  };
+  // Le héros d'origine (characterId 1) occupe le slot -> équipement actif.
+  prisma.idleSlot.findMany=async()=>[{id:10,userId:'u1',slotIndex:0,level:1,characterId:1,character:{id:1,name:'Ancien Héros',imageUrl:null,rarity:'epic'}}];
+  const before=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  const itemBefore=before.json.inventory.items.find((i)=>i.id==='w1');
+  assert.equal(itemBefore.equipped,true);assert.equal(itemBefore.equippedSlotIndex,0);assert.equal(itemBefore.equippedResting,false);
+
+  // Un AUTRE héros (characterId 2) prend le même slot -> l'objet doit rester
+  // sur son propriétaire d'origine (au repos), pas suivre le slot.
+  prisma.idleSlot.findMany=async()=>[{id:10,userId:'u1',slotIndex:0,level:1,characterId:2,character:{id:2,name:'Nouveau Héros',imageUrl:null,rarity:'epic'}}];
+  const after=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  const itemAfter=after.json.inventory.items.find((i)=>i.id==='w1');
+  assert.equal(itemAfter.equipped,true);
+  assert.equal(itemAfter.equippedCharacter,'Ancien Héros');
+  assert.equal(itemAfter.equippedSlotIndex,null);
+  assert.equal(itemAfter.equippedResting,true);
+});
+
 test('inventaire : le recyclage exige une confirmation renforcée pour les objets précieux',async()=>{
   prisma.user.findUnique=async()=>dbUser();
-  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'legend-1',userId:'u1',rarity:'legendary',locked:false,equippedSlotId:null,bonus:.14,effectValue:.03}]:[];
+  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'legend-1',userId:'u1',rarity:'legendary',locked:false,equippedCharacterId:null,bonus:.14,effectValue:.03}]:[];
   const res=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['legend-1']}});
   assert.equal(res.status,400);
   assert.match(res.json.error,/Confirmation requise/);
@@ -229,7 +254,7 @@ test('inventaire : le recyclage exige une confirmation renforcée pour les objet
 
 test('inventaire : le recyclage refuse une sélection partiellement introuvable',async()=>{
   prisma.user.findUnique=async()=>dbUser();
-  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'item-1',userId:'u1',rarity:'rare',locked:false,equippedSlotId:null,bonus:.04,effectValue:.02}]:[];
+  prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'item-1',userId:'u1',rarity:'rare',locked:false,equippedCharacterId:null,bonus:.04,effectValue:.02}]:[];
   const res=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['item-1','item-2']}});
   assert.equal(res.status,404);
   assert.match(res.json.error,/introuvable/);
