@@ -34,7 +34,6 @@ const {
   milestoneTierForLevel,
   milestoneReward,
   PRESTIGE_MIN_DOJO_LEVEL,
-  wisdomForPrestige,
   ANCIENTS,
   ancientCost,
   ancientByKey,
@@ -487,15 +486,13 @@ test('milestoneTierForLevel/milestoneReward : un palier tous les MILESTONE_INTER
   assert.ok(milestoneReward(2) > milestoneReward(1));
 });
 
-test('wisdomForPrestige : croît avec le niveau du Dojo au moment du Prestige, jamais nul ; seuil minimum exposé', () => {
-  assert.ok(PRESTIGE_MIN_DOJO_LEVEL > 1); // pas prestigeable dès le niveau 1 (rien à gagner)
-  assert.equal(wisdomForPrestige(0), 1); // plancher : jamais un Prestige pour rien
-  assert.ok(wisdomForPrestige(50) > wisdomForPrestige(PRESTIGE_MIN_DOJO_LEVEL));
-});
-
 test('ancientCost : croissant, jamais nul, pas de plafond (puits de très long terme)', () => {
+  assert.ok(PRESTIGE_MIN_DOJO_LEVEL > 1); // seuil historique toujours exposé pour l'affichage
   assert.ok(ancientCost(0) > 0);
   assert.ok(ancientCost(20) > ancientCost(0));
+  // Croissance adoucie après le niveau 10 : les niveaux profonds restent un
+  // puits, mais ne distancent plus la Sagesse gagnée par Retraite (linéaire).
+  assert.ok(ancientCost(20) / ancientCost(19) < ancientCost(10) / ancientCost(9));
 });
 
 test('ancientByKey/ancientBonus : liste fermée, bonus cumulé par type, absent = 0 (pas acheté)', () => {

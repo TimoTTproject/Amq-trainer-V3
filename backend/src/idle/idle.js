@@ -41,6 +41,10 @@ const CHAR_LEVEL_BONUS = 0.12;
 // La rareté apporte un avantage initial contenu, mais ne creuse plus un
 // gouffre exponentiel à chaque niveau. Ainsi, rôles, talents, synergies et
 // personnages favoris restent des choix viables jusqu'en fin de run.
+// L'avantage de rareté passe par la base (RARITY_RATE) et des coûts de
+// niveau COMPRESSÉS (cf. CHAR_LEVEL_BASE_COST) : l'ancien barème (28→52)
+// rendait le mythique MOINS rentable que le rare en production/essence
+// investie (base ×1.45 mais coût ×1.86) — la rareté haute était un piège.
 const RARITY_LEVEL_BONUS = { common: .03, rare: .05, epic: .05, legendary: .05, mythic: .05 };
 // Hash stable (nom+univers) utilisé pour tout ce qui doit varier PAR
 // personnage sans tirage aléatoire réel ni colonne DB dédiée : rôle assigné,
@@ -71,20 +75,28 @@ const RARITY_PASSIVE_POOL = {
     { key: 'sprint', label: 'Sprint', stat: 'click', min: .02, max: .06 },
     { key: 'instinct', label: 'Instinct aiguisé', stat: 'crit', min: .01, max: .03 },
   ],
+  // Chaque palier au-dessus de rare offre aussi un passif de production
+  // personnelle : sans lui, un épique/légendaire pouvait tirer un `cooldown`
+  // 1-3% quasi nul et être objectivement moins bon qu'un rare Endurance —
+  // aucun palier ne doit avoir de « passif poubelle » comme seul tirage
+  // possible face au stat qui porte réellement l'économie (la production).
   epic: [
     { key: 'aura', label: 'Aura', stat: 'prodTeam', min: .01, max: .03 },
+    { key: 'vigueur', label: 'Vigueur', stat: 'prodSelf', min: .05, max: .09 },
     { key: 'fulgurance', label: 'Fulgurance', stat: 'click', min: .03, max: .07 },
     { key: 'precision', label: 'Précision', stat: 'crit', min: .02, max: .04 },
     { key: 'flux_mineur', label: 'Flux mineur', stat: 'cooldown', min: .01, max: .03 },
   ],
   legendary: [
     { key: 'domination', label: 'Domination', stat: 'prodTeam', min: .03, max: .05 },
+    { key: 'ardeur', label: 'Ardeur', stat: 'prodSelf', min: .07, max: .12 },
     { key: 'fureur', label: 'Fureur', stat: 'click', min: .05, max: .09 },
     { key: 'oeil_du_tigre', label: 'Œil du Tigre', stat: 'crit', min: .03, max: .05 },
     { key: 'flux_majeur', label: 'Flux majeur', stat: 'cooldown', min: .02, max: .04 },
   ],
   mythic: [
     { key: 'transcendance', label: 'Transcendance', stat: 'prodTeam', min: .05, max: .07 },
+    { key: 'essence_primordiale', label: 'Essence primordiale', stat: 'prodSelf', min: .09, max: .15 },
     { key: 'apocalypse', label: 'Apocalypse', stat: 'click', min: .07, max: .11 },
     { key: 'oeil_omniscient', label: 'Œil Omniscient', stat: 'crit', min: .04, max: .06 },
     { key: 'flux_transcendant', label: 'Flux transcendant', stat: 'cooldown', min: .03, max: .05 },
@@ -109,7 +121,14 @@ function characterPassiveEntry(character, rarity) {
 function characterPassiveMagnitude(character, rarity) {
   const entry = characterPassiveEntry(character, rarity);
   if (!entry) return 0;
-  const roll = (stableCharacterHash(character) % 1000) / 1000;
+  // Hash SALÉ (≠ celui du type) : type et magnitude tiraient du même hash
+  // (`%pool.length` et `%1000`), donc les deux tirages étaient corrélés — les
+  // personnages d'un même type de passif se partageaient les mêmes classes de
+  // résidus de magnitude au lieu de couvrir toute la fourchette.
+  const salted = typeof character === 'object'
+    ? `${character?.name || ''}|${character?.series || ''}|magnitude`
+    : `${String(character || '')}|magnitude`;
+  const roll = (stableCharacterHash(salted) % 1000) / 1000;
   return Number((entry.min + roll * (entry.max - entry.min)).toFixed(3));
 }
 // Magnitude du passif de CE personnage pour le `stat` demandé — 0 si son
@@ -126,27 +145,42 @@ function characterPassiveDescription(character, rarity) {
   const percent = Math.round(characterPassiveMagnitude(character, rarity) * 1000) / 10;
   return `${entry.label} · ${PASSIVE_STAT_TEXT[entry.stat](percent)}`;
 }
-const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
+// 250/500 étaient hors de portée (L250 coûtait ~2,7e23 essence sur un rare) :
+// les deux derniers jalons n'existaient que sur le papier. 150/200 restent de
+// vrais objectifs de très longue haleine, mais atteignables dans une vie de
+// compte.
+const HERO_MILESTONES = [10, 25, 50, 100, 150, 200];
 const HERO_ASCENSION_LEVEL = 100;
 const HERO_ASCENSION_LEVEL_STEP = 10;
 const HERO_ASCENSION_MAX = 5;
 const HERO_ASCENSION_GROWTH = 1.6;
-const HERO_ASCENSION_COST_GROWTH = 4;
-const HERO_ASCENSION_BASE_COST = { common: 15000, rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 };
+// Équivalent-niveaux du coût d'une Ascension (voir heroAscensionCost).
+const HERO_ASCENSION_LEVEL_EQUIVALENT = 12;
 function heroAscensionRequiredLevel(ascension) {
   return HERO_ASCENSION_LEVEL + Math.max(0, Math.floor(ascension || 0)) * HERO_ASCENSION_LEVEL_STEP;
 }
 function heroAscensionMultiplier(ascension) {
   return finiteIdleNumber(Math.pow(HERO_ASCENSION_GROWTH, Math.max(0, Math.min(HERO_ASCENSION_MAX, Math.floor(ascension || 0)))), 1);
 }
+// Coût indexé sur le coût de niveau AU niveau requis (≈ l'équivalent de
+// HERO_ASCENSION_LEVEL_EQUIVALENT niveaux à cet endroit de la courbe), et non
+// plus sur des bases fixes en essence : les anciennes bases (400k pour un
+// mythique A1) étaient ~0,05% de l'essence déjà investie pour atteindre L100 —
+// l'Ascension était un clic automatique, pas un choix. Le coût suit désormais
+// naturellement la courbe (chaque palier +10 niveaux requis ⇒ ×1.16^10 ≈ ×4.4,
+// même ordre que l'ancien COST_GROWTH), et reste ~1.8× plus rentable que la
+// montée de niveaux brute — un vrai jalon récompensant, plus un cadeau.
 function heroAscensionCost(rarity, ascension) {
-  const base = HERO_ASCENSION_BASE_COST[rarity] || HERO_ASCENSION_BASE_COST.rare;
-  return Math.round(finiteIdleNumber(base * Math.pow(HERO_ASCENSION_COST_GROWTH, Math.max(0, Math.floor(ascension || 0))), 1));
+  const requiredLevel = heroAscensionRequiredLevel(ascension);
+  return Math.round(finiteIdleNumber(charLevelBulkCost(rarity, requiredLevel, HERO_ASCENSION_LEVEL_EQUIVALENT), 1));
 }
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
-const CHAR_LEVEL_BASE_COST = { common: 12, rare: 28, epic: 34, legendary: 42, mythic: 52 };
+// Coûts compressés (34/42/52 → 30/32/34) : l'écart de coût entre raretés
+// doit rester INFÉRIEUR à l'écart de production (RARITY_RATE, ×1.45 max),
+// sinon la rareté haute rapporte moins par essence investie que le rare.
+const CHAR_LEVEL_BASE_COST = { common: 12, rare: 28, epic: 30, legendary: 32, mythic: 34 };
 const CHAR_LEVEL_GROWTH = 1.16;
 function charLevelUpCost(rarity, level) {
   const base = CHAR_LEVEL_BASE_COST[rarity] || CHAR_LEVEL_BASE_COST.common;
@@ -229,7 +263,10 @@ function prodMultiplier(level, ancientBonus) {
 }
 function prodUpgradeCost(level) {
   const earlyDiscount=[.35,.45,.60,.75,.90][Math.max(0,level)]??1;
-  return Math.round(finiteIdleNumber(75 * Math.pow(1.75, level)*earlyDiscount, 1));
+  // 1.75→1.65 : les derniers niveaux coûtaient ~250G pour +8% additif — un
+  // rapport si mauvais que le plafond n'était jamais atteint. Discipline
+  // reste un gros puits de fin de run (~55G au total), mais achetable.
+  return Math.round(finiteIdleNumber(75 * Math.pow(1.65, level)*earlyDiscount, 1));
 }
 
 // Amélioration « Concentration » : puissance du clic manuel. `ancientBonus`
@@ -245,6 +282,17 @@ function clickUpgradeCost(level) {
   const earlyDiscount=[.35,.45,.60,.75,.90][Math.max(0,level)]??1;
   return Math.round(finiteIdleNumber(60 * Math.pow(1.7, level)*earlyDiscount, 1));
 }
+// Part de la production d'équipe ajoutée à CHAQUE frappe manuelle (2,5% du
+// taux/s par clic, soit jusqu'à +25% de DPS à 10 clics/s, avant Frappes
+// Multiples). Sans elle, le clic plafonnait en dur (CLICK_BASE +
+// CLICK_LEVEL_MAX×CLICK_LEVEL_BONUS = 125 avant multiplicateurs) face à des
+// PV exponentiels : dès le milieu de partie, frapper — et tout ce qui s'y
+// rattache (Instinct, Frappes Multiples, passifs click/crit, classes
+// offensives, modificateurs de monde) — devenait purement cosmétique. Le
+// clic reste ainsi un geste actif rentable à TOUT stade de la partie.
+// N'alimente PAS les frappes automatiques des Ancients (autoClickDps), qui
+// entrent elles-mêmes dans la production totale : ce serait circulaire.
+const CLICK_RATE_SHARE = 0.025;
 
 // Amélioration « Instinct » : +1 point de chance critique par niveau.
 // Elle reste une amélioration de run et repart donc à zéro au Prestige.
@@ -346,13 +394,15 @@ function enemyMaxHp(stage) {
 }
 function enemyReward(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
-  const special = isBossStage(s) ? 3 : isEliteStage(s) ? 1.5 : 1;
+  // Élite : récompense alignée sur ses PV (×3/×3). À ×1.5 pour ×3 PV, la
+  // vague 5 était une pure punition de rendement en farm.
+  const special = isBossStage(s) ? 3 : isEliteStage(s) ? ELITE_HP_MULTIPLIER : 1;
   return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special * campaignDifficulty(s).reward, 1)));
 }
 const ENEMY_ARCHETYPES = {
   standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
   swift: { key:'swift', name:'Rapide', description:'Peu de PV, récompense normale.', hpMultiplier:.68, rewardMultiplier:1 },
-  armored: { key:'armored', name:'Blindé', description:'Plus résistant, butin amélioré.', hpMultiplier:1.6, rewardMultiplier:1.5 },
+  armored: { key:'armored', name:'Blindé', description:'Plus résistant, butin amélioré.', hpMultiplier:1.6, rewardMultiplier:1.6 },
   captain: { key:'captain', name:'Capitaine', description:'Dixième ennemi renforcé de la vague.', hpMultiplier:2.25, rewardMultiplier:2.25 },
   boss: { key:'boss', name:'Gardien', description:'Boss du monde.', hpMultiplier:1, rewardMultiplier:1 },
 };
@@ -644,24 +694,22 @@ function prestigeMinimumRunMs(prestigeLevel=0){return PRESTIGE_MIN_RUN_BASE_MS+M
 function prestigeRequiredStage(prestigeLevel) {
   return PRESTIGE_MIN_STAGE + PRESTIGE_STAGE_STEP * Math.max(0, Math.floor(Number(prestigeLevel) || 0));
 }
-// Plus le Dojo est haut au moment du Prestige, plus la Sagesse gagnée est
-// généreuse — encourage à ne pas prestiger trop tôt, sans jamais rien
-// rapporter de nul (toujours au moins 1 point).
-function wisdomForPrestige(dojoLevel) {
-  return Math.max(1, Math.floor((dojoLevel || 1) / 5));
-}
 function wisdomForRunStage(stage, prestigeLevel = 0) {
   const s = Math.max(0, Number(stage) || 0);
   const required = prestigeRequiredStage(prestigeLevel);
   if (s < required) return 0;
-  // Relevé de 3→4 (base) et .35→.5 (exposant) : le stage requis grimpe de
-  // +20 à chaque Retraite (prestigeRequiredStage) alors que le coût d'un
-  // Ancient grimpe, lui, sans plafond (cf. ANCIENT_COST_GROWTH) — sans cette
-  // hausse, la Sagesse gagnée par Retraite restait quasi plate pendant que le
-  // prix des Ancients suivants continuait de grimper, rendant chaque nouvelle
-  // Retraite moins rentable que la précédente. Dépasser l'objectif reste
-  // utile, avec un rendement qui récompense mieux le push qu'avant.
-  return Math.max(1, Math.floor(4 * Math.pow(s / required, 1.5)));
+  // Deux composantes :
+  // - un ratio s/required (base 4, exposant 1.5) qui récompense le push
+  //   relatif à l'objectif de la Retraite courante ;
+  // - une composante CUMULATIVE (+1 par tranche de 20 stages au-dessus du
+  //   seuil, non plafonnée) : le seuil monte de +20 par Retraite alors que le
+  //   coût des Ancients croît sans plafond — au ratio seul, la Sagesse par
+  //   Retraite restait plate (4-7 points) et amener un Ancient au niveau 20
+  //   (~687 Sagesse) demandait une centaine de runs. La part linéaire suit la
+  //   progression absolue du joueur, pas seulement son avance relative.
+  const ratioPart = Math.floor(4 * Math.pow(s / required, 1.5));
+  const depthPart = Math.floor((s - required) / 20);
+  return Math.max(1, ratioPart + depthPart);
 }
 
 // Bénédictions temporaires : le joueur façonne un build différent à chaque
@@ -714,8 +762,17 @@ const ANCIENT_BASE_COST = 2;
 // un puits de Sagesse à très long terme (pas de plafond), mais sans faire
 // décrocher la rentabilité marginale d'un Ancient après une dizaine de niveaux.
 const ANCIENT_COST_GROWTH = 1.25;
+// Au-delà du niveau 10, la croissance ralentit encore (1.25→1.12) : la
+// Sagesse par Retraite croît linéairement (cf. wisdomForRunStage) alors
+// qu'une exponentielle 1.25^n finissait toujours par la distancer — les
+// niveaux profonds d'une branche restaient théoriques.
+const ANCIENT_COST_SOFT_LEVEL = 10;
+const ANCIENT_COST_LATE_GROWTH = 1.12;
 function ancientCost(level) {
-  return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * Math.pow(ANCIENT_COST_GROWTH, Math.max(0, level || 0)), 1));
+  const l = Math.max(0, level || 0);
+  const early = Math.pow(ANCIENT_COST_GROWTH, Math.min(l, ANCIENT_COST_SOFT_LEVEL));
+  const late = Math.pow(ANCIENT_COST_LATE_GROWTH, Math.max(0, l - ANCIENT_COST_SOFT_LEVEL));
+  return Math.round(finiteIdleNumber(ANCIENT_BASE_COST * early * late, 1));
 }
 // Arbre de talents (Ancients) : 4 branches × 6 paliers, chaque palier N exige
 // le palier N-1 de LA MÊME branche acheté (`requires`, chaîne linéaire —
@@ -831,6 +888,7 @@ module.exports = {
   CLICK_BASE,
   CLICK_LEVEL_BONUS,
   CLICK_LEVEL_MAX,
+  CLICK_RATE_SHARE,
   clickYield,
   clickUpgradeCost,
   CRIT_LEVEL_BONUS,
@@ -891,8 +949,7 @@ module.exports = {
   HERO_ASCENSION_LEVEL_STEP,
   HERO_ASCENSION_MAX,
   HERO_ASCENSION_GROWTH,
-  HERO_ASCENSION_COST_GROWTH,
-  HERO_ASCENSION_BASE_COST,
+  HERO_ASCENSION_LEVEL_EQUIVALENT,
   heroAscensionRequiredLevel,
   heroAscensionMultiplier,
   heroAscensionCost,
@@ -925,7 +982,6 @@ module.exports = {
   PRESTIGE_MIN_RUN_BASE_MS,
   prestigeMinimumRunMs,
   prestigeRequiredStage,
-  wisdomForPrestige,
   wisdomForRunStage,
   RUN_BLESSINGS,
   parseRunBlessings,

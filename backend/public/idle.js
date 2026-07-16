@@ -798,11 +798,11 @@ async function completeIdleOnboarding() {
 }
 
 const IDLE_ROLES = {
-  attaquant:{ name: 'Attaquant', icon: 'fa-burst', color: '#ff704d', description:'+9% DPS d’équipe' },
+  attaquant:{ name: 'Attaquant', icon: 'fa-burst', color: '#ff704d', description:'+9% DPS d’équipe (décroissant par doublon)' },
   support:{ name: 'Support', icon: 'fa-wand-magic-sparkles', color: '#b06cff', description:'−10% recharge Ultime + Combo, cap global −70%' },
   tank:{ name: 'Tank', icon: 'fa-shield-halved', color: '#4db8ff', description:'Réduit les pénalités des boss' },
-  assassin:{ name: 'Assassin', icon: 'fa-bolt', color: '#ffd54a', description:'+3% DPS · exécute sous 20% PV' },
-  producteur:{ name: 'Producteur', icon: 'fa-gears', color: '#3ec98a', description:'+4% DPS d’équipe' },
+  assassin:{ name: 'Assassin', icon: 'fa-bolt', color: '#ffd54a', description:'+3% DPS (décroissant) · exécute sous 20% PV' },
+  producteur:{ name: 'Producteur', icon: 'fa-gears', color: '#3ec98a', description:'+4% DPS d’équipe (décroissant par doublon)' },
 };
 function idleRoleFor(character) { return IDLE_ROLES[character?.role]||IDLE_ROLES.attaquant; }
 function idleRarityLabel(rarity){return (typeof RARITY_LABELS!=='undefined'&&RARITY_LABELS[rarity])||({rare:'Rare',epic:'Épique',legendary:'Légendaire',mythic:'Mythique'}[rarity]||rarity);}

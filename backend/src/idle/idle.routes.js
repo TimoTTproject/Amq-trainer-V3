@@ -18,6 +18,7 @@ const {
   clickYield,
   clickUpgradeCost,
   CLICK_LEVEL_MAX,
+  CLICK_RATE_SHARE,
   critUpgradeBonus,
   critUpgradeCost,
   CRIT_LEVEL_MAX,
@@ -489,9 +490,19 @@ function equipmentSetMultiplier(items=[]) {
   return equipmentSetEffectMultiplier(items,'dps');
 }
 
-function itemSalvageValue(item) {
+// Valeur de recyclage indexée sur la progression du joueur (`bestStage`) : la
+// formule historique (plate, ~25-600 essence) devenait dérisoire face à une
+// économie exponentielle — dès le milieu de partie, recycler ne payait plus
+// rien, et tout l'axe « Fortune » (set, affixe salvage, rôle Producteur)
+// était mort-né. Plancher = quelques ennemis du meilleur stage atteint,
+// pondéré par la rareté : recycler reste un appoint, jamais un revenu
+// principal, mais un appoint qui suit le joueur toute la partie.
+const SALVAGE_STAGE_FACTOR={rare:5,epic:12,legendary:25,mythic:50};
+function itemSalvageValue(item,bestStage=1) {
   const rarity=ITEM_RARITY_ORDER[item.rarity]||1;
-  return Math.max(25,Math.round(160*rarity*Math.pow(1+item.bonus,4)*(1+(item.enhancementLevel||0)*.08)));
+  const flat=Math.round(160*rarity*Math.pow(1+item.bonus,4)*(1+(item.enhancementLevel||0)*.08));
+  const progression=Math.round(enemyReward(Math.max(1,bestStage))*(SALVAGE_STAGE_FACTOR[item.rarity]||SALVAGE_STAGE_FACTOR.rare)*(1+(item.enhancementLevel||0)*.08));
+  return Math.max(25,flat,progression);
 }
 function runeEnhanceCost(item){const level=Math.max(0,Math.min(15,Number(item?.enhancementLevel)||0));return level>=15?0:Math.round(120*(level+1)*Math.pow(1.22,level)*(ITEM_RARITY_ORDER[item?.rarity]||1));}
 function enhancedRuneSubStats(item,nextLevel){
@@ -689,10 +700,16 @@ async function loadSlots(tx, userId) {
   return slots.map((s) => ({ ...s, awakened: !!s.characterId && awakened.has(s.characterId), items: s.characterId ? (itemsByCharacter.get(s.characterId) || []) : [] }));
 }
 
+// Chaque classe porte désormais une composante de production : la production
+// est à la fois le revenu ET le DPS passif — une classe qui n'y touchait pas
+// (Guerrier/Mage/Ninja) était strictement dominée par l'Invocateur en idle,
+// ses bonus (frappe/Ultime/Combo) ne payant qu'en jeu actif. L'Invocateur
+// reste le roi du pur idle (+20%), les autres échangent une partie de cette
+// production contre un avantage actif marqué.
 const HERO_CLASSES = {
-  warrior: { name: 'Guerrier', icon: 'fa-shield-halved', description: '+50% frappe · 20% de critique (×2)', click: 1.5, prod: 1, burst: 1, team: 1,crit:.20 },
-  mage: { name: 'Mage', icon: 'fa-hat-wizard', description: '+75% de dégâts avec l’Ultime', click: 1, prod: 1, burst: 1.75, team: 1 },
-  ninja: { name: 'Ninja', icon: 'fa-user-ninja', description: '+50% de dégâts avec le Combo', click: 1, prod: 1, burst: 1, team: 1.5 },
+  warrior: { name: 'Guerrier', icon: 'fa-shield-halved', description: '+50% frappe · 20% de critique (×2) · +8% DPS', click: 1.5, prod: 1.08, burst: 1, team: 1,crit:.20 },
+  mage: { name: 'Mage', icon: 'fa-hat-wizard', description: '+75% de dégâts avec l’Ultime · +8% DPS', click: 1, prod: 1.08, burst: 1.75, team: 1 },
+  ninja: { name: 'Ninja', icon: 'fa-user-ninja', description: '+50% de dégâts avec le Combo · +8% DPS', click: 1, prod: 1.08, burst: 1, team: 1.5 },
   swordsman: { name: 'Épéiste', icon: 'fa-khanda', description: '+25% frappe · +10% DPS · Exécution ×2 sous 20% PV', click: 1.25, prod: 1.1, burst: 1, team: 1,execute:2 },
   summoner: { name: 'Invocateur', icon: 'fa-dragon', description: '+20% de DPS d’équipe', click: 1, prod: 1.2, burst: 1, team: 1 },
 };
@@ -725,6 +742,32 @@ function characterTalent(character){
   const byRole={attaquant:'chosen',support:'leader',tank:'mentor',assassin:'prodigy',producteur:'strategist'};
   const key=typeof character==='object'?byRole[roleForCharacter(character)]:null;
   return CHARACTER_TALENTS.find((talent)=>talent.key===key)||CHARACTER_TALENTS[stableCharacterHash(character)%CHARACTER_TALENTS.length];
+}
+// Bonus de production des rôles à rendement DÉCROISSANT par doublon : à +9%
+// plat par Attaquant, empiler dix Attaquants (+90%) écrasait toute
+// composition variée — la diversité (+4%/rôle unique) et les rôles
+// situationnels (Tank/Support) ne pouvaient pas compenser un bonus permanent
+// cumulable sans friction. Le premier exemplaire garde sa pleine valeur, les
+// suivants paient de moins en moins (plancher = dernière valeur de la table).
+const ROLE_STACK_BONUSES={attaquant:[.09,.06,.04,.02],producteur:[.04,.03,.02,.01],assassin:[.03,.02,.01]};
+function roleStackBonus(role,count){
+  const table=ROLE_STACK_BONUSES[role];if(!table||!count)return 0;
+  let sum=0;for(let i=0;i<count;i++)sum+=table[Math.min(i,table.length-1)];
+  return sum;
+}
+// +6% par rôle unique après le premier (relevé de +4%) : la diversité devait
+// peser plus lourd pour être une alternative crédible au stacking.
+const ROLE_DIVERSITY_BONUS=.06;
+function roleTeamBonus(roles){
+  const count=(role)=>roles.filter((value)=>value===role).length;
+  const uniqueRoleBonus=Math.max(0,new Set(roles).size-1)*ROLE_DIVERSITY_BONUS;
+  return {
+    attaquant:roleStackBonus('attaquant',count('attaquant')),
+    producteur:roleStackBonus('producteur',count('producteur')),
+    assassin:roleStackBonus('assassin',count('assassin')),
+    diversity:uniqueRoleBonus,
+    total:roleStackBonus('attaquant',count('attaquant'))+roleStackBonus('producteur',count('producteur'))+roleStackBonus('assassin',count('assassin'))+uniqueRoleBonus,
+  };
 }
 const FORMATIONS={
   balanced:{name:'Équilibrée',description:'Toujours active. Aucun bonus ni condition.',bonusPercent:0,requirements:[],bonus:()=>1},
@@ -802,8 +845,7 @@ function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, cla
   // d'animation et non un multiplicateur obligatoire de classement.
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
   const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
-  const uniqueRoleBonus=Math.max(0,new Set(roles).size-1)*.04;
-  const roleMultiplier=1+roles.filter((role)=>role==='attaquant').length*.09+roles.filter((role)=>role==='producteur').length*.04+roles.filter((role)=>role==='assassin').length*.03+uniqueRoleBonus;
+  const roleMultiplier=1+roleTeamBonus(roles).total;
   const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*(PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*runBlessingEffects(extras.runBlessings).prod;
   const heroes=personalRates.map((entry)=>({...entry,teamMultiplier,rate:safeIdleNumber(entry.personalRate*teamMultiplier)}));
   const heroRate=heroes.reduce((sum,entry)=>safeIdleNumber(sum+entry.rate),0);
@@ -910,11 +952,16 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const active=slots.filter((slot)=>slot.characterId&&slot.character);
   const roles=active.map((slot)=>roleForCharacter(slot.character));
   const count=(role)=>roles.filter((value)=>value===role).length;
-  const uniqueRoleBonus=Math.max(0,new Set(roles).size-1)*.04;
-  const roleBonus=count('attaquant')*.09+count('producteur')*.04+count('assassin')*.03+uniqueRoleBonus;
+  const roleBreakdown=roleTeamBonus(roles);
+  const uniqueRoleBonus=roleBreakdown.diversity;
+  const roleBonus=roleBreakdown.total;
   const reserveBonus=Math.min(.20,Math.max(0,recruitCount-active.length)*.01);
   const teamTalentBonus=active.reduce((sum,slot)=>sum+characterTalent(slot.character).team,0);
-  const passiveBonus=active.reduce((sum,slot)=>sum+((slot.level||1)>=10?({epic:.02,legendary:.04,mythic:.06}[slot.character.rarity]||0):0),0);
+  // Même règle que computeRateBreakdown (characterPassiveTeamBonus) : seuls
+  // les passifs `prodTeam` réellement tirés par les personnages entrent dans
+  // la production d'équipe. L'ancien barème fixe par rareté ({epic:.02, ...})
+  // affichait ici un multiplicateur différent de celui effectivement appliqué.
+  const passiveBonus=characterPassiveTeamBonus(slots,'prodTeam');
   const synergy=synergyForSlots(slots);
   const selectedFormation=FORMATIONS[formation]||FORMATIONS.balanced;
   const formationMultiplier=selectedFormation.bonus(roles);
@@ -922,7 +969,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const multipliers=[
     {key:'roles',label:'Rôles et diversité',multiplier:1+roleBonus,detail:`${count('attaquant')} Attaquant(s), ${count('assassin')} Assassin(s), ${count('producteur')} Producteur(s), ${new Set(roles).size} rôle(s) unique(s)`},
     {key:'talents',label:'Talents d’équipe',multiplier:1+teamTalentBonus,detail:'Mentor, Leader et Stratège actifs'},
-    {key:'passives',label:'Passifs niv. 10',multiplier:1+passiveBonus,detail:'Bonus des héros Épiques et supérieurs'},
+    {key:'passives',label:'Passifs niv. 10',multiplier:1+passiveBonus,detail:'Somme des passifs « production d’équipe » actifs (héros niv. 10+)'},
     {key:'reserve',label:'Réserve',multiplier:1+reserveBonus,detail:`${Math.max(0,recruitCount-active.length)} recrue(s) non assignée(s), plafond +20%`},
     {key:'synergy',label:'Synergie',multiplier:synergy.multiplier,detail:synergy.name},
     {key:'formation',label:`Formation ${selectedFormation.name}`,multiplier:formationMultiplier,detail:formationMultiplier>1?'Condition remplie':'Condition non remplie ou formation neutre'},
@@ -930,12 +977,12 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
     {key:'auto',label:'Compétences automatiques',multiplier:autoSkills?1.15:1,detail:autoSkills?'Activées':'Inactives'},
   ];
   const roleDetails=[
-    {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+9% DPS d’équipe chacun',bonus:count('attaquant')*.09},
-    {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+3% DPS d’équipe chacun et +25% dégâts sous 20% PV ennemi',bonus:count('assassin')*.03+Math.min(.50,count('assassin')*.25),situational:true},
-    {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+4% DPS d’équipe chacun',bonus:count('producteur')*.04},
+    {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+9% DPS d’équipe, rendement décroissant par doublon (9/6/4/2%)',bonus:roleBreakdown.attaquant},
+    {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+3% DPS d’équipe (décroissant) et +25% dégâts sous 20% PV ennemi',bonus:roleBreakdown.assassin+Math.min(.50,count('assassin')*.25),situational:true},
+    {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+4% DPS d’équipe, rendement décroissant par doublon',bonus:roleBreakdown.producteur},
     {key:'support',count:count('support'),name:'Support',effect:'−10% recharge Ultime + Combo chacun. Cumulé avec Flux et passifs, cap global −70%',bonus:count('support')*.10,situational:true},
     {key:'tank',count:count('tank'),name:'Tank',effect:'−15% de pénalité de boss chacun (minimum 45%)',bonus:count('tank')*.15,situational:true},
-    {key:'diversity',count:new Set(roles).size,name:'Diversité',effect:'+4% DPS d’équipe par rôle unique après le premier',bonus:uniqueRoleBonus},
+    {key:'diversity',count:new Set(roles).size,name:'Diversité',effect:'+6% DPS d’équipe par rôle unique après le premier',bonus:uniqueRoleBonus},
   ];
   const talents=active.map((slot,index)=>{const talent=characterTalent(slot.character);return {slot:index+1,character:slot.character.name,name:talent.name,description:talent.description,teamBonus:talent.team,selfBonus:talent.self};});
   let recommendation='Composition stable : compare DPS, boss, essence et recharge avant de remplacer un héros.';
@@ -1036,7 +1083,10 @@ async function settleUnlocked(userId, mutate) {
     if(combat.kills>0)await incrementIdleCounter(userId,'kill',combat.kills);
     const bosses=progressionBossesCrossed(user.idleStage||1,stage,user.idleBattleMode);
     if(bosses>0)await incrementIdleCounter(userId,'boss_kill',bosses);
-    if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey, { passiveKills: combat.kills });
+    // `totalRate` transmis au mutateur : la frappe manuelle ajoute une part de
+    // la production d'équipe (CLICK_RATE_SHARE) et le taux vient d'être
+    // calculé ici — inutile de le recalculer dans chaque route.
+    if (mutate) await mutate(prisma, settledUser, ancientLevelsByKey, { passiveKills: combat.kills, totalRate });
     return settledUser;
   }
   throw new IdleError(409, 'Une autre action est déjà en cours, réessaie.');
@@ -1190,8 +1240,12 @@ async function buildState(userId) {
   if(executionActive)mechanicMultiplier*=heroClass(user.idleHeroClass).execute;
   if(hpRatio<=.2)mechanicMultiplier*=1+Math.min(.5,activeRoles.filter((role)=>role==='assassin').length*.25);
   const clickItems=itemActionBonus(slots,'click')*(isBossStage(stage)?itemActionBonus(slots,'boss'):1);
-  const clickDamage = Math.max(1, Math.round(clickBase * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * prestigeClick * mechanicMultiplier * clickItems * blessingEffects.click));
-  const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+(combatWorld.modifier?.critBonus||0)+critUpgradeBonus(user.idleCritLevel)+blessingEffects.crit));
+  // Même base que la route /click : rendement plat + part de la production
+  // (CLICK_RATE_SHARE), pour que l'aperçu affiché corresponde aux dégâts réels.
+  const clickDamage = Math.max(1, Math.round((clickBase + totalRate * CLICK_RATE_SHARE) * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * prestigeClick * mechanicMultiplier * clickItems * blessingEffects.click));
+  // Même formule que la route /click (passifs de personnage inclus) pour que
+  // la chance affichée soit celle réellement tirée.
+  const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+(combatWorld.modifier?.critBonus||0)+critUpgradeBonus(user.idleCritLevel)+blessingEffects.crit+characterPassiveTeamBonus(slots,'crit')));
   const uniqueActiveRoles=new Set(activeRoles).size;
   const burstPreview=Math.max(1,Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,clickAncientBonus),totalRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*(combatWorld.modifier?.burst||1)*itemActionBonus(slots,'burst')*blessingEffects.burst));
   const teamPreview=activeRoles.length<2?0:Math.max(1,Math.floor(totalRate*(20+uniqueActiveRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(combatWorld.modifier?.team||1)*itemActionBonus(slots,'team')*blessingEffects.team));
@@ -1279,7 +1333,7 @@ async function buildState(userId) {
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
     const set=RUNE_SETS[item.setKey]||RUNE_SETS.energy;
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item),enhanceCost:runeEnhanceCost(item),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item,Math.max(user.idleBestStage||1,stage)),enhanceCost:runeEnhanceCost(item),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
   const inventoryFamilies=RUNE_SET_KEYS.map((key)=>{const set=RUNE_SETS[key];const count=preparedInventoryItems.filter((item)=>(item.setKey||'energy')===key).length;return {key,world:set.name,count,kinds:[],complete:count>=set.required,required:set.required,description:set.description,mode:set.mode,bonus:set.bonus};}).filter((set)=>set.count).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
   const inventory={
@@ -1383,7 +1437,7 @@ async function buildState(userId) {
       level: user.idleClickLevel,
       yield: clickBase,
       damage: clickDamage,
-      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round(clickYield(user.idleClickLevel+1,clickAncientBonus)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*prestigeClick*mechanicMultiplier*blessingEffects.click)) : null,
+      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round((clickYield(user.idleClickLevel+1,clickAncientBonus)+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*prestigeClick*mechanicMultiplier*blessingEffects.click)) : null,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       bulkCosts: bulkUpgradeCosts(user.idleClickLevel, CLICK_LEVEL_MAX, clickUpgradeCost),
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
@@ -2026,7 +2080,7 @@ router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name
 router.post('/equipment/salvage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-equipment-salvage'}),idleUserLockMiddleware,async(req,res)=>{
   const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[req.body?.itemId]).map(String).filter(Boolean))].slice(0,100);if(!ids.length)return res.status(400).json({error:'Aucun objet sélectionné'});
   const confirmHighRarity=req.body?.confirmHighRarity===true;
-  try{const gained=await prisma.$transaction(async(tx)=>{const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedCharacterId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const affixMultiplier=1+fortune.flatMap((item)=>itemAffixList(item)).filter((affix)=>ITEM_EFFECTS[affix.effectKey]?.mode==='salvage').reduce((sum,affix)=>sum+Number(affix.effectValue||0),0);const multiplier=affixMultiplier*equipmentSetFlatMultiplier(fortune,'salvage');const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x),0)*multiplier);const deleted=await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(deleted.count!==items.length)throw new IdleError(409,'Ces objets viennent déjà d’être recyclés');if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{const gained=await prisma.$transaction(async(tx)=>{const salvageUser=await tx.user.findUnique({where:{id:req.user.id},select:{idleBestStage:true,idleStage:true}});const salvageStage=Math.max(salvageUser?.idleBestStage||1,salvageUser?.idleStage||1);const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedCharacterId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const affixMultiplier=1+fortune.flatMap((item)=>itemAffixList(item)).filter((affix)=>ITEM_EFFECTS[affix.effectKey]?.mode==='salvage').reduce((sum,affix)=>sum+Number(affix.effectValue||0),0);const multiplier=affixMultiplier*equipmentSetFlatMultiplier(fortune,'salvage');const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x,salvageStage),0)*multiplier);const deleted=await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(deleted.count!==items.length)throw new IdleError(409,'Ces objets viennent déjà d’être recyclés');if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
@@ -2051,7 +2105,7 @@ router.post('/claim-milestone', requireAuth, requireIdleBeta, rateLimit({ max: 1
 });
 
 // Prestige (« Retraite du Maître ») : reset la RUN contre de la Sagesse
-// (voir wisdomForPrestige), dépensée ensuite dans les Ancients — plus de
+// (voir wisdomForRunStage), dépensée ensuite dans les Ancients — plus de
 // multiplicateur automatique. Le rang du Dojo (épreuves d'Ascension), le
 // roster recruté, les jalons réclamés ET les Ancients déjà achetés sont
 // volontairement CONSERVÉS — seule la puissance personnelle (essence,
@@ -2148,7 +2202,12 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
     const normalized=normalizeWaveProgress(liveUser.idleStage,liveUser.idleWaveKills,liveUser.idleBattleMode);let stage=normalized.stage;let waveKills=normalized.waveKills;let hp=liveUser.idleEnemyHp>0&&liveUser.idleEnemyHp<=enemyUnitMaxHp(stage,waveKills)?liveUser.idleEnemyHp:enemyUnitMaxHp(stage,waveKills);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const slots=await loadSlots(tx,liveUser.id);const roles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
-    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const passiveCritBonus=characterPassiveTeamBonus(slots,'crit');const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'));
+    // Base = rendement plat du clic + part de la production d'équipe
+    // (CLICK_RATE_SHARE) : sans cette part, le clic plafonnait en dur face à
+    // des PV exponentiels et tout l'arsenal actif devenait cosmétique en
+    // milieu de partie. Les multiplicateurs (classe, crit, objets…) portent
+    // sur la somme : ils restent pertinents à tout stade.
+    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const passiveCritBonus=characterPassiveTeamBonus(slots,'crit');const base=(clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))+(settlement?.totalRate||0)*CLICK_RATE_SHARE)*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'));
     // « Frappes Multiples » : chaque frappe physique (count, plafonné par la
     // cadence/le budget serveur) simule PLUSIEURS frappes de combat — dégâts
     // et kills comptés en conséquence. Le compteur `count` renvoyé au client
@@ -2468,7 +2527,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
       const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
       if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
-      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus)*equipmentSetFlatMultiplier(equippedItems,'salvage'));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
+      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop,Math.max(user.idleBestStage||1,user.idleStage||1))*(1+fortuneBonus)*equipmentSetFlatMultiplier(equippedItems,'salvage'));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
       return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);

@@ -860,7 +860,9 @@ test('slot-level : refuse un emplacement vide, sinon débite selon charLevelUpCo
 });
 
 test('slot-ascend : seuil progressif et niveaux conservés pendant la run', async () => {
-  const user = dbUser({ essence: 1_000_000 });
+  // Coût d'ascension désormais indexé sur le coût de niveau au palier requis
+  // (≈ 12 niveaux à L100), soit de l'ordre du milliard pour un rare.
+  const user = dbUser({ essence: 1e12 });
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
   prisma.idleSlot.findUnique = async () => ({ id:9,userId:'u1',slotIndex:0,characterId:7,level:HERO_ASCENSION_LEVEL-1,ascension:0,character:{rarity:'rare'} });
