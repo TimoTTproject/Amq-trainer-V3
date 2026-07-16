@@ -93,7 +93,7 @@ test('méta transparente : Producteur, Leader, Lead Skill et Logistique reprenne
     {characterId:2,level:10,character:{name:'Sakura',series:'Naruto',rarity:'legendary'}},
   ];
   const meta=teamMetaBreakdown(slots,5,'industry',false,1);
-  assert.equal(meta.roleDetails.find((role)=>role.key==='producteur').bonus,.05);
+  assert.equal(meta.roleDetails.find((role)=>role.key==='producteur').bonus,.04);
   assert.equal(meta.talents.find((talent)=>talent.character==='Bulma').name,'Stratège');
   assert.equal(meta.talents.find((talent)=>talent.character==='Sakura').name,'Leader');
   assert.equal(meta.multipliers.find((item)=>item.key==='talents').multiplier,1.11);

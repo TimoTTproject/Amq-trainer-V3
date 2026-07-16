@@ -1,7 +1,7 @@
 // Service worker : network-first (évite le contenu périmé après déploiement),
 // repli sur le cache hors-ligne, et précache de la coquille applicative pour un
 // démarrage instantané / hors-ligne. N'intercepte ni l'API, ni les flux, ni Socket.io.
-const CACHE = 'amq-v102';
+const CACHE = 'amq-v103';
 
 // Coquille applicative : tout le statique nécessaire au 1er rendu.
 const SHELL = [

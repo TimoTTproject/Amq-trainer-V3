@@ -140,6 +140,37 @@ class IdleError extends Error {
   }
 }
 
+const SQUAD_PRESET_LIMIT = 5;
+const SQUAD_SLOT_DEFS = [
+  { index: 0, name: 'Escouade Alpha', icon: 'fa-flag', unlock: { type: 'start', label: 'Disponible' }, purpose: 'Progression principale', bonus: 'Aucun bonus caché : c’est la team de push.' },
+  { index: 1, name: 'Escouade Boss', icon: 'fa-skull', unlock: { type: 'prestige', value: 1, label: 'Prestige 1' }, purpose: 'Gardiens et boss communs', bonus: 'Pensée pour Tank + Assassin + Attaquant.' },
+  { index: 2, name: 'Escouade Farm', icon: 'fa-recycle', unlock: { type: 'rank', value: 25, label: 'Rang 25' }, purpose: 'Farm et recyclage', bonus: 'Pensée pour Producteur + Fortune.' },
+  { index: 3, name: 'Escouade Faille', icon: 'fa-dungeon', unlock: { type: 'rift', value: 1, label: 'Faille débloquée' }, purpose: 'Défi hebdomadaire', bonus: 'Pensée pour rôles variés et reliques.' },
+  { index: 4, name: 'Escouade Libre', icon: 'fa-stars', unlock: { type: 'prestige', value: 5, label: 'Prestige 5' }, purpose: 'Test de méta', bonus: 'Pour essayer des persos favoris sans casser la team principale.' },
+];
+
+function unlockedSquadPresetCount(user = {}) {
+  const prestige = Math.max(0, Number(user.prestigeLevel) || 0);
+  const rank = Math.max(1, Number(user.idleRankLevel) || 1);
+  const bestStage = Math.max(1, Number(user.idleBestStage || user.idleRunBestStage || user.idleStage) || 1);
+  return SQUAD_SLOT_DEFS.filter((slot) => {
+    if (slot.unlock.type === 'start') return true;
+    if (slot.unlock.type === 'prestige') return prestige >= slot.unlock.value;
+    if (slot.unlock.type === 'rank') return rank >= slot.unlock.value;
+    if (slot.unlock.type === 'rift') return rank >= 20 || bestStage >= 120;
+    return false;
+  }).length;
+}
+
+function squadPresetSlots(user = {}, presets = []) {
+  const byName = new Map(presets.map((preset) => [preset.name, preset]));
+  const unlocked = unlockedSquadPresetCount(user);
+  return SQUAD_SLOT_DEFS.map((slot) => {
+    const preset = byName.get(slot.name) || null;
+    return { ...slot, unlocked: slot.index < unlocked, saved: !!preset, formation: preset?.formation || null, size: Array.isArray(preset?.slots) ? preset.slots.length : 0 };
+  });
+}
+
 async function withIdleUserLock(userId, action, { attempts = 8, ttlMs = 30000 } = {}) {
   const key = `lock:idle:user:${userId}`;
   let token = null;
@@ -769,7 +800,8 @@ function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, cla
   // d'animation et non un multiplicateur obligatoire de classement.
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
   const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
-  const roleMultiplier=1+roles.filter((role)=>role==='attaquant').length*.08+roles.filter((role)=>role==='producteur').length*.05;
+  const uniqueRoleBonus=Math.max(0,new Set(roles).size-1)*.04;
+  const roleMultiplier=1+roles.filter((role)=>role==='attaquant').length*.09+roles.filter((role)=>role==='producteur').length*.04+roles.filter((role)=>role==='assassin').length*.03+uniqueRoleBonus;
   const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*(PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*runBlessingEffects(extras.runBlessings).prod;
   const heroes=personalRates.map((entry)=>({...entry,teamMultiplier,rate:safeIdleNumber(entry.personalRate*teamMultiplier)}));
   const heroRate=heroes.reduce((sum,entry)=>safeIdleNumber(sum+entry.rate),0);
@@ -876,7 +908,8 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const active=slots.filter((slot)=>slot.characterId&&slot.character);
   const roles=active.map((slot)=>roleForCharacter(slot.character));
   const count=(role)=>roles.filter((value)=>value===role).length;
-  const roleBonus=count('attaquant')*.08+count('producteur')*.05;
+  const uniqueRoleBonus=Math.max(0,new Set(roles).size-1)*.04;
+  const roleBonus=count('attaquant')*.09+count('producteur')*.04+count('assassin')*.03+uniqueRoleBonus;
   const reserveBonus=Math.min(.20,Math.max(0,recruitCount-active.length)*.01);
   const teamTalentBonus=active.reduce((sum,slot)=>sum+characterTalent(slot.character).team,0);
   const passiveBonus=active.reduce((sum,slot)=>sum+((slot.level||1)>=10?({epic:.02,legendary:.04,mythic:.06}[slot.character.rarity]||0):0),0);
@@ -885,7 +918,7 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
   const formationMultiplier=selectedFormation.bonus(roles);
   const leaderSkill=leaderSkillForSlots(slots,leaderCharacterId);
   const multipliers=[
-    {key:'roles',label:'Rôles offensifs',multiplier:1+roleBonus,detail:`${count('attaquant')} Attaquant(s), ${count('producteur')} Producteur(s)`},
+    {key:'roles',label:'Rôles et diversité',multiplier:1+roleBonus,detail:`${count('attaquant')} Attaquant(s), ${count('assassin')} Assassin(s), ${count('producteur')} Producteur(s), ${new Set(roles).size} rôle(s) unique(s)`},
     {key:'talents',label:'Talents d’équipe',multiplier:1+teamTalentBonus,detail:'Mentor, Leader et Stratège actifs'},
     {key:'passives',label:'Passifs niv. 10',multiplier:1+passiveBonus,detail:'Bonus des héros Épiques et supérieurs'},
     {key:'reserve',label:'Réserve',multiplier:1+reserveBonus,detail:`${Math.max(0,recruitCount-active.length)} recrue(s) non assignée(s), plafond +20%`},
@@ -895,11 +928,12 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
     {key:'auto',label:'Compétences automatiques',multiplier:autoSkills?1.15:1,detail:autoSkills?'Activées':'Inactives'},
   ];
   const roleDetails=[
-    {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+8% DPS d’équipe chacun',bonus:count('attaquant')*.08},
-    {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+5% DPS d’équipe chacun',bonus:count('producteur')*.05},
+    {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+9% DPS d’équipe chacun',bonus:count('attaquant')*.09},
+    {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+3% DPS d’équipe chacun et +25% dégâts sous 20% PV ennemi',bonus:count('assassin')*.03+Math.min(.50,count('assassin')*.25),situational:true},
+    {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+4% DPS d’équipe chacun',bonus:count('producteur')*.04},
     {key:'support',count:count('support'),name:'Support',effect:'−10% recharge du Combo chacun (max. −30%)',bonus:Math.min(.30,count('support')*.10),situational:true},
     {key:'tank',count:count('tank'),name:'Tank',effect:'−15% de pénalité de boss chacun (minimum 45%)',bonus:count('tank')*.15,situational:true},
-    {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+25% dégâts chacun sous 20% PV ennemi (max. +50%)',bonus:Math.min(.50,count('assassin')*.25),situational:true},
+    {key:'diversity',count:new Set(roles).size,name:'Diversité',effect:'+4% DPS d’équipe par rôle unique après le premier',bonus:uniqueRoleBonus},
   ];
   const talents=active.map((slot,index)=>{const talent=characterTalent(slot.character);return {slot:index+1,character:slot.character.name,name:talent.name,description:talent.description,teamBonus:talent.team,selfBonus:talent.self};});
   let recommendation='Composition stable : compare les rôles, la synergie et la formation avant de remplacer un héros.';
@@ -1046,7 +1080,7 @@ async function buildState(userId) {
   }) : [];
   let recruits = [];let presets=[];
   try { recruits = await prisma.dojoRecruit.findMany({ where: { userId }, include: { character: { select: { name:true, series: true, rarity: true } } }, orderBy:{recruitedAt:'desc'} }); } catch (e) { if (e?.code) throw e; }
-  try{presets=await prisma.idleTeamPreset.findMany({where:{userId},select:{name:true,formation:true,slots:true},orderBy:{updatedAt:'desc'},take:3});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
+  try{presets=await prisma.idleTeamPreset.findMany({where:{userId},select:{name:true,formation:true,slots:true},orderBy:{updatedAt:'desc'},take:SQUAD_PRESET_LIMIT});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
   const prodAncientBonus = ancientBonus(ancientLevelsByKey, 'prodMult');
   const clickAncientBonus = ancientBonus(ancientLevelsByKey, 'clickMult');
   const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
@@ -1282,7 +1316,7 @@ async function buildState(userId) {
     heroClass: { key: user.idleHeroClass, ...heroClass(user.idleHeroClass), passiveActive:executionActive,passiveStatus:user.idleHeroClass==='swordsman'?(executionActive?'EXÉCUTION ACTIVE · dégâts de frappe ×2':`Exécution à ${Math.round(executeAt*100)}% PV · ennemi à ${Math.round(hpRatio*100)}%`):null, changeReadyAt:user.idleHeroClassChangedAt?new Date(new Date(user.idleHeroClassChangedAt).getTime()+10*60*1000).toISOString():null, choices: Object.entries(HERO_CLASSES).map(([key, value]) => ({ key, ...value })) },
     heroSpecialization: { key:user.idleHeroSpec, active:heroSpec(user.idleHeroClass,user.idleHeroSpec), unlocked:dojoLevel>=25, choices:(HERO_SPECS[user.idleHeroClass]||[]).map((s)=>({...s,selected:s.key===user.idleHeroSpec})) },
     heroStyle: { aura:user.idleHeroAura, stance:user.idleHeroStance, title:user.idleHeroTitle, hair:user.idleHeroHair, outfit:user.idleHeroOutfit, color:user.idleHeroColor, choices:unlockedStyles(dojoLevel,{auras:user.idleHeroAura,stances:user.idleHeroStance,titles:user.idleHeroTitle,hairs:user.idleHeroHair,outfits:user.idleHeroOutfit,colors:user.idleHeroColor}) },
-    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',leaderCharacterId:(slots.some((s)=>s.characterId===user.idleLeaderCharacterId)?user.idleLeaderCharacterId:slots.find((s)=>s.character)?.characterId)||null,formations:Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier,bonusPercent:f.bonusPercent,conditionMet:key==='balanced'||multiplier>1,requirements};}),presets,meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills,user.idleLeaderCharacterId),leaderSkill:leaderSkillForSlots(slots,user.idleLeaderCharacterId) },
+    strategy: { ...strategy, reserveBonus:Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01), roles: slots.filter((s) => s.character).map((s) => roleForCharacter(s.character)),formation:user.idleFormation||'balanced',leaderCharacterId:(slots.some((s)=>s.characterId===user.idleLeaderCharacterId)?user.idleLeaderCharacterId:slots.find((s)=>s.character)?.characterId)||null,formations:Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,description:f.description,active:key===(user.idleFormation||'balanced'),multiplier,bonusPercent:f.bonusPercent,conditionMet:key==='balanced'||multiplier>1,requirements};}),presets,squads:{limit:SQUAD_PRESET_LIMIT,unlocked:unlockedSquadPresetCount(user),slots:squadPresetSlots(user,presets)},meta:teamMetaBreakdown(slots,recruitCount,user.idleFormation||'balanced',!!user.idleAutoSkills,user.idleLeaderCharacterId),leaderSkill:leaderSkillForSlots(slots,user.idleLeaderCharacterId) },
     lastCollectAt: user.idleLastCollectAt,
     offlineCapMs,
     offlineSummary:{awayMs:previewElapsedMs,essence:pending,kills:combatPreview.kills,waves:Math.max(0,combatPreview.stage-(user.idleStage||1)),bossBlocked:combatPreview.bossFailed,progressionCapped:combatPreview.progressionCapped,capped:Date.now()-new Date(user.idleLastCollectAt).getTime()>=offlineCapMs},
@@ -1902,8 +1936,27 @@ router.post('/run-blessing/reroll',requireAuth,requireIdleBeta,rateLimit({max:30
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void recordIdleEvent(req.user.id,'run_blessing_reroll');res.json(await buildState(req.user.id));
 });
-router.post('/team-preset/save',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),idleUserLockMiddleware,async(req,res)=>{const name=String(req.body?.name||'').trim().slice(0,24);if(!name)return res.status(400).json({error:'Nom du preset requis'});const count=await prisma.idleTeamPreset.count({where:{userId:req.user.id}});const existing=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}});if(count>=3&&!existing)return res.status(400).json({error:'Maximum de 3 presets'});const [slots,user]=await Promise.all([loadSlots(prisma,req.user.id),prisma.user.findUnique({where:{id:req.user.id},select:{idleFormation:true}})]);await prisma.idleTeamPreset.upsert({where:{userId_name:{userId:req.user.id,name}},update:{slots:slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId})),formation:user.idleFormation},create:{userId:req.user.id,name,slots:slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId})),formation:user.idleFormation}});res.json(await buildState(req.user.id));});
-router.post('/team-preset/load',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),async(req,res)=>{const name=String(req.body?.name||'');const preset=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}});if(!preset)return res.status(404).json({error:'Preset introuvable'});await withSettle(req.user.id,async(tx,user)=>{await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null,level:1,ascension:0}});const used=new Set();for(const item of Array.isArray(preset.slots)?preset.slots:[]){const slotIndex=Number(item.slotIndex);const characterId=Number(item.characterId);if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=user.idleSlotsUnlocked||!Number.isInteger(characterId)||used.has(characterId))continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId}}});if(owned){used.add(characterId);await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0},create:{userId:user.id,slotIndex,characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0}});}}await tx.user.update({where:{id:user.id},data:{idleFormation:FORMATIONS[preset.formation]?preset.formation:'balanced'}});});void recordIdleEvent(req.user.id,'preset_load');res.json(await buildState(req.user.id));});
+router.post('/team-preset/save',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),idleUserLockMiddleware,async(req,res)=>{
+  const name=String(req.body?.name||'').trim().slice(0,24);if(!name)return res.status(400).json({error:'Nom de squad requis'});
+  const [slots,user,presets]=await Promise.all([loadSlots(prisma,req.user.id),prisma.user.findUnique({where:{id:req.user.id},select:{idleFormation:true,prestigeLevel:true,idleRankLevel:true,idleBestStage:true,idleRunBestStage:true,idleStage:true}}),prisma.idleTeamPreset.findMany({where:{userId:req.user.id},select:{name:true,formation:true,slots:true}})]);
+  const squadSlots=squadPresetSlots(user,presets);const target=squadSlots.find((slot)=>slot.name===name)||squadSlots.find((slot)=>slot.index===Number(req.body?.slotIndex));
+  if(!target)return res.status(400).json({error:'Slot de squad invalide'});
+  if(!target.unlocked)return res.status(403).json({error:`${target.name} se débloque avec ${target.unlock.label}`});
+  const savedName=target.name;const existing=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name:savedName}}});
+  const count=await prisma.idleTeamPreset.count({where:{userId:req.user.id}});
+  if(count>=SQUAD_PRESET_LIMIT&&!existing)return res.status(400).json({error:`Maximum de ${SQUAD_PRESET_LIMIT} squads`});
+  const squadSlotsData=slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId}));
+  if(new Set(squadSlotsData.map((s)=>s.characterId)).size!==squadSlotsData.length)return res.status(400).json({error:'Un personnage ne peut pas être dupliqué dans la même squad'});
+  await prisma.idleTeamPreset.upsert({where:{userId_name:{userId:req.user.id,name:savedName}},update:{slots:squadSlotsData,formation:user.idleFormation},create:{userId:req.user.id,name:savedName,slots:squadSlotsData,formation:user.idleFormation}});
+  res.json(await buildState(req.user.id));
+});
+router.post('/team-preset/load',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),async(req,res)=>{
+  const name=String(req.body?.name||'');const [preset,user,presets]=await Promise.all([prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}}),prisma.user.findUnique({where:{id:req.user.id},select:{prestigeLevel:true,idleRankLevel:true,idleBestStage:true,idleRunBestStage:true,idleStage:true}}),prisma.idleTeamPreset.findMany({where:{userId:req.user.id},select:{name:true,formation:true,slots:true}})]);
+  if(!preset)return res.status(404).json({error:'Squad introuvable'});
+  const target=squadPresetSlots(user,presets).find((slot)=>slot.name===preset.name);if(target&&!target.unlocked)return res.status(403).json({error:`${target.name} se débloque avec ${target.unlock.label}`});
+  await withSettle(req.user.id,async(tx,user)=>{await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null,level:1,ascension:0}});const used=new Set();for(const item of Array.isArray(preset.slots)?preset.slots:[]){const slotIndex=Number(item.slotIndex);const characterId=Number(item.characterId);if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=user.idleSlotsUnlocked||!Number.isInteger(characterId)||used.has(characterId))continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId}}});if(owned){used.add(characterId);await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0},create:{userId:user.id,slotIndex,characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0}});}}await tx.user.update({where:{id:user.id},data:{idleFormation:FORMATIONS[preset.formation]?preset.formation:'balanced'}});});
+  void recordIdleEvent(req.user.id,'preset_load');res.json(await buildState(req.user.id));
+});
 router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});if((user.idleRankLevel||1)<50)return res.status(403).json({error:'Compétences automatiques débloquées au niveau 50'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
 
 // Identifie l'objet par itemId (comme equip/unequip/salvage), PAS par
