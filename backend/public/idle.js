@@ -389,7 +389,13 @@ function idleSpawnOrb(kind = 'orb') {
       const r = await api('/api/idle/bonus-orb', { method: 'POST', body: JSON.stringify({}) });
       idleOrbCooldownUntil = Date.now() + (Number(r.cooldownSeconds) || 90) * 1000;
       orb.remove();
-      idleSpawnFloat(r.buff ? r.buff.label.toUpperCase() : r.jackpot ? `JACKPOT +${idleFormatNumber(r.reward)}` : `ORBE +${idleFormatNumber(r.reward)}`, 'crit huge');
+      // Le nom seul ("PRÉCISION DIVINE") ne dit rien du bonus qu'il faut aller
+      // vérifier ailleurs — le texte flottant, le plus visible des trois
+      // retours (avec le bandeau et le toast), doit porter l'effet lui-même.
+      // Classe dédiée 'buff' (pas 'crit huge', trop large pour ce texte plus
+      // long — largeur fixe + retour à la ligne au lieu d'un débordement
+      // rogné par .idle-floats{overflow:hidden}).
+      idleSpawnFloat(r.buff ? `${r.buff.label.toUpperCase()} · ${r.buff.description.toUpperCase()}` : r.jackpot ? `JACKPOT +${idleFormatNumber(r.reward)}` : `ORBE +${idleFormatNumber(r.reward)}`, r.buff ? 'buff' : 'crit huge');
       if (r.seal) idleSpawnFloat('+1 SCEAU', 'crit');
       idleAddCombatLog(r.buff ? `${r.buff.label} — ${r.buff.description} pendant ${r.buff.seconds}s` : `${r.jackpot ? 'JACKPOT — orbe bonus' : 'Orbe bonus attrapé'} : +${idleFormatNumber(r.reward)} Essence${r.seal ? ' · +1 Sceau' : ''}`, r.buff ? 'fa-fire-flame-curved' : r.jackpot ? 'fa-burst' : 'fa-circle-notch');
       if (typeof burstConfetti === 'function') burstConfetti(r.jackpot || r.buff ? 60 : 20);
