@@ -52,38 +52,79 @@ function stableCharacterHash(character) {
   return Math.abs(hash);
 }
 // Passif de rareté : jusqu'ici un seul nombre fixe par palier de rareté, donc
-// deux personnages de même rareté avaient TOUJOURS le même bonus — aucune
-// variété. Chaque personnage tire maintenant sa propre magnitude dans une
-// fourchette par palier (stable, dérivée de son identité), sur le même
-// principe que `characterTalent`. Le catalogue dépasse 13 000 personnages :
-// une fourchette procédurale est la seule option qui ne demande aucun
-// contenu écrit à la main par personnage.
-// mode 'self' : bonus sur la production PROPRE du personnage.
-// mode 'team' : bonus sur la production de TOUTE l'équipe.
+// deux personnages de même rareté avaient TOUJOURS le même bonus, sur le même
+// stat — aucune variété. Chaque personnage tire maintenant un TYPE de passif
+// dans le pool de son palier ET sa propre magnitude dans la fourchette de ce
+// type (les deux stables, dérivées de son identité), sur le même principe que
+// `characterTalent`. Le catalogue dépasse 13 000 personnages : un pool +
+// fourchette procédural est la seule option qui ne demande aucun contenu
+// écrit à la main par personnage.
+// stat 'prodSelf'  : bonus sur la production PROPRE du personnage.
+// stat 'prodTeam'  : bonus sur la production de TOUTE l'équipe.
+// stat 'click'     : bonus sur les dégâts de clic manuel.
+// stat 'crit'      : points de chance critique supplémentaires.
+// stat 'cooldown'  : réduction de la recharge de l'Ultime et du Combo.
 // common n'a pas de bonus mécanique (pur texte de progression économique).
-const RARITY_PASSIVE_RANGE = {
-  rare: { mode: 'self', min: .03, max: .07 },
-  epic: { mode: 'team', min: .01, max: .03 },
-  legendary: { mode: 'team', min: .03, max: .05 },
-  mythic: { mode: 'team', min: .05, max: .07 },
+const RARITY_PASSIVE_POOL = {
+  rare: [
+    { key: 'endurance', label: 'Endurance', stat: 'prodSelf', min: .03, max: .07 },
+    { key: 'sprint', label: 'Sprint', stat: 'click', min: .02, max: .06 },
+    { key: 'instinct', label: 'Instinct aiguisé', stat: 'crit', min: .01, max: .03 },
+  ],
+  epic: [
+    { key: 'aura', label: 'Aura', stat: 'prodTeam', min: .01, max: .03 },
+    { key: 'fulgurance', label: 'Fulgurance', stat: 'click', min: .03, max: .07 },
+    { key: 'precision', label: 'Précision', stat: 'crit', min: .02, max: .04 },
+    { key: 'flux_mineur', label: 'Flux mineur', stat: 'cooldown', min: .01, max: .03 },
+  ],
+  legendary: [
+    { key: 'domination', label: 'Domination', stat: 'prodTeam', min: .03, max: .05 },
+    { key: 'fureur', label: 'Fureur', stat: 'click', min: .05, max: .09 },
+    { key: 'oeil_du_tigre', label: 'Œil du Tigre', stat: 'crit', min: .03, max: .05 },
+    { key: 'flux_majeur', label: 'Flux majeur', stat: 'cooldown', min: .02, max: .04 },
+  ],
+  mythic: [
+    { key: 'transcendance', label: 'Transcendance', stat: 'prodTeam', min: .05, max: .07 },
+    { key: 'apocalypse', label: 'Apocalypse', stat: 'click', min: .07, max: .11 },
+    { key: 'oeil_omniscient', label: 'Œil Omniscient', stat: 'crit', min: .04, max: .06 },
+    { key: 'flux_transcendant', label: 'Flux transcendant', stat: 'cooldown', min: .03, max: .05 },
+  ],
 };
-const RARITY_PASSIVE_LABEL = {
-  common: 'Apprenti', rare: 'Endurance', epic: 'Aura', legendary: 'Domination', mythic: 'Transcendance',
+const PASSIVE_STAT_TEXT = {
+  prodSelf: (v) => `+${v}% de production personnelle au niveau 10`,
+  prodTeam: (v) => `+${v}% de production à toute l’équipe au niveau 10`,
+  click: (v) => `+${v}% de dégâts de clic au niveau 10`,
+  crit: (v) => `+${v} point${v > 1 ? 's' : ''} de chance critique au niveau 10`,
+  cooldown: (v) => `-${v}% de recharge des compétences au niveau 10`,
 };
-function characterPassiveValue(character, rarity, mode) {
-  const range = RARITY_PASSIVE_RANGE[rarity];
-  if (!range || range.mode !== mode) return 0;
+// Type de passif tiré parmi le pool du palier — stable par personnage (même
+// hash que roleForCharacter/characterTalent, juste un modulo différent :
+// même précédent que ces deux fonctions qui dérivent chacune leur propre
+// sélection du même hash de base).
+function characterPassiveEntry(character, rarity) {
+  const pool = RARITY_PASSIVE_POOL[rarity];
+  if (!pool || !pool.length) return null;
+  return pool[stableCharacterHash(character) % pool.length];
+}
+function characterPassiveMagnitude(character, rarity) {
+  const entry = characterPassiveEntry(character, rarity);
+  if (!entry) return 0;
   const roll = (stableCharacterHash(character) % 1000) / 1000;
-  return Number((range.min + roll * (range.max - range.min)).toFixed(3));
+  return Number((entry.min + roll * (entry.max - entry.min)).toFixed(3));
+}
+// Magnitude du passif de CE personnage pour le `stat` demandé — 0 si son
+// passif tiré ne correspond pas à ce stat (permet aux appelants de sommer
+// sans avoir à connaître à l'avance quel type chaque personnage a reçu).
+function characterPassiveBonus(character, rarity, stat) {
+  const entry = characterPassiveEntry(character, rarity);
+  if (!entry || entry.stat !== stat) return 0;
+  return characterPassiveMagnitude(character, rarity);
 }
 function characterPassiveDescription(character, rarity) {
-  const range = RARITY_PASSIVE_RANGE[rarity];
-  const label = RARITY_PASSIVE_LABEL[rarity] || 'Bonus';
-  if (!range) return `${label} · progression économique`;
-  const percent = Math.round(characterPassiveValue(character, rarity, range.mode) * 1000) / 10;
-  return range.mode === 'self'
-    ? `${label} · +${percent}% de production personnelle au niveau 10`
-    : `${label} · +${percent}% de production à toute l’équipe au niveau 10`;
+  const entry = characterPassiveEntry(character, rarity);
+  if (!entry) return 'Apprenti · progression économique';
+  const percent = Math.round(characterPassiveMagnitude(character, rarity) * 1000) / 10;
+  return `${entry.label} · ${PASSIVE_STAT_TEXT[entry.stat](percent)}`;
 }
 const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 const HERO_ASCENSION_LEVEL = 100;
@@ -104,11 +145,11 @@ function charLevelBulkCost(rarity, level, amount) {
 
 // Taux de production d'un emplacement (essence/s), avant multiplicateurs
 // globaux (Discipline + niveau du Dojo).
-// Le passif de rareté « self » (rare, cf. RARITY_PASSIVE_RANGE) n'est PAS
-// appliqué ici : `slotRate` n'a pas l'identité du personnage (juste
-// rareté+niveau), et la magnitude varie maintenant PAR personnage. Il est
-// appliqué en aval, dans `computeTotalRate` (idle.routes.js), qui a accès au
-// personnage complet.
+// Le passif de rareté « prodSelf » (possible sur les rares, cf.
+// RARITY_PASSIVE_POOL) n'est PAS appliqué ici : `slotRate` n'a pas
+// l'identité du personnage (juste rareté+niveau), et le type/la magnitude
+// varient maintenant PAR personnage. Il est appliqué en aval, dans
+// `computeTotalRate` (idle.routes.js), qui a accès au personnage complet.
 function slotRate(rarity, charLevel) {
   const scaling = RARITY_LEVEL_BONUS[rarity] || CHAR_LEVEL_BONUS;
   const level = Math.max(1, charLevel || 1);
@@ -823,8 +864,10 @@ module.exports = {
   charLevelBulkCost,
   RARITY_LEVEL_BONUS,
   stableCharacterHash,
-  RARITY_PASSIVE_RANGE,
-  characterPassiveValue,
+  RARITY_PASSIVE_POOL,
+  characterPassiveEntry,
+  characterPassiveMagnitude,
+  characterPassiveBonus,
   characterPassiveDescription,
   HERO_MILESTONES,
   HERO_ASCENSION_LEVEL,

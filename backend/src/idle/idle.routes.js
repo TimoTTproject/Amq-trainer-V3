@@ -48,7 +48,7 @@ const {
   RARITY_RATE,
   RARITY_LEVEL_BONUS,
   stableCharacterHash,
-  characterPassiveValue,
+  characterPassiveBonus,
   characterPassiveDescription,
   RECRUIT_WEIGHTS,
   HERO_MILESTONES,
@@ -634,7 +634,7 @@ const ULTIMATE_COOLDOWN_MS=90000;
 const TEAM_COMBO_COOLDOWN_MS=150000;
 const ULTIMATE_CLICK_MULTIPLIER=75;
 const ULTIMATE_TEAM_SECONDS=15;
-function activeSkillCooldown(baseMs,supportCount,cooldownLevel=0,runMultiplier=1){return Math.max(5000,Math.round(baseMs*(1-Math.min(.7,supportCount*.1+cooldownUpgradeBonus(cooldownLevel)))*runMultiplier));}
+function activeSkillCooldown(baseMs,supportCount,cooldownLevel=0,runMultiplier=1,passiveCooldownBonus=0){return Math.max(5000,Math.round(baseMs*(1-Math.min(.7,supportCount*.1+cooldownUpgradeBonus(cooldownLevel)+passiveCooldownBonus))*runMultiplier));}
 function ultimateBaseDamage(clickDamage,teamRate){return Math.max(clickDamage*ULTIMATE_CLICK_MULTIPLIER,teamRate*ULTIMATE_TEAM_SECONDS);}
 const PRESTIGE_PATHS={balanced:{name:'Voie de l’Équilibre',prod:1,click:1},fist:{name:'Voie du Poing',prod:1,click:1.25},army:{name:'Voie de l’Armée',prod:1.2,click:1},time:{name:'Voie du Temps',prod:1.1,click:1.1}};
 function characterCombatSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Ruée',description:'Renforce les formations d’assaut.'},support:{name:'Ralliement',description:'Active les formations combinées.'},tank:{name:'Rempart',description:'Stabilise les combats de boss.'},assassin:{name:'Exécution',description:'Excellent contre les ennemis affaiblis.'},producteur:{name:'Logistique',description:'Améliore le rendement hors combat.'}}[role];}
@@ -667,6 +667,18 @@ function currentIdleEvent(now = new Date()) {
 // achievementProdMultiplier) et `autoClickDps` (Ancient « Frappe Fantôme »,
 // ajouté APRÈS les multiplicateurs d'équipe : c'est le joueur qui frappe,
 // pas l'équipe qui produit).
+// Somme, sur les emplacements actifs de niveau 10+, la magnitude du passif
+// de rareté de CE personnage pour le `stat` demandé (0 si son passif tiré
+// porte sur un autre stat) — même esprit que `itemActionBonus` pour
+// l'équipement, mais pour les passifs de personnage. Réutilisé pour
+// click/crit/cooldown dans les routes de combat (le stat 'prodTeam' passe
+// lui par `computeTotalRate`, seul endroit qui compose déjà la production).
+function characterPassiveTeamBonus(slots, stat) {
+  return slots.reduce((sum, s) => {
+    if (!s.character || (s.level || 1) < 10) return sum;
+    return sum + characterPassiveBonus(s.character, s.character.rarity, stat);
+  }, 0);
+}
 function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null,extras={}) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
@@ -676,17 +688,13 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if(!s.characterId||!s.character)return sum;
     const equipped=(s.items?.length?s.items:s.equipments)||[];
     const gearMultiplier=(1+equipped.reduce((v,e)=>v+itemProductionBonus(e),0))*equipmentSetMultiplier(equipped);
-    // Passif de rareté « self » (rare, cf. RARITY_PASSIVE_RANGE) : ne
-    // s'applique qu'au niveau 10+, comme annoncé côté personnage — retour
-    // testeur : avant ce correctif, ce passif était affiché mais jamais
-    // réellement appliqué au calcul de production.
-    const rarityPassiveSelf=(s.level||1)>=10?characterPassiveValue(s.character,s.character.rarity,'self'):0;
+    // Passif de rareté « prodSelf » (possible sur les rares, cf.
+    // RARITY_PASSIVE_POOL) : ne s'applique qu'au niveau 10+, comme annoncé
+    // côté personnage.
+    const rarityPassiveSelf=(s.level||1)>=10?characterPassiveBonus(s.character,s.character.rarity,'prodSelf'):0;
     return sum+slotRate(s.character.rarity,s.level)*(1+characterTalent(s.character).self)*(1+rarityPassiveSelf)*Math.pow(2,s.ascension||0)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1);
   },0);
-  const teamPassive = slots.reduce((mult, s) => {
-    if (!s.character || (s.level || 1) < 10) return mult;
-    return mult + characterPassiveValue(s.character,s.character.rarity,'team');
-  }, 1);
+  const teamPassive = 1 + characterPassiveTeamBonus(slots, 'prodTeam');
   // battleSpeed ne modifie volontairement plus l'économie : c'est un réglage
   // d'animation et non un multiplicateur obligatoire de classement.
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
@@ -1043,6 +1051,7 @@ async function buildState(userId) {
   const prestigeClick=(PRESTIGE_PATHS[user.idlePrestigePath]||PRESTIGE_PATHS.balanced).click;
   const activeRoles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
   const activeSupportCount=activeRoles.filter((role)=>role==='support').length;
+  const passiveCooldownBonus=characterPassiveTeamBonus(slots,'cooldown');
   const executeAt=combatWorld.modifier?.executeAt||.2;const executionActive=!!heroClass(user.idleHeroClass).execute&&hpRatio<=executeAt;
   if(isBossStage(stage)&&hpRatio<=.5)mechanicMultiplier*=.75;
   if(isBossStage(stage)&&user.idleBossStartedAt&&Date.now()-new Date(user.idleBossStartedAt).getTime()>=BOSS_TIMER_SECONDS*1000)mechanicMultiplier*=.5;
@@ -1219,7 +1228,7 @@ async function buildState(userId) {
       speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
       mode: user.idleBattleMode||'progress',
       autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=50,level:50,bonus:.15},
-      skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,supportCount:activeSupportCount,cooldownReductionPercent:Math.round((1-activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/ULTIMATE_COOLDOWN_MS)*100),burstBaseCooldownSeconds:ULTIMATE_COOLDOWN_MS/1000,teamBaseCooldownSeconds:TEAM_COMBO_COOLDOWN_MS/1000,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/1000)},
+      skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,supportCount:activeSupportCount,cooldownReductionPercent:Math.round((1-activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/ULTIMATE_COOLDOWN_MS)*100),burstBaseCooldownSeconds:ULTIMATE_COOLDOWN_MS/1000,teamBaseCooldownSeconds:TEAM_COMBO_COOLDOWN_MS/1000,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000)},
     },
     missions,
     codex: { discovered: recruitCount, masteries, collection: seriesCollection, catalogTotal, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
@@ -1261,10 +1270,10 @@ async function buildState(userId) {
       level:user.idleCooldownLevel||0,
       reduction:cooldownUpgradeBonus(user.idleCooldownLevel),
       nextReduction:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?cooldownUpgradeBonus(user.idleCooldownLevel+1):null,
-      burstSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/1000),
-      nextBurstSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown)/1000):null,
-      teamSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown)/1000),
-      nextTeamSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown)/1000):null,
+      burstSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),
+      nextBurstSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown,passiveCooldownBonus)/1000):null,
+      teamSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),
+      nextTeamSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown,passiveCooldownBonus)/1000):null,
       nextCost:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?cooldownUpgradeCost(user.idleCooldownLevel):null,
       bulkCosts: bulkUpgradeCosts(user.idleCooldownLevel||0, COOLDOWN_LEVEL_MAX, cooldownUpgradeCost),
       maxed:user.idleCooldownLevel>=COOLDOWN_LEVEL_MAX,
@@ -1995,7 +2004,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
     const normalized=normalizeWaveProgress(liveUser.idleStage,liveUser.idleWaveKills,liveUser.idleBattleMode);let stage=normalized.stage;let waveKills=normalized.waveKills;let hp=liveUser.idleEnemyHp>0&&liveUser.idleEnemyHp<=enemyUnitMaxHp(stage,waveKills)?liveUser.idleEnemyHp:enemyUnitMaxHp(stage,waveKills);let progress=liveUser.idleBossProgress||0;let bossStartedAt=liveUser.idleBossStartedAt?new Date(liveUser.idleBossStartedAt):null;let bestBossMs=liveUser.idleBestBossMs||null;
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const slots=await loadSlots(tx,liveUser.id);const roles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
-    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click;
+    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const passiveCritBonus=characterPassiveTeamBonus(slots,'crit');const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'));
     // « Frappes Multiples » : chaque frappe physique (count, plafonné par la
     // cadence/le budget serveur) simule PLUSIEURS frappes de combat — dégâts
     // et kills comptés en conséquence. Le compteur `count` renvoyé au client
@@ -2014,7 +2023,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
       const executeAt=world.modifier?.executeAt||.2;if(heroClass(liveUser.idleHeroClass).execute&&hpRatio<=executeAt)multiplier*=heroClass(liveUser.idleHeroClass).execute;
       if(hpRatio<=.2)multiplier*=1+Math.min(.5,roles.filter((role)=>role==='assassin').length*.25);
       if(isBossStage(stage))multiplier*=itemActionBonus(slots,'boss');
-      const critical=Math.random()<Math.max(0,Math.min(.95,(heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0)+critUpgradeBonus(liveUser.idleCritLevel)+blessingEffects.crit));if(critical)criticals++;
+      const critical=Math.random()<Math.max(0,Math.min(.95,(heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0)+critUpgradeBonus(liveUser.idleCritLevel)+blessingEffects.crit+passiveCritBonus));if(critical)criticals++;
       const damage=Math.max(1,Math.round(base*multiplier*(critical?2:1)));damageTotal+=damage;
       if(damage>=hp){const defeatedStage=stage;rewardTotal+=enemyUnitReward(stage,waveKills);kills++;waveKills++;const waveComplete=waveKills>=enemiesRequiredForStage(stage);if(isBossStage(stage)&&waveComplete&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}if(waveComplete){waveKills=0;if(liveUser.idleBattleMode!=='farm')stage++;}hp=enemyUnitMaxHp(stage,waveKills);progress=stage!==defeatedStage?0:progress;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
     }
@@ -2030,7 +2039,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
   let gained=0;let readyAt;let cooldownMs=ULTIMATE_COOLDOWN_MS;let killed=false,bossKilled=false;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const blessingEffects=runBlessingEffects(user.idleRunBlessings);const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount,user.idleCooldownLevel,blessingEffects.cooldown);const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst')*blessingEffects.burst);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const blessingEffects=runBlessingEffects(user.idleRunBlessings);const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst')*blessingEffects.burst);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void incrementIdleCounter(req.user.id,'skill',1);
   if(killed)await incrementIdleCounter(req.user.id,'kill',1);
   if(bossKilled)await incrementIdleCounter(req.user.id,'boss_kill',1);
@@ -2049,7 +2058,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const blessingEffects=runBlessingEffects(user.idleRunBlessings);const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
-      cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length,user.idleCooldownLevel,blessingEffects.cooldown);
+      cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));
       await tx.user.update({where:{id:user.id},data:{idleTeamReadyAt:new Date(Date.now()+cooldownMs),idleBossProgress:progress}});
       gained=Math.max(1,Math.floor(rate*(20+uniqueRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(campaignForStage(user.idleStage||1).modifier?.team||1)*multiplier*itemActionBonus(slots,'team')*blessingEffects.team));
       ({killed,bossKilled}=await applyActiveDamage(tx,user,gained));
