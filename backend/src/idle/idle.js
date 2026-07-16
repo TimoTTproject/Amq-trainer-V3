@@ -590,11 +590,18 @@ function runBlessingEffects(value) {
   }
   return effects;
 }
-function runBlessingChoices(userId,prestigeLevel,choiceIndex,owned=[]) {
-  const ownedKeys=parseRunBlessings(owned);const score=(item,salt)=>String(`${userId}:${prestigeLevel}:${choiceIndex}:${salt}:${item.key}`).split('').reduce((n,char)=>((n*33)^char.charCodeAt(0))>>>0,2166136261);
+function runBlessingChoices(userId,prestigeLevel,choiceIndex,owned=[],rerollCount=0) {
+  const ownedKeys=parseRunBlessings(owned);const score=(item,salt)=>String(`${userId}:${prestigeLevel}:${choiceIndex}:${rerollCount}:${salt}:${item.key}`).split('').reduce((n,char)=>((n*33)^char.charCodeAt(0))>>>0,2166136261);
   const fresh=RUN_BLESSINGS.filter((item)=>!ownedKeys.includes(item.key)).sort((a,b)=>score(a,'fresh')-score(b,'fresh'));
   const repeats=RUN_BLESSINGS.filter((item)=>ownedKeys.includes(item.key)).sort((a,b)=>score(a,'repeat')-score(b,'repeat'));
   return [...fresh,...repeats].slice(0,3);
+}
+// Reroll payant des 3 choix proposés (retour testeur : « peut-être offrir la
+// possibilité de reroll ») : coût croissant en Essence, remis à zéro au
+// Prestige comme le reste du build de run.
+const RUN_BLESSING_REROLL_BASE_COST = 250;
+function runBlessingRerollCost(rerollCount) {
+  return Math.round(RUN_BLESSING_REROLL_BASE_COST * Math.pow(1.6, Math.max(0, rerollCount || 0)));
 }
 
 // ── Ancients : arbre de Prestige PERMANENT (jamais reset, y compris par un
@@ -811,6 +818,7 @@ module.exports = {
   parseRunBlessings,
   runBlessingEffects,
   runBlessingChoices,
+  runBlessingRerollCost,
   ANCIENT_BASE_COST,
   ANCIENT_COST_GROWTH,
   ancientCost,

@@ -82,6 +82,7 @@ const {
   parseRunBlessings,
   runBlessingEffects,
   runBlessingChoices,
+  runBlessingRerollCost,
 } = require('./idle');
 
 const router = express.Router();
@@ -917,7 +918,7 @@ async function buildState(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true, idleCritLevel:true, idleCooldownLevel:true,idleMultiStrikeLevel:true,idleRunBlessings:true,idleRunStartedAt:true,
+      essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true, idleCritLevel:true, idleCooldownLevel:true,idleMultiStrikeLevel:true,idleRunBlessings:true,idleRunBlessingRerolls:true,idleRunStartedAt:true,
       essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true, idleWaveKills:true,
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
@@ -1152,14 +1153,15 @@ async function buildState(userId) {
   // `buildState` charge volontairement une projection sans `id`. La graine
   // doit donc utiliser l'identifiant reçu par la fonction ; sinon l'interface
   // affiche l'offre de `undefined` que la route de choix refuse ensuite.
-  const blessingChoices=blessingPending?runBlessingChoices(userId,user.prestigeLevel,runBlessingKeys.length,runBlessingKeys):[];
+  const blessingChoices=blessingPending?runBlessingChoices(userId,user.prestigeLevel,runBlessingKeys.length,runBlessingKeys,user.idleRunBlessingRerolls||0):[];
+  const blessingRerollCost=blessingPending?runBlessingRerollCost(user.idleRunBlessingRerolls||0):null;
   const selectedBlessings=runBlessingKeys.map((key)=>RUN_BLESSINGS.find((item)=>item.key===key)).filter(Boolean);
   return {
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
     economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,offlineCapMs},
-    run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,pending:blessingPending,choices:blessingChoices,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
+    run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,pending:blessingPending,choices:blessingChoices,rerollCost:blessingRerollCost,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
     combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     rank:{...rank,startedAt:user.idleRankStartedAt?.toISOString()||null},
@@ -1759,13 +1761,34 @@ router.post('/run-blessing',requireAuth,requireIdleBeta,rateLimit({max:12,name:'
   try{
     await withSettle(req.user.id,async(tx,user)=>{
       const owned=parseRunBlessings(user.idleRunBlessings);const unlocked=Math.min(12,Math.floor((Math.max(user.idleRunBestStage||1,user.idleStage||1)-1)/20));
-      if(owned.length>=unlocked)throw new IdleError(400,'Aucune bénédiction disponible : vaincs le prochain gardien majeur');
-      const choices=runBlessingChoices(user.id,user.prestigeLevel,owned.length,owned);
+      // Le déblocage est un simple palier de stage (tous les 20), pas un combat
+      // de boss distinct — le message doit refléter la vraie condition
+      // (retour testeur : « n'a pas vraiment de sens » avec l'ancien texte).
+      if(owned.length>=unlocked)throw new IdleError(400,unlocked>=12?'Toutes les bénédictions de cette run sont déjà choisies':`Aucune bénédiction disponible pour l’instant : la prochaine se débloque au stage ${(unlocked+1)*20+1}`);
+      const choices=runBlessingChoices(user.id,user.prestigeLevel,owned.length,owned,user.idleRunBlessingRerolls||0);
       if(!choices.some((item)=>item.key===key))throw new IdleError(400,'Cette bénédiction ne fait pas partie de tes choix');
-      await tx.user.update({where:{id:user.id},data:{idleRunBlessings:[...owned,key].join(',')}});
+      // Le prochain choix (s'il y en a un) repart d'un lot non reroll : chaque
+      // choix de run a son propre budget de rerolls.
+      await tx.user.update({where:{id:user.id},data:{idleRunBlessings:[...owned,key].join(','),idleRunBlessingRerolls:0}});
     });
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void recordIdleEvent(req.user.id,'run_blessing');res.json(await buildState(req.user.id));
+});
+// Reroll payant des 3 choix proposés (retour testeur : « peut-être offrir la
+// possibilité de reroll »). Ne change pas les bénédictions déjà choisies —
+// seulement l'offre du choix EN COURS, via le compteur de rerolls inclus
+// dans la graine de `runBlessingChoices`.
+router.post('/run-blessing/reroll',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-run-blessing-reroll'}),async(req,res)=>{
+  try{
+    await withSettle(req.user.id,async(tx,user)=>{
+      const owned=parseRunBlessings(user.idleRunBlessings);const unlocked=Math.min(12,Math.floor((Math.max(user.idleRunBestStage||1,user.idleStage||1)-1)/20));
+      if(owned.length>=unlocked)throw new IdleError(400,unlocked>=12?'Toutes les bénédictions de cette run sont déjà choisies':`Aucune bénédiction disponible pour l’instant : la prochaine se débloque au stage ${(unlocked+1)*20+1}`);
+      const cost=runBlessingRerollCost(user.idleRunBlessingRerolls||0);
+      if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');
+      await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost},idleRunBlessingRerolls:{increment:1}}});
+    });
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  void recordIdleEvent(req.user.id,'run_blessing_reroll');res.json(await buildState(req.user.id));
 });
 router.post('/team-preset/save',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),async(req,res)=>{const name=String(req.body?.name||'').trim().slice(0,24);if(!name)return res.status(400).json({error:'Nom du preset requis'});const count=await prisma.idleTeamPreset.count({where:{userId:req.user.id}});const existing=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}});if(count>=3&&!existing)return res.status(400).json({error:'Maximum de 3 presets'});const [slots,user]=await Promise.all([loadSlots(prisma,req.user.id),prisma.user.findUnique({where:{id:req.user.id},select:{idleFormation:true}})]);await prisma.idleTeamPreset.upsert({where:{userId_name:{userId:req.user.id,name}},update:{slots:slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId})),formation:user.idleFormation},create:{userId:req.user.id,name,slots:slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId})),formation:user.idleFormation}});res.json(await buildState(req.user.id));});
 router.post('/team-preset/load',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),async(req,res)=>{const name=String(req.body?.name||'');const preset=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}});if(!preset)return res.status(404).json({error:'Preset introuvable'});await withSettle(req.user.id,async(tx,user)=>{await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null}});for(const item of Array.isArray(preset.slots)?preset.slots:[]){if(item.slotIndex>=user.idleSlotsUnlocked)continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId:Number(item.characterId)}}});if(owned)await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex:Number(item.slotIndex)}},update:{characterId:Number(item.characterId),assignedAt:new Date(),level:owned.trainingLevel||1},create:{userId:user.id,slotIndex:Number(item.slotIndex),characterId:Number(item.characterId),assignedAt:new Date(),level:owned.trainingLevel||1}});}await tx.user.update({where:{id:user.id},data:{idleFormation:preset.formation}});});void recordIdleEvent(req.user.id,'preset_load');res.json(await buildState(req.user.id));});
@@ -1920,6 +1943,7 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleCooldownLevel: 0,
           idleMultiStrikeLevel: 0,
           idleRunBlessings: '',
+          idleRunBlessingRerolls: 0,
           idleRunStartedAt: new Date(),
           idleRunEssenceEarned: 0,
           idleStage: startStage,

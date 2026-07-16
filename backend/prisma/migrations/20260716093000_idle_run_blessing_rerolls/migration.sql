@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "idleRunBlessingRerolls" INTEGER NOT NULL DEFAULT 0;
