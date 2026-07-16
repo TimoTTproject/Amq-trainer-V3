@@ -9,7 +9,7 @@ const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
-  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, charLevelUpCost,
+  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
 } = require('../src/idle/idle');
@@ -19,7 +19,7 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleRunBlessings:'',idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
+    idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleMultiStrikeLevel:0,idleRunBlessings:'',idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
@@ -915,6 +915,14 @@ test('upgrade cooldown : débite le coût et augmente Flux', async () => {
   assert.equal(res.status,200);assert.equal(updateData.essence.decrement,cost);assert.equal(updateData.idleCooldownLevel.increment,1);
 });
 
+test('upgrade multistrike : débite le coût et augmente Frappes Multiples', async () => {
+  const cost=multiStrikeUpgradeCost(0);const user=dbUser({essence:cost});let updateData=null;
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async(args)=>{if(args.data.idleMultiStrikeLevel)updateData=args.data;return user;};
+  const res=await app.request('/api/idle/upgrade',{method:'POST',cookie:app.authCookie('u1'),body:{type:'multistrike'}});
+  assert.equal(res.status,200);assert.equal(updateData.essence.decrement,cost);assert.equal(updateData.idleMultiStrikeLevel.increment,1);
+});
+
 test('upgrade prod : amount=5 achète 5 niveaux au prix exact, tout ou rien', async () => {
   const exactCost=[0,1,2,3,4].reduce((sum,lvl)=>sum+prodUpgradeCost(lvl),0);
   const poor=dbUser({essence:exactCost-1});let updateData=null;
@@ -1015,6 +1023,26 @@ test('click : regroupe plusieurs frappes dans une seule requête autoritaire', a
   assert.equal(res.status,200);
   assert.equal(res.json.count,5);
   assert.ok(res.json.damage>=5);
+});
+
+test('click : Frappes Multiples augmente les dégâts simulés sans changer le compteur de clics (retour testeur)', async () => {
+  const stage=100;
+  const baseline=dbUser({id:'u-ms-base',idleClickLevel:2,idleMultiStrikeLevel:0,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
+  prisma.user.findUnique=async()=>baseline;
+  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')baseline.idleEnemyHp=data.idleEnemyHp;return baseline;};
+  const baseRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-base-0001'}});
+  assert.equal(baseRes.status,200);
+  assert.equal(baseRes.json.count,1);
+
+  const boosted=dbUser({id:'u-ms-boost',idleClickLevel:2,idleMultiStrikeLevel:20,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
+  prisma.user.findUnique=async()=>boosted;
+  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')boosted.idleEnemyHp=data.idleEnemyHp;return boosted;};
+  const boostedRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-boost-0001'}});
+  assert.equal(boostedRes.status,200);
+  // Le compteur de clics physiques (quêtes) ne bouge pas...
+  assert.equal(boostedRes.json.count,1);
+  // ...mais les dégâts simulés augmentent (2 frappes de combat pour 1 tap au niveau max).
+  assert.ok(boostedRes.json.damage>baseRes.json.damage);
 });
 
 test('click : rejouer le même requestId ne réapplique jamais les dégâts', async () => {

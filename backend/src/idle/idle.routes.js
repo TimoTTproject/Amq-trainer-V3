@@ -21,6 +21,9 @@ const {
   critUpgradeBonus,
   critUpgradeCost,
   CRIT_LEVEL_MAX,
+  multiStrikeBonus,
+  multiStrikeUpgradeCost,
+  MULTI_STRIKE_MAX,
   cooldownUpgradeBonus,
   cooldownUpgradeCost,
   COOLDOWN_LEVEL_MAX,
@@ -901,7 +904,7 @@ async function buildState(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true, idleCritLevel:true, idleCooldownLevel:true,idleRunBlessings:true,idleRunStartedAt:true,
+      essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true, idleCritLevel:true, idleCooldownLevel:true,idleMultiStrikeLevel:true,idleRunBlessings:true,idleRunStartedAt:true,
       essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true, idleWaveKills:true,
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
       idleBossClaimed: true,
@@ -1248,6 +1251,14 @@ async function buildState(userId) {
       bulkCosts: bulkUpgradeCosts(user.idleCooldownLevel||0, COOLDOWN_LEVEL_MAX, cooldownUpgradeCost),
       maxed:user.idleCooldownLevel>=COOLDOWN_LEVEL_MAX,
     },
+    multiStrike: {
+      level:user.idleMultiStrikeLevel||0,
+      bonus:multiStrikeBonus(user.idleMultiStrikeLevel||0),
+      nextBonus:user.idleMultiStrikeLevel<MULTI_STRIKE_MAX?multiStrikeBonus((user.idleMultiStrikeLevel||0)+1):null,
+      nextCost:user.idleMultiStrikeLevel<MULTI_STRIKE_MAX?multiStrikeUpgradeCost(user.idleMultiStrikeLevel||0):null,
+      bulkCosts: bulkUpgradeCosts(user.idleMultiStrikeLevel||0, MULTI_STRIKE_MAX, multiStrikeUpgradeCost),
+      maxed:user.idleMultiStrikeLevel>=MULTI_STRIKE_MAX,
+    },
     ancients: {
       points: user.wisdomPoints,
       branches: ANCIENT_BRANCHES,
@@ -1293,7 +1304,7 @@ async function buildState(userId) {
             {key:'stage',label:'Stage et record de la run',before:user.idleRunBestStage||1,after:1},
             {key:'training',label:'Niveaux et Ascensions des héros',before:'Niveaux et Ascensions actuels',after:'Niveau 1 · A0'},
             {key:'team',label:'Équipe et emplacements',before:`${user.idleSlotsUnlocked}/${MAX_SLOTS} débloqués`,after:`${START_SLOTS}/${MAX_SLOTS}, formation conservée`},
-            {key:'upgrades',label:'Niveaux des améliorations',before:`Niv. ${user.idleProdLevel||0} · ${user.idleClickLevel||0} · ${user.idleCritLevel||0} · ${user.idleCooldownLevel||0}`,after:'Tous au niveau 0'},
+            {key:'upgrades',label:'Niveaux des améliorations',before:`Niv. ${user.idleProdLevel||0} · ${user.idleClickLevel||0} · ${user.idleCritLevel||0} · ${user.idleCooldownLevel||0} · ${user.idleMultiStrikeLevel||0}`,after:'Tous au niveau 0'},
             {key:'blessings',label:'Bénédictions roguelike',before:`${runBlessingKeys.length} pouvoir${runBlessingKeys.length!==1?'s':''} de run`,after:'Toutes retirées'},
           ],
           kept:[
@@ -1583,7 +1594,7 @@ function buyBulkUpgrade(user, { level, maxLevel, costFn, amount }) {
 
 router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), async (req, res) => {
   const type = req.body?.type;
-  if (!['prod', 'click', 'slot', 'crit', 'cooldown'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
+  if (!['prod', 'click', 'slot', 'crit', 'cooldown', 'multistrike'].includes(type)) return res.status(400).json({ error: 'Type invalide' });
   const requestedAmount = req.body?.amount;
   const amount = type === 'slot' ? 1 : (requestedAmount === 'max' ? 'max' : Number(requestedAmount || 1));
   if (type !== 'slot' && amount !== 'max' && ![1, 5, 10, 100].includes(amount)) return res.status(400).json({ error: 'Quantité invalide' });
@@ -1607,6 +1618,10 @@ router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
         const { bought, total } = buyBulkUpgrade(user, { level: user.idleCooldownLevel || 0, maxLevel: COOLDOWN_LEVEL_MAX, costFn: cooldownUpgradeCost, amount });
         purchasedLevels = bought;
         await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleCooldownLevel: { increment: bought } } });
+      } else if (type === 'multistrike') {
+        const { bought, total } = buyBulkUpgrade(user, { level: user.idleMultiStrikeLevel || 0, maxLevel: MULTI_STRIKE_MAX, costFn: multiStrikeUpgradeCost, amount });
+        purchasedLevels = bought;
+        await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleMultiStrikeLevel: { increment: bought } } });
       } else if (type === 'slot') {
         if (user.idleSlotsUnlocked >= MAX_SLOTS) throw new IdleError(400, 'Tous les emplacements sont débloqués');
         const cost = slotUpgradeCost(user.idleSlotsUnlocked);
@@ -1862,6 +1877,7 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleClickLevel: 0,
           idleCritLevel: 0,
           idleCooldownLevel: 0,
+          idleMultiStrikeLevel: 0,
           idleRunBlessings: '',
           idleRunStartedAt: new Date(),
           idleRunEssenceEarned: 0,
@@ -1912,7 +1928,13 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
     let damageTotal=0,rewardTotal=0,kills=0,bosses=0,criticals=0,lastMechanic=null;
     const slots=await loadSlots(tx,liveUser.id);const roles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
     const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const base=clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click;
-    for(let i=0;i<count;i++){
+    // « Frappes Multiples » : chaque frappe physique (count, plafonné par la
+    // cadence/le budget serveur) simule PLUSIEURS frappes de combat — dégâts
+    // et kills comptés en conséquence. Le compteur `count` renvoyé au client
+    // (et utilisé pour les quêtes de clic) reste basé sur les frappes
+    // physiques, pas sur ce multiplicateur.
+    const effectiveCount=Math.max(count,Math.round(count*(1+multiStrikeBonus(liveUser.idleMultiStrikeLevel||0))));
+    for(let i=0;i<effectiveCount;i++){
       const world=campaignForStage(stage);const mechanic=bossMechanicForStage(stage);lastMechanic=mechanic?.key||null;
       if(isBossStage(stage)&&!bossStartedAt)bossStartedAt=new Date();const hpRatio=hp/Math.max(1,enemyUnitMaxHp(stage,waveKills));let multiplier=world.modifier?.click||1;
       if(isBossStage(stage)&&hpRatio<=.5)multiplier*=.75;

@@ -111,6 +111,7 @@ model User {
   idleClickLevel         Int       @default(0) // amélioration « Concentration » : puissance du clic manuel
   idleCritLevel          Int       @default(0) // amélioration « Instinct » : chance de critique de la run
   idleCooldownLevel      Int       @default(0) // amélioration « Flux » : recharge Ultime et Combo de la run
+  idleMultiStrikeLevel   Int       @default(0) // amélioration « Frappes Multiples » : nombre de frappes simulées par clic manuel
   idleRunBlessings       String    @default("") // choix roguelike temporaires, séparés par des virgules ; reset au Prestige
   idleRunStartedAt       DateTime  @default(now()) // durée minimale et transparence de la run courante
   // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement

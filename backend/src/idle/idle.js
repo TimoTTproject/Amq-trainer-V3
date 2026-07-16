@@ -158,6 +158,22 @@ function critUpgradeCost(level) {
   return Math.round(finiteIdleNumber(100 * Math.pow(1.78, level) * earlyDiscount, 1));
 }
 
+// Amélioration « Frappes Multiples » : chaque clic manuel simule plusieurs
+// frappes à la fois (dégâts ET kills comptés en conséquence), pour donner de
+// la profondeur au clic au lieu d'un geste répétitif sans enjeu (retour
+// testeur : « le clic manque d'intérêt... des upgrade pour augmenter le
+// nombre de clique en un clique »). Comme Instinct/Flux, repart à zéro au
+// Prestige — c'est un renforcement de la run en cours, pas un bonus permanent.
+const MULTI_STRIKE_BONUS = 0.05;
+const MULTI_STRIKE_MAX = 20;
+function multiStrikeBonus(level) {
+  return Math.min(Math.max(0, level || 0), MULTI_STRIKE_MAX) * MULTI_STRIKE_BONUS;
+}
+function multiStrikeUpgradeCost(level) {
+  const earlyDiscount=[.4,.5,.65,.8,.9][Math.max(0,level)]??1;
+  return Math.round(finiteIdleNumber(120 * Math.pow(1.8, level) * earlyDiscount, 1));
+}
+
 // Amélioration « Flux » : −2% sur les recharges de l'Ultime et du Combo par
 // niveau. Les Supports s'additionnent à ce bonus côté routes, avec un plafond
 // commun de −70% pour que les compétences ne deviennent jamais permanentes.
@@ -714,6 +730,10 @@ module.exports = {
   CRIT_LEVEL_MAX,
   critUpgradeBonus,
   critUpgradeCost,
+  MULTI_STRIKE_BONUS,
+  MULTI_STRIKE_MAX,
+  multiStrikeBonus,
+  multiStrikeUpgradeCost,
   COOLDOWN_LEVEL_BONUS,
   COOLDOWN_LEVEL_MAX,
   cooldownUpgradeBonus,

@@ -1851,6 +1851,10 @@ function renderIdleUpgrades(state) {
       type:'cooldown',icon:'fa-stopwatch',title:'Flux',level:state.cooldown.level,maxed:state.cooldown.maxed,cost:state.cooldown.nextCost, bulkCosts: state.cooldown.bulkCosts, bulk: true,
       label:'Recharge des compétences',before:`${state.cooldown.burstSeconds}s · ${state.cooldown.teamSeconds}s`,after:`${state.cooldown.nextBurstSeconds??state.cooldown.burstSeconds}s · ${state.cooldown.nextTeamSeconds??state.cooldown.teamSeconds}s`,desc:'Réduit de 2% par niveau la recharge de l’Ultime et du Combo. Se cumule avec les Supports.',
     },
+    {
+      type:'multistrike',icon:'fa-hand-sparkles',title:'Frappes Multiples',level:state.multiStrike.level,maxed:state.multiStrike.maxed,cost:state.multiStrike.nextCost, bulkCosts: state.multiStrike.bulkCosts, bulk: true,
+      label:'Frappes simulées par clic',before:`+${Math.round(state.multiStrike.bonus*100)}%`,after:`+${Math.round((state.multiStrike.nextBonus??state.multiStrike.bonus)*100)}%`,desc:'Chaque clic manuel simule des frappes supplémentaires (dégâts et kills comptés). Réinitialisé au Prestige.',
+    },
   ];
   const available=items.filter((item)=>!item.maxed&&Number.isFinite(item.cost));
   const recommended=available.slice().sort((a,b)=>(a.cost<=essence?0:1)-(b.cost<=essence?0:1)||a.cost-b.cost)[0];
