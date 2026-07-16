@@ -399,21 +399,21 @@ function equipmentItemScore(item,role='attaquant'){
   return Number(item.bonus||0)+affixScore+(ITEM_RARITY_ORDER[item.rarity]||1)*1e-6;
 }
 function equipmentPlanScore(assignments=[]){
-  const bySlot=new Map();for(const assignment of assignments){const list=bySlot.get(assignment.slotId)||[];list.push(assignment);bySlot.set(assignment.slotId,list);}
-  let total=0;for(const list of bySlot.values()){const raw=list.reduce((sum,x)=>sum+equipmentItemScore(x.item,x.role),0);total+=raw*equipmentSetMultiplier(list.map((x)=>x.item));}return total;
+  const byCharacter=new Map();for(const assignment of assignments){const list=byCharacter.get(assignment.characterId)||[];list.push(assignment);byCharacter.set(assignment.characterId,list);}
+  let total=0;for(const list of byCharacter.values()){const raw=list.reduce((sum,x)=>sum+equipmentItemScore(x.item,x.role),0);total+=raw*equipmentSetMultiplier(list.map((x)=>x.item));}return total;
 }
 function buildAutoEquipmentPlan(slots=[],items=[]){
   const active=slots.filter((slot)=>slot.characterId&&slot.character);if(!active.length)return {assignments:[],beforeScore:0,afterScore:0,changed:0};
-  const current=items.filter((item)=>item.equippedSlotId&&active.some((slot)=>slot.id===item.equippedSlotId)).map((item)=>{const slot=active.find((x)=>x.id===item.equippedSlotId);return {slotId:slot.id,slotIndex:slot.slotIndex,itemId:item.id,item,role:roleForCharacter(slot.character)};});
+  const current=items.filter((item)=>item.equippedCharacterId&&active.some((slot)=>slot.characterId===item.equippedCharacterId)).map((item)=>{const slot=active.find((x)=>x.characterId===item.equippedCharacterId);return {characterId:slot.characterId,slotIndex:slot.slotIndex,itemId:item.id,item,role:roleForCharacter(slot.character)};});
   const orders=[active,[...active].reverse(),...active.map((_,index)=>[...active.slice(index),...active.slice(0,index)])];let best=current;let bestScore=equipmentPlanScore(current);
   for(const order of orders){const remaining=new Map(items.map((item)=>[item.id,item]));const candidate=[];
     for(const slot of order){const role=roleForCharacter(slot.character);const available=[...remaining.values()];const singles=['weapon','relic','accessory'].map((kind)=>available.filter((item)=>item.kind===kind).sort((a,b)=>equipmentItemScore(b,role)-equipmentItemScore(a,role))[0]).filter(Boolean);let chosen=singles;let chosenScore=singles.reduce((sum,item)=>sum+equipmentItemScore(item,role),0);
       for(const world of new Set(available.map((item)=>item.sourceWorld))){const bundle=['weapon','relic','accessory'].map((kind)=>available.filter((item)=>item.kind===kind&&item.sourceWorld===world).sort((a,b)=>equipmentItemScore(b,role)-equipmentItemScore(a,role))[0]);if(bundle.some((item)=>!item))continue;const score=bundle.reduce((sum,item)=>sum+equipmentItemScore(item,role),0)*1.10;if(score>chosenScore){chosen=bundle;chosenScore=score;}}
-      for(const item of chosen){remaining.delete(item.id);candidate.push({slotId:slot.id,slotIndex:slot.slotIndex,itemId:item.id,item,role});}
+      for(const item of chosen){remaining.delete(item.id);candidate.push({characterId:slot.characterId,slotIndex:slot.slotIndex,itemId:item.id,item,role});}
     }
     const score=equipmentPlanScore(candidate);if(score>bestScore+1e-9){best=candidate;bestScore=score;}
   }
-  const currentByItem=new Map(current.map((x)=>[x.itemId,x.slotId]));const changed=best.filter((x)=>currentByItem.get(x.itemId)!==x.slotId).length+current.filter((x)=>!best.some((y)=>y.itemId===x.itemId)).length;
+  const currentByItem=new Map(current.map((x)=>[x.itemId,x.characterId]));const changed=best.filter((x)=>currentByItem.get(x.itemId)!==x.characterId).length+current.filter((x)=>!best.some((y)=>y.itemId===x.itemId)).length;
   return {assignments:best,beforeScore:equipmentPlanScore(current),afterScore:bestScore,changed};
 }
 
@@ -546,7 +546,7 @@ async function fetchDecorArt(theme) {
 async function loadSlots(tx, userId) {
   const slots = await tx.idleSlot.findMany({
     where: { userId },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } }, equipments: true,items:true },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } }, equipments: true },
   });
   // Marque les héros « Éveillés » (shiny, +10% de production personnelle) —
   // l'information vit sur DojoRecruit, pas sur l'emplacement. try/catch : la
@@ -555,7 +555,17 @@ async function loadSlots(tx, userId) {
   let awakenedRows = [];
   try { awakenedRows = await tx.dojoRecruit.findMany({ where: { userId, awakened: true }, select: { characterId: true } }); } catch { /* migration/tests */ }
   const awakened = new Set(awakenedRows.map((r) => r.characterId));
-  return slots.map((s) => ({ ...s, awakened: !!s.characterId && awakened.has(s.characterId) }));
+  // L'équipement est lié au PERSONNAGE (equippedCharacterId), plus au slot :
+  // on le rattache ici par characterId pour que le reste du code (score
+  // d'équipe, fiche héros, plan d'auto-équipement) continue de lire
+  // `slot.items` sans changement, mais en suivant le héros s'il change
+  // d'emplacement.
+  const characterIds = slots.map((s) => s.characterId).filter(Boolean);
+  let items = [];
+  if (characterIds.length) items = await tx.idleItem.findMany({ where: { userId, equippedCharacterId: { in: characterIds } } });
+  const itemsByCharacter = new Map();
+  for (const item of items) { const list = itemsByCharacter.get(item.equippedCharacterId) || []; list.push(item); itemsByCharacter.set(item.equippedCharacterId, list); }
+  return slots.map((s) => ({ ...s, awakened: !!s.characterId && awakened.has(s.characterId), items: s.characterId ? (itemsByCharacter.get(s.characterId) || []) : [] }));
 }
 
 const HERO_CLASSES = {
@@ -1098,10 +1108,16 @@ async function buildState(userId) {
     {key:'gear',title:'Équipe une pièce',description:'Les coffres donnent Armes, Reliques et Accessoires.',done:slots.some((s)=>(s.items||s.equipments||[]).length>0),tab:'equipment'},
     {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le niveau requis pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
   ];
-  const slotById=new Map(slots.map((s)=>[s.id,s]));
+  // Équipé sur un personnage : reste vrai même si ce personnage est
+  // actuellement au repos (pas dans un emplacement actif) — `slotByCharacter`
+  // ne sert qu'à savoir OÙ il produit en ce moment, `characterNameById`
+  // (issu du roster complet, pas des seuls emplacements actifs) permet
+  // d'afficher le nom même pour un héros laissé au repos.
+  const slotByCharacter=new Map(slots.filter((s)=>s.characterId).map((s)=>[s.characterId,s]));
+  const characterNameById=new Map(recruits.map((r)=>[r.characterId,r.character?.name]));
   const preparedInventoryItems=inventoryItems.map((item)=>{
-    const equipped=slotById.get(item.equippedSlotId);
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+item.bonus,6))),powerLevel:Math.max(1,Math.round(item.bonus*100)),equippedSlotIndex:equipped?.slotIndex??null,equippedCharacter:equipped?.character?.name||null};
+    const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+item.bonus,6))),powerLevel:Math.max(1,Math.round(item.bonus*100)),equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
   const inventoryFamilies=[...new Set(preparedInventoryItems.map((item)=>item.sourceWorld))].filter(Boolean).map((world)=>{
     const familyItems=preparedInventoryItems.filter((item)=>item.sourceWorld===world);
@@ -1112,7 +1128,7 @@ async function buildState(userId) {
     capacity:IDLE_ITEM_CAPACITY,
     count:inventoryItems.length,
     items:preparedInventoryItems,
-    summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.flatMap((item)=>item.affixesDetailed.map((a)=>a.key))).size,equipped:preparedInventoryItems.filter((item)=>item.equippedSlotIndex!==null).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
+    summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.flatMap((item)=>item.affixesDetailed.map((a)=>a.key))).size,equipped:preparedInventoryItems.filter((item)=>item.equipped).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
     families:inventoryFamilies,
     setBonus:{required:3,multiplier:1.10,label:'Trois pièces du même monde : +10% DPS sur le héros'},
   };
@@ -1735,7 +1751,7 @@ router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 // « ça upgrade et/ou change qui équipe l'objet, ça dépend du slot »).
 router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const itemId=String(req.body?.itemId||'');if(!itemId)return res.status(400).json({error:'Objet invalide'});
-  try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');if(!item.equippedSlotId)throw new IdleError(400,'Cet objet doit être équipé pour être amélioré');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=upgradedItemRarity(item.rarity,bonus);await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});});await incrementIdleCounter(req.user.id,'upgrade',1);res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');if(!item.equippedCharacterId)throw new IdleError(400,'Cet objet doit être équipé pour être amélioré');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=upgradedItemRarity(item.rarity,bonus);await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});});await incrementIdleCounter(req.user.id,'upgrade',1);res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 router.post('/equipment/auto-equip',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-equipment-auto'}),async(req,res)=>{
@@ -1745,7 +1761,11 @@ router.post('/equipment/auto-equip',requireAuth,requireIdleBeta,rateLimit({max:1
       const [slots,items]=await Promise.all([loadSlots(prisma,req.user.id),prisma.idleItem.findMany({where:{userId:req.user.id}})]);const plan=buildAutoEquipmentPlan(slots,items);
       optimization={changed:plan.changed,beforeScore:plan.beforeScore,afterScore:plan.afterScore,equipped:plan.assignments.length};
       if(!plan.changed||plan.afterScore<=plan.beforeScore+1e-9)return;
-      await prisma.$transaction(async(tx)=>{await tx.idleItem.updateMany({where:{userId:req.user.id,equippedSlotId:{not:null}},data:{equippedSlotId:null}});for(const assignment of plan.assignments)await tx.idleItem.update({where:{id:assignment.itemId},data:{equippedSlotId:assignment.slotId}});});
+      // Ne libère que l'équipement des personnages ACTIFS (candidats au
+      // réagencement) : un héros laissé au repos garde son équipement
+      // réservé, l'optimisation ne doit pas le déséquiper en silence.
+      const activeCharacterIds=slots.filter((s)=>s.characterId).map((s)=>s.characterId);
+      await prisma.$transaction(async(tx)=>{await tx.idleItem.updateMany({where:{userId:req.user.id,equippedCharacterId:{in:activeCharacterIds}},data:{equippedCharacterId:null}});for(const assignment of plan.assignments)await tx.idleItem.update({where:{id:assignment.itemId},data:{equippedCharacterId:assignment.characterId}});});
     });
     const state=await buildState(req.user.id);res.json({ok:true,optimization,state});
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
@@ -1754,12 +1774,12 @@ router.post('/equipment/auto-equip',requireAuth,requireIdleBeta,rateLimit({max:1
 router.post('/equipment/equip',requireAuth,requireIdleBeta,rateLimit({max:40,name:'idle-equipment-equip'}),async(req,res)=>{
   const itemId=String(req.body?.itemId||'');const slotIndex=Number(req.body?.slotIndex);
   if(!itemId||!Number.isInteger(slotIndex))return res.status(400).json({error:'Choix d’équipement invalide'});
-  try{await withSettle(req.user.id,async(tx,user)=>{const [item,slot]=await Promise.all([tx.idleItem.findFirst({where:{id:itemId,userId:user.id}}),tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}})]);if(!item)throw new IdleError(404,'Objet introuvable');if(!slot?.characterId)throw new IdleError(400,'Ce héros n’est pas assigné');await tx.idleItem.updateMany({where:{userId:user.id,equippedSlotId:slot.id,kind:item.kind,id:{not:item.id}},data:{equippedSlotId:null}});await tx.idleItem.update({where:{id:item.id},data:{equippedSlotId:slot.id}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id,async(tx,user)=>{const [item,slot]=await Promise.all([tx.idleItem.findFirst({where:{id:itemId,userId:user.id}}),tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}})]);if(!item)throw new IdleError(404,'Objet introuvable');if(!slot?.characterId)throw new IdleError(400,'Ce héros n’est pas assigné');await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:slot.characterId,kind:item.kind,id:{not:item.id}},data:{equippedCharacterId:null}});await tx.idleItem.update({where:{id:item.id},data:{equippedCharacterId:slot.characterId}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 router.post('/equipment/unequip',requireAuth,requireIdleBeta,rateLimit({max:40,name:'idle-equipment-unequip'}),async(req,res)=>{
   const itemId=String(req.body?.itemId||'');
-  try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');await tx.idleItem.update({where:{id:item.id},data:{equippedSlotId:null}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');await tx.idleItem.update({where:{id:item.id},data:{equippedCharacterId:null}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name:'idle-equipment-lock'}),async(req,res)=>{
@@ -1769,7 +1789,7 @@ router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name
 router.post('/equipment/salvage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-equipment-salvage'}),async(req,res)=>{
   const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[req.body?.itemId]).map(String).filter(Boolean))].slice(0,100);if(!ids.length)return res.status(400).json({error:'Aucun objet sélectionné'});
   const confirmHighRarity=req.body?.confirmHighRarity===true;
-  try{const gained=await prisma.$transaction(async(tx)=>{const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedSlotId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedSlotId:{not:null},effectKey:'salvage'},select:{effectValue:true}});const multiplier=1+fortune.reduce((sum,x)=>sum+x.effectValue,0);const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x),0)*multiplier);await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{const gained=await prisma.$transaction(async(tx)=>{const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedCharacterId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null},effectKey:'salvage'},select:{effectValue:true}});const multiplier=1+fortune.reduce((sum,x)=>sum+x.effectValue,0);const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x),0)*multiplier);await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
@@ -2191,7 +2211,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
       const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
       if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
-      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedSlotId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
+      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
       return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
