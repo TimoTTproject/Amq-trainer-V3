@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -216,9 +216,18 @@ test('inventaire : les mondes et les paliers créent des familles variées',()=>
   assert.match(idleItemDrop(1,'rune1','rare',.03,'Namek').name,/Lame de Ki/);
 });
 
-test('inventaire : les sets de deux et quatre runes respectent leurs seuils',()=>{
+test('inventaire : chaque set possède un effet réel différent et respecte son seuil',()=>{
+  assert.equal(new Set(Object.values(RUNE_SETS).map((set)=>set.mode)).size,Object.keys(RUNE_SETS).length);
+  assert.equal(new Set(Object.values(RUNE_SETS).map((set)=>set.description)).size,Object.keys(RUNE_SETS).length);
   assert.equal(equipmentSetMultiplier([{kind:'weapon'},{kind:'relic'}]),1);
   assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'energy'},{kind:'rune2',setKey:'energy'}]),1.06);
+  assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'blade'},{kind:'rune2',setKey:'blade'}]),1);
+  assert.equal(equipmentSetEffectMultiplier([{setKey:'blade'},{setKey:'blade'}],'click'),1.12);
+  assert.equal(itemActionBonus([{items:[{setKey:'blade'},{setKey:'blade'}]}],'click'),1.12);
+  assert.equal(itemActionBonus([{items:[{setKey:'rage'},{setKey:'rage'},{setKey:'rage'},{setKey:'rage'}]}],'burst'),1.25);
+  assert.equal(itemActionBonus([{items:[{setKey:'unity'},{setKey:'unity'},{setKey:'unity'},{setKey:'unity'}]}],'team'),1.22);
+  assert.equal(itemActionBonus([{items:[{setKey:'hunter'},{setKey:'hunter'}]}],'boss'),1.15);
+  assert.equal(equipmentSetFlatMultiplier([{setKey:'fortune',equippedCharacterId:1},{setKey:'fortune',equippedCharacterId:1}],'salvage'),1.25);
   assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'rage'},{kind:'rune2',setKey:'rage'},{kind:'rune3',setKey:'rage'}]),1);
 });
 

@@ -7675,6 +7675,17 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-item-families>span{align-items:flex-start;flex-direction:column;gap:2px}
 #view-idle .idle-item-families>span>em{color:var(--text-2);font-size:7px;font-style:normal}
 #view-idle .idle-item-families>span>small{max-width:230px;white-space:normal;line-height:1.3}
+#view-idle .mode-dps{--set-color:#60a5fa}
+#view-idle .mode-click{--set-color:#f59e0b}
+#view-idle .mode-burst{--set-color:#fb7185}
+#view-idle .mode-team{--set-color:#c084fc}
+#view-idle .mode-boss{--set-color:#f87171}
+#view-idle .mode-salvage{--set-color:#4ade80}
+#view-idle .idle-item-set[class*="mode-"]>i,
+#view-idle .idle-loadout-set-status>span[class*="mode-"]>i,
+#view-idle .idle-item-families>span[class*="mode-"]>b>i{color:var(--set-color)}
+#view-idle .idle-loadout-set-status>span[class*="mode-"]{border-left:3px solid color-mix(in srgb,var(--set-color) 72%,transparent)}
+#view-idle .idle-item-families>span[class*="mode-"]{border-top:2px solid color-mix(in srgb,var(--set-color) 72%,transparent)}
 
 @media(max-width:760px){
   #view-idle .idle-synergy-status,#view-idle .idle-synergy-rules{grid-template-columns:1fr}

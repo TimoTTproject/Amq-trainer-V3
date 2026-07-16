@@ -347,12 +347,12 @@ const ITEM_EFFECTS={
 // qui rend le tirage excitant (une arme peut sortir « Fortune »).
 const ITEM_AFFIX_COUNT_BY_RARITY={rare:1,epic:2,legendary:3,mythic:4};
 const RUNE_SETS={
-  energy:{name:'Énergie',required:2,multiplier:1.06,effectKey:'assault',description:'+6% DPS personnel'},
-  blade:{name:'Lame',required:2,multiplier:1.07,effectKey:'precision',description:'+7% DPS personnel'},
-  rage:{name:'Rage',required:4,multiplier:1.18,effectKey:'overdrive',description:'+18% DPS personnel'},
-  unity:{name:'Union',required:4,multiplier:1.16,effectKey:'resonance',description:'+16% DPS personnel'},
-  hunter:{name:'Chasseur',required:2,multiplier:1.08,effectKey:'focus',description:'+8% DPS personnel'},
-  fortune:{name:'Fortune',required:2,multiplier:1.05,effectKey:'salvage',description:'+5% DPS personnel'},
+  energy:{name:'Énergie',required:2,mode:'dps',bonus:.06,multiplier:1.06,effectKey:'assault',description:'+6% de production personnelle'},
+  blade:{name:'Lame',required:2,mode:'click',bonus:.12,multiplier:1.12,effectKey:'precision',description:'+12% de dégâts de clic'},
+  rage:{name:'Rage',required:4,mode:'burst',bonus:.25,multiplier:1.25,effectKey:'overdrive',description:'+25% de dégâts d’Ultime'},
+  unity:{name:'Union',required:4,mode:'team',bonus:.22,multiplier:1.22,effectKey:'resonance',description:'+22% de dégâts de Combo'},
+  hunter:{name:'Chasseur',required:2,mode:'boss',bonus:.15,multiplier:1.15,effectKey:'focus',description:'+15% de dégâts contre les boss'},
+  fortune:{name:'Fortune',required:2,mode:'salvage',bonus:.25,multiplier:1.25,effectKey:'salvage',description:'+25% d’Essence au recyclage'},
 };
 const RUNE_SET_KEYS=Object.keys(RUNE_SETS);
 const WORLD_ITEM_NAMES={
@@ -431,15 +431,29 @@ function itemProductionBonus(item) {
   return item.bonus+itemAffixList(item).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='dps').reduce((sum,a)=>sum+(a.effectValue||0),0)+Number(item.subStats?.dps||0);
 }
 
+function equipmentSetEffectMultiplier(items=[],mode='dps') {
+  const counts=new Map();for(const item of items){if(!item.setKey)continue;counts.set(item.setKey,(counts.get(item.setKey)||0)+1);}
+  let multiplier=1;for(const [key,count] of counts){const set=RUNE_SETS[key]||RUNE_SETS.energy;if(set.mode!==mode)continue;multiplier*=Math.pow(set.multiplier,Math.floor(count/set.required));}
+  return multiplier;
+}
+
+function equipmentSetActionMultiplier(slots=[],mode='dps') {
+  return slots.reduce((multiplier,slot)=>multiplier*equipmentSetEffectMultiplier((slot.items?.length?slot.items:slot.equipments)||[],mode),1);
+}
+
+function equipmentSetFlatMultiplier(items=[],mode='dps') {
+  const byCharacter=new Map();for(const item of items){const key=item.equippedCharacterId||'unassigned';const list=byCharacter.get(key)||[];list.push(item);byCharacter.set(key,list);}
+  return [...byCharacter.values()].reduce((multiplier,list)=>multiplier*equipmentSetEffectMultiplier(list,mode),1);
+}
+
 function itemActionBonus(slots, mode) {
-  return 1 + slots.flatMap((slot)=>(slot.items?.length?slot.items:slot.equipments)||[])
+  const affixMultiplier=1+slots.flatMap((slot)=>(slot.items?.length?slot.items:slot.equipments)||[])
     .reduce((sum,item)=>sum+itemAffixList(item).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode===mode).reduce((affixSum,a)=>affixSum+Number(a.effectValue||0),0)+Number(item.subStats?.[mode]||0),0);
+  return affixMultiplier*equipmentSetActionMultiplier(slots,mode);
 }
 
 function equipmentSetMultiplier(items=[]) {
-  const counts=new Map();for(const item of items){if(!item.setKey)continue;counts.set(item.setKey,(counts.get(item.setKey)||0)+1);}
-  let multiplier=1;for(const [key,count] of counts){const set=RUNE_SETS[key]||RUNE_SETS.energy;multiplier*=Math.pow(set.multiplier,Math.floor(count/set.required));}
-  return multiplier;
+  return equipmentSetEffectMultiplier(items,'dps');
 }
 
 function itemSalvageValue(item) {
@@ -474,7 +488,7 @@ function equipmentItemScore(item,role='attaquant'){
 }
 function equipmentPlanScore(assignments=[]){
   const byCharacter=new Map();for(const assignment of assignments){const list=byCharacter.get(assignment.characterId)||[];list.push(assignment);byCharacter.set(assignment.characterId,list);}
-  let total=0;for(const list of byCharacter.values()){const raw=list.reduce((sum,x)=>sum+equipmentItemScore(x.item,x.role),0);total+=raw*equipmentSetMultiplier(list.map((x)=>x.item));}return total;
+  let total=0;for(const list of byCharacter.values()){const role=list[0]?.role||'attaquant';const weights=EQUIPMENT_ROLE_WEIGHTS[role]||EQUIPMENT_ROLE_WEIGHTS.attaquant;const items=list.map((x)=>x.item);const raw=list.reduce((sum,x)=>sum+equipmentItemScore(x.item,x.role),0);const counts=new Map();for(const item of items)counts.set(item.setKey,(counts.get(item.setKey)||0)+1);const setUtility=[...counts.entries()].reduce((sum,[key,count])=>{const set=RUNE_SETS[key]||RUNE_SETS.energy;const stacks=Math.floor(count/set.required);return sum+stacks*set.bonus*(set.mode==='dps'?1:.65*(weights[set.mode]||1));},0);total+=raw*equipmentSetMultiplier(items)+setUtility;}return total;
 }
 function buildAutoEquipmentPlan(slots=[],items=[]){
   const active=slots.filter((slot)=>slot.characterId&&slot.character);if(!active.length)return {assignments:[],beforeScore:0,afterScore:0,changed:0};
@@ -1098,7 +1112,7 @@ async function buildState(userId) {
         ascensionMax: HERO_ASCENSION_MAX,
         canAscend: level >= heroAscensionRequiredLevel(row.ascension) && (row.ascension || 0) < HERO_ASCENSION_MAX,
         ascensionCost: heroAscensionCost(row.character.rarity, row.ascension),
-        equipments: RUNE_KINDS.map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description}:{kind,empty:true}; }),
+        equipments: RUNE_KINDS.map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus}:{kind,empty:true}; }),
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
@@ -1229,9 +1243,9 @@ async function buildState(userId) {
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
     const set=RUNE_SETS[item.setKey]||RUNE_SETS.energy;
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,salvageValue:itemSalvageValue(item),enhanceCost:runeEnhanceCost(item),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item),enhanceCost:runeEnhanceCost(item),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
-  const inventoryFamilies=RUNE_SET_KEYS.map((key)=>{const set=RUNE_SETS[key];const count=preparedInventoryItems.filter((item)=>(item.setKey||'energy')===key).length;return {key,world:set.name,count,kinds:[],complete:count>=set.required,required:set.required,description:set.description};}).filter((set)=>set.count).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
+  const inventoryFamilies=RUNE_SET_KEYS.map((key)=>{const set=RUNE_SETS[key];const count=preparedInventoryItems.filter((item)=>(item.setKey||'energy')===key).length;return {key,world:set.name,count,kinds:[],complete:count>=set.required,required:set.required,description:set.description,mode:set.mode,bonus:set.bonus};}).filter((set)=>set.count).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
   const inventory={
     capacity:IDLE_ITEM_CAPACITY,
     count:inventoryItems.length,
@@ -1957,7 +1971,7 @@ router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name
 router.post('/equipment/salvage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-equipment-salvage'}),idleUserLockMiddleware,async(req,res)=>{
   const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[req.body?.itemId]).map(String).filter(Boolean))].slice(0,100);if(!ids.length)return res.status(400).json({error:'Aucun objet sélectionné'});
   const confirmHighRarity=req.body?.confirmHighRarity===true;
-  try{const gained=await prisma.$transaction(async(tx)=>{const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedCharacterId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null},effectKey:'salvage'},select:{effectValue:true}});const multiplier=1+fortune.reduce((sum,x)=>sum+x.effectValue,0);const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x),0)*multiplier);const deleted=await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(deleted.count!==items.length)throw new IdleError(409,'Ces objets viennent déjà d’être recyclés');if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{const gained=await prisma.$transaction(async(tx)=>{const items=await tx.idleItem.findMany({where:{userId:req.user.id,id:{in:ids}}});if(items.length!==ids.length)throw new IdleError(404,'Un objet sélectionné est introuvable');if(items.some((x)=>x.locked))throw new IdleError(400,'Un objet verrouillé est sélectionné');if(items.some((x)=>x.equippedCharacterId))throw new IdleError(400,'Retire les objets équipés avant de les recycler');if(!confirmHighRarity&&items.some((x)=>['legendary','mythic'].includes(x.rarity)))throw new IdleError(400,'Confirmation requise pour recycler un objet légendaire ou mythique');const fortune=await tx.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const affixMultiplier=1+fortune.flatMap((item)=>itemAffixList(item)).filter((affix)=>ITEM_EFFECTS[affix.effectKey]?.mode==='salvage').reduce((sum,affix)=>sum+Number(affix.effectValue||0),0);const multiplier=affixMultiplier*equipmentSetFlatMultiplier(fortune,'salvage');const amount=Math.round(items.reduce((sum,x)=>sum+itemSalvageValue(x),0)*multiplier);const deleted=await tx.idleItem.deleteMany({where:{userId:req.user.id,id:{in:items.map((x)=>x.id)}}});if(deleted.count!==items.length)throw new IdleError(409,'Ces objets viennent déjà d’être recyclés');if(amount)await tx.user.update({where:{id:req.user.id},data:{essence:{increment:amount},essenceEarnedTotal:{increment:amount}}});return amount;});res.json({ok:true,gained,state:await buildState(req.user.id)});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Réclame le coffre du jalon en cours (tous les MILESTONE_INTERVAL niveaux de
@@ -2399,7 +2413,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
       const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
       if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
-      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
+      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop)*(1+fortuneBonus)*equipmentSetFlatMultiplier(equippedItems,'salvage'));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
       return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
@@ -2531,7 +2545,10 @@ module.exports = {
   itemProductionBonus,
   upgradedItemRarity,
   itemActionBonus,
+  equipmentSetEffectMultiplier,
+  equipmentSetFlatMultiplier,
   equipmentSetMultiplier,
+  RUNE_SETS,
   itemSalvageValue,
   equipmentItemScore,
   buildAutoEquipmentPlan,
