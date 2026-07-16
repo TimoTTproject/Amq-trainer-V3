@@ -9,7 +9,7 @@ const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
 const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
-  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, charLevelUpCost,
+  slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
 } = require('../src/idle/idle');
@@ -19,7 +19,7 @@ const {
 function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
-    idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleMultiStrikeLevel:0,idleRunBlessings:'',idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
+    idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleMultiStrikeLevel:0,idleRunBlessings:'',idleRunBlessingRerolls:0,idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
@@ -1231,6 +1231,45 @@ test('roguelike : un choix se débloque au stage 21 et seuls les trois pouvoirs 
   assert.equal(accepted.status,200);assert.equal(written.idleRunBlessings,displayedKey);
   const duplicate=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:displayedKey}});
   assert.equal(duplicate.status,400);
+});
+
+test('roguelike : le message de blocage reflète le vrai palier de stage, pas un combat de boss distinct (retour testeur)',async()=>{
+  const user=dbUser({idleStage:5,idleRunBestStage:5,idleBestStage:5}); // aucun palier de bénédiction débloqué avant le stage 21
+  prisma.user.findUnique=async(args={})=>args.select?Object.fromEntries(Object.keys(args.select).map((key)=>[key,user[key]])):user;
+  prisma.user.update=async()=>user;
+  const res=await app.request('/api/idle/run-blessing',{method:'POST',cookie:app.authCookie('u1'),body:{key:'berserker'}});
+  assert.equal(res.status,400);
+  assert.match(res.json.error,/stage 21/);
+  assert.doesNotMatch(res.json.error,/gardien/);
+});
+
+test('roguelike : le reroll payant change l’offre de choix sans toucher aux bénédictions déjà choisies',async()=>{
+  const cost=runBlessingRerollCost(0);
+  let user=dbUser({idleStage:21,idleRunBestStage:21,idleBestStage:21,essence:cost});
+  prisma.user.findUnique=async(args={})=>args.select?Object.fromEntries(Object.keys(args.select).map((key)=>[key,user[key]])):user;
+  prisma.user.update=async({data})=>{user={...user,...(data.essence?.decrement!=null?{essence:user.essence-data.essence.decrement}:{}),...(data.idleRunBlessingRerolls?.increment!=null?{idleRunBlessingRerolls:(user.idleRunBlessingRerolls||0)+data.idleRunBlessingRerolls.increment}:{})};return user;};
+  const before=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  const choicesBefore=before.json.run.build.choices.map((c)=>c.key);
+  const reroll=await app.request('/api/idle/run-blessing/reroll',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(reroll.status,200);
+  assert.equal(reroll.json.essence,0); // le coût exact a été débité
+  assert.equal(reroll.json.run.build.choices.length,3);
+  const choicesAfter=reroll.json.run.build.choices.map((c)=>c.key);
+  assert.notDeepEqual(choicesAfter,choicesBefore); // l’offre change après reroll
+});
+
+test('roguelike : le reroll refuse si l’Essence est insuffisante ou si aucune bénédiction n’est disponible',async()=>{
+  const poor=dbUser({idleStage:21,idleRunBestStage:21,idleBestStage:21,essence:runBlessingRerollCost(0)-1});
+  prisma.user.findUnique=async(args={})=>args.select?Object.fromEntries(Object.keys(args.select).map((key)=>[key,poor[key]])):poor;
+  prisma.user.update=async()=>poor;
+  const poorRes=await app.request('/api/idle/run-blessing/reroll',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(poorRes.status,400);assert.match(poorRes.json.error,/Essence insuffisante/);
+
+  const noneUnlocked=dbUser({idleStage:5,idleRunBestStage:5,idleBestStage:5,essence:1e9});
+  prisma.user.findUnique=async(args={})=>args.select?Object.fromEntries(Object.keys(args.select).map((key)=>[key,noneUnlocked[key]])):noneUnlocked;
+  prisma.user.update=async()=>noneUnlocked;
+  const lockedRes=await app.request('/api/idle/run-blessing/reroll',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(lockedRes.status,400);assert.match(lockedRes.json.error,/stage 21/);
 });
 
 test('ancient : refuse une clé inconnue', async () => {

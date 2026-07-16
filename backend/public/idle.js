@@ -702,15 +702,24 @@ function renderIdleRunJourney(state){
   const archetypeEl=document.getElementById('idle-run-archetype');if(archetypeEl)archetypeEl.textContent=archetype;
   const power=document.getElementById('idle-run-power');if(power)power.textContent=idleFormatNumber(Math.round((state.totalRate||0)+(state.click?.damage||0)));
   const next=document.getElementById('idle-run-next');if(next)next.textContent=build.pending?'CHOIX DISPONIBLE':build.nextStage?`Stage ${idleFormatNumber(build.nextStage)}`:'Build complet';
-  const list=document.getElementById('idle-run-blessings');if(list)list.innerHTML=(build.blessings||[]).length?(build.blessings||[]).map((item,index)=>`<article class="r-${escapeHtml(item.rarity)}"><i class="fas ${escapeHtml(item.icon)}"></i><span><small>POUVOIR ${index+1}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(item.upside)} · <strong>${escapeHtml(item.downside)}</strong></em></span></article>`).join(''):`<p><i class="fas fa-route"></i><span><b>Ton build de run commence au stage 21</b><small>Vaincs les gardiens majeurs, choisis parmi 3 pouvoirs et adapte ton équipe aux bonus obtenus.</small></span></p>`;
+  const list=document.getElementById('idle-run-blessings');if(list)list.innerHTML=(build.blessings||[]).length?(build.blessings||[]).map((item,index)=>`<article class="r-${escapeHtml(item.rarity)}"><i class="fas ${escapeHtml(item.icon)}"></i><span><small>POUVOIR ${index+1}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(item.upside)} · <strong>${escapeHtml(item.downside)}</strong></em></span></article>`).join(''):`<p><i class="fas fa-route"></i><span><b>Ton build de run commence au stage 21</b><small>Tous les 20 stages, choisis parmi 3 pouvoirs et adapte ton équipe aux bonus obtenus.</small></span></p>`;
   const choice=document.getElementById('idle-run-choice');choice?.classList.toggle('hidden',!build.pending);
   const choices=document.getElementById('idle-run-choices');if(choices)choices.innerHTML=(build.choices||[]).map((item)=>`<button type="button" data-run-blessing="${escapeHtml(item.key)}" class="r-${escapeHtml(item.rarity)}"><i class="fas ${escapeHtml(item.icon)}"></i><span><small>${escapeHtml(item.rarity).toUpperCase()}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(item.upside)}</em><strong>${escapeHtml(item.downside)}</strong></span><i class="fas fa-chevron-right"></i></button>`).join('');
+  const rerollBtn=document.getElementById('idle-run-reroll');const rerollCostEl=document.getElementById('idle-run-reroll-cost');
+  if(rerollCostEl)rerollCostEl.textContent=build.rerollCost!=null?idleFormatNumber(build.rerollCost):'–';
+  if(rerollBtn)rerollBtn.disabled=build.rerollCost==null||(state.essence||0)<build.rerollCost;
 }
 
 async function chooseIdleRunBlessing(key){
   const choice=document.getElementById('idle-run-choice');choice?.classList.add('choosing');
   try{const state=await api('/api/idle/run-blessing',{method:'POST',body:JSON.stringify({key})});renderIdleState(state);idleSpawnFloat('BÉNÉDICTION ACQUISE','crit');idleNotify('Ton build de run évolue. Cette bénédiction sera retirée au Prestige.','success');}
   catch(e){idleNotify(e.message,'error');}finally{choice?.classList.remove('choosing');}
+}
+
+async function rerollIdleRunBlessing(){
+  const button=document.getElementById('idle-run-reroll');if(button)button.disabled=true;
+  try{const state=await api('/api/idle/run-blessing/reroll',{method:'POST',body:JSON.stringify({})});renderIdleState(state);idleSpawnFloat('NOUVEAUX POUVOIRS','xp');}
+  catch(e){idleNotify(e.message,'error');}
 }
 
 function renderIdleOnboarding(onboarding) {
@@ -2331,7 +2340,10 @@ function initIdleUI() {
   document.getElementById('idle-chat-form')?.addEventListener('submit',idleSendChat);
   document.getElementById('idle-chat-toggle')?.addEventListener('click',idleToggleChat);
   document.getElementById('idle-chat-close')?.addEventListener('click',()=>{localStorage.removeItem('idle-chat-open');idleSetChatOpen(false);});
-  document.getElementById('idle-run-choice')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-run-blessing]');if(button&&!button.disabled)chooseIdleRunBlessing(button.dataset.runBlessing);});
+  document.getElementById('idle-run-choice')?.addEventListener('click',(e)=>{
+    const reroll=e.target.closest('#idle-run-reroll');if(reroll)return void(!reroll.disabled&&rerollIdleRunBlessing());
+    const button=e.target.closest('[data-run-blessing]');if(button&&!button.disabled)chooseIdleRunBlessing(button.dataset.runBlessing);
+  });
   document.querySelector('.idle-community-chat')?.addEventListener('click',idleChatCommunityClick);
   document.getElementById('idle-community-ranking')?.addEventListener('click',openIdleRanking);
   document.getElementById('idle-community-friends')?.addEventListener('click',()=>document.getElementById('friends-popover-btn')?.click());
