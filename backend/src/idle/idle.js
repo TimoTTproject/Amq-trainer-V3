@@ -565,7 +565,12 @@ function dojoLevelMultiplier(level) {
 
 // Le niveau du joueur n'est plus accordé automatiquement par l'Essence à vie.
 // Chaque rang demande une série d'épreuves, remise à zéro après validation.
-function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosses = 0 } = {}) {
+// Tous les 5 niveaux, l'épreuve bonus demande d'ATTEINDRE un stage de combat
+// (×10 le rang visé, donc alignée sur les mondes de 10 vagues et sur le seuil
+// de Prestige par défaut : rang 10 ⇒ stage 100) — remplace l'ancienne épreuve
+// « ouvrir 1 coffre de boss », qui pouvait se valider en revenant simplement
+// réclamer un coffre déjà mérité, sans faire progresser le combat.
+function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bestStage = 1 } = {}) {
   const current = Math.max(1, Math.floor(level || 1));
   const nextLevel = current + 1;
   const defs = [
@@ -573,7 +578,10 @@ function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bosse
     { key:'clicks', icon:'fa-hand-fist', name:'Frappes manuelles', description:'Utilise le bouton Attaquer', progress:clicks, target:Math.min(4000, 40 + current * 15) },
     { key:'upgrades', icon:'fa-arrow-trend-up', name:'Améliorations achetées', description:'Dépense de l’Essence dans Améliorer', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
   ];
-  if (nextLevel % 5 === 0) defs.push({ key:'bosses', icon:'fa-crown', name:'Coffre de gardien', description:'Vaincs un boss et ouvre son coffre', progress:bosses, target:1 });
+  if (nextLevel % 5 === 0) {
+    const stageTarget = Math.min(5000, nextLevel * 10);
+    defs.push({ key:'stage', icon:'fa-flag-checkered', name:'Progression de combat', description:`Atteins le stage ${stageTarget}`, progress:bestStage, target:stageTarget });
+  }
   const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));
   return { level:current, nextLevel, quests, completed:quests.filter((q)=>q.completed).length, total:quests.length, ready:quests.every((q)=>q.completed), sealReward:nextLevel % 5 === 0 ? 2 : 1, powerReward:DOJO_LEVEL_BONUS };
 }

@@ -449,13 +449,14 @@ test('rankQuestSeries : impose combat, clics et améliorations avant le niveau s
   assert.equal(ready.powerReward,.01);
 });
 
-test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de boss et double les Sceaux', () => {
+test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de stage et double les Sceaux', () => {
   const series = rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999 });
   assert.equal(series.total, 4);
   assert.equal(series.ready, false);
-  assert.equal(series.quests.at(-1).key, 'bosses');
+  assert.equal(series.quests.at(-1).key, 'stage');
+  assert.equal(series.quests.at(-1).target, 50); // nextLevel(5) × 10
   assert.equal(series.sealReward, 2);
-  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bosses:1 }).ready, true);
+  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bestStage:50 }).ready, true);
 });
 
 test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DECOR', () => {

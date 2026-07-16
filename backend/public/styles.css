@@ -7144,10 +7144,24 @@ body.idle-fullscreen .feedback-fab { display: none; }
 #view-idle .idle-click-btn::before,
 #view-idle .idle-skill::before,
 #view-idle .idle-nav-summon::before {
-  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(115deg, rgba(255,255,255,.32) 0%, rgba(255,255,255,.06) 28%, transparent 45%);
 }
 #view-idle .btn-primary>*, #view-idle .idle-click-btn>*, #view-idle .idle-skill>*, #view-idle .idle-nav-summon>* { position: relative; z-index: 1; }
+/* Le clic sur "Attaquer" ajoute dynamiquement des feedbacks flottants
+   (.idle-click-fx, .idle-click-coin, cf. idleClickFeedback en JS) comme
+   ENFANTS DIRECTS du bouton. La règle générique ci-dessus (`>*`) leur
+   imposait `position:relative`, écrasant leur propre `position:absolute` —
+   dans un bouton en display:flex, ça les faisait participer à la mise en
+   page comme de vrais éléments flex, poussant l'icône et le texte
+   "Attaquer" à chaque frappe (retour joueur : "le texte se décale à
+   chaque clic"). Sélecteur plus spécifique pour regagner la priorité.
+   `border-radius:inherit` sur ::before (au lieu de compter sur
+   overflow:hidden) permet en plus de rendre le feedback visible : il
+   s'envole au-dessus du bouton, overflow:hidden le tronquait net. */
+#view-idle .idle-click-btn .idle-click-fx,
+#view-idle .idle-click-btn .idle-click-coin { position: absolute; z-index: 2; }
+#view-idle .idle-click-btn { overflow: visible; }
 #view-idle .btn-primary:hover,
 #view-idle .idle-click-btn:not(:disabled):hover,
 #view-idle .idle-skill:not(:disabled):hover,

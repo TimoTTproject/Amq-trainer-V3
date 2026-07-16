@@ -1309,7 +1309,7 @@ async function buildState(userId) {
 
   const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
   const decorArt = await decorArtForTheme(decor.theme);
-  const rank = rankQuestSeries({ level:dojoLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bosses:user.idleRankBosses });
+  const rank = rankQuestSeries({ level:dojoLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bestStage:progressionStage });
   const xpIntoLevel = rank.completed;
   const xpForNextLevel = rank.total;
   const milestoneTier = milestoneTierForLevel(dojoLevel);
@@ -1687,13 +1687,17 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where:{id:req.user.id} });
       if (!user) throw new IdleError(404, 'Compte introuvable');
-      const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bosses:user.idleRankBosses });
+      const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
+      const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bestStage });
       if (!series.ready) throw new IdleError(400, 'Termine tous les objectifs avant de passer au niveau suivant');
+      // `idleRankBosses` n'entre plus dans la garde optimiste : le stage
+      // (bestStage) ne peut que progresser entre la lecture et cette écriture,
+      // jamais régresser, donc aucune course à protéger sur ce compteur.
       const updated = await tx.user.updateMany({
         where:{
           id:user.id,idleRankLevel:series.level,
           idleRankKills:user.idleRankKills,idleRankClicks:user.idleRankClicks,
-          idleRankUpgrades:user.idleRankUpgrades,idleRankBosses:user.idleRankBosses,
+          idleRankUpgrades:user.idleRankUpgrades,
         },
         data:{
           idleRankLevel:{increment:1}, idleRankKills:0, idleRankClicks:0,
