@@ -315,6 +315,19 @@ const WORLD_ITEM_NAMES={
 };
 const ITEM_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
 function upgradedItemRarity(currentRarity,bonus){const earned=bonus>=.25?'mythic':bonus>=.16?'legendary':bonus>=.09?'epic':'rare';return (ITEM_RARITY_ORDER[earned]||1)>(ITEM_RARITY_ORDER[currentRarity]||1)?earned:currentRarity;}
+function itemEnhanceCost(bonus){return Math.max(100,Math.round(250*Math.pow(1+bonus,6)));}
+// Aperçu du coût des lots ×10/×100 d'amélioration d'objet — même esprit que
+// `bulkUpgradeCosts` pour les niveaux, mais sans plafond (le bonus d'un objet
+// n'a pas de maximum) : chaque lot coûte donc toujours le nombre entier demandé.
+function itemEnhanceBulkCosts(bonus) {
+  const out = {};
+  for (const n of [10, 100]) {
+    let total = 0, b = bonus || 0;
+    for (let i = 0; i < n; i++) { total += itemEnhanceCost(b); b = Number((b + .01).toFixed(3)); }
+    out[n] = { count: n, cost: safeIdleNumber(total) };
+  }
+  return out;
+}
 
 // Tire N affixes sans remise dans la totalité de ITEM_EFFECTS (N selon la
 // rareté, voir ITEM_AFFIX_COUNT_BY_RARITY). Chaque magnitude reçoit une
@@ -1120,7 +1133,7 @@ async function buildState(userId) {
   const characterNameById=new Map(recruits.map((r)=>[r.characterId,r.character?.name]));
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:Math.max(100,Math.round(250*Math.pow(1+item.bonus,6))),powerLevel:Math.max(1,Math.round(item.bonus*100)),equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,salvageValue:itemSalvageValue(item),enhanceCost:itemEnhanceCost(item.bonus),enhanceBulkCosts:itemEnhanceBulkCosts(item.bonus),powerLevel:Math.max(1,Math.round(item.bonus*100)),equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
   const inventoryFamilies=[...new Set(preparedInventoryItems.map((item)=>item.sourceWorld))].filter(Boolean).map((world)=>{
     const familyItems=preparedInventoryItems.filter((item)=>item.sourceWorld===world);
@@ -1766,7 +1779,35 @@ router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 // « ça upgrade et/ou change qui équipe l'objet, ça dépend du slot »).
 router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max: 60, name: 'idle-equipment' }), async(req,res)=>{
   const itemId=String(req.body?.itemId||'');if(!itemId)return res.status(400).json({error:'Objet invalide'});
-  try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');if(!item.equippedCharacterId)throw new IdleError(400,'Cet objet doit être équipé pour être amélioré');const cost=Math.max(100,Math.round(250*Math.pow(1+item.bonus,6)));if(user.essence<cost)throw new IdleError(400,'Essence insuffisante');const bonus=Number((item.bonus+.01).toFixed(3));const rarity=upgradedItemRarity(item.rarity,bonus);await tx.user.update({where:{id:user.id},data:{essence:{decrement:cost}}});await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});});await incrementIdleCounter(req.user.id,'upgrade',1);res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  const requestedAmount=req.body?.amount;
+  const amount=requestedAmount==='max'?'max':Number(requestedAmount||1);
+  if(amount!=='max'&&![1,10,100].includes(amount))return res.status(400).json({error:'Quantité invalide'});
+  let bought=0;
+  try{
+    await withSettle(req.user.id,async(tx,user)=>{
+      const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});
+      if(!item)throw new IdleError(404,'Objet introuvable');
+      if(!item.equippedCharacterId)throw new IdleError(400,'Cet objet doit être équipé pour être amélioré');
+      let bonus=item.bonus,total=0;
+      // Pas de plafond de niveau sur le bonus d'un objet (contrairement aux
+      // améliorations de run) : un lot ×10/×100 coûte donc toujours le nombre
+      // entier demandé — sauf `amount:'max'`, qui s'arrête dès que le budget
+      // ne suffit plus pour l'étape suivante.
+      if(amount==='max'){
+        while(true){const next=itemEnhanceCost(bonus);if(total+next>user.essence)break;total+=next;bonus=Number((bonus+.01).toFixed(3));bought++;}
+        if(!bought)throw new IdleError(400,'Essence insuffisante');
+      } else {
+        for(let i=0;i<amount;i++){total+=itemEnhanceCost(bonus);bonus=Number((bonus+.01).toFixed(3));}
+        if(user.essence<total)throw new IdleError(400,'Essence insuffisante');
+        bought=amount;
+      }
+      const rarity=upgradedItemRarity(item.rarity,bonus);
+      await tx.user.update({where:{id:user.id},data:{essence:{decrement:total}}});
+      await tx.idleItem.update({where:{id:item.id},data:{bonus,rarity}});
+    });
+    await incrementIdleCounter(req.user.id,'upgrade',bought);
+    res.json(await buildState(req.user.id));
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 router.post('/equipment/auto-equip',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-equipment-auto'}),async(req,res)=>{

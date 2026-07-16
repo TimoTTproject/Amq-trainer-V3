@@ -219,6 +219,28 @@ test('équipement : améliorer refuse un objet non équipé ou appartenant à un
   assert.equal(notOwned.status,404);
 });
 
+test('équipement : améliorer ×10 coûte le total exact en une fois, tout ou rien (retour testeur : bouton en lot)',async()=>{
+  const poor=dbUser({essence:4353});prisma.user.findUnique=async()=>poor;let essenceSpent=false;
+  // `withSettle` fait toujours un premier `update` pour la CAS de règlement
+  // passif (idleLastCollectAt) — on vérifie donc précisément qu'aucune
+  // décrémentation d'Essence n'a suivi, pas l'absence totale d'appel.
+  prisma.user.update=async({data})=>{if(data.essence?.decrement)essenceSpent=true;return poor;};
+  prisma.idleItem.findFirst=async({where})=>where.id==='item-1'&&where.userId==='u1'?{id:'item-1',userId:'u1',bonus:.05,rarity:'rare',equippedCharacterId:7}:null;
+  prisma.idleItem.update=async()=>({});
+  const poorRes=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1',amount:10}});
+  assert.equal(poorRes.status,400); // le coût exact du lot de 10 dépasse 4353 : aucun achat partiel
+  assert.equal(essenceSpent,false);
+
+  const rich=dbUser({essence:4354});prisma.user.findUnique=async()=>rich;
+  let essenceDecrement=null,bonusAfter=null;
+  prisma.user.update=async({data})=>{essenceDecrement=data.essence.decrement;return rich;};
+  prisma.idleItem.update=async({data})=>{bonusAfter=data.bonus;return{};};
+  const richRes=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1',amount:10}});
+  assert.equal(richRes.status,200);
+  assert.equal(essenceDecrement,4354); // somme exacte des 10 coûts croissants à partir de bonus=.05
+  assert.ok(Math.abs(bonusAfter-.15)<1e-9); // +0.01 × 10
+});
+
 test('équipement : lié au personnage — échanger le héros d’un slot ne transfère pas son équipement au nouveau (retour testeur)',async()=>{
   const user=dbUser();prisma.user.findUnique=async()=>user;
   prisma.dojoRecruit.findMany=async()=>[{characterId:1,character:{name:'Ancien Héros'}},{characterId:2,character:{name:'Nouveau Héros'}}];
