@@ -121,7 +121,7 @@ async function recordIdleEvent(userId,event,{value=null,stage=null}={}) {
 async function incrementIdleCounter(userId,key,amount=1,now=new Date()) {
   const periods=idlePeriods(now);
   const targets=[periods.day,periods.week,periods.month];
-  const rankField={click:'idleRankClicks',kill:'idleRankKills',upgrade:'idleRankUpgrades',boss_chest:'idleRankBosses'}[key];
+  const rankField={click:'idleRankClicks',kill:'idleRankKills',upgrade:'idleRankUpgrades',boss_chest:'idleRankBosses',skill:'idleRankSkills',recruit:'idleRankRecruits'}[key];
   const increment=Math.max(0,Math.floor(amount));
   try {
     await Promise.all([...targets.map((period)=>prisma.idleProgressCounter.upsert({
@@ -1202,7 +1202,7 @@ async function buildState(userId) {
       idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleEssenceRecruitCount:true,idleOnboardingComplete:true,
       idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idleLeaderCharacterId:true,idlePrestigeMilestone:true,
       idleBuffKey:true,idleBuffUntil:true,idleCompletedSeries:true,
-      idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankStartedAt:true,
+      idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankSkills:true,idleRankRecruits:true,idleRankStartedAt:true,
     },
   });
   if (!user) return null;
@@ -1309,7 +1309,7 @@ async function buildState(userId) {
 
   const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
   const decorArt = await decorArtForTheme(decor.theme);
-  const rank = rankQuestSeries({ level:dojoLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bestStage:progressionStage });
+  const rank = rankQuestSeries({ level:dojoLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, skills:user.idleRankSkills, recruits:user.idleRankRecruits, bestStage:progressionStage });
   const xpIntoLevel = rank.completed;
   const xpForNextLevel = rank.total;
   const milestoneTier = milestoneTierForLevel(dojoLevel);
@@ -1688,7 +1688,7 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
       const user = await tx.user.findUnique({ where:{id:req.user.id} });
       if (!user) throw new IdleError(404, 'Compte introuvable');
       const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
-      const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, bestStage });
+      const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, skills:user.idleRankSkills, recruits:user.idleRankRecruits, bestStage });
       if (!series.ready) throw new IdleError(400, 'Termine tous les objectifs avant de passer au niveau suivant');
       // `idleRankBosses` n'entre plus dans la garde optimiste : le stage
       // (bestStage) ne peut que progresser entre la lecture et cette écriture,
@@ -1697,11 +1697,13 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
         where:{
           id:user.id,idleRankLevel:series.level,
           idleRankKills:user.idleRankKills,idleRankClicks:user.idleRankClicks,
-          idleRankUpgrades:user.idleRankUpgrades,
+          idleRankUpgrades:user.idleRankUpgrades,idleRankSkills:user.idleRankSkills,
+          idleRankRecruits:user.idleRankRecruits,
         },
         data:{
           idleRankLevel:{increment:1}, idleRankKills:0, idleRankClicks:0,
-          idleRankUpgrades:0, idleRankBosses:0, idleRankStartedAt:new Date(),
+          idleRankUpgrades:0, idleRankBosses:0, idleRankSkills:0, idleRankRecruits:0,
+          idleRankStartedAt:new Date(),
           idleSeals:{increment:series.sealReward},
         },
       });

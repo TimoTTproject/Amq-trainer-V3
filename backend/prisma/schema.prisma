@@ -179,7 +179,12 @@ model User {
   idleRankKills          Int       @default(0)
   idleRankClicks         Int       @default(0)
   idleRankUpgrades       Int       @default(0)
-  idleRankBosses         Int       @default(0)
+  idleRankBosses         Int       @default(0) // vestige (l'épreuve boss a été remplacée par un objectif de stage) — plus lu par rankQuestSeries
+  // Compteurs additionnels pour diversifier les épreuves de rang (voir
+  // rankQuestSeries) : jusqu'ici toujours kills/clics/améliorations, tous les
+  // niveaux, sans variation — un pool plus large tourne désormais par rang.
+  idleRankSkills         Int       @default(0)
+  idleRankRecruits       Int       @default(0)
   idleRankStartedAt      DateTime  @default(now())
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo

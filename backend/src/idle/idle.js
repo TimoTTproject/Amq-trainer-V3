@@ -583,21 +583,27 @@ function dojoLevelMultiplier(level) {
 
 // Le niveau du joueur n'est plus accordé automatiquement par l'Essence à vie.
 // Chaque rang demande une série d'épreuves, remise à zéro après validation.
-// Tous les 5 niveaux, l'épreuve bonus demande d'ATTEINDRE un stage de combat
-// — remplace l'ancienne épreuve « ouvrir 1 coffre de boss », qui pouvait se
-// valider en revenant simplement réclamer un coffre déjà mérité, sans faire
-// progresser le combat. Relevé ×10→×5 (retour testeur : demander le stage
-// 100 dès le rang 10 tombait comme un mur isolé, sans rapport avec le rythme
-// — bien plus rapide — des trois autres épreuves du même palier) : la cible
-// grossit deux fois plus lentement, laissant le temps au combat de suivre.
-function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bestStage = 1 } = {}) {
+// Pool de 5 types d'épreuves (au lieu des 3 mêmes à chaque niveau, toujours
+// dans le même ordre — retour testeur : « il faudrait diversifier les quêtes
+// de montée de niveau ») : 3 sont tirées par rotation déterministe sur le
+// niveau courant, donc stables d'un rendu à l'autre mais différentes d'un
+// rang au suivant. Le cycle complet (5 niveaux) retombe sur kills/clics/
+// améliorations tous les 5 rangs — pile quand l'épreuve de stage bonus
+// s'ajoute, sans jamais répéter deux fois de suite la même combinaison.
+const RANK_QUEST_POOL = [
+  { key:'kills', icon:'fa-skull', name:'Ennemis vaincus', description:'Élimine des ennemis dans Combat', counter:'kills', target:(current)=>Math.min(5000, 15 + current * 8) },
+  { key:'clicks', icon:'fa-hand-fist', name:'Frappes manuelles', description:'Utilise le bouton Attaquer', counter:'clicks', target:(current)=>Math.min(4000, 40 + current * 15) },
+  { key:'upgrades', icon:'fa-arrow-trend-up', name:'Améliorations achetées', description:'Dépense de l’Essence dans Améliorer', counter:'upgrades', target:(current)=>Math.min(180, 3 + Math.ceil(current * .6)) },
+  { key:'skills', icon:'fa-burst', name:'Compétences actives', description:'Utilise l’Ultime ou le Combo d’équipe', counter:'skills', target:(current)=>Math.min(200, 2 + Math.ceil(current * .5)) },
+  { key:'recruits', icon:'fa-user-plus', name:'Nouvelles recrues', description:'Invoque des personnages (Sceaux ou Essence)', counter:'recruits', target:(current)=>Math.min(30, 1 + Math.floor(current / 8)) },
+];
+function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, skills = 0, recruits = 0, bestStage = 1 } = {}) {
   const current = Math.max(1, Math.floor(level || 1));
   const nextLevel = current + 1;
-  const defs = [
-    { key:'kills', icon:'fa-skull', name:'Ennemis vaincus', description:'Élimine des ennemis dans Combat', progress:kills, target:Math.min(5000, 15 + current * 8) },
-    { key:'clicks', icon:'fa-hand-fist', name:'Frappes manuelles', description:'Utilise le bouton Attaquer', progress:clicks, target:Math.min(4000, 40 + current * 15) },
-    { key:'upgrades', icon:'fa-arrow-trend-up', name:'Améliorations achetées', description:'Dépense de l’Essence dans Améliorer', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
-  ];
+  const progressByCounter = { kills, clicks, upgrades, skills, recruits };
+  const rotation = (current - 1) % RANK_QUEST_POOL.length;
+  const rotated = [...RANK_QUEST_POOL.slice(rotation), ...RANK_QUEST_POOL.slice(0, rotation)].slice(0, 3);
+  const defs = rotated.map((def) => ({ key:def.key, icon:def.icon, name:def.name, description:def.description, progress:progressByCounter[def.counter] || 0, target:def.target(current) }));
   if (nextLevel % 5 === 0) {
     const stageTarget = Math.min(5000, nextLevel * 5);
     defs.push({ key:'stage', icon:'fa-flag-checkered', name:'Progression de combat', description:`Atteins le stage ${stageTarget}`, progress:bestStage, target:stageTarget });
@@ -1061,6 +1067,7 @@ module.exports = {
   dojoLevelForXp,
   DOJO_LEVEL_BONUS,
   dojoLevelMultiplier,
+  RANK_QUEST_POOL,
   rankQuestSeries,
   STAGE_XP_BASE,
   STAGE_XP_GROWTH,

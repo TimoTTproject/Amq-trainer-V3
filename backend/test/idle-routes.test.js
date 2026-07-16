@@ -22,7 +22,7 @@ function dbUser(over = {}) {
   return {
     id: 'u1', email: 'melfisk6@gmail.com', essence: 0, idleLastCollectAt: new Date(), idleSlotsUnlocked: START_SLOTS,
     idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleMultiStrikeLevel:0,idleRunBlessings:'',idleRunBlessingRerolls:0,idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
-    idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
+    idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankSkills:0,idleRankRecruits:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
     wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null,idleBuffKey:null,idleBuffUntil:null,idleCompletedSeries:0, ...over,
   };

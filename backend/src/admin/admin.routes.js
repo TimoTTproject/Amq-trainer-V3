@@ -897,7 +897,7 @@ router.post('/reset-idle', requireAuth, requireAdmin, async (req, res) => {
         idleFormation: 'balanced', idleLeaderCharacterId: null,
         idlePrestigeMilestone: 0,
         idleBuffKey: null, idleBuffUntil: null, idleCompletedSeries: 0,
-        idleRankLevel: 1, idleRankKills: 0, idleRankClicks: 0, idleRankUpgrades: 0, idleRankBosses: 0, idleRankStartedAt: new Date(),
+        idleRankLevel: 1, idleRankKills: 0, idleRankClicks: 0, idleRankUpgrades: 0, idleRankBosses: 0, idleRankSkills: 0, idleRankRecruits: 0, idleRankStartedAt: new Date(),
         prestigeLevel: 0, wisdomPoints: 0,
       },
     }),

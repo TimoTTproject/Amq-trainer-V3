@@ -232,6 +232,11 @@ test('Prestige : la durée minimale bloque les retraites en chaîne et augmente 
 });
 
 test('long terme : le dernier décor ne peut pas être épuisé en 10 h de jeu actif',()=>{
+  // Depuis la diversification du pool d'épreuves (5 types tournants au lieu
+  // de kills/clics/améliorations à chaque niveau), chaque type n'apparaît
+  // plus que ~3 niveaux sur 5 — les seuils sont donc abaissés en proportion
+  // (×0,6), mais l'invariant reste vrai : au rythme maximal accepté par le
+  // serveur, même le dernier décor demande largement plus de 10h de jeu actif.
   let requiredClicks=0,requiredKills=0,requiredUpgrades=0;
   for(let level=1;level<1000;level++){
     for(const quest of rankQuestSeries({level}).quests){
@@ -241,9 +246,9 @@ test('long terme : le dernier décor ne peut pas être épuisé en 10 h de jeu a
     }
   }
   // Le serveur accepte au maximum 30 frappes comptabilisées par seconde.
-  assert.ok(requiredClicks/(30*3600)>30);
-  assert.ok(requiredKills>3_000_000);
-  assert.ok(requiredUpgrades>150_000);
+  assert.ok(requiredClicks/(30*3600)>15);
+  assert.ok(requiredKills>1_800_000);
+  assert.ok(requiredUpgrades>80_000);
 });
 
 test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gardiens exposés',()=>{
@@ -457,13 +462,52 @@ test('rankQuestSeries : impose combat, clics et améliorations avant le niveau s
 });
 
 test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de stage et double les Sceaux', () => {
-  const series = rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999 });
+  // Niveau 4 (rotation (4-1)%5=3) tire skills/recruits/kills, pas clics ni
+  // améliorations — voir le test de rotation ci-dessous pour la couverture
+  // complète du pool.
+  const full = { kills:999, clicks:999, upgrades:999, skills:999, recruits:999 };
+  const series = rankQuestSeries({ level:4, ...full });
   assert.equal(series.total, 4);
-  assert.equal(series.ready, false);
+  assert.equal(series.ready, false); // sans bestStage, l'épreuve de stage bloque
   assert.equal(series.quests.at(-1).key, 'stage');
   assert.equal(series.quests.at(-1).target, 25); // nextLevel(5) × 5
   assert.equal(series.sealReward, 2);
-  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bestStage:25 }).ready, true);
+  assert.equal(rankQuestSeries({ level:4, ...full, bestStage:25 }).ready, true);
+});
+
+test('rankQuestSeries : le pool de 5 épreuves tourne par rang au lieu de répéter toujours les 3 mêmes', () => {
+  // Retour testeur : « il faudrait diversifier les quêtes de montée de
+  // niveau » — jusqu'ici toujours kills/clics/améliorations, dans cet ordre,
+  // à chaque rang. Le pool complet doit apparaître sur un cycle de 5 niveaux,
+  // et la combinaison ne doit jamais se répéter à l'identique deux rangs de
+  // suite.
+  const keysAt = (level) => rankQuestSeries({ level }).quests.slice(0, 3).map((q) => q.key);
+  assert.deepEqual(keysAt(1), ['kills', 'clicks', 'upgrades']); // continuité avec le comportement historique
+  const seen = new Set();
+  let previous = null;
+  for (let level = 1; level <= 10; level++) {
+    const combo = keysAt(level).join(',');
+    seen.add(combo);
+    if (previous) assert.notEqual(combo, previous, `niveau ${level} répète la combinaison du niveau précédent`);
+    previous = combo;
+  }
+  assert.equal(seen.size, 5); // les 5 rotations possibles apparaissent sur 2 cycles
+  // Chaque type du pool doit être utilisé au moins une fois sur un cycle complet.
+  const allKeysOverCycle = new Set([1,2,3,4,5].flatMap(keysAt));
+  assert.deepEqual([...allKeysOverCycle].sort(), ['clicks','kills','recruits','skills','upgrades']);
+});
+
+test('rankQuestSeries : compétences actives et recrues sont des épreuves valides, avec des cibles progressives et plafonnées', () => {
+  // Niveau 2 (rotation 1) tire clicks/upgrades/skills.
+  const withSkills = rankQuestSeries({ level:2, skills:0 }).quests.find((q) => q.key === 'skills');
+  assert.ok(withSkills);
+  assert.ok(withSkills.target > 0);
+  assert.ok(rankQuestSeries({ level:999 }).quests.find((q)=>q.key==='skills')?.target <= 200); // rotation (999-1)%5=3 -> skills présent
+  // Niveau 5 (rotation 4) tire recruits/kills/clicks.
+  const withRecruits = rankQuestSeries({ level:5, recruits:0 }).quests.find((q) => q.key === 'recruits');
+  assert.ok(withRecruits);
+  assert.ok(withRecruits.target >= 1);
+  assert.ok(rankQuestSeries({ level:500 }).quests.find((q)=>q.key==='recruits')?.target <= 30); // jamais un mur d'invocations
 });
 
 test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DECOR', () => {
