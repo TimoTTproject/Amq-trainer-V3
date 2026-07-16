@@ -26,6 +26,8 @@ const {
   dojoLevelForXp,
   dojoLevelMultiplier,
   rankQuestSeries,
+  ENEMY_HP_GROWTH,
+  ENEMY_HP_BASE,
   stageXpForLevel,
   stageForXp,
   decorForLevel,
@@ -115,7 +117,7 @@ test('post-stage 100 : chaque acte renforce réellement les ennemis, avec un but
   assert.equal(campaignDifficulty(101).power,1.35);
   assert.ok(campaignDifficulty(201).power>campaignDifficulty(101).power);
   assert.ok(campaignDifficulty(201).reward<campaignDifficulty(201).power);
-  const naturalHpAt101=20*Math.pow(1.13,100);
+  const naturalHpAt101=ENEMY_HP_BASE*Math.pow(ENEMY_HP_GROWTH,100);
   assert.ok(enemyMaxHp(101)>=naturalHpAt101*1.349);
 });
 
@@ -454,9 +456,9 @@ test('rankQuestSeries : chaque cinquième niveau ajoute une épreuve de stage et
   assert.equal(series.total, 4);
   assert.equal(series.ready, false);
   assert.equal(series.quests.at(-1).key, 'stage');
-  assert.equal(series.quests.at(-1).target, 50); // nextLevel(5) × 10
+  assert.equal(series.quests.at(-1).target, 25); // nextLevel(5) × 5
   assert.equal(series.sealReward, 2);
-  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bestStage:50 }).ready, true);
+  assert.equal(rankQuestSeries({ level:4, kills:999, clicks:999, upgrades:999, bestStage:25 }).ready, true);
 });
 
 test('decorForLevel : palier courant + prochain palier, cohérents avec DOJO_DECOR', () => {

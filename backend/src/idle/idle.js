@@ -353,9 +353,18 @@ const OFFLINE_CAP_MS = 12 * 60 * 60 * 1000; // 12h
 // stages, doivent tomber en 30 secondes ; sinon la simulation revient sur le
 // dernier stage normal afin qu'une absence ne bloque jamais le joueur.
 const ENEMY_HP_BASE = 20;
-const ENEMY_HP_GROWTH = 1.13;
+// Relevé de 1.13→1.15 (retour testeur : « on arrive à Hueco Mundo [~stage 55]
+// trop vite, personne n'est jamais bloqué sur un boss ») : avec la pile de
+// multiplicateurs de production du Dojo (niveaux, paliers ×2, Ascension,
+// Éveil, Discipline, rôles, synergies, classes, succès...), le DPS des
+// joueurs investis croît bien plus vite que l'ancienne courbe d'ennemis —
+// les boss ne représentaient jamais un vrai mur avant la fin de l'Acte 1.
+const ENEMY_HP_GROWTH = 1.15;
 const BOSS_INTERVAL = 10;
-const BOSS_HP_MULTIPLIER = 9;
+// Relevé de 9→12 : les boss doivent rester le moment où le DPS accumulé est
+// réellement mis à l'épreuve (30s pour l'abattre), pas une formalité que
+// n'importe quelle équipe de vagues normales franchit sans y penser.
+const BOSS_HP_MULTIPLIER = 12;
 const ELITE_WAVE = 5;
 const ELITE_HP_MULTIPLIER = 3;
 const BOSS_TIMER_SECONDS = 30;
@@ -364,7 +373,10 @@ const ENEMY_REWARD_BASE = 2;
 // moins rentable à farmer que le début du jeu. La difficulté vient du mur de
 // PV à franchir et des coûts qui croissent plus vite, pas d'une incitation à
 // retourner farmer indéfiniment le stage 4.
-const ENEMY_REWARD_GROWTH = 1.131; // +0,1 pt/stage : les mondes récents gagnent légèrement en rendement
+// Relevé avec ENEMY_HP_GROWTH (même marge de +0,1 pt au-dessus) : sans ce
+// suivi, la hausse de la difficulté (1.13→1.15) aurait dégradé le farm des
+// hauts stages en cassant l'invariant ci-dessus (récompense/PV en baisse).
+const ENEMY_REWARD_GROWTH = 1.151;
 const CAMPAIGN_ACT_LENGTH = 100;
 function campaignDifficulty(stage) {
   const act = Math.floor((Math.max(1, Math.floor(stage || 1)) - 1) / CAMPAIGN_ACT_LENGTH) + 1;
@@ -566,10 +578,12 @@ function dojoLevelMultiplier(level) {
 // Le niveau du joueur n'est plus accordé automatiquement par l'Essence à vie.
 // Chaque rang demande une série d'épreuves, remise à zéro après validation.
 // Tous les 5 niveaux, l'épreuve bonus demande d'ATTEINDRE un stage de combat
-// (×10 le rang visé, donc alignée sur les mondes de 10 vagues et sur le seuil
-// de Prestige par défaut : rang 10 ⇒ stage 100) — remplace l'ancienne épreuve
-// « ouvrir 1 coffre de boss », qui pouvait se valider en revenant simplement
-// réclamer un coffre déjà mérité, sans faire progresser le combat.
+// — remplace l'ancienne épreuve « ouvrir 1 coffre de boss », qui pouvait se
+// valider en revenant simplement réclamer un coffre déjà mérité, sans faire
+// progresser le combat. Relevé ×10→×5 (retour testeur : demander le stage
+// 100 dès le rang 10 tombait comme un mur isolé, sans rapport avec le rythme
+// — bien plus rapide — des trois autres épreuves du même palier) : la cible
+// grossit deux fois plus lentement, laissant le temps au combat de suivre.
 function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bestStage = 1 } = {}) {
   const current = Math.max(1, Math.floor(level || 1));
   const nextLevel = current + 1;
@@ -579,7 +593,7 @@ function rankQuestSeries({ level = 1, kills = 0, clicks = 0, upgrades = 0, bestS
     { key:'upgrades', icon:'fa-arrow-trend-up', name:'Améliorations achetées', description:'Dépense de l’Essence dans Améliorer', progress:upgrades, target:Math.min(180, 3 + Math.ceil(current * .6)) },
   ];
   if (nextLevel % 5 === 0) {
-    const stageTarget = Math.min(5000, nextLevel * 10);
+    const stageTarget = Math.min(5000, nextLevel * 5);
     defs.push({ key:'stage', icon:'fa-flag-checkered', name:'Progression de combat', description:`Atteins le stage ${stageTarget}`, progress:bestStage, target:stageTarget });
   }
   const quests = defs.map((quest) => ({ ...quest, progress:Math.min(Math.max(0, Math.floor(quest.progress || 0)), quest.target), completed:(quest.progress || 0) >= quest.target }));
