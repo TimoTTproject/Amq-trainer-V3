@@ -12,7 +12,7 @@ const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
-  RARITY_PASSIVE_RANGE, characterPassiveValue, characterPassiveDescription,
+  RARITY_PASSIVE_POOL, characterPassiveEntry, characterPassiveMagnitude, characterPassiveBonus, characterPassiveDescription,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -563,32 +563,46 @@ test('GET /roster : liste les personnages recrutés (pas la collection gacha)', 
   assert.ok(res.json.recruits[0].baseRate > 0);
 });
 
-test('passif de rareté : varie par personnage dans la fourchette de son palier, stable entre deux appels (retour testeur : plus de RNG)', () => {
-  const naruto={name:'Naruto Uzumaki',series:'Naruto'};const killua={name:'Killua Zoldyck',series:'Hunter x Hunter'};
-  const rangeRare=RARITY_PASSIVE_RANGE.rare;
-  const vNaruto=characterPassiveValue(naruto,'rare','self');const vKillua=characterPassiveValue(killua,'rare','self');
-  assert.ok(vNaruto>=rangeRare.min&&vNaruto<=rangeRare.max);
-  assert.ok(vKillua>=rangeRare.min&&vKillua<=rangeRare.max);
-  assert.notEqual(vNaruto,vKillua); // deux personnages de même rareté n'ont plus la même magnitude
-  assert.equal(characterPassiveValue(naruto,'rare','self'),vNaruto); // stable : même perso ⇒ même valeur à chaque appel
-  // Un passif 'team' n'a aucune valeur en mode 'self' et vice versa (rare est 'self', pas 'team')
-  assert.equal(characterPassiveValue(naruto,'rare','team'),0);
-  assert.equal(characterPassiveValue(naruto,'common','self'),0); // common n'a pas de bonus mécanique
+test('passif de rareté : le pool propose plusieurs TYPES distincts, chaque personnage tire type+magnitude de façon stable (retour testeur : plus de RNG)', () => {
+  const candidates=[
+    {name:'Naruto Uzumaki',series:'Naruto'},{name:'Killua Zoldyck',series:'Hunter x Hunter'},
+    {name:'Sasuke Uchiha',series:'Naruto'},{name:'Edward Elric',series:'FMA'},
+    {name:'Levi Ackerman',series:'Attack on Titan'},{name:'Gojo Satoru',series:'Jujutsu Kaisen'},
+  ];
+  const entries=candidates.map((c)=>characterPassiveEntry(c,'rare'));
+  for(const entry of entries)assert.ok(RARITY_PASSIVE_POOL.rare.includes(entry));
+  // Le pool propose plusieurs TYPES qualitativement différents, pas juste
+  // une magnitude différente sur un seul type partagé par tous.
+  assert.ok(new Set(entries.map((e)=>e.key)).size>1);
+  candidates.forEach((c,i)=>{
+    const magnitude=characterPassiveMagnitude(c,'rare');
+    assert.ok(magnitude>=entries[i].min&&magnitude<=entries[i].max);
+  });
+  // Stable : même personnage ⇒ même tirage (type ET magnitude) à chaque appel
+  assert.equal(characterPassiveEntry(candidates[0],'rare'),entries[0]);
+  assert.equal(characterPassiveMagnitude(candidates[0],'rare'),characterPassiveMagnitude(candidates[0],'rare'));
+  // common n'a pas de bonus mécanique
+  assert.equal(characterPassiveEntry(candidates[0],'common'),null);
+  assert.equal(characterPassiveBonus(candidates[0],'common','prodSelf'),0);
 });
 
-test('passif de rareté : la description reflète la magnitude réellement tirée pour ce personnage', () => {
+test('passif de rareté : la description reflète le type et la magnitude réellement tirés pour ce personnage', () => {
   const character={name:'Sasuke Uchiha',series:'Naruto'};
+  const entry=characterPassiveEntry(character,'epic');
   const desc=characterPassiveDescription(character,'epic');
-  const value=characterPassiveValue(character,'epic','team');
-  const percent=Math.round(value*1000)/10;
-  assert.match(desc,new RegExp(`\\+${percent}% de production à toute l.équipe`));
+  assert.ok(desc.startsWith(`${entry.label} ·`));
+  const magnitude=characterPassiveMagnitude(character,'epic');
+  const percent=Math.round(magnitude*1000)/10;
+  assert.ok(desc.includes(String(percent)));
 });
 
-test('production : le passif rare varie par personnage, à niveau/rôle égal (retour testeur : plus de RNG sur les passifs)', async () => {
-  // Même rôle ('support', reconnu par roleForCharacter sur les deux noms) ⇒
-  // même Talent Permanent pour les deux ⇒ seule la magnitude du passif de
-  // rareté (propre à chaque personnage) peut expliquer un écart de
-  // production, à niveau et rareté strictement identiques.
+test('production : le passif de personnage (quel que soit son type tiré) s\'applique correctement à niveau/rôle égal (retour testeur : plus de RNG sur les passifs)', async () => {
+  // Même rôle ('support', reconnu littéralement par roleForCharacter sur les
+  // deux noms) ⇒ même Talent Permanent pour les deux ⇒ tout écart de
+  // production à niveau/rareté égaux ne peut venir QUE du passif de rareté
+  // de chacun — quel que soit le TYPE qu'il a tiré (prodSelf/prodTeam
+  // affectent la production ; click/crit/cooldown ne l'affectent pas du
+  // tout, auquel cas la production doit être strictement identique).
   const sakura={id:1,name:'Sakura Haruno',series:'Naruto',rarity:'rare'};
   const orihime={id:2,name:'Orihime Inoue',series:'Bleach',rarity:'rare'};
   const user=dbUser();
@@ -599,12 +613,51 @@ test('production : le passif rare varie par personnage, à niveau/rôle égal (r
     const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
     rateFor[character.name]=res.json.totalRate;
   }
-  const passiveSakura=characterPassiveValue(sakura,'rare','self');
-  const passiveOrihime=characterPassiveValue(orihime,'rare','self');
-  assert.ok(passiveSakura>0&&passiveOrihime>0&&passiveSakura!==passiveOrihime);
+  const prodEffect=(character)=>{
+    const entry=characterPassiveEntry(character,'rare');
+    if(!entry||(entry.stat!=='prodSelf'&&entry.stat!=='prodTeam'))return 0;
+    return characterPassiveMagnitude(character,'rare');
+  };
   const observedRatio=rateFor[sakura.name]/rateFor[orihime.name];
-  const expectedRatio=(1+passiveSakura)/(1+passiveOrihime);
+  const expectedRatio=(1+prodEffect(sakura))/(1+prodEffect(orihime));
   assert.ok(Math.abs(observedRatio-expectedRatio)<1e-6);
+});
+
+test('clic : le passif "click" d\'un personnage actif de niveau 10+ augmente les dégâts de clic (retour testeur : types de passifs variés)', async () => {
+  // Cherche un personnage synthétique dont le tirage tombe sur le type
+  // 'click' du pool rare — le pool contenant aussi prodSelf/crit, il faut
+  // trouver un nom qui roule spécifiquement sur 'click' pour ce test.
+  let clickCharacter=null;
+  for(let i=0;i<2000;i++){
+    const candidate={name:`Perso Passif Test ${i}`,series:'Univers de Test'};
+    if(characterPassiveEntry(candidate,'rare')?.stat==='click'){clickCharacter=candidate;break;}
+  }
+  assert.ok(clickCharacter,'aucun personnage synthétique ne tire le type "click" — pool ou hash a changé ?');
+  const character={...clickCharacter,id:1,rarity:'rare'};
+  const originalRandom=Math.random;
+  Math.random=()=>0.99; // neutralise les critiques (aléatoires) pour isoler le seul effet du passif
+  try{
+    // Cookie sur un userId dédié : le budget de clic/seconde (store en
+    // mémoire, clé userId+seconde courante) est partagé par TOUS les tests
+    // qui utilisent 'u1' dans ce fichier — un userId à part évite de
+    // consommer ce budget commun et de faire échouer un autre test de clic
+    // qui tourne dans la même seconde.
+    const withPassiveUser=dbUser({id:'u-passive-click',idleClickLevel:2,idleStage:9,idleEnemyHp:enemyMaxHp(9)});
+    prisma.user.findUnique=async()=>withPassiveUser;
+    prisma.idleSlot.findMany=async()=>[{id:10,userId:'u-passive-click',slotIndex:0,level:10,characterId:1,character}];
+    prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')withPassiveUser.idleEnemyHp=data.idleEnemyHp;return withPassiveUser;};
+    const withRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u-passive-click'),body:{requestId:'click-passive-with-0001'}});
+
+    const withoutPassiveUser=dbUser({id:'u-passive-click-2',idleClickLevel:2,idleStage:9,idleEnemyHp:enemyMaxHp(9)});
+    prisma.user.findUnique=async()=>withoutPassiveUser;
+    prisma.idleSlot.findMany=async()=>[]; // aucun personnage actif : pas de passif d'équipe
+    prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')withoutPassiveUser.idleEnemyHp=data.idleEnemyHp;return withoutPassiveUser;};
+    const withoutRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u-passive-click-2'),body:{requestId:'click-passive-without-0001'}});
+
+    assert.equal(withRes.status,200);assert.equal(withoutRes.status,200);
+    assert.equal(withRes.json.critical,false);assert.equal(withoutRes.json.critical,false); // confirme la neutralisation du hasard
+    assert.ok(withRes.json.damage>withoutRes.json.damage);
+  }finally{Math.random=originalRandom;}
 });
 
 test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost et crée une ligne DojoRecruit', async () => {
@@ -1094,22 +1147,26 @@ test('click : regroupe plusieurs frappes dans une seule requête autoritaire', a
 
 test('click : Frappes Multiples augmente les dégâts simulés sans changer le compteur de clics (retour testeur)', async () => {
   const stage=100;
-  const baseline=dbUser({id:'u-ms-base',idleClickLevel:2,idleMultiStrikeLevel:0,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
-  prisma.user.findUnique=async()=>baseline;
-  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')baseline.idleEnemyHp=data.idleEnemyHp;return baseline;};
-  const baseRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-base-0001'}});
-  assert.equal(baseRes.status,200);
-  assert.equal(baseRes.json.count,1);
+  const originalRandom=Math.random;
+  Math.random=()=>0.99; // neutralise les critiques (aléatoires) : sans ça, un crit chanceux sur le seul coup du baseline peut ponctuellement dépasser 2 coups non-crit du boosté
+  try{
+    const baseline=dbUser({id:'u-ms-base',idleClickLevel:2,idleMultiStrikeLevel:0,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
+    prisma.user.findUnique=async()=>baseline;
+    prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')baseline.idleEnemyHp=data.idleEnemyHp;return baseline;};
+    const baseRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-base-0001'}});
+    assert.equal(baseRes.status,200);
+    assert.equal(baseRes.json.count,1);
 
-  const boosted=dbUser({id:'u-ms-boost',idleClickLevel:2,idleMultiStrikeLevel:20,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
-  prisma.user.findUnique=async()=>boosted;
-  prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')boosted.idleEnemyHp=data.idleEnemyHp;return boosted;};
-  const boostedRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-boost-0001'}});
-  assert.equal(boostedRes.status,200);
-  // Le compteur de clics physiques (quêtes) ne bouge pas...
-  assert.equal(boostedRes.json.count,1);
-  // ...mais les dégâts simulés augmentent (2 frappes de combat pour 1 tap au niveau max).
-  assert.ok(boostedRes.json.damage>baseRes.json.damage);
+    const boosted=dbUser({id:'u-ms-boost',idleClickLevel:2,idleMultiStrikeLevel:20,idleStage:stage,idleEnemyHp:enemyMaxHp(stage)});
+    prisma.user.findUnique=async()=>boosted;
+    prisma.user.update=async({data})=>{if(typeof data.idleEnemyHp==='number')boosted.idleEnemyHp=data.idleEnemyHp;return boosted;};
+    const boostedRes=await app.request('/api/idle/click',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'click-ms-boost-0001'}});
+    assert.equal(boostedRes.status,200);
+    // Le compteur de clics physiques (quêtes) ne bouge pas...
+    assert.equal(boostedRes.json.count,1);
+    // ...mais les dégâts simulés augmentent (2 frappes de combat pour 1 tap au niveau max).
+    assert.ok(boostedRes.json.damage>baseRes.json.damage);
+  }finally{Math.random=originalRandom;}
 });
 
 test('click : rejouer le même requestId ne réapplique jamais les dégâts', async () => {
