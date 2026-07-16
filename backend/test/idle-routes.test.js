@@ -200,6 +200,25 @@ test('inventaire : le verrouillage vérifie que l objet appartient au joueur',as
   assert.equal(res.status,200);assert.equal(locked,true);
 });
 
+test('équipement : améliorer cible l’objet par itemId, pas par slot+kind (jamais le mauvais objet équipé)',async()=>{
+  const user=dbUser({essence:1000});prisma.user.findUnique=async()=>user;prisma.user.update=async()=>user;
+  prisma.idleItem.findFirst=async({where})=>where.id==='item-1'&&where.userId==='u1'?{id:'item-1',userId:'u1',bonus:.05,rarity:'rare',equippedSlotId:7}:null;
+  let updateArgs=null;prisma.idleItem.update=async(args)=>{updateArgs=args;return{};};
+  const res=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1'}});
+  assert.equal(res.status,200);
+  assert.equal(updateArgs.where.id,'item-1');
+  assert.ok(Math.abs(updateArgs.data.bonus-.06)<1e-9);
+});
+
+test('équipement : améliorer refuse un objet non équipé ou appartenant à un autre joueur',async()=>{
+  const user=dbUser({essence:1000});prisma.user.findUnique=async()=>user;prisma.user.update=async()=>user;
+  prisma.idleItem.findFirst=async({where})=>where.id==='unequipped'&&where.userId==='u1'?{id:'unequipped',userId:'u1',bonus:.05,rarity:'rare',equippedSlotId:null}:null;
+  const unequipped=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'unequipped'}});
+  assert.equal(unequipped.status,400);assert.match(unequipped.json.error,/équipé/);
+  const notOwned=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'not-mine'}});
+  assert.equal(notOwned.status,404);
+});
+
 test('inventaire : le recyclage exige une confirmation renforcée pour les objets précieux',async()=>{
   prisma.user.findUnique=async()=>dbUser();
   prisma.idleItem.findMany=async({where})=>where.id?.in?[{id:'legend-1',userId:'u1',rarity:'legendary',locked:false,equippedSlotId:null,bonus:.14,effectValue:.03}]:[];
@@ -316,9 +335,13 @@ test('Épéiste : la frappe et l’aperçu appliquent bien l’Exécution sous 2
   assert.equal(normal.json.heroClass.passiveActive,false);
   assert.equal(execute.json.heroClass.passiveActive,true);
   assert.match(execute.json.heroClass.passiveStatus,/EXÉCUTION ACTIVE/);
-  // Le multiplicateur est appliqué avant l'arrondi final (6,25 → 6 ; 12,5 → 13).
-  assert.ok(execute.json.click.damage>=normal.json.click.damage*2);
-  assert.ok(execute.json.click.damage<=normal.json.click.damage*2+1);
+  // Le multiplicateur est appliqué avant l'arrondi final : chaque valeur est
+  // arrondie indépendamment (pas execute = round(normal)×2), donc la
+  // comparaison tolère ±1 — sans quoi le multiplicateur d'événement journalier
+  // (currentIdleEvent) fait dériver l'écart au-delà d'un arrondi unique selon
+  // la date réelle du test (ex. ×1.2 aujourd'hui : normal=round(7.5)=8,
+  // execute=round(15)=15, 15 < 8×2).
+  assert.ok(Math.abs(execute.json.click.damage-normal.json.click.damage*2)<=1);
 });
 
 test('GET /state : reflète les niveaux d\'Ancients déjà achetés (bonus appliqués, coût du niveau suivant)', async () => {
