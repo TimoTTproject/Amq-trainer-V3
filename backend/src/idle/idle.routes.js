@@ -142,12 +142,14 @@ class IdleError extends Error {
 
 const SQUAD_PRESET_LIMIT = 5;
 const SQUAD_SLOT_DEFS = [
-  { index: 0, name: 'Escouade Alpha', icon: 'fa-flag', unlock: { type: 'start', label: 'Disponible' }, purpose: 'Progression principale', bonus: 'Aucun bonus caché : c’est la team de push.' },
-  { index: 1, name: 'Escouade Boss', icon: 'fa-skull', unlock: { type: 'prestige', value: 1, label: 'Prestige 1' }, purpose: 'Gardiens et boss communs', bonus: 'Pensée pour Tank + Assassin + Attaquant.' },
-  { index: 2, name: 'Escouade Farm', icon: 'fa-recycle', unlock: { type: 'rank', value: 25, label: 'Rang 25' }, purpose: 'Farm et recyclage', bonus: 'Pensée pour Producteur + Fortune.' },
-  { index: 3, name: 'Escouade Faille', icon: 'fa-dungeon', unlock: { type: 'rift', value: 1, label: 'Faille débloquée' }, purpose: 'Défi hebdomadaire', bonus: 'Pensée pour rôles variés et reliques.' },
-  { index: 4, name: 'Escouade Libre', icon: 'fa-stars', unlock: { type: 'prestige', value: 5, label: 'Prestige 5' }, purpose: 'Test de méta', bonus: 'Pour essayer des persos favoris sans casser la team principale.' },
+  { index: 0, name: 'Composition Alpha', icon: 'fa-flag', unlock: { type: 'start', label: 'Disponible' }, purpose: 'Progression principale', bonus: 'Sauvegarde de team : aucun bonus caché, c’est ta compo de push.' },
+  { index: 1, name: 'Composition Boss', icon: 'fa-skull', unlock: { type: 'prestige', value: 1, label: 'Prestige 1' }, purpose: 'Gardiens et boss communs', bonus: 'Sauvegarde conseillée pour Tank + Assassin + Attaquant.' },
+  { index: 2, name: 'Composition Farm', icon: 'fa-recycle', unlock: { type: 'rank', value: 25, label: 'Rang 25' }, purpose: 'Farm et recyclage', bonus: 'Sauvegarde conseillée pour Producteur + Support.' },
+  { index: 3, name: 'Composition Faille', icon: 'fa-dungeon', unlock: { type: 'rift', value: 1, label: 'Rang 20 ou stage 120' }, purpose: 'Défi hebdomadaire', bonus: 'Sauvegarde conseillée pour rôles variés et reliques.' },
+  { index: 4, name: 'Composition Libre', icon: 'fa-stars', unlock: { type: 'prestige', value: 5, label: 'Prestige 5' }, purpose: 'Test de méta', bonus: 'Pour essayer des persos favoris sans casser la composition principale.' },
 ];
+const AUTO_SKILLS_UNLOCK_LEVEL = 40;
+const BATTLE_SPEED_UNLOCKS = { 1: 1, 2: 30, 4: 60 };
 
 function unlockedSquadPresetCount(user = {}) {
   const prestige = Math.max(0, Number(user.prestigeLevel) || 0);
@@ -931,15 +933,15 @@ function teamMetaBreakdown(slots, recruitCount=0, formation='balanced', autoSkil
     {key:'attaquant',count:count('attaquant'),name:'Attaquant',effect:'+9% DPS d’équipe chacun',bonus:count('attaquant')*.09},
     {key:'assassin',count:count('assassin'),name:'Assassin',effect:'+3% DPS d’équipe chacun et +25% dégâts sous 20% PV ennemi',bonus:count('assassin')*.03+Math.min(.50,count('assassin')*.25),situational:true},
     {key:'producteur',count:count('producteur'),name:'Producteur',effect:'+4% DPS d’équipe chacun',bonus:count('producteur')*.04},
-    {key:'support',count:count('support'),name:'Support',effect:'−10% recharge du Combo chacun (max. −30%)',bonus:Math.min(.30,count('support')*.10),situational:true},
+    {key:'support',count:count('support'),name:'Support',effect:'−10% recharge Ultime + Combo chacun. Cumulé avec Flux et passifs, cap global −70%',bonus:count('support')*.10,situational:true},
     {key:'tank',count:count('tank'),name:'Tank',effect:'−15% de pénalité de boss chacun (minimum 45%)',bonus:count('tank')*.15,situational:true},
     {key:'diversity',count:new Set(roles).size,name:'Diversité',effect:'+4% DPS d’équipe par rôle unique après le premier',bonus:uniqueRoleBonus},
   ];
   const talents=active.map((slot,index)=>{const talent=characterTalent(slot.character);return {slot:index+1,character:slot.character.name,name:talent.name,description:talent.description,teamBonus:talent.team,selfBonus:talent.self};});
-  let recommendation='Composition stable : compare les rôles, la synergie et la formation avant de remplacer un héros.';
+  let recommendation='Composition stable : compare DPS, boss, essence et recharge avant de remplacer un héros.';
   if(!active.length)recommendation='Assigne un premier héros pour commencer à produire de l’Essence.';
   else if(roles.includes('producteur')&&!roles.includes('support'))recommendation='Ajoute un Support pour activer Logistique : Producteur + Support donne ×1,18.';
-  else if(roles.includes('support')&&!roles.includes('producteur'))recommendation='Un Producteur ajoute +5% d’équipe, son talent Stratège +5%, et peut activer Logistique ×1,18.';
+  else if(roles.includes('support')&&!roles.includes('producteur'))recommendation='Un Producteur ajoute +4% DPS d’équipe, son talent Stratège +5%, et peut activer Logistique ×1,18.';
   else if(formation!=='balanced'&&formationMultiplier===1)recommendation=`La formation ${selectedFormation.name} est sélectionnée mais sa condition n’est pas remplie.`;
   return {
     roleDetails,talents,multipliers,recommendation,
@@ -1265,7 +1267,7 @@ async function buildState(userId) {
     {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
     {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
     {key:'gear',title:'Équipe un objet',description:'Les coffres donnent des objets à placer sur les six emplacements.',done:slots.some((s)=>(s.items||s.equipments||[]).length>0),tab:'equipment'},
-    {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le niveau requis pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
+    {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le stage requis et garde la run assez longtemps pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
   ];
   // Équipé sur un personnage : reste vrai même si ce personnage est
   // actuellement au repos (pas dans un emplacement actif) — `slotByCharacter`
@@ -1353,9 +1355,9 @@ async function buildState(userId) {
       bossChest: { defeated: defeatedBosses, claimed: user.idleBossClaimed, available: defeatedBosses >= nextBossChest, tier: nextBossChest, ...nextChestRewards },
       isElite:isEliteStage(stage),
       mechanic: clickMechanic?{...clickMechanic,progress:user.idleBossProgress||0,active:clickMechanic.key!=='shield'||(user.idleBossProgress||0)<8}:null,
-      speed: { current:user.idleBattleSpeed||1, choices:[{value:1,level:1},{value:2,level:30},{value:4,level:75}].map((x)=>({...x,unlocked:dojoLevel>=x.level})) },
+      speed: { current:user.idleBattleSpeed||1, choices:Object.entries(BATTLE_SPEED_UNLOCKS).map(([value,level])=>({value:Number(value),level,unlocked:dojoLevel>=level})) },
       mode: user.idleBattleMode||'progress',
-      autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=50,level:50,bonus:.15},
+      autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=AUTO_SKILLS_UNLOCK_LEVEL,level:AUTO_SKILLS_UNLOCK_LEVEL,bonus:.15},
       skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,supportCount:activeSupportCount,cooldownReductionPercent:Math.round((1-activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/ULTIMATE_COOLDOWN_MS)*100),burstBaseCooldownSeconds:ULTIMATE_COOLDOWN_MS/1000,teamBaseCooldownSeconds:TEAM_COMBO_COOLDOWN_MS/1000,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000)},
     },
     missions,
@@ -1884,7 +1886,7 @@ router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10,
 });
 
 router.post('/battle-speed', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-speed' }), async (req,res)=>{
-  const speed=Number(req.body?.speed);const required={1:1,2:30,4:75}[speed];if(!required)return res.status(400).json({error:'Vitesse invalide'});
+  const speed=Number(req.body?.speed);const required=BATTLE_SPEED_UNLOCKS[speed];if(!required)return res.status(400).json({error:'Vitesse invalide'});
   const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});if((user.idleRankLevel||1)<required)return res.status(403).json({error:`Débloqué au niveau ${required}`});
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleSpeed:speed}});});res.json(await buildState(req.user.id));
 });
@@ -1957,7 +1959,7 @@ router.post('/team-preset/load',requireAuth,requireIdleBeta,rateLimit({max:15,na
   await withSettle(req.user.id,async(tx,user)=>{await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null,level:1,ascension:0}});const used=new Set();for(const item of Array.isArray(preset.slots)?preset.slots:[]){const slotIndex=Number(item.slotIndex);const characterId=Number(item.characterId);if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=user.idleSlotsUnlocked||!Number.isInteger(characterId)||used.has(characterId))continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId}}});if(owned){used.add(characterId);await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0},create:{userId:user.id,slotIndex,characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0}});}}await tx.user.update({where:{id:user.id},data:{idleFormation:FORMATIONS[preset.formation]?preset.formation:'balanced'}});});
   void recordIdleEvent(req.user.id,'preset_load');res.json(await buildState(req.user.id));
 });
-router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});if((user.idleRankLevel||1)<50)return res.status(403).json({error:'Compétences automatiques débloquées au niveau 50'});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
+router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});if((user.idleRankLevel||1)<AUTO_SKILLS_UNLOCK_LEVEL)return res.status(403).json({error:`Compétences automatiques débloquées au Rang ${AUTO_SKILLS_UNLOCK_LEVEL}`});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
 
 // Identifie l'objet par itemId (comme equip/unequip/salvage), PAS par
 // slotIndex+kind : ce dernier résolvait « l'objet actuellement équipé à cet
