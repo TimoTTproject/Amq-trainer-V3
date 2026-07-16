@@ -886,6 +886,7 @@ model IdleSlot {
   equipments IdleEquipment[]
 
   @@unique([userId, slotIndex])
+  @@unique([userId, characterId])
   @@index([userId])
 }
 
@@ -926,10 +927,14 @@ model IdleItem {
   // idle.routes.js. Additif : les objets créés avant cette colonne ont
   // simplement un tableau vide, donc un seul affixe visible (comportement
   // identique à avant, pas de backfill nécessaire).
-  affixes    Json     @default("[]")
-  sourceWorld String
-  locked      Boolean  @default(false)
-  obtainedAt  DateTime @default(now())
+  affixes          Json     @default("[]")
+  sourceWorld      String
+  enhancementLevel Int    @default(0)
+  setKey           String   @default("energy")
+  mainStat         String   @default("dps")
+  subStats         Json     @default("{}")
+  locked           Boolean  @default(false)
+  obtainedAt       DateTime @default(now())
 
   user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   equippedCharacter Character? @relation(fields: [equippedCharacterId], references: [id], onDelete: SetNull)
@@ -1040,8 +1045,8 @@ model DojoRecruit {
   characterId   Int
   recruitedAt   DateTime @default(now())
   trainingLevel Int      @default(1)
-  // Puissance temporaire de la run : double le rendement par palier et repart
-  // à 0 au Prestige, contrairement au recrutement du héros qui est permanent.
+  // Puissance temporaire de la run : bonus progressif par palier, sans perte
+  // de niveau lors de l'Ascension, puis retour à 0 au Prestige.
   idleAscension Int      @default(0)
   // Recrue « Éveillée » (équivalent shiny) : tirée à l'invocation (~2,5%),
   // bordure dorée + petit bonus de production personnelle permanent.

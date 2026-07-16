@@ -58,6 +58,36 @@ async function incrBy(key, amount, ttlSec) {
   e.n=(e.n||0)+delta;return e.n;
 }
 
+// Verrou distribué court. Le token empêche une requête expirée de libérer le
+// verrou acquis entre-temps par une autre requête.
+async function acquireLock(key, ttlMs = 30000) {
+  const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  if (redis) {
+    const result = await redis.set(key, token, 'PX', Math.max(1000, ttlMs), 'NX');
+    return result === 'OK' ? token : null;
+  }
+  const now = Date.now();
+  const existing = mem.get(key);
+  if (existing && (!existing.exp || existing.exp > now)) return null;
+  mem.set(key, { exp: now + Math.max(1000, ttlMs), token });
+  return token;
+}
+
+async function releaseLock(key, token) {
+  if (!token) return;
+  if (redis) {
+    await redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      key,
+      token,
+    );
+    return;
+  }
+  const existing = mem.get(key);
+  if (existing?.token === token) mem.delete(key);
+}
+
 function redisEnabled() { return !!redis; }
 
-module.exports = { setIfAbsent, incr, incrBy, redisEnabled };
+module.exports = { setIfAbsent, incr, incrBy, acquireLock, releaseLock, redisEnabled };

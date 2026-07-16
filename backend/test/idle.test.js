@@ -21,6 +21,7 @@ const {
   pendingEssence,
   charLevelMultiplier,
   charLevelUpCost,
+  charLevelBulkCost,
   dojoXpForLevel,
   dojoLevelForXp,
   dojoLevelMultiplier,
@@ -42,6 +43,10 @@ const {
   rollRecruitRarity,
   recruitCost,
   recruitEssenceCost,
+  HERO_ASCENSION_MAX,
+  heroAscensionRequiredLevel,
+  heroAscensionMultiplier,
+  heroAscensionCost,
   simulateCombat,
   enemyMaxHp,
   enemyReward,
@@ -315,7 +320,48 @@ test('recruitEssenceCost : progresse seulement avec les achats Essence et respec
   assert.equal(recruitEssenceCost(0),1500);
   assert.ok(recruitEssenceCost(10)>recruitEssenceCost(0));
   assert.ok(recruitEssenceCost(10,.25)<recruitEssenceCost(10));
-  assert.ok(recruitEssenceCost(999)<=5000000);
+  assert.ok(recruitEssenceCost(50)>5000000);
+  assert.ok(recruitEssenceCost(100)>recruitEssenceCost(50));
+  assert.ok(recruitEssenceCost(999)>recruitEssenceCost(100));
+  assert.ok(Number.isFinite(recruitEssenceCost(10000)));
+});
+
+test('simulation 1000 h : même une production extrême ne rend pas les invocations illimitées', () => {
+  const simulatePulls = (hours, essencePerSecond, discount = .6) => {
+    let balance = hours * 3600 * essencePerSecond;
+    let pulls = 0;
+    while (pulls < 10000) {
+      const cost = recruitEssenceCost(pulls, discount);
+      if (cost > balance) return { pulls, balance, nextCost: cost };
+      balance -= cost;
+      pulls++;
+    }
+    throw new Error('La simulation a atteint sa garde anti-boucle');
+  };
+  const at500h = simulatePulls(500, 1e12);
+  const at1000h = simulatePulls(1000, 1e12);
+  assert.ok(at1000h.pulls < 250);
+  assert.ok(at1000h.pulls - at500h.pulls <= 6);
+  assert.ok(at1000h.nextCost > at1000h.balance);
+  assert.ok(Number.isFinite(at1000h.nextCost));
+});
+
+test('ascension : cinq paliers à rendement décroissant, sans boucle auto-accélérante', () => {
+  assert.deepEqual(
+    Array.from({ length: HERO_ASCENSION_MAX }, (_, ascension) => heroAscensionRequiredLevel(ascension)),
+    [100, 110, 120, 130, 140],
+  );
+  assert.ok(heroAscensionMultiplier(HERO_ASCENSION_MAX) < 11);
+  assert.equal(heroAscensionMultiplier(HERO_ASCENSION_MAX + 100), heroAscensionMultiplier(HERO_ASCENSION_MAX));
+  for (let ascension = 0; ascension < HERO_ASCENSION_MAX; ascension++) {
+    const requiredLevel = heroAscensionRequiredLevel(ascension);
+    const nextRequiredLevel = heroAscensionRequiredLevel(ascension + 1);
+    const previousLevel = ascension ? heroAscensionRequiredLevel(ascension - 1) : 1;
+    const cycleCost = charLevelBulkCost('rare', previousLevel, requiredLevel - previousLevel) + heroAscensionCost('rare', ascension);
+    const nextCycleCost = charLevelBulkCost('rare', requiredLevel, nextRequiredLevel - requiredLevel) + heroAscensionCost('rare', ascension + 1);
+    const powerGain = heroAscensionMultiplier(ascension + 1) / heroAscensionMultiplier(ascension);
+    assert.ok(nextCycleCost / cycleCost > powerGain);
+  }
 });
 
 test('charLevelMultiplier/charLevelUpCost : illimités, croissance sans plafond', () => {

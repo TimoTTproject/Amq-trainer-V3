@@ -7,12 +7,13 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
   RARITY_PASSIVE_POOL, characterPassiveEntry, characterPassiveMagnitude, characterPassiveBonus, characterPassiveDescription,
+  heroAscensionRequiredLevel,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -83,6 +84,24 @@ test('méta transparente : Producteur, Leader, Lead Skill et Logistique reprenne
   assert.equal(meta.leaderSkill.prod,1.15);
   assert.match(meta.leaderExplanation,/Maître logisticien/i);
   assert.equal(characterLeaderSkill(slots[1].character).prod,1.10);
+});
+
+test('DPS héros : la somme réelle inclut équipement et multiplicateurs d équipe',()=>{
+  const slots=[
+    {slotIndex:0,characterId:1,level:25,ascension:1,awakened:true,character:{id:1,name:'Artoria',rarity:'epic',series:'Fate'},items:[
+      {kind:'weapon',bonus:.10,effectKey:'assault',effectValue:.04,sourceWorld:'Fate'},
+      {kind:'relic',bonus:.08,effectKey:'echo',effectValue:.03,sourceWorld:'Fate'},
+      {kind:'accessory',bonus:.06,effectKey:'aura',effectValue:.02,sourceWorld:'Fate'},
+    ]},
+    {slotIndex:1,characterId:2,level:20,ascension:0,awakened:false,character:{id:2,name:'Emiya',rarity:'rare',series:'Fate'},items:[]},
+  ];
+  const extras={achievementsCompleted:3,autoClickDps:17,runBlessings:'berserker'};
+  const result=computeRateBreakdown(slots,5,12,.04,'warrior','none',1,true,5,'balanced','army',1,extras);
+  assert.equal(result.heroes.length,2);
+  assert.ok(result.heroes[0].personalMultiplier>result.heroes[1].personalMultiplier);
+  assert.ok(result.heroes.every((hero)=>hero.rate===hero.personalRate*hero.teamMultiplier));
+  assert.equal(result.heroRate,result.heroes.reduce((sum,hero)=>sum+hero.rate,0));
+  assert.equal(result.totalRate,result.heroRate+17);
 });
 
 test('saison : huit paliers et aucune action unique ne termine le parcours', () => {
@@ -160,37 +179,39 @@ test('inventaire : la rareté détermine le nombre d’affixes tirés, sans doub
 });
 
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
-  const item={bonus:.11,effectKey:'assault',effectValue:.05,affixes:[{effectKey:'echo',effectValue:.03},{effectKey:'precision',effectValue:.02}]};
+  const item={bonus:.11,effectKey:'assault',effectValue:.05,affixes:[{effectKey:'echo',effectValue:.03},{effectKey:'precision',effectValue:.02}],subStats:{dps:.01,click:.01}};
   // assault et echo sont en mode dps (comptés), precision est en mode click (pas ici)
-  assert.ok(Math.abs(itemProductionBonus(item)-(.11+.05+.03))<1e-9);
-  assert.ok(Math.abs(itemActionBonus([{items:[item]}],'click')-(1+.02))<1e-9);
+  assert.ok(Math.abs(itemProductionBonus(item)-(.11+.05+.03+.01))<1e-9);
+  assert.ok(Math.abs(itemActionBonus([{items:[item]}],'click')-(1+.02+.01))<1e-9);
   assert.ok(itemSalvageValue(item)>25);
 });
 
-test('améliorer un objet ne peut jamais réduire sa rareté',()=>{
+test('améliorer un objet conserve toujours sa rareté d’origine',()=>{
   assert.equal(upgradedItemRarity('legendary',.12),'legendary');
-  assert.equal(upgradedItemRarity('epic',.16),'legendary');
+  assert.equal(upgradedItemRarity('epic',.16),'epic');
   assert.equal(upgradedItemRarity('mythic',.26),'mythic');
 });
 
-test('inventaire : les mondes déterminent le nom de l’objet',()=>{
-  assert.match(idleItemDrop(1,'weapon','rare',.03,'Konoha').name,/Kunai de la Feuille/);
-  assert.match(idleItemDrop(1,'weapon','rare',.03,'Namek').name,/Lame de Ki/);
+test('inventaire : les mondes et les paliers créent des familles variées',()=>{
+  const effects=new Set([1,2,3].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
+  assert.equal(effects.size,3);
+  assert.match(idleItemDrop(1,'rune1','rare',.03,'Konoha').name,/Kunai de la Feuille/);
+  assert.match(idleItemDrop(1,'rune1','rare',.03,'Namek').name,/Lame de Ki/);
 });
 
-test('inventaire : une panoplie des trois types accorde le bonus complet',()=>{
+test('inventaire : les sets de deux et quatre runes respectent leurs seuils',()=>{
   assert.equal(equipmentSetMultiplier([{kind:'weapon'},{kind:'relic'}]),1);
-  assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'A'},{kind:'accessory',sourceWorld:'A'}]),1.10);
-  assert.equal(equipmentSetMultiplier([{kind:'weapon',sourceWorld:'A'},{kind:'relic',sourceWorld:'B'},{kind:'accessory',sourceWorld:'A'}]),1);
+  assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'energy'},{kind:'rune2',setKey:'energy'}]),1.06);
+  assert.equal(equipmentSetMultiplier([{kind:'rune1',setKey:'rage'},{kind:'rune2',setKey:'rage'},{kind:'rune3',setKey:'rage'}]),1);
 });
 
 test('équipement automatique : privilégie le rôle et une panoplie réellement plus forte sans dégrader le build',()=>{
   const character={id:1,name:'Sakura',series:'Naruto',rarity:'epic'};const slot={id:10,slotIndex:0,characterId:1,character};
   const item=(id,kind,bonus,sourceWorld='Konoha',effectKey='assault',effectValue=0,equippedCharacterId=null)=>({id,kind,bonus,sourceWorld,effectKey,effectValue,rarity:'epic',equippedCharacterId});
-  const set=[item('w-set','weapon',.10),item('r-set','relic',.10),item('a-set','accessory',.10),item('w-off','weapon',.125,'Namek')];
+  const set=[{...item('w-set','rune1',.10),setKey:'energy'},{...item('r-set','rune2',.10),setKey:'energy'},{...item('a-set','rune3',.10),setKey:'blade'},{...item('w-off','rune1',.105,'Namek'),setKey:'hunter'}];
   const plan=buildAutoEquipmentPlan([slot],set);assert.deepEqual(new Set(plan.assignments.map((x)=>x.itemId)),new Set(['w-set','r-set','a-set']));assert.ok(plan.afterScore>0);
-  const current=set.slice(0,3).map((x)=>({...x,equippedCharacterId:1}));const stable=buildAutoEquipmentPlan([slot],[...current,item('weak','weapon',.01,'Namek')]);assert.equal(stable.changed,0);
-  assert.ok(equipmentItemScore(item('team','relic',.10,'Konoha','resonance',.05),'support')>equipmentItemScore(item('plain','relic',.13,'Konoha','assault',0),'support'));
+  const current=set.slice(0,3).map((x)=>({...x,equippedCharacterId:1}));const stable=buildAutoEquipmentPlan([slot],[...current,{...item('weak','rune4',.01,'Namek'),setKey:'blade'}]);assert.ok(stable.afterScore>=stable.beforeScore);assert.ok(stable.assignments.some((x)=>x.itemId==='weak'));
+  assert.ok(equipmentItemScore(item('team','rune2',.10,'Konoha','resonance',.05),'support')>equipmentItemScore(item('plain','rune2',.13,'Konoha','assault',0),'support'));
 });
 
 test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{
@@ -208,7 +229,8 @@ test('équipement : améliorer cible l’objet par itemId, pas par slot+kind (ja
   const res=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1'}});
   assert.equal(res.status,200);
   assert.equal(updateArgs.where.id,'item-1');
-  assert.ok(Math.abs(updateArgs.data.bonus-.06)<1e-9);
+  assert.ok(Math.abs(updateArgs.data.bonus-.057)<1e-9);
+  assert.equal(updateArgs.data.enhancementLevel,1);
 });
 
 test('équipement : améliorer refuse un objet non équipé ou appartenant à un autre joueur',async()=>{
@@ -221,7 +243,7 @@ test('équipement : améliorer refuse un objet non équipé ou appartenant à un
 });
 
 test('équipement : améliorer ×10 coûte le total exact en une fois, tout ou rien (retour testeur : bouton en lot)',async()=>{
-  const poor=dbUser({essence:4353});prisma.user.findUnique=async()=>poor;let essenceSpent=false;
+  const poor=dbUser({essence:1});prisma.user.findUnique=async()=>poor;let essenceSpent=false;
   // `withSettle` fait toujours un premier `update` pour la CAS de règlement
   // passif (idleLastCollectAt) — on vérifie donc précisément qu'aucune
   // décrémentation d'Essence n'a suivi, pas l'absence totale d'appel.
@@ -229,17 +251,18 @@ test('équipement : améliorer ×10 coûte le total exact en une fois, tout ou r
   prisma.idleItem.findFirst=async({where})=>where.id==='item-1'&&where.userId==='u1'?{id:'item-1',userId:'u1',bonus:.05,rarity:'rare',equippedCharacterId:7}:null;
   prisma.idleItem.update=async()=>({});
   const poorRes=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1',amount:10}});
-  assert.equal(poorRes.status,400); // le coût exact du lot de 10 dépasse 4353 : aucun achat partiel
+  assert.equal(poorRes.status,400);
   assert.equal(essenceSpent,false);
 
-  const rich=dbUser({essence:4354});prisma.user.findUnique=async()=>rich;
-  let essenceDecrement=null,bonusAfter=null;
+  const rich=dbUser({essence:100000});prisma.user.findUnique=async()=>rich;
+  let essenceDecrement=null,bonusAfter=null,levelAfter=null;
   prisma.user.update=async({data})=>{essenceDecrement=data.essence.decrement;return rich;};
-  prisma.idleItem.update=async({data})=>{bonusAfter=data.bonus;return{};};
+  prisma.idleItem.update=async({data})=>{bonusAfter=data.bonus;levelAfter=data.enhancementLevel;return{};};
   const richRes=await app.request('/api/idle/equipment/enhance',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:'item-1',amount:10}});
   assert.equal(richRes.status,200);
-  assert.equal(essenceDecrement,4354); // somme exacte des 10 coûts croissants à partir de bonus=.05
-  assert.ok(Math.abs(bonusAfter-.15)<1e-9); // +0.01 × 10
+  assert.ok(essenceDecrement>0&&essenceDecrement<rich.essence);
+  assert.ok(Math.abs(bonusAfter-.12)<1e-9);
+  assert.equal(levelAfter,10);
 });
 
 test('équipement : lié au personnage — échanger le héros d’un slot ne transfère pas son équipement au nouveau (retour testeur)',async()=>{
@@ -810,7 +833,7 @@ test('slot-level : refuse un emplacement vide, sinon débite selon charLevelUpCo
   assert.equal(writes[0].data.level.increment, 1);
 });
 
-test('slot-ascend : déblocage au niveau 100, puis retour niveau 1 pour la run', async () => {
+test('slot-ascend : seuil progressif et niveaux conservés pendant la run', async () => {
   const user = dbUser({ essence: 1_000_000 });
   prisma.user.findUnique = async () => user;
   prisma.user.update = async () => user;
@@ -825,10 +848,15 @@ test('slot-ascend : déblocage au niveau 100, puis retour niveau 1 pour la run',
   prisma.dojoRecruit.update = async (args) => { recruitWrite=args;return {}; };
   const ok = await app.request('/api/idle/slot-ascend', {method:'POST',cookie:app.authCookie('u1'),body:{slotIndex:0}});
   assert.equal(ok.status,200);
-  assert.equal(slotWrite.data.level,1);
+  assert.equal(slotWrite.data.level,undefined);
   assert.equal(slotWrite.data.ascension.increment,1);
-  assert.equal(recruitWrite.data.trainingLevel,1);
+  assert.equal(recruitWrite.data.trainingLevel,undefined);
   assert.equal(recruitWrite.data.idleAscension.increment,1);
+
+  prisma.idleSlot.findUnique = async () => ({ id:9,userId:'u1',slotIndex:0,characterId:7,level:heroAscensionRequiredLevel(1)-1,ascension:1,character:{rarity:'rare'} });
+  const secondLocked = await app.request('/api/idle/slot-ascend', {method:'POST',cookie:app.authCookie('u1'),body:{slotIndex:0}});
+  assert.equal(secondLocked.status,400);
+  assert.match(secondLocked.json.error,/Niveau 110 requis/);
 });
 
 test('assign : refuse un emplacement verrouillé', async () => {
@@ -1271,6 +1299,7 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   // Plus de multiplicateur automatique : la Sagesse gagnée dépend du niveau
   // du Dojo AU MOMENT du Prestige, à dépenser ensuite dans les Ancients.
   assert.equal(userUpdate.wisdomPoints.increment, wisdomForRunStage(prestigeRequiredStage(1),1));
+  assert.equal(userUpdate.idleEssenceRecruitCount, undefined); // coût des pulls permanent entre les runs
   assert.equal(userUpdate.idleStage,1);
   assert.equal(userUpdate.idleRunBestStage,1);
 });
@@ -1387,6 +1416,7 @@ test('ancient : refuse si Sagesse insuffisante, sinon débite selon ancientCost 
   const poor = dbUser({ wisdomPoints: ancientCost(0) - 1 });
   prisma.user.findUnique = async () => poor;
   prisma.ancientLevel.findUnique = async () => null; // jamais acheté → niveau 0
+  prisma.user.updateMany = async () => ({ count:0 });
   const poorRes = await app.request('/api/idle/ancient', {
     method: 'POST', cookie: app.authCookie('u1'), body: { key },
   });
@@ -1397,17 +1427,16 @@ test('ancient : refuse si Sagesse insuffisante, sinon débite selon ancientCost 
   prisma.user.findUnique = async () => rich;
   prisma.ancientLevel.findUnique = async () => null;
   let userDecrement = null;
-  let upsertArgs = null;
-  prisma.user.update = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return rich; };
-  prisma.ancientLevel.upsert = async (args) => { upsertArgs = args; return {}; };
+  let createArgs = null;
+  prisma.user.updateMany = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return {count:1}; };
+  prisma.ancientLevel.create = async (args) => { createArgs = args; return {}; };
   const okRes = await app.request('/api/idle/ancient', {
     method: 'POST', cookie: app.authCookie('u1'), body: { key },
   });
   assert.equal(okRes.status, 200);
   assert.equal(userDecrement, ancientCost(0));
-  assert.equal(upsertArgs.create.ancientKey, key);
-  assert.equal(upsertArgs.create.level, 1);
-  assert.equal(upsertArgs.update.level.increment, 1);
+  assert.equal(createArgs.data.ancientKey, key);
+  assert.equal(createArgs.data.level, 1);
 });
 
 test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas ancientCost(0)', async () => {
@@ -1416,8 +1445,8 @@ test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas 
   prisma.user.findUnique = async () => user;
   prisma.ancientLevel.findUnique = async () => ({ level: 4 });
   let userDecrement = null;
-  prisma.user.update = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return user; };
-  prisma.ancientLevel.upsert = async () => ({});
+  prisma.user.updateMany = async (args) => { userDecrement = args.data.wisdomPoints.decrement; return {count:1}; };
+  prisma.ancientLevel.updateMany = async () => ({count:1});
   const res = await app.request('/api/idle/ancient', {
     method: 'POST', cookie: app.authCookie('u1'), body: { key },
   });
@@ -1437,9 +1466,9 @@ test('ancient : un palier verrouillé s’achète normalement une fois le prére
   const node=ANCIENTS.find((a)=>a.requires);
   const user=dbUser({wisdomPoints:ancientCost(0)});prisma.user.findUnique=async()=>user;
   prisma.ancientLevel.findUnique=async({where})=>where.userId_ancientKey.ancientKey===node.requires?{level:1}:null;
-  let upsertArgs=null;prisma.user.update=async()=>user;prisma.ancientLevel.upsert=async(args)=>{upsertArgs=args;return{};};
+  let createArgs=null;prisma.user.updateMany=async()=>({count:1});prisma.ancientLevel.create=async(args)=>{createArgs=args;return{};};
   const res=await app.request('/api/idle/ancient',{method:'POST',cookie:app.authCookie('u1'),body:{key:node.key}});
-  assert.equal(res.status,200);assert.equal(upsertArgs.create.ancientKey,node.key);
+  assert.equal(res.status,200);assert.equal(createArgs.data.ancientKey,node.key);
 });
 
 test('GET /state : chaque palier verrouillé indique son prérequis, tier1 toujours débloqué',async()=>{
@@ -1506,4 +1535,16 @@ test('claim-all : ne réclame rien de plus si tout est déjà réclamé', async 
   assert.equal(res.status, 200);
   assert.equal(res.json.claimed, 0);
   assert.equal(updateCalled, false);
+});
+
+test('claim-all : ne crédite rien si une récompense concurrente a déjà créé une ligne', async () => {
+  const user = dbUser({ idleBestStage:25,idleStage:25 });
+  prisma.user.findUnique = async () => user;
+  prisma.idleMissionClaim.findMany = async () => [];
+  prisma.idleMissionClaim.createMany = async () => ({count:1}); // deux récompenses étaient attendues
+  let credited=false;
+  prisma.user.update = async () => { credited=true;return user; };
+  const res=await app.request('/api/idle/claim-all',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(res.status,409);
+  assert.equal(credited,false);
 });

@@ -128,6 +128,21 @@ function characterPassiveDescription(character, rarity) {
 }
 const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 const HERO_ASCENSION_LEVEL = 100;
+const HERO_ASCENSION_LEVEL_STEP = 10;
+const HERO_ASCENSION_MAX = 5;
+const HERO_ASCENSION_GROWTH = 1.6;
+const HERO_ASCENSION_COST_GROWTH = 4;
+const HERO_ASCENSION_BASE_COST = { common: 15000, rare: 25000, epic: 60000, legendary: 150000, mythic: 400000 };
+function heroAscensionRequiredLevel(ascension) {
+  return HERO_ASCENSION_LEVEL + Math.max(0, Math.floor(ascension || 0)) * HERO_ASCENSION_LEVEL_STEP;
+}
+function heroAscensionMultiplier(ascension) {
+  return finiteIdleNumber(Math.pow(HERO_ASCENSION_GROWTH, Math.max(0, Math.min(HERO_ASCENSION_MAX, Math.floor(ascension || 0)))), 1);
+}
+function heroAscensionCost(rarity, ascension) {
+  const base = HERO_ASCENSION_BASE_COST[rarity] || HERO_ASCENSION_BASE_COST.rare;
+  return Math.round(finiteIdleNumber(base * Math.pow(HERO_ASCENSION_COST_GROWTH, Math.max(0, Math.floor(ascension || 0))), 1));
+}
 function charLevelMultiplier(level) {
   return 1 + Math.max(0, (level || 1) - 1) * CHAR_LEVEL_BONUS;
 }
@@ -194,10 +209,12 @@ function recruitCost() {
 
 // Alternative en Essence. Le compteur représente UNIQUEMENT les invocations
 // payées en Essence : utiliser un Sceau ne renchérit jamais ce prix.
-// La croissance reste progressive mais abordable pour un joueur en montée.
+// La croissance reste progressive et suit toute la montée en puissance.
 function recruitEssenceCost(essenceRecruitCount, discountBonus) {
   const discount = Math.max(0, Math.min(0.6, discountBonus || 0));
-  const base = Math.min(5000000, Math.round(1500 * Math.pow(1.18, Math.max(0, essenceRecruitCount || 0))));
+  // La production du Dojo continue d'augmenter : plafonner ce coût rendait
+  // les invocations en Essence pratiquement gratuites en fin de progression.
+  const base = finiteIdleNumber(1500 * Math.pow(1.18, Math.max(0, essenceRecruitCount || 0)), 1500);
   return Math.max(600, Math.round(finiteIdleNumber(base * (1 - discount), 1500)));
 }
 
@@ -871,6 +888,14 @@ module.exports = {
   characterPassiveDescription,
   HERO_MILESTONES,
   HERO_ASCENSION_LEVEL,
+  HERO_ASCENSION_LEVEL_STEP,
+  HERO_ASCENSION_MAX,
+  HERO_ASCENSION_GROWTH,
+  HERO_ASCENSION_COST_GROWTH,
+  HERO_ASCENSION_BASE_COST,
+  heroAscensionRequiredLevel,
+  heroAscensionMultiplier,
+  heroAscensionCost,
   DOJO_XP_BASE,
   DOJO_XP_GROWTH,
   dojoXpForLevel,
