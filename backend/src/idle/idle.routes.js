@@ -47,7 +47,9 @@ const {
   charLevelBulkCost,
   RARITY_RATE,
   RARITY_LEVEL_BONUS,
-  RARITY_PASSIVE,
+  stableCharacterHash,
+  characterPassiveValue,
+  characterPassiveDescription,
   RECRUIT_WEIGHTS,
   HERO_MILESTONES,
   HERO_ASCENSION_LEVEL,
@@ -609,10 +611,6 @@ const CHARACTER_TALENTS = [
   {key:'chosen',name:'Élu',description:'+15% de production personnelle',self:.15,team:0},
   {key:'strategist',name:'Stratège',description:'+5% de production à toute l’équipe',self:0,team:.05},
 ];
-function stableCharacterHash(character) {
-  const text=typeof character==='object'?`${character?.name||''}|${character?.series||''}`:String(character||'');
-  let hash=2166136261;for(const char of text){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return Math.abs(hash);
-}
 function roleForCharacter(character) {
   const text=`${character?.name||''} ${character?.series||''}`.toLowerCase();
   if(/heal|sakura|orihime|support|rem|nezuko/.test(text))return 'support';
@@ -678,11 +676,16 @@ function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKe
     if(!s.characterId||!s.character)return sum;
     const equipped=(s.items?.length?s.items:s.equipments)||[];
     const gearMultiplier=(1+equipped.reduce((v,e)=>v+itemProductionBonus(e),0))*equipmentSetMultiplier(equipped);
-    return sum+slotRate(s.character.rarity,s.level)*(1+characterTalent(s.character).self)*Math.pow(2,s.ascension||0)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1);
+    // Passif de rareté « self » (rare, cf. RARITY_PASSIVE_RANGE) : ne
+    // s'applique qu'au niveau 10+, comme annoncé côté personnage — retour
+    // testeur : avant ce correctif, ce passif était affiché mais jamais
+    // réellement appliqué au calcul de production.
+    const rarityPassiveSelf=(s.level||1)>=10?characterPassiveValue(s.character,s.character.rarity,'self'):0;
+    return sum+slotRate(s.character.rarity,s.level)*(1+characterTalent(s.character).self)*(1+rarityPassiveSelf)*Math.pow(2,s.ascension||0)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1);
   },0);
   const teamPassive = slots.reduce((mult, s) => {
     if (!s.character || (s.level || 1) < 10) return mult;
-    return mult + ({ epic: .02, legendary: .04, mythic: .06 }[s.character.rarity] || 0);
+    return mult + characterPassiveValue(s.character,s.character.rarity,'team');
   }, 1);
   // battleSpeed ne modifie volontairement plus l'économie : c'est un réglage
   // d'animation et non un multiplicateur obligatoire de classement.
@@ -990,14 +993,14 @@ async function buildState(userId) {
         levelCosts: Object.fromEntries([1, 5, 10, 100].map((n) => [n, charLevelBulkCost(row.character.rarity, level, n)])),
         baseRate: RARITY_RATE[row.character.rarity] || 0,
         scaling: RARITY_LEVEL_BONUS[row.character.rarity] || 0,
-        passive: RARITY_PASSIVE[row.character.rarity] || '',
+        passive: characterPassiveDescription(row.character, row.character.rarity),
         passiveUnlocked: level >= 10,
         milestones: HERO_MILESTONES.map((target,index) => ({
           target,
           reached: level >= target,
           bonusMultiplier: 2,
           cumulativeMultiplier: Math.pow(2,index+1),
-          effect: target===10?`Production ×2 et passif : ${RARITY_PASSIVE[row.character.rarity]||'bonus personnel'}`:target===HERO_ASCENSION_LEVEL?'Production ×2 et Ascension débloquée':'Production ×2 supplémentaire',
+          effect: target===10?`Production ×2 et passif : ${characterPassiveDescription(row.character,row.character.rarity)}`:target===HERO_ASCENSION_LEVEL?'Production ×2 et Ascension débloquée':'Production ×2 supplémentaire',
         })),
         nextMilestone: HERO_MILESTONES.find((target) => target > level) || null,
         ascension: row.ascension || 0,
@@ -1424,7 +1427,7 @@ router.get('/roster', requireAuth, requireIdleBeta, async (req, res) => {
   res.json({
     recruits: recruits.map((r) => ({
       id: r.character.id, name: r.character.name, imageUrl: r.character.imageUrl, rarity: r.character.rarity, series:r.character.series, recruitedAt:r.recruitedAt,
-      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1)*(r.awakened?AWAKENED_BONUS:1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:RARITY_PASSIVE[r.character.rarity]||'',passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),leaderSkill:characterLeaderSkill(r.character),awakened:!!r.awakened,
+      level:r.trainingLevel||1,rate:slotRate(r.character.rarity,r.trainingLevel||1)*(r.awakened?AWAKENED_BONUS:1),baseRate:RARITY_RATE[r.character.rarity]||0,scaling:RARITY_LEVEL_BONUS[r.character.rarity]||0,passive:characterPassiveDescription(r.character,r.character.rarity),passiveUnlocked:(r.trainingLevel||1)>=10,talent:characterTalent(r.character),role:roleForCharacter(r.character),combatSkill:characterCombatSkill(r.character),leaderSkill:characterLeaderSkill(r.character),awakened:!!r.awakened,
     })),
   });
 });

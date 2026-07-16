@@ -12,6 +12,7 @@ const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
+  RARITY_PASSIVE_RANGE, characterPassiveValue, characterPassiveDescription,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -560,6 +561,50 @@ test('GET /roster : liste les personnages recrutés (pas la collection gacha)', 
   assert.ok(res.json.recruits[0].talent?.description);
   assert.ok(res.json.recruits[0].combatSkill?.description);
   assert.ok(res.json.recruits[0].baseRate > 0);
+});
+
+test('passif de rareté : varie par personnage dans la fourchette de son palier, stable entre deux appels (retour testeur : plus de RNG)', () => {
+  const naruto={name:'Naruto Uzumaki',series:'Naruto'};const killua={name:'Killua Zoldyck',series:'Hunter x Hunter'};
+  const rangeRare=RARITY_PASSIVE_RANGE.rare;
+  const vNaruto=characterPassiveValue(naruto,'rare','self');const vKillua=characterPassiveValue(killua,'rare','self');
+  assert.ok(vNaruto>=rangeRare.min&&vNaruto<=rangeRare.max);
+  assert.ok(vKillua>=rangeRare.min&&vKillua<=rangeRare.max);
+  assert.notEqual(vNaruto,vKillua); // deux personnages de même rareté n'ont plus la même magnitude
+  assert.equal(characterPassiveValue(naruto,'rare','self'),vNaruto); // stable : même perso ⇒ même valeur à chaque appel
+  // Un passif 'team' n'a aucune valeur en mode 'self' et vice versa (rare est 'self', pas 'team')
+  assert.equal(characterPassiveValue(naruto,'rare','team'),0);
+  assert.equal(characterPassiveValue(naruto,'common','self'),0); // common n'a pas de bonus mécanique
+});
+
+test('passif de rareté : la description reflète la magnitude réellement tirée pour ce personnage', () => {
+  const character={name:'Sasuke Uchiha',series:'Naruto'};
+  const desc=characterPassiveDescription(character,'epic');
+  const value=characterPassiveValue(character,'epic','team');
+  const percent=Math.round(value*1000)/10;
+  assert.match(desc,new RegExp(`\\+${percent}% de production à toute l.équipe`));
+});
+
+test('production : le passif rare varie par personnage, à niveau/rôle égal (retour testeur : plus de RNG sur les passifs)', async () => {
+  // Même rôle ('support', reconnu par roleForCharacter sur les deux noms) ⇒
+  // même Talent Permanent pour les deux ⇒ seule la magnitude du passif de
+  // rareté (propre à chaque personnage) peut expliquer un écart de
+  // production, à niveau et rareté strictement identiques.
+  const sakura={id:1,name:'Sakura Haruno',series:'Naruto',rarity:'rare'};
+  const orihime={id:2,name:'Orihime Inoue',series:'Bleach',rarity:'rare'};
+  const user=dbUser();
+  prisma.user.findUnique=async()=>user;
+  const rateFor={};
+  for(const character of [sakura,orihime]){
+    prisma.idleSlot.findMany=async()=>[{id:10,userId:'u1',slotIndex:0,level:10,characterId:character.id,character}];
+    const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+    rateFor[character.name]=res.json.totalRate;
+  }
+  const passiveSakura=characterPassiveValue(sakura,'rare','self');
+  const passiveOrihime=characterPassiveValue(orihime,'rare','self');
+  assert.ok(passiveSakura>0&&passiveOrihime>0&&passiveSakura!==passiveOrihime);
+  const observedRatio=rateFor[sakura.name]/rateFor[orihime.name];
+  const expectedRatio=(1+passiveSakura)/(1+passiveOrihime);
+  assert.ok(Math.abs(observedRatio-expectedRatio)<1e-6);
 });
 
 test('recruit : refuse si Sceaux insuffisants, sinon débite selon recruitCost et crée une ligne DojoRecruit', async () => {

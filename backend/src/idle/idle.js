@@ -42,11 +42,49 @@ const CHAR_LEVEL_BONUS = 0.12;
 // gouffre exponentiel à chaque niveau. Ainsi, rôles, talents, synergies et
 // personnages favoris restent des choix viables jusqu'en fin de run.
 const RARITY_LEVEL_BONUS = { common: .03, rare: .05, epic: .05, legendary: .05, mythic: .05 };
-const RARITY_PASSIVE = {
-  common: 'Apprenti · progression économique', rare: 'Endurance · +5% de production personnelle au niveau 10',
-  epic: 'Aura · +2% de production à toute l’équipe au niveau 10', legendary: 'Domination · +4% de production à toute l’équipe au niveau 10',
-  mythic: 'Transcendance · +6% de production à toute l’équipe au niveau 10',
+// Hash stable (nom+univers) utilisé pour tout ce qui doit varier PAR
+// personnage sans tirage aléatoire réel ni colonne DB dédiée : rôle assigné,
+// repli de talent, et désormais magnitude du passif de rareté. Même
+// personnage ⇒ toujours le même résultat, y compris après redéploiement.
+function stableCharacterHash(character) {
+  const text = typeof character === 'object' ? `${character?.name || ''}|${character?.series || ''}` : String(character || '');
+  let hash = 2166136261; for (const char of text) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 16777619); }
+  return Math.abs(hash);
+}
+// Passif de rareté : jusqu'ici un seul nombre fixe par palier de rareté, donc
+// deux personnages de même rareté avaient TOUJOURS le même bonus — aucune
+// variété. Chaque personnage tire maintenant sa propre magnitude dans une
+// fourchette par palier (stable, dérivée de son identité), sur le même
+// principe que `characterTalent`. Le catalogue dépasse 13 000 personnages :
+// une fourchette procédurale est la seule option qui ne demande aucun
+// contenu écrit à la main par personnage.
+// mode 'self' : bonus sur la production PROPRE du personnage.
+// mode 'team' : bonus sur la production de TOUTE l'équipe.
+// common n'a pas de bonus mécanique (pur texte de progression économique).
+const RARITY_PASSIVE_RANGE = {
+  rare: { mode: 'self', min: .03, max: .07 },
+  epic: { mode: 'team', min: .01, max: .03 },
+  legendary: { mode: 'team', min: .03, max: .05 },
+  mythic: { mode: 'team', min: .05, max: .07 },
 };
+const RARITY_PASSIVE_LABEL = {
+  common: 'Apprenti', rare: 'Endurance', epic: 'Aura', legendary: 'Domination', mythic: 'Transcendance',
+};
+function characterPassiveValue(character, rarity, mode) {
+  const range = RARITY_PASSIVE_RANGE[rarity];
+  if (!range || range.mode !== mode) return 0;
+  const roll = (stableCharacterHash(character) % 1000) / 1000;
+  return Number((range.min + roll * (range.max - range.min)).toFixed(3));
+}
+function characterPassiveDescription(character, rarity) {
+  const range = RARITY_PASSIVE_RANGE[rarity];
+  const label = RARITY_PASSIVE_LABEL[rarity] || 'Bonus';
+  if (!range) return `${label} · progression économique`;
+  const percent = Math.round(characterPassiveValue(character, rarity, range.mode) * 1000) / 10;
+  return range.mode === 'self'
+    ? `${label} · +${percent}% de production personnelle au niveau 10`
+    : `${label} · +${percent}% de production à toute l’équipe au niveau 10`;
+}
 const HERO_MILESTONES = [10, 25, 50, 100, 250, 500];
 const HERO_ASCENSION_LEVEL = 100;
 function charLevelMultiplier(level) {
@@ -66,15 +104,19 @@ function charLevelBulkCost(rarity, level, amount) {
 
 // Taux de production d'un emplacement (essence/s), avant multiplicateurs
 // globaux (Discipline + niveau du Dojo).
+// Le passif de rareté « self » (rare, cf. RARITY_PASSIVE_RANGE) n'est PAS
+// appliqué ici : `slotRate` n'a pas l'identité du personnage (juste
+// rareté+niveau), et la magnitude varie maintenant PAR personnage. Il est
+// appliqué en aval, dans `computeTotalRate` (idle.routes.js), qui a accès au
+// personnage complet.
 function slotRate(rarity, charLevel) {
   const scaling = RARITY_LEVEL_BONUS[rarity] || CHAR_LEVEL_BONUS;
-  const endurance = rarity === 'rare' && charLevel >= 10 ? 1.05 : 1;
   const level = Math.max(1, charLevel || 1);
   const reached = HERO_MILESTONES.filter((target) => target <= level).length;
   // Les paliers restent de vrais objectifs, sans quadrupler brutalement le
   // rendement d'un achat unique ni court-circuiter l'économie de la run.
   const milestoneMultiplier = Math.pow(2, reached);
-  return finiteIdleNumber((RARITY_RATE[rarity] || 0) * Math.pow(1 + scaling, level - 1) * milestoneMultiplier * endurance);
+  return finiteIdleNumber((RARITY_RATE[rarity] || 0) * Math.pow(1 + scaling, level - 1) * milestoneMultiplier);
 }
 
 // ── Recrutement : la SEULE façon d'obtenir un personnage dans le Dojo, contre
@@ -780,7 +822,10 @@ module.exports = {
   charLevelUpCost,
   charLevelBulkCost,
   RARITY_LEVEL_BONUS,
-  RARITY_PASSIVE,
+  stableCharacterHash,
+  RARITY_PASSIVE_RANGE,
+  characterPassiveValue,
+  characterPassiveDescription,
   HERO_MILESTONES,
   HERO_ASCENSION_LEVEL,
   DOJO_XP_BASE,
