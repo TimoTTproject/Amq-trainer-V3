@@ -1687,6 +1687,7 @@
                 <button type="button" id="idle-customize-hero" title="Personnaliser mon personnage principal"><i class="fas fa-palette"></i><span>Personnaliser</span></button>
               </div>
               <div class="idle-stage-team" id="idle-stage-team" aria-label="Équipe active"></div>
+              <span class="idle-boss-ring hidden" id="idle-boss-ring" aria-hidden="true"></span>
               <div class="idle-scene-boss hidden" id="idle-decor-boss"></div>
               <div class="idle-floats" id="idle-floats" aria-hidden="true"></div>
               <div class="idle-scene-foot">
@@ -1697,9 +1698,11 @@
                 <div class="idle-decor-next" id="idle-decor-next"></div>
               </div>
             </div>
-            <!-- Récompense en attente : affichée JUSTE SOUS la scène (avant
-                 était enterrée sous les quêtes/journal/réglages, invisible
-                 sans scroller — une récompense doit sauter aux yeux). -->
+            <!-- Prochain objectif ET récompense en attente : affichés JUSTE SOUS
+                 la scène (avant, enterrés sous les stats de combat/guide de
+                 compétences, invisibles sans scroller — savoir "vers quoi je
+                 joue là, maintenant" doit sauter aux yeux en permanence). -->
+            <div class="idle-next-objective" id="idle-next-objective"></div>
             <button class="idle-boss-chest hidden" id="idle-boss-chest"><i class="fas fa-box-open"></i><span><b>Coffre de boss disponible</b><small id="idle-boss-chest-label">Récompense</small></span><i class="fas fa-chevron-right"></i></button>
             <p class="idle-decor-flavor" id="idle-decor-flavor"></p>
             <div class="idle-combat-controls" aria-label="Commandes de combat">
@@ -1712,7 +1715,6 @@
               <span><i class="fas fa-hand-fist"></i> Clic <b id="idle-combat-click">+0</b></span>
               <span><i class="fas fa-users"></i> Équipe <b id="idle-combat-team">0/s</b></span>
             </div>
-            <div class="idle-next-objective" id="idle-next-objective"></div>
             <div class="idle-combat-quests" id="idle-combat-quests" aria-label="Quêtes actives"></div>
             <!-- Dock d'achats rapides : monter ses héros SANS quitter le combat
                  (la boucle cœur d'un Clicker Heroes tient sur un seul écran).
