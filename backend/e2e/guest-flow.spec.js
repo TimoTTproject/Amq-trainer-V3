@@ -54,3 +54,17 @@ test('les protections HTTP et les contraintes de mot de passe sont actives', asy
   await expect(page.locator('#register-password')).toHaveAttribute('minlength', '8');
   await expect(page.locator('#register-password')).toHaveAttribute('maxlength', '128');
 });
+
+test('Invocation reste intégrée à la navigation et l’atelier de runes expose une cible unique', async ({ page }) => {
+  await page.goto('/');
+
+  const summon = page.locator('#idle-nav-summon');
+  await expect(summon).toHaveCount(1);
+  await expect(summon).toHaveClass(/idle-tab/);
+  await expect(summon.locator('xpath=..')).toHaveAttribute('id', 'idle-tabs');
+  await expect(summon).toHaveCSS('position', 'relative');
+
+  await expect(page.locator('#idle-equipment-target')).toHaveCount(1);
+  await expect(page.locator('.idle-rune-steps > span')).toHaveCount(3);
+  await expect(page.locator('#idle-inventory-grid')).toHaveCSS('display', 'grid');
+});
