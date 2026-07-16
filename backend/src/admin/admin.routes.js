@@ -874,6 +874,7 @@ router.post('/reset-idle', requireAuth, requireAdmin, async (req, res) => {
     prisma.ancientLevel.deleteMany({}),
     prisma.idleTeamPreset.deleteMany({}),
     prisma.idleRiftRun.deleteMany({}),
+    prisma.idleRunHistory.deleteMany({}),
     prisma.idleMissionClaim.deleteMany({}),
     prisma.idleProgressCounter.deleteMany({}),
     // Tous les champs idle*/prestige/sagesse de User, remis à leurs valeurs

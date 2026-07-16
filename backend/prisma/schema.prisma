@@ -104,100 +104,100 @@ model User {
   // ne sert qu'aux améliorations du Dojo (voir src/idle/idle.js).
   // 20 de départ (au lieu de 0) : évite ~10 clics à vide avant le premier
   // recrutement pour un joueur qui vient d'ouvrir le Dojo pour la première fois.
-  essence                Float     @default(20)
-  idleLastCollectAt      DateTime  @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
-  idleSlotsUnlocked      Int       @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
-  idleProdLevel          Int       @default(0) // amélioration « Discipline » : multiplicateur de production globale
-  idleClickLevel         Int       @default(0) // amélioration « Concentration » : puissance du clic manuel
-  idleCritLevel          Int       @default(0) // amélioration « Instinct » : chance de critique de la run
-  idleCooldownLevel      Int       @default(0) // amélioration « Flux » : recharge Ultime et Combo de la run
-  idleMultiStrikeLevel   Int       @default(0) // amélioration « Frappes Multiples » : nombre de frappes simulées par clic manuel
-  idleRunBlessings       String    @default("") // choix roguelike temporaires, séparés par des virgules ; reset au Prestige
-  idleRunBlessingRerolls Int       @default(0) // nombre de rerolls payants utilisés sur les choix de bénédiction ; reset au Prestige
-  idleRunStartedAt       DateTime  @default(now()) // durée minimale et transparence de la run courante
+  essence                 Float     @default(20)
+  idleLastCollectAt       DateTime  @default(now()) // dernière récolte (calcul de la prod hors-ligne, plafonné)
+  idleSlotsUnlocked       Int       @default(3) // emplacements d'entraînement débloqués (3 gratuits, jusqu'à IDLE_MAX_SLOTS)
+  idleProdLevel           Int       @default(0) // amélioration « Discipline » : multiplicateur de production globale
+  idleClickLevel          Int       @default(0) // amélioration « Concentration » : puissance du clic manuel
+  idleCritLevel           Int       @default(0) // amélioration « Instinct » : chance de critique de la run
+  idleCooldownLevel       Int       @default(0) // amélioration « Flux » : recharge Ultime et Combo de la run
+  idleMultiStrikeLevel    Int       @default(0) // amélioration « Frappes Multiples » : nombre de frappes simulées par clic manuel
+  idleRunBlessings        String    @default("") // choix roguelike temporaires, séparés par des virgules ; reset au Prestige
+  idleRunBlessingRerolls  Int       @default(0) // nombre de rerolls payants utilisés sur les choix de bénédiction ; reset au Prestige
+  idleRunStartedAt        DateTime  @default(now()) // durée minimale et transparence de la run courante
   // Essence gagnée à VIE (jamais décrémentée, même dépensée) : sert uniquement
   // à dériver le niveau du Dojo (le lieu lui-même, décor + bonus global qui en
   // dépend), via une courbe XP en formule fermée (voir idleLevelForXp).
-  essenceEarnedTotal     Float     @default(0)
+  essenceEarnedTotal      Float     @default(0)
   // Progression explicite de la run. Le stage ne dépend plus du total gagné
   // à vie : les boss peuvent donc constituer de vrais murs et le Prestige ne
   // peut plus être répété sans reconstruire une run.
-  idleRunEssenceEarned   Float     @default(0)
-  idleStage              Int       @default(1)
-  idleRunBestStage       Int       @default(1)
-  idleBestStage          Int       @default(1)
-  idleEnemyHp            Float     @default(0)
+  idleRunEssenceEarned    Float     @default(0)
+  idleStage               Int       @default(1)
+  idleRunBestStage        Int       @default(1)
+  idleBestStage           Int       @default(1)
+  idleEnemyHp             Float     @default(0)
   // Nombre d'ennemis déjà vaincus dans la vague courante. Une vague
   // normale contient plusieurs ennemis ; le boss final reste un combat unique.
-  idleWaveKills          Int       @default(0)
+  idleWaveKills           Int       @default(0)
   // Plus haut palier de jalon (tous les MILESTONE_INTERVAL niveaux de Dojo)
   // déjà réclamé — jamais redescendu, y compris après une Prestige (le niveau
   // du Dojo qui les débloque est lui aussi permanent).
-  idleMilestoneClaimed   Int       @default(0)
-  idleBossClaimed        Int       @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
-  idleHeroClass          String    @default("warrior")
-  idleHeroClassChangedAt DateTime?
-  idleHeroAura           String    @default("none")
-  idleHeroStance         String    @default("balanced")
-  idleHeroTitle          String    @default("rookie")
-  idleHeroHair           String    @default("short")
-  idleHeroOutfit         String    @default("dojo")
-  idleHeroColor          String    @default("red")
-  idleHeroSpec           String    @default("none")
-  idleBattleSpeed        Int       @default(1)
-  idleBattleMode         String    @default("progress")
-  idleAutoSkills         Boolean   @default(false)
-  idleRecruitPity        Int       @default(0)
+  idleMilestoneClaimed    Int       @default(0)
+  idleBossClaimed         Int       @default(0) // dernier coffre de boss (boss 1 = stage 10) réclamé
+  idleHeroClass           String    @default("warrior")
+  idleHeroClassChangedAt  DateTime?
+  idleHeroAura            String    @default("none")
+  idleHeroStance          String    @default("balanced")
+  idleHeroTitle           String    @default("rookie")
+  idleHeroHair            String    @default("short")
+  idleHeroOutfit          String    @default("dojo")
+  idleHeroColor           String    @default("red")
+  idleHeroSpec            String    @default("none")
+  idleBattleSpeed         Int       @default(1)
+  idleBattleMode          String    @default("progress")
+  idleAutoSkills          Boolean   @default(false)
+  idleRecruitPity         Int       @default(0)
   // Compte uniquement les invocations payées en Essence : les Sceaux ne
   // doivent jamais augmenter le coût alternatif.
-  idleEssenceRecruitCount Int      @default(0)
-  idleOnboardingComplete Boolean   @default(false)
+  idleEssenceRecruitCount Int       @default(0)
+  idleOnboardingComplete  Boolean   @default(false)
   // Sceaux permanents gagnés sur les boss et missions. Ils financent le
   // recrutement, afin que les recrues permanentes ne concurrencent plus les
   // améliorations temporaires payées en Essence.
-  idleSeals              Int       @default(2)
-  idleBurstReadyAt       DateTime?
-  idleTeamReadyAt        DateTime?
-  idleBossProgress       Int       @default(0)
-  idleBossStartedAt      DateTime?
-  idleBestBossMs         Int?
-  idleFormation          String    @default("balanced")
+  idleSeals               Int       @default(2)
+  idleBurstReadyAt        DateTime?
+  idleTeamReadyAt         DateTime?
+  idleBossProgress        Int       @default(0)
+  idleBossStartedAt       DateTime?
+  idleBestBossMs          Int?
+  idleFormation           String    @default("balanced")
   // Chef affiché dans la scène. Choix purement visuel : les bonus viennent des
   // rôles/talents et restent indépendants de l'ordre de l'équipe.
-  idleLeaderCharacterId  Int?
-  idlePrestigeMilestone  Int       @default(0)
+  idleLeaderCharacterId   Int?
+  idlePrestigeMilestone   Int       @default(0)
   // Buff temporaire d'orbe (« Frenzy » façon Cookie Clicker) : clé du buff +
   // expiration. Un seul buff actif à la fois — le suivant remplace.
-  idleBuffKey            String?
-  idleBuffUntil          DateTime?
+  idleBuffKey             String?
+  idleBuffUntil           DateTime?
   // Nombre de licences dont le joueur possède TOUS les personnages du
   // catalogue — chaque licence complétée donne un bonus de production
   // permanent (voir completedSeriesMultiplier). Monotone : jamais décrémenté,
   // même si le catalogue s'agrandit ensuite (récompense acquise).
-  idleCompletedSeries    Int       @default(0)
-  idleRankLevel          Int       @default(1)
-  idleRankKills          Int       @default(0)
-  idleRankClicks         Int       @default(0)
-  idleRankUpgrades       Int       @default(0)
-  idleRankBosses         Int       @default(0) // vestige (l'épreuve boss a été remplacée par un objectif de stage) — plus lu par rankQuestSeries
+  idleCompletedSeries     Int       @default(0)
+  idleRankLevel           Int       @default(1)
+  idleRankKills           Int       @default(0)
+  idleRankClicks          Int       @default(0)
+  idleRankUpgrades        Int       @default(0)
+  idleRankBosses          Int       @default(0) // vestige (l'épreuve boss a été remplacée par un objectif de stage) — plus lu par rankQuestSeries
   // Compteurs additionnels pour diversifier les épreuves de rang (voir
   // rankQuestSeries) : jusqu'ici toujours kills/clics/améliorations, tous les
   // niveaux, sans variation — un pool plus large tourne désormais par rang.
-  idleRankSkills         Int       @default(0)
-  idleRankRecruits       Int       @default(0)
-  idleRankStartedAt      DateTime  @default(now())
+  idleRankSkills          Int       @default(0)
+  idleRankRecruits        Int       @default(0)
+  idleRankStartedAt       DateTime  @default(now())
   // Prestige (« Retraite du Maître ») : remet à zéro la progression de la RUN
   // (essence, niveaux des emplacements, améliorations) — le niveau du Dojo
   // (donc le décor) n'est PAS remis à zéro, voir POST /api/idle/prestige.
   // prestigeLevel est un simple compteur (achievement) : il n'a plus d'effet
   // automatique depuis l'introduction des Ancients ci-dessous, qui l'ont
   // remplacé par des choix (voir src/idle/idle.js).
-  prestigeLevel          Int       @default(0)
+  prestigeLevel           Int       @default(0)
   // Sagesse : monnaie PERMANENTE gagnée à chaque Prestige (jamais remise à
   // zéro, contrairement à `essence`), dépensée dans les Ancients — l'arbre
   // d'améliorations permanentes qui remplace l'ancien multiplicateur plat de
   // Prestige par de vrais choix stratégiques.
-  wisdomPoints           Int       @default(0)
+  wisdomPoints            Int       @default(0)
 
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -222,6 +222,7 @@ model User {
   idleProgressCounters IdleProgressCounter[]
   idleTeamPresets      IdleTeamPreset[]
   idleRiftRuns         IdleRiftRun[]
+  idleRunHistory       IdleRunHistory[]
   idleFeedback         IdleFeedback[]
   dailyStats           DailyStat[]
   coopWeekly           CoopWeeklyScore[]
@@ -895,8 +896,8 @@ model IdleSlot {
   level       Int       @default(1)
   ascension   Int       @default(0)
 
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  character  Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
 
   @@unique([userId, slotIndex])
   @@unique([userId, characterId])
@@ -907,8 +908,8 @@ model IdleSlot {
 // équipé sur un héros ; plusieurs objets d'un même type peuvent coexister et
 // être comparés. (L'ancien modèle IdleEquipment, lié au slot, a été supprimé.)
 model IdleItem {
-  id     String @id @default(cuid())
-  userId String
+  id                  String   @id @default(cuid())
+  userId              String
   // Équipé sur un PERSONNAGE (recruté), pas sur un emplacement d'équipe : un
   // héros retiré de l'équipe active garde son équipement (réservé, inutilisé)
   // au lieu de le faire « hériter » au prochain personnage placé dans le même
@@ -927,16 +928,16 @@ model IdleItem {
   // idle.routes.js. Additif : les objets créés avant cette colonne ont
   // simplement un tableau vide, donc un seul affixe visible (comportement
   // identique à avant, pas de backfill nécessaire).
-  affixes          Json     @default("[]")
-  sourceWorld      String
-  enhancementLevel Int    @default(0)
-  setKey           String   @default("energy")
-  mainStat         String   @default("dps")
-  subStats         Json     @default("{}")
-  locked           Boolean  @default(false)
-  obtainedAt       DateTime @default(now())
+  affixes             Json     @default("[]")
+  sourceWorld         String
+  enhancementLevel    Int      @default(0)
+  setKey              String   @default("energy")
+  mainStat            String   @default("dps")
+  subStats            Json     @default("{}")
+  locked              Boolean  @default(false)
+  obtainedAt          DateTime @default(now())
 
-  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   equippedCharacter Character? @relation(fields: [equippedCharacterId], references: [id], onDelete: SetNull)
 
   // Un personnage n'a qu'une arme/relique/accessoire à la fois, mais
@@ -1017,6 +1018,24 @@ model IdleTeamPreset {
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+model IdleRunHistory {
+  id              Int      @id @default(autoincrement())
+  userId          String
+  prestigeLevel   Int
+  bestStage       Int
+  essenceEarned   Float
+  wisdomGained    Int
+  durationSeconds Int
+  teamDps         Float
+  heroCount       Int
+  blessings       Json     @default("[]")
+  completedAt     DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, completedAt])
+  @@index([bestStage, completedAt])
 }
 
 model IdleFeedback {

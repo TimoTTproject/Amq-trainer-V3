@@ -12,12 +12,20 @@ function openAdmin() {
   document.getElementById('admin-backfill-status').textContent = '';
   // Repart sur l'onglet Catalogue (les panneaux gardent sinon le dernier état).
   document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.adminTab === 'catalog'));
-  ['catalog', 'gacha', 'reports', 'danger'].forEach((p) =>
+  ['catalog', 'gacha', 'reports', 'idle', 'danger'].forEach((p) =>
     document.getElementById('admin-panel-' + p)?.classList.toggle('hidden', p !== 'catalog')
   );
   loadAdminStats();
   loadR2Status();
   loadAdminChars(1, '');
+}
+
+function adminIdleDuration(seconds){const minutes=Math.round((seconds||0)/60);return minutes>=60?`${Math.floor(minutes/60)}h ${minutes%60}m`:`${minutes} min`;}
+async function loadAdminIdleBalance(){
+  const box=document.getElementById('admin-idle-balance');const button=document.getElementById('admin-idle-balance-load');if(!box)return;if(button)button.disabled=true;box.innerHTML='<p class="hint">Analyse des cohortes…</p>';
+  try{const data=await api('/api/idle/diagnostics/balance');const number=(value)=>Number(value||0).toLocaleString('fr-FR');
+    box.innerHTML=`<div class="admin-idle-kpis"><span><small>JOUEURS</small><b>${number(data.players)}</b></span><span><small>STAGE MÉDIAN</small><b>${number(data.progression.stageMedian)}</b><em>P90 · ${number(data.progression.stageP90)}</em></span><span><small>RANG MÉDIAN</small><b>${number(data.progression.rankMedian)}</b></span><span><small>RUNS PRESTIGE</small><b>${number(data.prestige.runs)}</b><em>${number(data.prestige.players)} joueurs</em></span><span><small>DURÉE MÉDIANE</small><b>${adminIdleDuration(data.prestige.durationMedianSeconds)}</b></span><span><small>SAGESSE / H</small><b>${number(Math.round(data.prestige.wisdomPerHourMedian))}</b></span></div><section class="admin-idle-funnel"><h4>Funnel de progression</h4>${data.funnel.map((step)=>`<span><b>${escapeHtml(step.label)}</b><em><i style="--progress:${step.percent}%"></i></em><strong>${number(step.count)} · ${step.percent}%</strong></span>`).join('')}</section><div class="admin-idle-split"><section><h4>Murs principaux</h4>${data.walls.map((wall)=>`<span class="admin-idle-wall"><b>Boss ${number(wall.stage)}</b><em>${number(wall.players)} joueurs</em><strong>${wall.percent}%</strong></span>`).join('')||'<p class="hint">Pas encore assez de progression.</p>'}</section><section><h4>Faille hebdomadaire</h4><div class="admin-idle-rift"><span><small>ÉLIGIBLES</small><b>${number(data.rift.eligible)}</b></span><span><small>PARTICIPANTS</small><b>${number(data.rift.participants)}</b></span><span><small>PALIER MÉDIAN</small><b>${number(data.rift.floorMedian)}</b></span><span><small>P90</small><b>${number(data.rift.floorP90)}</b></span></div></section></div><section class="admin-idle-alerts"><h4>Alertes automatiques</h4>${data.alerts.map((alert)=>`<p class="${escapeHtml(alert.severity)}"><i class="fas ${alert.severity==='ok'?'fa-circle-check':alert.severity==='critical'?'fa-circle-exclamation':'fa-triangle-exclamation'}"></i>${escapeHtml(alert.message)}</p>`).join('')}</section>`;
+  }catch(error){box.innerHTML=`<p class="hint">Erreur : ${escapeHtml(error.message)}</p>`;}finally{if(button)button.disabled=false;}
 }
 
 async function loadR2Status() {

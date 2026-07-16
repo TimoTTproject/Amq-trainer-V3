@@ -49,6 +49,7 @@ test('reset-idle : vide le roster/inventaire Dojo et remet à zéro les compteur
   prisma.ancientLevel.deleteMany = async () => { writes.push('ancientLevel'); return {}; };
   prisma.idleTeamPreset.deleteMany = async () => { writes.push('idleTeamPreset'); return {}; };
   prisma.idleRiftRun.deleteMany = async () => { writes.push('idleRiftRun'); return {}; };
+  prisma.idleRunHistory.deleteMany = async () => { writes.push('idleRunHistory'); return {}; };
   prisma.idleMissionClaim.deleteMany = async () => { writes.push('idleMissionClaim'); return {}; };
   prisma.idleProgressCounter.deleteMany = async () => { writes.push('idleProgressCounter'); return {}; };
   let userUpdateData = null;
@@ -70,5 +71,5 @@ test('reset-idle : vide le roster/inventaire Dojo et remet à zéro les compteur
   for (const field of ['tokens', 'dust', 'pity', 'towerBestFloor', 'mmr', 'claimedLevel']) {
     assert.equal(field in userUpdateData, false, `${field} ne devrait pas être touché`);
   }
-  assert.ok(['idleSlot', 'idleItem', 'dojoRecruit', 'ancientLevel', 'idleTeamPreset', 'idleRiftRun', 'idleMissionClaim', 'idleProgressCounter', 'user'].every((w) => writes.includes(w)));
+  assert.ok(['idleSlot', 'idleItem', 'dojoRecruit', 'ancientLevel', 'idleTeamPreset', 'idleRiftRun', 'idleRunHistory', 'idleMissionClaim', 'idleProgressCounter', 'user'].every((w) => writes.includes(w)));
 });

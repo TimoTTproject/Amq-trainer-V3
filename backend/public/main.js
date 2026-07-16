@@ -1650,10 +1650,11 @@ function setupAppUI() {
     const tab = e.target.closest('.admin-tab');
     if (!tab) return;
     document.querySelectorAll('#admin-tabs .admin-tab').forEach((t) => t.classList.toggle('active', t === tab));
-    ['catalog', 'gacha', 'reports', 'danger'].forEach((p) =>
+    ['catalog', 'gacha', 'reports', 'idle', 'danger'].forEach((p) =>
       document.getElementById('admin-panel-' + p).classList.toggle('hidden', p !== tab.dataset.adminTab)
     );
     if (tab.dataset.adminTab === 'reports' && typeof loadAdminReports === 'function') loadAdminReports();
+    if (tab.dataset.adminTab === 'idle' && typeof loadAdminIdleBalance === 'function') loadAdminIdleBalance();
   });
   document.getElementById('admin-songs-search-btn').addEventListener('click', runSongsSearch);
   document.getElementById('admin-songs-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSongsSearch(); });
@@ -1668,6 +1669,7 @@ function setupAppUI() {
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
   document.getElementById('admin-reset-gacha-btn').addEventListener('click', runResetGacha);
   document.getElementById('admin-reset-idle-btn').addEventListener('click', runResetIdle);
+  document.getElementById('admin-idle-balance-load')?.addEventListener('click', loadAdminIdleBalance);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));

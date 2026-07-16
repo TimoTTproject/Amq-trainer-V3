@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,SQUAD_SLOT_DEFS }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -94,6 +94,7 @@ test('squadPresetSlots : chaque slot vérifie SA PROPRE condition (pas un simple
 test.beforeEach(() => {
   prisma.idleSlot.findMany = async () => [];
   prisma.dojoRecruit.count = async () => 0;
+  prisma.dojoRecruit.findMany = async () => [];
   prisma.dojoRecruit.update = async () => ({});
   prisma.dojoRecruit.updateMany = async () => ({count:0});
   // buildState()/withSettle() appellent systématiquement decorArtForTheme()
@@ -110,8 +111,108 @@ test.beforeEach(() => {
   prisma.idleProgressCounter.upsert = async () => ({});
   prisma.idleItem.findMany = async () => [];
   prisma.idleRiftRun.findUnique = async () => null;
+  prisma.idleRunHistory.findMany = async () => [];
+  prisma.idleRunHistory.create = async ({data}) => ({id:1,...data});
+  prisma.idleMissionClaim.findUnique = async () => null;
   idleRoutes.decorArtCache.clear();
   idleRoutes.invalidateStarterPool();
+});
+
+test('laboratoire tactique : compare formations et presets avec le DPS exact sans mutation',async()=>{
+  const me=dbUser({idleSlotsUnlocked:3,idleBestStage:37,idleRunBestStage:37,idleFormation:'balanced',idleLeaderCharacterId:1,idleProdLevel:2});
+  const characters=[
+    {id:1,name:'Héros Alpha',imageUrl:'/alpha.png',rarity:'epic',series:'Naruto'},
+    {id:2,name:'Héros Beta',imageUrl:'/beta.png',rarity:'epic',series:'Naruto'},
+    {id:3,name:'Héros Gamma',imageUrl:'/gamma.png',rarity:'legendary',series:'Bleach'},
+  ];
+  const recruits=characters.map((character,index)=>({userId:'u1',characterId:character.id,trainingLevel:12+index*8,idleAscension:0,awakened:false,awakenStars:index,character}));
+  prisma.user.findUnique=async()=>me;
+  prisma.idleSlot.findMany=async()=>[{userId:'u1',slotIndex:0,characterId:1,level:12,ascension:0,character:characters[0]},{userId:'u1',slotIndex:1,characterId:3,level:28,ascension:0,character:characters[2]}];
+  prisma.dojoRecruit.findMany=async()=>recruits;
+  prisma.idleTeamPreset.findMany=async()=>[{name:'Composition Alpha',formation:'assault',slots:[{slotIndex:0,characterId:1,leader:true},{slotIndex:1,characterId:2,leader:false}],updatedAt:new Date()}];
+  prisma.idleItem.findMany=async()=>[];
+  prisma.user.update=async()=>{throw new Error('la route de lecture ne doit pas muter le joueur');};
+  prisma.idleSlot.updateMany=async()=>{throw new Error('la route de lecture ne doit pas muter les slots');};
+
+  const response=await app.request('/api/idle/strategy-lab',{cookie:app.authCookie('u1')});
+  assert.equal(response.status,200);assert.equal(response.json.readOnly,true);
+  assert.ok(response.json.current.totalRate>0);assert.equal(response.json.boss.stage,40);assert.ok(response.json.boss.requiredDps>0);
+  assert.equal(response.json.formations.length,4);assert.ok(response.json.formations.every((formation)=>Number.isFinite(formation.totalRate)&&Number.isFinite(formation.delta)));
+  assert.equal(response.json.presets[0].name,'Composition Alpha');assert.equal(response.json.presets[0].heroCount,2);
+  assert.equal(response.json.presets[0].team[0].leader,true);assert.match(response.json.presets[0].synergy.name,/Naruto/);
+  assert.ok(response.json.recommended?.totalRate>0);
+});
+
+test('classements Idle : progression, vitesse, Faille et collection exposent une métrique comparable',async()=>{
+  const me=dbUser({id:'u1',idleBestStage:80,idleRankLevel:12});
+  const rival={...dbUser({id:'u2',displayName:'Rivale',idleBestStage:120,idleRankLevel:18,prestigeLevel:2}),_count:{dojoRecruits:14}};
+  prisma.user.findUnique=async()=>me;
+  prisma.user.findMany=async()=>[rival,{...me,_count:{dojoRecruits:6}}];
+  prisma.idleRunHistory.findMany=async()=>[
+    {userId:'u2',durationSeconds:900,bestStage:100,completedAt:new Date(),user:rival},
+    {userId:'u2',durationSeconds:1200,bestStage:110,completedAt:new Date(),user:rival},
+  ];
+  prisma.idleProgressCounter.findMany=async(args)=>args.where?.key==='rift_floor'?[{userId:'u2',value:17,user:rival}]:[];
+  const stage=await app.request('/api/idle/leaderboard?type=stage',{cookie:app.authCookie('u1')});
+  const speed=await app.request('/api/idle/leaderboard?type=speed',{cookie:app.authCookie('u1')});
+  const rift=await app.request('/api/idle/leaderboard?type=rift',{cookie:app.authCookie('u1')});
+  const collection=await app.request('/api/idle/leaderboard?type=collection',{cookie:app.authCookie('u1')});
+  assert.equal(stage.status,200);assert.equal(stage.json.players[0].metric,120);
+  assert.equal(speed.json.players.length,1);assert.equal(speed.json.players[0].metric,900);
+  assert.equal(rift.json.players[0].metric,17);assert.ok(rift.json.period);
+  assert.equal(collection.json.players[0].metric,14);
+});
+
+test('social Idle : compare les amis et rend leur composition active inspectable',async()=>{
+  const me=dbUser({id:'u1'});const rival=dbUser({id:'u2',displayName:'Rivale',idleBestStage:140,idleRankLevel:22,prestigeLevel:3,idleLeaderCharacterId:7,idleFormation:'assault'});
+  prisma.user.findUnique=async(args)=>args.where.id==='u2'?rival:me;
+  prisma.friendship.findMany=async()=>[{requesterId:'u1',addresseeId:'u2',status:'accepted',requester:{...me,_count:{dojoRecruits:4}},addressee:{...rival,_count:{dojoRecruits:12}}}];
+  prisma.idleProgressCounter.findMany=async()=>[{userId:'u2',value:15}];
+  const social=await app.request('/api/idle/social',{cookie:app.authCookie('u1')});
+  assert.equal(social.status,200);assert.equal(social.json.friends[0].name,'Rivale');assert.equal(social.json.friends[0].stage,140);
+  assert.equal(social.json.friends[0].collection,12);assert.equal(social.json.friends[0].rift,15);
+
+  prisma.idleSlot.findMany=async()=>[{userId:'u2',slotIndex:0,characterId:7,level:25,ascension:1,character:{id:7,name:'Rem',imageUrl:'/rem.png',rarity:'epic',series:'Re:Zero'}}];
+  prisma.dojoRecruit.count=async()=>12;prisma.ancientLevel.findMany=async()=>[];prisma.idleItem.findMany=async()=>[];
+  prisma.idleProgressCounter.findUnique=async()=>({value:15});
+  const profile=await app.request('/api/idle/players/u2',{cookie:app.authCookie('u1')});
+  assert.equal(profile.status,200);assert.equal(profile.json.player.name,'Rivale');assert.equal(profile.json.player.team[0].character.name,'Rem');assert.equal(profile.json.player.team[0].role,'support');
+  assert.equal(profile.json.player.team[0].leader,true);assert.ok(profile.json.player.totalRate>0);
+});
+
+test('diagnostic d’équilibrage Idle : expose funnel, percentiles, murs et alertes sans donnée personnelle',async()=>{
+  const users=Array.from({length:10},(_,index)=>({id:`u${index}`,idleBestStage:index<4?20:40+index*10,idleRankLevel:index<5?10:22,prestigeLevel:index===9?1:0}));
+  const runs=[{userId:'u9',bestStage:100,wisdomGained:12,durationSeconds:3600,teamDps:5000}];
+  const rifts=[{userId:'u7',value:8}];
+  const diagnostic=idleBalanceDiagnostic(users,runs,rifts,[]);
+  assert.equal(diagnostic.players,10);assert.equal(diagnostic.funnel[1].count,10);assert.ok(diagnostic.progression.stageMedian>=20);
+  assert.equal(diagnostic.prestige.wisdomPerHourMedian,12);assert.equal(diagnostic.rift.participants,1);
+  assert.ok(diagnostic.walls.some((wall)=>wall.stage===20&&wall.players===4));assert.ok(diagnostic.alerts.some((alert)=>alert.key==='wall'));
+
+  prisma.user.findUnique=async()=>dbUser();prisma.user.findMany=async()=>users;
+  prisma.idleRunHistory.findMany=async()=>runs;prisma.idleProgressCounter.findMany=async()=>rifts;prisma.idleTelemetry.groupBy=async()=>[];
+  const response=await app.request('/api/idle/diagnostics/balance',{cookie:app.authCookie('u1')});
+  assert.equal(response.status,200);assert.equal(response.json.players,10);assert.equal(response.json.prestige.runs,1);
+  assert.equal(JSON.stringify(response.json).includes('displayName'),false);
+});
+
+test('boss communautaire : agrège les actions, classe les contributeurs et crédite une seule récompense',async()=>{
+  const rows=[
+    {userId:'u1',key:'kill',value:100},{userId:'u1',key:'click',value:100},{userId:'u1',key:'skill',value:2},{userId:'u1',key:'boss_kill',value:1},
+    {userId:'u2',key:'kill',value:25000},
+  ];
+  assert.equal(communityContribution(rows).get('u1'),176);
+  const event=weeklyCommunityBoss(rows,[{id:'u1',displayName:'Moi'},{id:'u2',displayName:'Rivale'}],'u1',false,'2026-07-13');
+  assert.equal(event.completed,true);assert.equal(event.eligible,true);assert.equal(event.leaderboard[0].id,'u2');assert.equal(event.phase.key,'defeated');
+
+  prisma.user.findUnique=async()=>dbUser();prisma.idleProgressCounter.findMany=async()=>rows;
+  prisma.user.findMany=async()=>[{id:'u1',displayName:'Moi',avatarUrl:null},{id:'u2',displayName:'Rivale',avatarUrl:null}];
+  prisma.idleMissionClaim.findUnique=async()=>null;let claim=null;let reward=null;
+  prisma.idleMissionClaim.create=async({data})=>{claim=data;return{id:1,...data};};prisma.user.update=async({data})=>{reward=data;return dbUser();};
+  const read=await app.request('/api/idle/community-boss',{cookie:app.authCookie('u1')});
+  const claimed=await app.request('/api/idle/community-boss/claim',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(read.status,200);assert.equal(read.json.myContribution,176);assert.equal(claimed.status,200);assert.equal(claimed.json.claimed,true);
+  assert.equal(claim.missionKey,'community_boss');assert.equal(reward.idleSeals.increment,5);assert.equal(reward.essence.increment,5000);
 });
 
 test('GET /state : reste fonctionnel avec un héros assigné ET des objets en inventaire (régression TDZ)', async () => {
@@ -204,6 +305,14 @@ test('les gardiens sont comptés uniquement lors dune nouvelle progression', () 
   assert.equal(progressionBossesCrossed(10,10,'farm'),0);
 });
 
+test('gardiens : six mécaniques tournent et les nouvelles imposent une séquence active', () => {
+  const keys=Array.from({length:6},(_,index)=>bossMechanicForStage((index+1)*10)?.key);
+  assert.deepEqual(keys,['shield','rage','regen','counter','ward','focus']);
+  assert.equal(bossMechanicForStage(50).required,1);
+  assert.ok(bossMechanicForStage(60).required>=5);
+  assert.equal(bossMechanicForStage(59),null);
+});
+
 test('faille hebdomadaire : record, difficulté et récompense dépendent de la puissance',()=>{
   const counters=new Map([['rift_floor:2026-07-13',3]]);const rift=weeklyRift(counters,1e9,20,20,{week:'2026-07-13'});
   assert.equal(rift.unlocked,true);assert.equal(rift.bestFloor,3);assert.ok(rift.projectedFloor>3);assert.ok(rift.reward.essence>0);
@@ -227,7 +336,12 @@ test('reliques de Faille : modificateurs cumulatifs, Écho Temporel monte en pui
   assert.ok(Math.abs(stacked.dpsMult-1.25*.90)<1e-9);assert.ok(Math.abs(stacked.rewardMult-.90*1.50)<1e-9);
   const echoAlone=riftRelicModifiers(['echo_temporel']);const echoWithTwo=riftRelicModifiers(['echo_temporel','focalisation','instinct_econome']);
   assert.ok(echoWithTwo.dpsMult>echoAlone.dpsMult); // le bonus scale avec le nombre total de reliques
-  assert.deepEqual(riftRelicModifiers([]),{dpsMult:1,rewardMult:1,resistanceMult:1});
+  assert.deepEqual(riftRelicModifiers([]),{dpsMult:1,rewardMult:1,resistanceMult:1,sealBonus:0});
+  const pact=riftRelicModifiers(['pacte_sceaux']);
+  assert.equal(pact.sealBonus,1);
+  const collectorAlone=riftRelicModifiers(['collectionneur']);
+  const collectorStacked=riftRelicModifiers(['collectionneur','focalisation','instinct_econome']);
+  assert.ok(collectorStacked.rewardMult>collectorAlone.rewardMult);
 });
 
 test('reliques de Faille : le tirage ne propose jamais une relique déjà possédée, respecte le nombre demandé',()=>{
@@ -1406,8 +1520,10 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   const slotsReset = [];
   let recruitsReset = null;
   let userUpdate = null;
+  let runHistory = null;
   prisma.idleSlot.updateMany = async (args) => { slotsReset.push(args); return { count: 3 }; };
   prisma.dojoRecruit.updateMany = async (args) => { recruitsReset = args; return { count: 3 }; };
+  prisma.idleRunHistory.create = async (args) => { runHistory=args.data;return {id:1,...args.data}; };
   prisma.user.update = async (args) => { userUpdate = args.data; return eligible; };
   const okRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(okRes.status, 200);
@@ -1420,6 +1536,9 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(slotsReset[1].data.characterId, null);
   assert.equal(recruitsReset.data.trainingLevel, 1);
   assert.equal(recruitsReset.data.idleAscension, 0);
+  assert.equal(runHistory.bestStage, prestigeRequiredStage(1));
+  assert.equal(runHistory.prestigeLevel, 2);
+  assert.ok(runHistory.durationSeconds > 0);
   assert.equal(userUpdate.essence, 0);
   assert.equal(userUpdate.idleSlotsUnlocked, START_SLOTS);
   // Mémoire du Maître (fast-start) : la nouvelle run (Prestige 2 ici) démarre
