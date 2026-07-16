@@ -358,6 +358,24 @@ async function runResetGacha() {
   }
 }
 
+async function runResetIdle() {
+  const status = document.getElementById('admin-reset-idle-status');
+  const ans = prompt("⚠️ RESET DOJO de TOUS les comptes bêta : essence, roster recruté, emplacements, objets, améliorations, Ancients/Sagesse, Prestige et rang remis à zéro. Le reste du jeu (quiz, gacha, tokens, Château, classé) N'EST PAS touché.\n\nTape RESET_IDLE (exactement, en majuscules) pour confirmer :");
+  if (ans === null) { status.textContent = 'Annulé.'; return; }
+  if (ans !== 'RESET_IDLE') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RESET_IDLE") — rien n'a été fait, réessaie.`; return; }
+  const btn = document.getElementById('admin-reset-idle-btn');
+  btn.disabled = true;
+  status.textContent = 'Réinitialisation du Dojo…';
+  try {
+    const r = await api('/api/admin/reset-idle', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_IDLE' }) });
+    status.textContent = `✅ ${r.users} comptes réinitialisés. Les bêta-testeurs repartent avec 3 emplacements et l'essence de départ.`;
+  } catch (e) {
+    status.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function runRecomputeRarities() {
   const btn = document.getElementById('admin-recompute-btn');
   const status = document.getElementById('admin-recompute-status');

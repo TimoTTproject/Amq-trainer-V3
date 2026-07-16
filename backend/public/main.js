@@ -1667,6 +1667,7 @@ function setupAppUI() {
   document.getElementById('admin-reset-btn').addEventListener('click', runResetMe);
   document.getElementById('admin-reset-all-btn').addEventListener('click', runResetAll);
   document.getElementById('admin-reset-gacha-btn').addEventListener('click', runResetGacha);
+  document.getElementById('admin-reset-idle-btn').addEventListener('click', runResetIdle);
   document.querySelectorAll('.lb-tab').forEach((b) =>
     b.addEventListener('click', () => {
       document.querySelectorAll('.lb-tab').forEach((t) => t.classList.remove('active'));

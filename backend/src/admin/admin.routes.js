@@ -852,4 +852,57 @@ router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true, users });
 });
 
+// Reset DOJO (idle/clicker) UNIQUEMENT : remet à zéro toute la progression
+// Anime Ascension de TOUS les comptes (essence, roster recruté, emplacements,
+// objets, améliorations, Ancients/Sagesse, Prestige, rang, cosmétiques de
+// héros) SANS toucher au reste du jeu (quiz, gacha, Château, classé, tokens).
+// Pensé pour repartir propre après un rééquilibrage du Dojo pendant la bêta —
+// même style que reset-gacha : transaction unique, confirmation stricte.
+// `essence`/`essenceEarnedTotal` sont des colonnes User dédiées au Dojo (cf.
+// schema.prisma) : les remettre à zéro ne touche jamais aux tokens gacha.
+router.post('/reset-idle', requireAuth, requireAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'RESET_IDLE') return res.status(400).json({ error: 'Confirmation requise (RESET_IDLE)' });
+
+  const users = await prisma.user.count();
+  await prisma.$transaction([
+    // Roster recruté, emplacements, objets et progression permanente propres
+    // au Dojo — tout ce qui référence un personnage/objet via userId, à
+    // vider avant de remettre les compteurs User à zéro.
+    prisma.idleSlot.deleteMany({}),
+    prisma.idleItem.deleteMany({}),
+    prisma.dojoRecruit.deleteMany({}),
+    prisma.ancientLevel.deleteMany({}),
+    prisma.idleTeamPreset.deleteMany({}),
+    prisma.idleRiftRun.deleteMany({}),
+    prisma.idleMissionClaim.deleteMany({}),
+    prisma.idleProgressCounter.deleteMany({}),
+    // Tous les champs idle*/prestige/sagesse de User, remis à leurs valeurs
+    // par défaut du schéma (cf. schema.prisma). idleTelemetry et
+    // idleFeedback ne sont PAS touchés : ce sont des journaux d'analyse et
+    // de retours joueurs, pas de la progression à réinitialiser.
+    prisma.user.updateMany({
+      data: {
+        essence: 20, idleLastCollectAt: new Date(), idleSlotsUnlocked: 3,
+        idleProdLevel: 0, idleClickLevel: 0, idleCritLevel: 0, idleCooldownLevel: 0, idleMultiStrikeLevel: 0,
+        idleRunBlessings: '', idleRunBlessingRerolls: 0, idleRunStartedAt: new Date(),
+        essenceEarnedTotal: 0, idleRunEssenceEarned: 0,
+        idleStage: 1, idleRunBestStage: 1, idleBestStage: 1, idleEnemyHp: 0, idleWaveKills: 0,
+        idleMilestoneClaimed: 0, idleBossClaimed: 0,
+        idleHeroClass: 'warrior', idleHeroClassChangedAt: null,
+        idleHeroAura: 'none', idleHeroStance: 'balanced', idleHeroTitle: 'rookie', idleHeroHair: 'short', idleHeroOutfit: 'dojo', idleHeroColor: 'red', idleHeroSpec: 'none',
+        idleBattleSpeed: 1, idleBattleMode: 'progress', idleAutoSkills: false,
+        idleRecruitPity: 0, idleEssenceRecruitCount: 0, idleOnboardingComplete: false,
+        idleSeals: 2, idleBurstReadyAt: null, idleTeamReadyAt: null,
+        idleBossProgress: 0, idleBossStartedAt: null, idleBestBossMs: null,
+        idleFormation: 'balanced', idleLeaderCharacterId: null,
+        idlePrestigePath: 'balanced', idlePrestigeMilestone: 0,
+        idleRankLevel: 1, idleRankKills: 0, idleRankClicks: 0, idleRankUpgrades: 0, idleRankBosses: 0, idleRankStartedAt: new Date(),
+        prestigeLevel: 0, wisdomPoints: 0,
+      },
+    }),
+  ]);
+
+  res.json({ ok: true, users });
+});
+
 module.exports = { router };
