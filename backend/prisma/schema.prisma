@@ -165,8 +165,16 @@ model User {
   // Chef affiché dans la scène. Choix purement visuel : les bonus viennent des
   // rôles/talents et restent indépendants de l'ordre de l'équipe.
   idleLeaderCharacterId  Int?
-  idlePrestigePath       String    @default("balanced")
   idlePrestigeMilestone  Int       @default(0)
+  // Buff temporaire d'orbe (« Frenzy » façon Cookie Clicker) : clé du buff +
+  // expiration. Un seul buff actif à la fois — le suivant remplace.
+  idleBuffKey            String?
+  idleBuffUntil          DateTime?
+  // Nombre de licences dont le joueur possède TOUS les personnages du
+  // catalogue — chaque licence complétée donne un bonus de production
+  // permanent (voir completedSeriesMultiplier). Monotone : jamais décrémenté,
+  // même si le catalogue s'agrandit ensuite (récompense acquise).
+  idleCompletedSeries    Int       @default(0)
   idleRankLevel          Int       @default(1)
   idleRankKills          Int       @default(0)
   idleRankClicks         Int       @default(0)
@@ -874,38 +882,25 @@ model IdleSlot {
   slotIndex   Int
   characterId Int?
   assignedAt  DateTime?
-  // Niveau d'entraînement de LA CARTE assignée ici (pas du compte) : illimité,
-  // remis à 1 quand on change de personnage sur cet emplacement. Distinct des
-  // ★ d'ascension du gacha (cosmétiques là-bas) — ici chaque niveau augmente
-  // la production, coût croissant payé en essence (voir idle.js).
+  // Copie ACTIVE du niveau d'entraînement du personnage assigné (la source de
+  // vérité est DojoRecruit.trainingLevel, restaurée à chaque assignation — le
+  // niveau suit le personnage, pas l'emplacement). Distinct des ★ d'ascension
+  // du gacha (cosmétiques là-bas) — ici chaque niveau augmente la production,
+  // coût croissant payé en essence (voir idle.js).
   level       Int       @default(1)
   ascension   Int       @default(0)
 
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   character  Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
-  equipments IdleEquipment[]
 
   @@unique([userId, slotIndex])
   @@unique([userId, characterId])
   @@index([userId])
 }
 
-model IdleEquipment {
-  id         Int      @id @default(autoincrement())
-  idleSlotId Int
-  kind       String
-  rarity     String
-  bonus      Float
-  obtainedAt DateTime @default(now())
-  idleSlot   IdleSlot @relation(fields: [idleSlotId], references: [id], onDelete: Cascade)
-
-  @@unique([idleSlotId, kind])
-  @@index([idleSlotId])
-}
-
 // Inventaire persistant du mode Idle. Un objet peut rester dans le sac ou être
-// équipé sur un héros ; contrairement à l'ancien IdleEquipment, plusieurs
-// objets d'un même type peuvent donc coexister et être comparés.
+// équipé sur un héros ; plusieurs objets d'un même type peuvent coexister et
+// être comparés. (L'ancien modèle IdleEquipment, lié au slot, a été supprimé.)
 model IdleItem {
   id     String @id @default(cuid())
   userId String
@@ -1051,6 +1046,10 @@ model DojoRecruit {
   // Recrue « Éveillée » (équivalent shiny) : tirée à l'invocation (~2,5%),
   // bordure dorée + petit bonus de production personnelle permanent.
   awakened      Boolean  @default(false)
+  // Étoiles d'Éveil : investissement PERMANENT par héros, payé en Sceaux
+  // (deuxième usage des Sceaux après l'invocation). Chaque étoile augmente la
+  // production personnelle ; conservées au Prestige, comme le roster.
+  awakenStars   Int      @default(0)
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)

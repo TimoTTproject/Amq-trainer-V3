@@ -81,9 +81,21 @@ const {
   ACHIEVEMENT_PROD_BONUS,
   AWAKENED_CHANCE,
   AWAKENED_BONUS,
+  AWAKEN_STAR_MAX,
+  AWAKEN_STAR_BONUS,
+  awakenStarCost,
+  awakenStarMultiplier,
+  SERIES_COMPLETION_BONUS,
+  SERIES_COMPLETION_SEALS,
+  completedSeriesMultiplier,
+  prestigeStartingLevels,
   ORB_COOLDOWN_SECONDS,
   ORB_SEAL_CHANCE,
   ORB_JACKPOT_CHANCE,
+  ORB_BUFF_CHANCE,
+  ORB_BUFFS,
+  rollOrbBuff,
+  activeOrbBuff,
   orbReward,
   RUN_BLESSINGS,
   parseRunBlessings,
@@ -485,7 +497,7 @@ function equipmentSetEffectMultiplier(items=[],mode='dps') {
 }
 
 function equipmentSetActionMultiplier(slots=[],mode='dps') {
-  return slots.reduce((multiplier,slot)=>multiplier*equipmentSetEffectMultiplier((slot.items?.length?slot.items:slot.equipments)||[],mode),1);
+  return slots.reduce((multiplier,slot)=>multiplier*equipmentSetEffectMultiplier(slot.items||[],mode),1);
 }
 
 function equipmentSetFlatMultiplier(items=[],mode='dps') {
@@ -494,7 +506,7 @@ function equipmentSetFlatMultiplier(items=[],mode='dps') {
 }
 
 function itemActionBonus(slots, mode) {
-  const affixMultiplier=1+slots.flatMap((slot)=>(slot.items?.length?slot.items:slot.equipments)||[])
+  const affixMultiplier=1+slots.flatMap((slot)=>slot.items||[])
     .reduce((sum,item)=>sum+itemAffixList(item).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode===mode).reduce((affixSum,a)=>affixSum+Number(a.effectValue||0),0)+Number(item.subStats?.[mode]||0),0);
   return affixMultiplier*equipmentSetActionMultiplier(slots,mode);
 }
@@ -517,7 +529,32 @@ function itemSalvageValue(item,bestStage=1) {
   const progression=Math.round(enemyReward(Math.max(1,bestStage))*(SALVAGE_STAGE_FACTOR[item.rarity]||SALVAGE_STAGE_FACTOR.rare)*(1+(item.enhancementLevel||0)*.08));
   return Math.max(25,flat,progression);
 }
-function runeEnhanceCost(item){const level=Math.max(0,Math.min(15,Number(item?.enhancementLevel)||0));return level>=15?0:Math.round(120*(level+1)*Math.pow(1.22,level)*(ITEM_RARITY_ORDER[item?.rarity]||1));}
+// Coût d'amélioration (+15) : formule plate historique + plancher indexé sur
+// la progression — la formule plate (quelques milliers au total) devenait
+// dérisoire face à l'économie exponentielle, l'amélioration doit rester un
+// investissement comparable aux autres achats du moment (esprit Summoners
+// War : le +15 est un gouffre assumé, pas une formalité).
+function runeEnhanceCost(item,bestStage=1){
+  const level=Math.max(0,Math.min(15,Number(item?.enhancementLevel)||0));if(level>=15)return 0;
+  const rarity=ITEM_RARITY_ORDER[item?.rarity]||1;
+  const flat=Math.round(120*(level+1)*Math.pow(1.22,level)*rarity);
+  const progression=Math.round(enemyReward(Math.max(1,bestStage))*.5*(level+1)*rarity);
+  return Math.max(flat,progression);
+}
+// Meulage (reroll) : re-tire la MAGNITUDE de l'affixe primaire et des affixes
+// secondaires (les types sont conservés) aux valeurs du tier ACTUEL du joueur
+// — revalorise les vieux objets « presque parfaits » et sert de puits
+// d'essence de fin de partie (« grind » de Summoners War).
+function runeRerollCost(item,bestStage=1){
+  const rarity=ITEM_RARITY_ORDER[item?.rarity]||1;
+  return Math.max(400,Math.round(enemyReward(Math.max(1,bestStage))*8*rarity));
+}
+function rerolledAffixValue(effectKey,tier){
+  const mode=ITEM_EFFECTS[effectKey]?.mode||'dps';
+  const base=mode==='salvage'?(.05+Math.min(.25,tier*.005)):(.01+Math.min(.09,tier*.002));
+  const variance=.85+Math.random()*.3;
+  return Number((base*variance).toFixed(3));
+}
 function enhancedRuneSubStats(item,nextLevel){
   const stats={...(item.subStats&&typeof item.subStats==='object'?item.subStats:{})};
   if(nextLevel%3===0){const keys=['dps','click','burst','team','boss'];const key=keys[(Math.floor(nextLevel/3)-1)%keys.length];stats[key]=Number((Number(stats[key]||0)+.01).toFixed(3));}
@@ -691,15 +728,16 @@ async function fetchDecorArt(theme) {
 async function loadSlots(tx, userId) {
   const slots = await tx.idleSlot.findMany({
     where: { userId },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } }, equipments: true },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } } },
   });
-  // Marque les héros « Éveillés » (shiny, +10% de production personnelle) —
-  // l'information vit sur DojoRecruit, pas sur l'emplacement. try/catch : la
-  // colonne peut manquer pendant la fenêtre de migration (et dans les tests
-  // qui ne stubbent pas cette requête), auquel cas personne n'est éveillé.
-  let awakenedRows = [];
-  try { awakenedRows = await tx.dojoRecruit.findMany({ where: { userId, awakened: true }, select: { characterId: true } }); } catch { /* migration/tests */ }
-  const awakened = new Set(awakenedRows.map((r) => r.characterId));
+  // Marque les héros « Éveillés » (shiny, +10% de production personnelle) et
+  // leurs étoiles d'Éveil (+8% chacune) — ces informations vivent sur
+  // DojoRecruit, pas sur l'emplacement. try/catch : les colonnes peuvent
+  // manquer pendant la fenêtre de migration (et dans les tests qui ne
+  // stubbent pas cette requête), auquel cas personne n'est éveillé.
+  let recruitRows = [];
+  try { recruitRows = await tx.dojoRecruit.findMany({ where: { userId }, select: { characterId: true, awakened: true, awakenStars: true } }); } catch { /* migration/tests */ }
+  const recruitByCharacter = new Map(recruitRows.map((r) => [r.characterId, r]));
   // L'équipement est lié au PERSONNAGE (equippedCharacterId), plus au slot :
   // on le rattache ici par characterId pour que le reste du code (score
   // d'équipe, fiche héros, plan d'auto-équipement) continue de lire
@@ -710,7 +748,10 @@ async function loadSlots(tx, userId) {
   if (characterIds.length) items = await tx.idleItem.findMany({ where: { userId, equippedCharacterId: { in: characterIds } } });
   const itemsByCharacter = new Map();
   for (const item of items) { const list = itemsByCharacter.get(item.equippedCharacterId) || []; list.push(item); itemsByCharacter.set(item.equippedCharacterId, list); }
-  return slots.map((s) => ({ ...s, awakened: !!s.characterId && awakened.has(s.characterId), items: s.characterId ? (itemsByCharacter.get(s.characterId) || []) : [] }));
+  return slots.map((s) => {
+    const recruit = s.characterId ? recruitByCharacter.get(s.characterId) : null;
+    return { ...s, awakened: !!recruit?.awakened, awakenStars: recruit?.awakenStars || 0, items: s.characterId ? (itemsByCharacter.get(s.characterId) || []) : [] };
+  });
 }
 
 // Chaque classe porte désormais une composante de production : la production
@@ -794,7 +835,10 @@ const ULTIMATE_CLICK_MULTIPLIER=75;
 const ULTIMATE_TEAM_SECONDS=15;
 function activeSkillCooldown(baseMs,supportCount,cooldownLevel=0,runMultiplier=1,passiveCooldownBonus=0){return Math.max(5000,Math.round(baseMs*(1-Math.min(.7,supportCount*.1+cooldownUpgradeBonus(cooldownLevel)+passiveCooldownBonus))*runMultiplier));}
 function ultimateBaseDamage(clickDamage,teamRate){return Math.max(clickDamage*ULTIMATE_CLICK_MULTIPLIER,teamRate*ULTIMATE_TEAM_SECONDS);}
-const PRESTIGE_PATHS={balanced:{name:'Voie de l’Équilibre',prod:1,click:1},fist:{name:'Voie du Poing',prod:1,click:1.25},army:{name:'Voie de l’Armée',prod:1.2,click:1},time:{name:'Voie du Temps',prod:1.1,click:1.1}};
+// (Les « Voies de Prestige » — 4 multiplicateurs plats choisis après le
+// premier Prestige — ont été supprimées : redondantes avec les classes, les
+// bénédictions de run et les Ancients, elles ajoutaient une couche de
+// multiplicateurs sans vrai choix.)
 function characterCombatSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Ruée',description:'Renforce les formations d’assaut.'},support:{name:'Ralliement',description:'Active les formations combinées.'},tank:{name:'Rempart',description:'Stabilise les combats de boss.'},assassin:{name:'Exécution',description:'Excellent contre les ennemis affaiblis.'},producteur:{name:'Logistique',description:'Améliore le rendement hors combat.'}}[role];}
 function characterLeaderSkill(character){const role=roleForCharacter(character);return {attaquant:{name:'Avant-garde',description:'+12% de DPS d’équipe lorsque ce héros est chef.',prod:1.12},support:{name:'Inspiration',description:'+10% de DPS d’équipe lorsque ce héros est chef.',prod:1.10},tank:{name:'Commandement défensif',description:'+10% de DPS d’équipe lorsque ce héros est chef.',prod:1.10},assassin:{name:'Chasse coordonnée',description:'+12% de DPS d’équipe lorsque ce héros est chef.',prod:1.12},producteur:{name:'Maître logisticien',description:'+15% de DPS d’équipe lorsque ce héros est chef.',prod:1.15}}[role];}
 function leaderSkillForSlots(slots,leaderCharacterId){const leader=slots.find((slot)=>slot.character&&slot.characterId===leaderCharacterId)||slots.find((slot)=>slot.character);return leader?characterLeaderSkill(leader.character):{name:'Aucun chef',description:'Désigne un chef pour activer un Lead Skill.',prod:1};}
@@ -837,20 +881,20 @@ function characterPassiveTeamBonus(slots, stat) {
     return sum + characterPassiveBonus(s.character, s.character.rarity, stat);
   }, 0);
 }
-function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null,extras={}) {
+function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',leaderCharacterId=null,extras={}) {
   const seriesLevels = new Map();
   for (const s of slots) if (s.character?.series) seriesLevels.set(s.character.series, (seriesLevels.get(s.character.series) || 0) + (s.level || 1));
   const masteryBonus = (series) => { const n = seriesLevels.get(series) || 0; return n >= 500 ? .25 : n >= 250 ? .15 : n >= 100 ? .10 : n >= 25 ? .05 : 0; };
   const talentTeamBonus=slots.reduce((n,s)=>n+(s.character?characterTalent(s.character).team:0),0);
   const personalRates=slots.filter((s)=>s.characterId&&s.character).map((s)=>{
-    const equipped=(s.items?.length?s.items:s.equipments)||[];
+    const equipped=s.items||[];
     const gearMultiplier=(1+equipped.reduce((v,e)=>v+itemProductionBonus(e),0))*equipmentSetMultiplier(equipped);
     // Passif de rareté « prodSelf » (possible sur les rares, cf.
     // RARITY_PASSIVE_POOL) : ne s'applique qu'au niveau 10+, comme annoncé
     // côté personnage.
     const rarityPassiveSelf=(s.level||1)>=10?characterPassiveBonus(s.character,s.character.rarity,'prodSelf'):0;
     const baseRate=slotRate(s.character.rarity,s.level);
-    const personalMultiplier=(1+characterTalent(s.character).self)*(1+rarityPassiveSelf)*heroAscensionMultiplier(s.ascension)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1);
+    const personalMultiplier=(1+characterTalent(s.character).self)*(1+rarityPassiveSelf)*heroAscensionMultiplier(s.ascension)*gearMultiplier*(1+masteryBonus(s.character.series))*(s.awakened?AWAKENED_BONUS:1)*awakenStarMultiplier(s.awakenStars);
     return {slotIndex:s.slotIndex,characterId:s.characterId,baseRate,personalMultiplier,personalRate:safeIdleNumber(baseRate*personalMultiplier)};
   });
   const teamPassive = 1 + characterPassiveTeamBonus(slots, 'prodTeam');
@@ -859,15 +903,20 @@ function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, cla
   const reserveBonus=1+Math.min(.20,Math.max(0,recruitCount-slots.filter((s)=>s.character).length)*.01);
   const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
   const roleMultiplier=1+roleTeamBonus(roles).total;
-  const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*(PRESTIGE_PATHS[prestigePath]||PRESTIGE_PATHS.balanced).prod*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*runBlessingEffects(extras.runBlessings).prod;
+  // `extras.completedSeries` (licences complétées, permanent) et
+  // `extras.buffProd` (buff temporaire d'orbe) arrivent par rateExtrasFor —
+  // même chemin que les succès, pour que TOUTES les routes calculent le même
+  // taux. L'ancienne Voie de Prestige (multiplicateur plat) a été supprimée :
+  // redondante avec classes + bénédictions + Ancients.
+  const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*completedSeriesMultiplier(extras.completedSeries||0)*runBlessingEffects(extras.runBlessings).prod*(extras.buffProd||1);
   const heroes=personalRates.map((entry)=>({...entry,teamMultiplier,rate:safeIdleNumber(entry.personalRate*teamMultiplier)}));
   const heroRate=heroes.reduce((sum,entry)=>safeIdleNumber(sum+entry.rate),0);
   const autoClickDps=Math.max(0,extras.autoClickDps||0);
   return {heroes,teamMultiplier,heroRate,autoClickDps,totalRate:safeIdleNumber(heroRate+autoClickDps)};
 }
 
-function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',prestigePath='balanced',leaderCharacterId=null,extras={}) {
-  return computeRateBreakdown(slots,prodLevel,dojoLevel,prodAncientBonus,classKey,specKey,battleSpeed,autoSkills,recruitCount,formation,prestigePath,leaderCharacterId,extras).totalRate;
+function computeTotalRate(slots, prodLevel, dojoLevel, prodAncientBonus, classKey, specKey, battleSpeed=1, autoSkills=false, recruitCount=0,formation='balanced',leaderCharacterId=null,extras={}) {
+  return computeRateBreakdown(slots,prodLevel,dojoLevel,prodAncientBonus,classKey,specKey,battleSpeed,autoSkills,recruitCount,formation,leaderCharacterId,extras).totalRate;
 }
 
 // Nombre de succès complétés (cf. idleAchievementDefs) — utilisé pour le
@@ -891,10 +940,13 @@ function autoClickDpsFor(user, ancientLevelsByKey) {
 }
 
 function rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey) {
+  const buff = activeOrbBuff(user);
   return {
     achievementsCompleted: achievementsCompletedFor(user, slots, recruitCount),
     autoClickDps: autoClickDpsFor(user, ancientLevelsByKey),
     runBlessings: user.idleRunBlessings,
+    completedSeries: user.idleCompletedSeries || 0,
+    buffProd: buff?.prod || 1,
   };
 }
 
@@ -1066,7 +1118,7 @@ async function settleUnlocked(userId, mutate) {
     const [slots,recruitCount] = await Promise.all([loadSlots(prisma, userId),prisma.dojoRecruit.count({where:{userId}})]);
     const ancientLevelsByKey = await loadAncientLevels(prisma, userId);
     const dojoLevel = user.idleRankLevel || 1;
-    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,ancientLevelsByKey));
+    const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,ancientLevelsByKey));
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
     const elapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
     const combat = simulateCombat({
@@ -1154,7 +1206,8 @@ async function buildState(userId) {
       idleBossClaimed: true,
       idleHeroClass: true, idleHeroClassChangedAt: true,
       idleHeroAura: true, idleHeroStance: true, idleHeroTitle: true, idleHeroHair:true, idleHeroOutfit:true, idleHeroColor:true, idleHeroSpec:true, idleBattleSpeed:true, idleBattleMode:true, idleAutoSkills:true,idleRecruitPity:true,idleEssenceRecruitCount:true,idleOnboardingComplete:true,
-      idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idleLeaderCharacterId:true,idlePrestigePath:true,idlePrestigeMilestone:true,
+      idleSeals:true,idleBurstReadyAt:true,idleTeamReadyAt:true,idleBossProgress:true,idleBossStartedAt:true,idleBestBossMs:true,idleFormation:true,idleLeaderCharacterId:true,idlePrestigeMilestone:true,
+      idleBuffKey:true,idleBuffUntil:true,idleCompletedSeries:true,
       idleRankLevel:true,idleRankKills:true,idleRankClicks:true,idleRankUpgrades:true,idleRankBosses:true,idleRankStartedAt:true,
     },
   });
@@ -1186,7 +1239,7 @@ async function buildState(userId) {
   const dojoLevel = user.idleRankLevel || 1;
   const runBlessingKeys=parseRunBlessings(user.idleRunBlessings);const blessingEffects=runBlessingEffects(runBlessingKeys);
   const rateExtras = rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey);
-  const rateBreakdown = computeRateBreakdown(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtras);
+  const rateBreakdown = computeRateBreakdown(slots, user.idleProdLevel, dojoLevel, prodAncientBonus, user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtras);
   const totalRate = rateBreakdown.totalRate;
   const rateBySlot = new Map(rateBreakdown.heroes.map((entry)=>[entry.slotIndex,entry]));
   const strategy = synergyForSlots(slots);
@@ -1244,12 +1297,17 @@ async function buildState(userId) {
         ascensionMax: HERO_ASCENSION_MAX,
         canAscend: level >= heroAscensionRequiredLevel(row.ascension) && (row.ascension || 0) < HERO_ASCENSION_MAX,
         ascensionCost: heroAscensionCost(row.character.rarity, row.ascension),
-        equipments: RUNE_KINDS.map((kind) => { const e=(row.items?.length?row.items:row.equipments||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus}:{kind,empty:true}; }),
+        equipments: RUNE_KINDS.map((kind) => { const e=(row.items||[]).find((x)=>x.kind===kind);const set=e?(RUNE_SETS[e.setKey]||RUNE_SETS.energy):null; return e?{...e,effectiveBonus:itemProductionBonus(e),effectLabel:ITEM_EFFECTS[e.effectKey]?.label||ITEM_KINDS[kind].effectLabel,effectDescription:ITEM_EFFECTS[e.effectKey]?.description||'',affixesDetailed:describeItemAffixes(e),enhanceCost:runeEnhanceCost(e,Math.max(user.idleBestStage||1,stage)),powerLevel:e.enhancementLevel||0,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus}:{kind,empty:true}; }),
         talent: characterTalent(row.character),
         role: roleForCharacter(row.character),
         combatSkill: characterCombatSkill(row.character),
         leaderSkill: characterLeaderSkill(row.character),
         awakened: !!row.awakened,
+        awakenStars: row.awakenStars || 0,
+        awakenStarMax: AWAKEN_STAR_MAX,
+        awakenStarBonus: AWAKEN_STAR_BONUS,
+        awakenStarMultiplier: awakenStarMultiplier(row.awakenStars),
+        awakenStarCost: (row.awakenStars || 0) < AWAKEN_STAR_MAX ? awakenStarCost(row.awakenStars) : null,
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -1276,7 +1334,8 @@ async function buildState(userId) {
   let mechanicMultiplier=!clickMechanic?1:clickMechanic.key==='shield'&&(user.idleBossProgress||0)<8?.25:clickMechanic.key==='rage'&&hpRatio<=.3?.5:clickMechanic.key==='regen'&&(user.idleBossProgress||0)<1?.65:clickMechanic.key==='counter'&&(user.idleBossProgress||0)===1?.35:1;
   const combatWorld=campaignForStage(stage);
   const worldClick=combatWorld.modifier?.click||1;
-  const prestigeClick=(PRESTIGE_PATHS[user.idlePrestigePath]||PRESTIGE_PATHS.balanced).click;
+  const activeBuff=activeOrbBuff(user);
+  const buffClick=activeBuff?.click||1;
   const activeRoles=slots.filter((slot)=>slot.character).map((slot)=>roleForCharacter(slot.character));
   const activeSupportCount=activeRoles.filter((role)=>role==='support').length;
   const passiveCooldownBonus=characterPassiveTeamBonus(slots,'cooldown');
@@ -1288,7 +1347,7 @@ async function buildState(userId) {
   const clickItems=itemActionBonus(slots,'click')*(isBossStage(stage)?itemActionBonus(slots,'boss'):1);
   // Même base que la route /click : rendement plat + part de la production
   // (CLICK_RATE_SHARE), pour que l'aperçu affiché corresponde aux dégâts réels.
-  const clickDamage = Math.max(1, Math.round((clickBase + totalRate * CLICK_RATE_SHARE) * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * prestigeClick * mechanicMultiplier * clickItems * blessingEffects.click));
+  const clickDamage = Math.max(1, Math.round((clickBase + totalRate * CLICK_RATE_SHARE) * heroClass(user.idleHeroClass).click * (heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1) * currentIdleEvent().click * worldClick * buffClick * mechanicMultiplier * clickItems * blessingEffects.click));
   // Même formule que la route /click (passifs de personnage inclus) pour que
   // la chance affichée soit celle réellement tirée.
   const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+(combatWorld.modifier?.critBonus||0)+critUpgradeBonus(user.idleCritLevel)+blessingEffects.crit+characterPassiveTeamBonus(slots,'crit')));
@@ -1351,6 +1410,27 @@ async function buildState(userId) {
     return { series, owned: entry.owned, awakened: entry.awakened, total, percent: Math.round((entry.owned / total) * 100), complete: entry.owned >= total };
   }).sort((a, b) => b.percent - a.percent || b.owned - a.owned);
   const catalogTotal = [...seriesTotals.values()].reduce((sum, n) => sum + n, 0);
+  // ── Complétion de licence : synchronisation paresseuse du compteur
+  // permanent (User.idleCompletedSeries). Monotone : ne descend jamais, même
+  // si un import catalogue agrandit une licence déjà complétée — la
+  // récompense reste acquise. Chaque nouvelle complétion verse aussi des
+  // Sceaux (garde optimiste sur l'ancienne valeur : deux requêtes
+  // concurrentes ne créditent pas deux fois).
+  // Garde-fou : si les totaux du catalogue n'ont pas pu être chargés
+  // (seriesTotals vide, cf. loadSeriesTotals), chaque licence possédée
+  // paraîtrait « complète » — on ne synchronise jamais dans ce cas.
+  const completedNow = seriesTotals.size ? seriesCollection.filter((s) => s.complete).length : 0;
+  let completedSeries = user.idleCompletedSeries || 0;
+  if (completedNow > completedSeries) {
+    const gainedSeals = (completedNow - completedSeries) * SERIES_COMPLETION_SEALS;
+    try {
+      const synced = await prisma.user.updateMany({
+        where: { id: userId, idleCompletedSeries: completedSeries },
+        data: { idleCompletedSeries: completedNow, idleSeals: { increment: gainedSeals } },
+      });
+      if (synced.count) completedSeries = completedNow;
+    } catch { /* fenêtre de migration : le bonus s'appliquera à la prochaine lecture */ }
+  }
   const now=new Date();const seasonPeriod=periods.month;const seasonName=['Hiver Éternel','Floraison des héros','Brasier des mondes','Crépuscule dimensionnel'][Math.floor(now.getUTCMonth()/3)];
   const seasonActivity=seasonActivityScore(missionCounters,seasonPeriod);
   let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
@@ -1366,7 +1446,7 @@ async function buildState(userId) {
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
     {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
     {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
-    {key:'gear',title:'Équipe un objet',description:'Les coffres donnent des objets à placer sur les six emplacements.',done:slots.some((s)=>(s.items||s.equipments||[]).length>0),tab:'equipment'},
+    {key:'gear',title:'Équipe un objet',description:'Les coffres donnent des objets à placer sur les six emplacements.',done:slots.some((s)=>(s.items||[]).length>0),tab:'equipment'},
     {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le stage requis et garde la run assez longtemps pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
   ];
   // Équipé sur un personnage : reste vrai même si ce personnage est
@@ -1379,7 +1459,7 @@ async function buildState(userId) {
   const preparedInventoryItems=inventoryItems.map((item)=>{
     const activeSlot=item.equippedCharacterId?slotByCharacter.get(item.equippedCharacterId):null;
     const set=RUNE_SETS[item.setKey]||RUNE_SETS.energy;
-    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item,Math.max(user.idleBestStage||1,stage)),enhanceCost:runeEnhanceCost(item),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
+    return {...item,effectiveBonus:itemProductionBonus(item),effectLabel:ITEM_EFFECTS[item.effectKey]?.label||ITEM_KINDS[item.kind]?.effectLabel||'Effet',effectDescription:ITEM_EFFECTS[item.effectKey]?.description||'',affixesDetailed:describeItemAffixes(item),kindLabel:ITEM_KINDS[item.kind]?.label||item.kind,setName:set.name,setRequired:set.required,setDescription:set.description,setMode:set.mode,setBonus:set.bonus,salvageValue:itemSalvageValue(item,Math.max(user.idleBestStage||1,stage)),enhanceCost:runeEnhanceCost(item,Math.max(user.idleBestStage||1,stage)),rerollCost:runeRerollCost(item,Math.max(user.idleBestStage||1,stage)),powerLevel:item.enhancementLevel||0,equipped:!!item.equippedCharacterId,equippedSlotIndex:activeSlot?.slotIndex??null,equippedCharacter:item.equippedCharacterId?(characterNameById.get(item.equippedCharacterId)||null):null,equippedResting:!!item.equippedCharacterId&&!activeSlot};
   });
   const inventoryFamilies=RUNE_SET_KEYS.map((key)=>{const set=RUNE_SETS[key];const count=preparedInventoryItems.filter((item)=>(item.setKey||'energy')===key).length;return {key,world:set.name,count,kinds:[],complete:count>=set.required,required:set.required,description:set.description,mode:set.mode,bonus:set.bonus};}).filter((set)=>set.count).sort((a,b)=>Number(b.complete)-Number(a.complete)||b.count-a.count);
   const inventory={
@@ -1403,6 +1483,9 @@ async function buildState(userId) {
     pendingEssence: pending,
     totalRate,
     economy:{essence:user.essence,seals:user.idleSeals,pendingEssence:pending,dps:totalRate,heroDps:rateBreakdown.heroRate,autoClickDps:rateBreakdown.autoClickDps,offlineCapMs},
+    // Buff temporaire d'orbe en cours (ou null) — le client affiche le bandeau
+    // et le compte à rebours ; le serveur reste seul juge de l'expiration.
+    buff:(()=>{const active=activeOrbBuff(user);return active?{key:active.key,label:active.label,description:active.description,prod:active.prod,click:active.click,until:active.until.toISOString(),remainingSeconds:Math.max(0,Math.round((active.until.getTime()-Date.now())/1000))}:null;})(),
     run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,pending:blessingPending,choices:blessingChoices,rerollCost:blessingRerollCost,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
     combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
@@ -1461,7 +1544,7 @@ async function buildState(userId) {
       skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,supportCount:activeSupportCount,cooldownReductionPercent:Math.round((1-activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/ULTIMATE_COOLDOWN_MS)*100),burstBaseCooldownSeconds:ULTIMATE_COOLDOWN_MS/1000,teamBaseCooldownSeconds:TEAM_COMBO_COOLDOWN_MS/1000,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000)},
     },
     missions,
-    codex: { discovered: recruitCount, masteries, collection: seriesCollection, catalogTotal, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
+    codex: { discovered: recruitCount, masteries, collection: seriesCollection, catalogTotal, completion:{completed:completedSeries,perSeriesBonus:SERIES_COMPLETION_BONUS,sealsPerSeries:SERIES_COMPLETION_SEALS,multiplier:completedSeriesMultiplier(completedSeries)}, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
     event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
     rift,
     achievements,
@@ -1483,7 +1566,7 @@ async function buildState(userId) {
       level: user.idleClickLevel,
       yield: clickBase,
       damage: clickDamage,
-      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round((clickYield(user.idleClickLevel+1,clickAncientBonus)+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*prestigeClick*mechanicMultiplier*blessingEffects.click)) : null,
+      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round((clickYield(user.idleClickLevel+1,clickAncientBonus)+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*buffClick*mechanicMultiplier*blessingEffects.click)) : null,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
       bulkCosts: bulkUpgradeCosts(user.idleClickLevel, CLICK_LEVEL_MAX, clickUpgradeCost),
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
@@ -1561,19 +1644,19 @@ async function buildState(userId) {
             {key:'stage',label:'Stage et record de la run',before:user.idleRunBestStage||1,after:1},
             {key:'training',label:'Niveaux et Ascensions des héros',before:'Niveaux et Ascensions actuels',after:'Niveau 1 · A0'},
             {key:'team',label:'Équipe et emplacements',before:`${user.idleSlotsUnlocked}/${MAX_SLOTS} débloqués`,after:`${START_SLOTS}/${MAX_SLOTS}, formation conservée`},
-            {key:'upgrades',label:'Niveaux des améliorations',before:`Niv. ${user.idleProdLevel||0} · ${user.idleClickLevel||0} · ${user.idleCritLevel||0} · ${user.idleCooldownLevel||0} · ${user.idleMultiStrikeLevel||0}`,after:'Tous au niveau 0'},
+            {key:'upgrades',label:'Niveaux des améliorations',before:`Niv. ${user.idleProdLevel||0} · ${user.idleClickLevel||0} · ${user.idleCritLevel||0} · ${user.idleCooldownLevel||0} · ${user.idleMultiStrikeLevel||0}`,after:`Discipline et Concentration niv. ${prestigeStartingLevels((user.prestigeLevel||0)+1)} offerts (Mémoire du Maître), le reste au niveau 0`},
             {key:'blessings',label:'Bénédictions roguelike',before:`${runBlessingKeys.length} pouvoir${runBlessingKeys.length!==1?'s':''} de run`,after:'Toutes retirées'},
           ],
           kept:[
             {key:'rank',label:'Rang et niveau du Dojo',value:`Rang ${user.idleRankLevel||1} · Dojo niv. ${dojoLevel}`},
-            {key:'roster',label:'Héros recrutés',value:`${recruitCount} héros conservés`},
+            {key:'roster',label:'Héros recrutés et étoiles d’Éveil',value:`${recruitCount} héros conservés`},
             {key:'gear',label:'Inventaire et équipements',value:'Tout est conservé'},
             {key:'records',label:'Record permanent et coffres',value:`Stage ${Math.max(user.idleBestStage||1,stage)} · coffres conservés`},
             {key:'permanent',label:'Sagesse, Ancients et Sceaux',value:`${safeIdleNumber(user.wisdomPoints)} + ${wisdomForRunStage(user.idleRunBestStage||1,user.prestigeLevel)} Sagesse`},
           ],
           note:'Les recharges de l’Ultime et du Combo sont aussi annulées. La production en attente est comptabilisée dans l’XP permanente du Dojo avant la remise à zéro.',
         },
-        path:user.idlePrestigePath||'balanced',paths:Object.entries(PRESTIGE_PATHS).map(([key,p])=>({key,name:p.name,prod:p.prod,click:p.click,selected:key===(user.idlePrestigePath||'balanced')})),milestone:user.idlePrestigeMilestone||0,
+        startingLevels:prestigeStartingLevels((user.prestigeLevel||0)+1),milestone:user.idlePrestigeMilestone||0,
       },
     },
   };
@@ -1956,6 +2039,36 @@ router.post('/slot-ascend', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
+// Étoile d'Éveil : investissement PERMANENT par héros, payé en Sceaux (le
+// deuxième usage des Sceaux après l'invocation). +8% de production
+// personnelle par étoile, conservé au Prestige comme le roster — l'éveil
+// progressif d'un favori, façon Summoners War.
+router.post('/hero-awaken', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-awaken' }), async (req, res) => {
+  const characterId = Number(req.body?.characterId);
+  if (!Number.isInteger(characterId)) return res.status(400).json({ error: 'Personnage invalide' });
+  let stars = 0, cost = 0;
+  try {
+    await withSettle(req.user.id, async (tx, user) => {
+      const recruit = await tx.dojoRecruit.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
+      if (!recruit) throw new IdleError(400, "Tu n'as pas recruté ce personnage");
+      if ((recruit.awakenStars || 0) >= AWAKEN_STAR_MAX) throw new IdleError(400, 'Éveil maximal atteint');
+      cost = awakenStarCost(recruit.awakenStars);
+      // Garde optimiste sur le solde ET le nombre d'étoiles : deux requêtes
+      // simultanées ne peuvent ni payer deux fois ni sauter une étoile.
+      const debit = await tx.user.updateMany({ where: { id: user.id, idleSeals: { gte: cost } }, data: { idleSeals: { decrement: cost } } });
+      if (!debit.count) throw new IdleError(400, 'Sceaux insuffisants');
+      const upgraded = await tx.dojoRecruit.updateMany({
+        where: { userId: user.id, characterId, awakenStars: recruit.awakenStars || 0 },
+        data: { awakenStars: { increment: 1 } },
+      });
+      if (!upgraded.count) throw new IdleError(409, 'Éveil déjà en cours, réessaie');
+      stars = (recruit.awakenStars || 0) + 1;
+    });
+  } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
+  void recordIdleEvent(req.user.id, 'hero_awaken', { value: stars });
+  res.json({ ...(await buildState(req.user.id)), awaken: { characterId, stars, cost, multiplier: awakenStarMultiplier(stars) } });
+});
+
 router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10, name: 'idle-optimize' }), async (req, res) => {
   let optimization={changed:0,beforeRate:0,afterRate:0,gainPercent:0,selected:[]};
   try {
@@ -1963,8 +2076,8 @@ router.post('/optimize-team', requireAuth, requireIdleBeta, rateLimit({ max: 10,
       const [loadedSlots,recruits]=await Promise.all([loadSlots(tx,user.id),tx.dojoRecruit.findMany({where:{userId:user.id},include:{character:{select:{id:true,name:true,imageUrl:true,rarity:true,series:true}}}})]);
       if(!recruits.length)throw new IdleError(400,'Aucun héros recruté');
       const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
-      const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,equipments:[],items:[]});
-      const rateFor=(picks)=>{const mapped=slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened}:{...slot,characterId:null,character:null,level:1,ascension:0,awakened:false};});return computeTotalRate(mapped,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,mapped,recruits.length,levels));};
+      const slots=Array.from({length:unlocked},(_,slotIndex)=>loadedSlots.find((slot)=>slot.slotIndex===slotIndex)||{slotIndex,characterId:null,character:null,level:1,ascension:0,items:[]});
+      const rateFor=(picks)=>{const mapped=slots.map((slot,index)=>{const recruit=picks[index];return recruit?{...slot,characterId:recruit.characterId,character:recruit.character,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened}:{...slot,characterId:null,character:null,level:1,ascension:0,awakened:false};});return computeTotalRate(mapped,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruits.length,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,mapped,recruits.length,levels));};
       const currentPicks=slots.map((slot)=>recruits.find((recruit)=>recruit.characterId===slot.characterId)||null);
       const beforeRate=rateFor(currentPicks);const teamSize=Math.min(unlocked,recruits.length);
       let beam=[{picks:[],used:new Set(),score:0}];
@@ -2000,7 +2113,6 @@ router.post('/battle-mode', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 router.post('/formation',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-formation'}),async(req,res)=>{const formation=String(req.body?.formation||'');if(!FORMATIONS[formation])return res.status(400).json({error:'Formation invalide'});await withSettle(req.user.id,async(tx,u)=>tx.user.update({where:{id:u.id},data:{idleFormation:formation}}));void recordIdleEvent(req.user.id,'formation_change');res.json(await buildState(req.user.id));});
 router.post('/stage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-stage-select'}),async(req,res)=>{const target=Number(req.body?.stage);if(!Number.isInteger(target)||target<1)return res.status(400).json({error:'Niveau de combat invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const best=Math.max(1,user.idleRunBestStage||1,user.idleStage||1);if(target>best)throw new IdleError(400,`Le niveau ${target} n’est pas encore débloqué`);await tx.user.update({where:{id:user.id},data:{idleStage:target,idleWaveKills:0,idleEnemyHp:enemyUnitMaxHp(target,0),idleBossProgress:0,idleBossStartedAt:null,idleBattleMode:target<best?'farm':'progress'}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}void recordIdleEvent(req.user.id,'stage_select',{stage:target});res.json(await buildState(req.user.id));});
 router.post('/team-leader',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-team-leader'}),async(req,res)=>{const characterId=Number(req.body?.characterId);if(!Number.isInteger(characterId))return res.status(400).json({error:'Personnage invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const active=await tx.idleSlot.findFirst({where:{userId:user.id,characterId},select:{id:true}});if(!active)throw new IdleError(400,'Ce personnage doit être dans ton équipe');await tx.user.update({where:{id:user.id},data:{idleLeaderCharacterId:characterId}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}res.json(await buildState(req.user.id));});
-router.post('/prestige-path',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-prestige-path'}),async(req,res)=>{const path=String(req.body?.path||'');if(!PRESTIGE_PATHS[path])return res.status(400).json({error:'Voie inconnue'});const user=await prisma.user.findUnique({where:{id:req.user.id},select:{prestigeLevel:true}});if((user?.prestigeLevel||0)<1)return res.status(403).json({error:'Effectue un Prestige pour choisir une voie'});await prisma.user.update({where:{id:req.user.id},data:{idlePrestigePath:path}});void recordIdleEvent(req.user.id,'prestige_path');res.json(await buildState(req.user.id));});
 
 // Choix roguelike tous les 20 stages. Le solde préalable garantit que le DPS
 // produit avant le choix est calculé avec l'ancien build, jamais rétroactivement.
@@ -2081,13 +2193,41 @@ router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max:
       let bonus=item.bonus,total=0,level=Math.max(0,item.enhancementLevel||0),subStats=item.subStats||{};
       if(level>=15)throw new IdleError(400,'Cet objet est déjà au niveau +15');
       const wanted=amount==='max'?15-level:Math.min(amount,15-level);
-      for(let i=0;i<wanted;i++){const current={...item,enhancementLevel:level};const next=runeEnhanceCost(current);if(total+next>user.essence)break;total+=next;level++;bonus=Number((bonus+.006+(ITEM_RARITY_ORDER[item.rarity]||1)*.001).toFixed(3));subStats=enhancedRuneSubStats({...item,subStats},level);bought++;}
+      const enhanceStage=Math.max(user.idleBestStage||1,user.idleStage||1);
+      for(let i=0;i<wanted;i++){const current={...item,enhancementLevel:level};const next=runeEnhanceCost(current,enhanceStage);if(total+next>user.essence)break;total+=next;level++;bonus=Number((bonus+.006+(ITEM_RARITY_ORDER[item.rarity]||1)*.001).toFixed(3));subStats=enhancedRuneSubStats({...item,subStats},level);bought++;}
       if(!bought)throw new IdleError(400,'Essence insuffisante');
       await tx.user.update({where:{id:user.id},data:{essence:{decrement:total}}});
       await tx.idleItem.update({where:{id:item.id},data:{bonus,enhancementLevel:level,subStats}});
     });
     await incrementIdleCounter(req.user.id,'upgrade',bought);
     res.json(await buildState(req.user.id));
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+});
+
+// Meulage : re-tire la magnitude de l'affixe primaire et des affixes
+// secondaires (types conservés) aux valeurs du tier ACTUEL du joueur —
+// revalorise les vieux objets et sert de puits d'essence répétable. Le
+// résultat peut être meilleur OU moins bon : c'est un pari, comme le
+// « grind » de Summoners War, pas une amélioration garantie.
+router.post('/equipment/reroll',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-equipment-reroll'}),async(req,res)=>{
+  const itemId=String(req.body?.itemId||'');if(!itemId)return res.status(400).json({error:'Objet invalide'});
+  let rerolled=null;
+  try{
+    await withSettle(req.user.id,async(tx,user)=>{
+      const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});
+      if(!item)throw new IdleError(404,'Objet introuvable');
+      const bestStage=Math.max(user.idleBestStage||1,user.idleStage||1);
+      const cost=runeRerollCost(item,bestStage);
+      const debit=await tx.user.updateMany({where:{id:user.id,essence:{gte:cost}},data:{essence:{decrement:cost}}});
+      if(!debit.count)throw new IdleError(400,'Essence insuffisante');
+      const tier=Math.max(1,Math.floor(bestStage/10));
+      const effectValue=rerolledAffixValue(item.effectKey,tier);
+      const affixes=(Array.isArray(item.affixes)?item.affixes:[]).map((affix)=>({...affix,effectValue:rerolledAffixValue(affix.effectKey,tier)}));
+      await tx.idleItem.update({where:{id:item.id},data:{effectValue,affixes}});
+      rerolled={itemId:item.id,cost,before:{effectValue:item.effectValue,affixes:item.affixes},after:{effectValue,affixes}};
+    });
+    void recordIdleEvent(req.user.id,'rune_reroll');
+    res.json({...(await buildState(req.user.id)),reroll:rerolled});
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
@@ -2190,13 +2330,18 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
         data: { characterId: null, assignedAt: null, level: 1, ascension: 0 },
       });
       await tx.dojoRecruit.updateMany({where:{userId:user.id},data:{trainingLevel:1,idleAscension:0}});
+      // Mémoire du Maître (fast-start façon Clicker Heroes) : la nouvelle run
+      // démarre avec des niveaux gratuits de Discipline et de Concentration
+      // (2 par Prestige, plafonné) — chaque Retraite rend la reprise
+      // tangiblement plus rapide, sans multiplicateur caché.
+      const startingLevels = prestigeStartingLevels(nextPrestige);
       await tx.user.update({
         where: { id: user.id },
         data: {
           essence: 0,
           idleSlotsUnlocked: START_SLOTS,
-          idleProdLevel: 0,
-          idleClickLevel: 0,
+          idleProdLevel: startingLevels,
+          idleClickLevel: startingLevels,
           idleCritLevel: 0,
           idleCooldownLevel: 0,
           idleMultiStrikeLevel: 0,
@@ -2253,7 +2398,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
     // des PV exponentiels et tout l'arsenal actif devenait cosmétique en
     // milieu de partie. Les multiplicateurs (classe, crit, objets…) portent
     // sur la somme : ils restent pertinents à tout stade.
-    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const passiveCritBonus=characterPassiveTeamBonus(slots,'crit');const base=(clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))+(settlement?.totalRate||0)*CLICK_RATE_SHARE)*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*(PRESTIGE_PATHS[liveUser.idlePrestigePath]||PRESTIGE_PATHS.balanced).click*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'));
+    const blessingEffects=runBlessingEffects(liveUser.idleRunBlessings);const passiveCritBonus=characterPassiveTeamBonus(slots,'crit');const clickBuff=activeOrbBuff(liveUser)?.click||1;const base=(clickYield(liveUser.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))+(settlement?.totalRate||0)*CLICK_RATE_SHARE)*heroClass(liveUser.idleHeroClass).click*(heroSpec(liveUser.idleHeroClass,liveUser.idleHeroSpec).click||1)*currentIdleEvent().click*clickBuff*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'));
     // « Frappes Multiples » : chaque frappe physique (count, plafonné par la
     // cadence/le budget serveur) simule PLUSIEURS frappes de combat — dégâts
     // et kills comptés en conséquence. Le compteur `count` renvoyé au client
@@ -2288,7 +2433,7 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
 
 router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
   let gained=0;let readyAt;let cooldownMs=ULTIMATE_COOLDOWN_MS;let killed=false,bossKilled=false;
-  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const blessingEffects=runBlessingEffects(user.idleRunBlessings);const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst')*blessingEffects.burst);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const blessingEffects=runBlessingEffects(user.idleRunBlessings);const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst')*blessingEffects.burst);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   // L'Ultime représente 75 frappes : cette équivalence doit aussi alimenter
   // tous les systèmes de progression fondés sur les clics (rang du Dojo,
   // missions quotidiennes/hebdomadaires, défis et score de saison).
@@ -2310,7 +2455,7 @@ router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 6
       const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));
       if(roles.length<2)throw new IdleError(400,'Équipe insuffisante');
       const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});
-      const blessingEffects=runBlessingEffects(user.idleRunBlessings);const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idlePrestigePath,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));
+      const blessingEffects=runBlessingEffects(user.idleRunBlessings);const rate=computeTotalRate(slots,user.idleProdLevel,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));
       uniqueRoles=new Set(roles).size;
       const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=1;let progress=user.idleBossProgress||0;if(mechanic?.key==='counter'){if(progress===3)multiplier=.35;progress=3;}
       cooldownMs=activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,roles.filter((role)=>role==='support').length,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));
@@ -2510,6 +2655,24 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
   const crossedThreshold=Math.floor(floor/5)>Math.floor(rift.bestFloor/5);
   const offerRelicChoice=crossedThreshold&&!rift.pendingChoice.length&&currentRelicKeys.length<Math.floor(rift.maxFloor/5);
   const offeredKeys=offerRelicChoice?rollRiftRelics(currentRelicKeys,3):null;
+  // ── Butin d'équipement : chaque palier multiple de 5 franchi pour la
+  // première fois cette semaine fait tomber une rune — la Faille devient LA
+  // source RÉPÉTABLE d'objets (jusqu'à 4 par semaine), là où les coffres de
+  // boss ne tombent qu'une fois par palier de progression. La rareté suit la
+  // profondeur ; la magnitude des affixes suit le meilleur stage du joueur
+  // (même logique de tier que les coffres), donc le butin reste pertinent à
+  // tout niveau de compte.
+  const bestStageForLoot=Math.max(1,state.permanentProgress?.bestStage||1);
+  const lootFloors=Array.from({length:floor-rift.bestFloor},(_,i)=>rift.bestFloor+1+i).filter((f)=>f%5===0);
+  const riftDrops=lootFloors.map((f)=>{
+    const rarity=f>=20?'mythic':f>=10?'legendary':'epic';
+    const tier=Math.floor(bestStageForLoot/10)+f;
+    const base={epic:.06,legendary:.10,mythic:.16}[rarity];
+    const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
+    const kind=RUNE_KINDS[Math.floor(Math.random()*RUNE_KINDS.length)];
+    return idleItemDrop(tier,kind,rarity,bonus,'Faille dimensionnelle');
+  });
+  const lootResults=[];
   try{await prisma.$transaction(async(tx)=>{
     const existing=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:req.user.id,key:'rift_floor',period:rift.period}}});
     if((existing?.value||0)!==rift.bestFloor)throw new IdleError(409,'La Faille a déjà été actualisée');
@@ -2517,9 +2680,16 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
     else{try{await tx.idleProgressCounter.create({data:{userId:req.user.id,key:'rift_floor',period:rift.period,value:floor}});}catch(error){if(error?.code==='P2002')throw new IdleError(409,'La Faille a déjà été actualisée');throw error;}}
     await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals}}});
     if(offeredKeys)await tx.idleRiftRun.upsert({where:{userId_period:{userId:req.user.id,period:rift.period}},create:{userId:req.user.id,period:rift.period,relics:currentRelicKeys,pendingChoice:offeredKeys},update:{pendingChoice:offeredKeys}});
+    // Inventaire plein → recyclage automatique (même règle que les coffres de
+    // boss) : le drop n'est jamais silencieusement perdu.
+    let inventoryCount=await tx.idleItem.count({where:{userId:req.user.id}});
+    for(const drop of riftDrops){
+      if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:req.user.id,...drop}});inventoryCount++;lootResults.push({...drop,itemId:item.id,stored:true});}
+      else{const salvage=itemSalvageValue(drop,bestStageForLoot);await tx.user.update({where:{id:req.user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});lootResults.push({...drop,stored:false,salvage});}
+    }
   });}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void recordIdleEvent(req.user.id,'rift_record',{value:floor,stage:state.battle.stage});
-  res.json({ok:true,floor,essence,seals,state:await buildState(req.user.id)});
+  res.json({ok:true,floor,essence,seals,loot:lootResults,state:await buildState(req.user.id)});
 });
 
 router.post('/rift/relic',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-rift-relic'}),async(req,res)=>{
@@ -2593,13 +2763,22 @@ router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, nam
   let reward = 0;
   let seal = false;
   let jackpot = false;
+  let buff = null;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const [slots, recruitCount] = await Promise.all([loadSlots(tx, user.id), tx.dojoRecruit.count({ where: { userId: user.id } })]);
-      const rate = computeTotalRate(slots, user.idleProdLevel, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idlePrestigePath, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
+      const rate = computeTotalRate(slots, user.idleProdLevel, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
       jackpot = Math.random() < ORB_JACKPOT_CHANCE;
-      reward = Math.min(orbReward(rate, jackpot), ROUTE_NUMBER_CAP - safeIdleNumber(user.essence));
+      // Buff temporaire (« Frénésie »/« Précision divine ») : tiré seulement si
+      // l'orbe n'est pas un jackpot ET qu'aucun buff n'est déjà actif. Un orbe
+      // à buff ne verse PAS d'essence instantanée : sa valeur est le
+      // multiplicateur à durée — c'est le moment d'adrénaline, pas la paie.
+      const grantBuff = !jackpot && !activeOrbBuff(user) && Math.random() < ORB_BUFF_CHANCE;
+      reward = grantBuff ? 0 : Math.min(orbReward(rate, jackpot), ROUTE_NUMBER_CAP - safeIdleNumber(user.essence));
       seal = Math.random() < ORB_SEAL_CHANCE;
+      const rolledBuff = grantBuff ? rollOrbBuff() : null;
+      const buffUntil = rolledBuff ? new Date(Date.now() + rolledBuff.seconds * 1000) : null;
+      if (rolledBuff) buff = { key: rolledBuff.key, label: rolledBuff.label, description: rolledBuff.description, seconds: rolledBuff.seconds, prod: rolledBuff.prod, click: rolledBuff.click, until: buffUntil.toISOString() };
       await tx.user.update({
         where: { id: user.id },
         data: {
@@ -2607,6 +2786,7 @@ router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, nam
           essenceEarnedTotal: { increment: reward },
           idleRunEssenceEarned: { increment: reward },
           ...(seal ? { idleSeals: { increment: 1 } } : {}),
+          ...(rolledBuff ? { idleBuffKey: rolledBuff.key, idleBuffUntil: buffUntil } : {}),
         },
       });
     });
@@ -2615,7 +2795,7 @@ router.post('/bonus-orb', requireAuth, requireIdleBeta, rateLimit({ max: 30, nam
     throw e;
   }
   void recordIdleEvent(req.user.id, 'bonus_orb', { value: reward });
-  res.json({ ok: true, reward, seal, jackpot, cooldownSeconds: ORB_COOLDOWN_SECONDS });
+  res.json({ ok: true, reward, seal, jackpot, buff, cooldownSeconds: ORB_COOLDOWN_SECONDS });
 });
 
 // Détail d'une licence pour l'écran collection : personnages possédés en

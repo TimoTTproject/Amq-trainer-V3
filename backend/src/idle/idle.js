@@ -30,8 +30,10 @@ const RARITY_RATE = {
   mythic: 1.45,
 };
 
-// Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité, remis
-// à 1 quand on change de personnage sur l'emplacement (cf. IdleSlot.level).
+// Niveau d'entraînement DE LA CARTE assignée (pas du compte) : illimité. Le
+// niveau SUIT le personnage (source de vérité : DojoRecruit.trainingLevel,
+// restauré à chaque assignation — cf. POST /assign) : changer un héros
+// d'emplacement ne lui fait jamais perdre ses niveaux.
 // C'est le principal puits d'essence à long terme — ★ et Discipline plafonnent,
 // pas ça : le coût croît plus vite que le gain, donc la progression ralentit
 // sans jamais s'arrêter (courbe idle classique).
@@ -850,6 +852,45 @@ function achievementProdMultiplier(completedCount) {
 const AWAKENED_CHANCE = 0.025;
 const AWAKENED_BONUS = 1.10;
 
+// ── Étoiles d'Éveil : investissement PERMANENT par héros, payé en Sceaux —
+// le deuxième usage des Sceaux après l'invocation, et le pendant « éveil
+// progressif » de Summoners War / AFK Arena. Chaque étoile ajoute +8% de
+// production personnelle ; conservées au Prestige comme le roster. Le coût
+// croît par étoile — éveiller un favori au maximum est un objectif de longue
+// haleine, pas un achat réflexe.
+const AWAKEN_STAR_MAX = 5;
+const AWAKEN_STAR_BONUS = 0.08;
+const AWAKEN_STAR_COSTS = [3, 6, 12, 24, 48]; // Sceaux pour l'étoile N+1
+function awakenStarCost(stars) {
+  const s = Math.max(0, Math.min(AWAKEN_STAR_MAX - 1, Math.floor(stars || 0)));
+  return AWAKEN_STAR_COSTS[s];
+}
+function awakenStarMultiplier(stars) {
+  return 1 + Math.max(0, Math.min(AWAKEN_STAR_MAX, Math.floor(stars || 0))) * AWAKEN_STAR_BONUS;
+}
+
+// ── Complétion de licence (façon Pokédex) : posséder TOUS les personnages
+// d'une licence du catalogue donne +2% de production permanente par licence
+// complétée. La collection devient un moteur de puissance, pas un simple
+// écran cosmétique. Monotone : une licence qui « redevient incomplète »
+// (import catalogue) ne retire jamais un bonus acquis.
+const SERIES_COMPLETION_BONUS = 0.02;
+const SERIES_COMPLETION_SEALS = 3; // récompense immédiate à la complétion
+function completedSeriesMultiplier(count) {
+  return 1 + Math.max(0, Math.floor(count || 0)) * SERIES_COMPLETION_BONUS;
+}
+
+// ── Mémoire du Maître (fast-start post-Prestige, façon rush de Clicker
+// Heroes) : chaque nouvelle run démarre avec des niveaux gratuits de
+// Discipline et de Concentration (2 par Prestige, plafonné à 10) — la reprise
+// saute la phase la plus lente du début de partie, et chaque Retraite rend la
+// suivante tangiblement plus rapide, sans multiplicateur caché.
+const PRESTIGE_START_LEVELS_PER_PRESTIGE = 2;
+const PRESTIGE_START_LEVELS_MAX = 10;
+function prestigeStartingLevels(prestigeLevel) {
+  return Math.min(PRESTIGE_START_LEVELS_MAX, Math.max(0, Math.floor(prestigeLevel || 0)) * PRESTIGE_START_LEVELS_PER_PRESTIGE);
+}
+
 // ── Orbes bonus : un orbe cliquable traverse la scène toutes les quelques
 // minutes (équivalent golden cookie). Le serveur borne la fréquence
 // (ORB_COOLDOWN_SECONDS) et paie ORB_PRODUCTION_SECONDS de production.
@@ -866,6 +907,31 @@ const ORB_JACKPOT_SECONDS = ORB_PRODUCTION_SECONDS * 4;
 function orbReward(totalRate, jackpot = false) {
   const seconds = jackpot ? ORB_JACKPOT_SECONDS : ORB_PRODUCTION_SECONDS;
   return Math.max(ORB_MIN_REWARD, Math.round(finiteIdleNumber(Math.max(0, totalRate) * seconds)));
+}
+
+// ── Buffs temporaires d'orbe (« Frenzy » de Cookie Clicker, cette fois avec
+// un vrai état à durée) : certains orbes n'offrent PAS de versement instantané
+// mais un multiplicateur pendant quelques dizaines de secondes — c'est le
+// moment d'adrénaline qui manquait au jeu actif. Un seul buff actif à la fois
+// (User.idleBuffKey/idleBuffUntil) ; le serveur reste autoritaire sur le
+// tirage et l'expiration.
+const ORB_BUFF_CHANCE = 0.20; // tiré APRÈS le jackpot (donc ~18% effectif)
+const ORB_BUFFS = {
+  frenzy: { key: 'frenzy', label: 'Frénésie', description: 'Production ×2', seconds: 90, prod: 2, click: 1 },
+  precision: { key: 'precision', label: 'Précision divine', description: 'Dégâts de clic ×3', seconds: 75, prod: 1, click: 3 },
+};
+function rollOrbBuff() {
+  const keys = Object.keys(ORB_BUFFS);
+  return ORB_BUFFS[keys[Math.floor(Math.random() * keys.length)]];
+}
+// Buff actif d'un utilisateur (ou null) — lit les colonnes User, vérifie
+// l'expiration côté serveur à chaque calcul.
+function activeOrbBuff(user, now = new Date()) {
+  const buff = ORB_BUFFS[user?.idleBuffKey];
+  if (!buff || !user?.idleBuffUntil) return null;
+  const until = new Date(user.idleBuffUntil);
+  if (until.getTime() <= now.getTime()) return null;
+  return { ...buff, until };
 }
 
 module.exports = {
@@ -999,10 +1065,25 @@ module.exports = {
   achievementProdMultiplier,
   AWAKENED_CHANCE,
   AWAKENED_BONUS,
+  AWAKEN_STAR_MAX,
+  AWAKEN_STAR_BONUS,
+  AWAKEN_STAR_COSTS,
+  awakenStarCost,
+  awakenStarMultiplier,
+  SERIES_COMPLETION_BONUS,
+  SERIES_COMPLETION_SEALS,
+  completedSeriesMultiplier,
+  PRESTIGE_START_LEVELS_PER_PRESTIGE,
+  PRESTIGE_START_LEVELS_MAX,
+  prestigeStartingLevels,
   ORB_COOLDOWN_SECONDS,
   ORB_PRODUCTION_SECONDS,
   ORB_SEAL_CHANCE,
   ORB_JACKPOT_CHANCE,
   ORB_JACKPOT_SECONDS,
+  ORB_BUFF_CHANCE,
+  ORB_BUFFS,
+  rollOrbBuff,
+  activeOrbBuff,
   orbReward,
 };

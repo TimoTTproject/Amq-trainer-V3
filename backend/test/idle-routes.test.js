@@ -13,7 +13,7 @@ const {
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
   RARITY_PASSIVE_POOL, characterPassiveEntry, characterPassiveMagnitude, characterPassiveBonus, characterPassiveDescription,
-  heroAscensionRequiredLevel,
+  heroAscensionRequiredLevel, prestigeStartingLevels,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -24,7 +24,7 @@ function dbUser(over = {}) {
     idleProdLevel: 0, idleClickLevel: 0, idleCritLevel:0, idleCooldownLevel:0,idleMultiStrikeLevel:0,idleRunBlessings:'',idleRunBlessingRerolls:0,idleRunStartedAt:new Date(Date.now()-2*60*60*1000), essenceEarnedTotal: 0, idleRunEssenceEarned:0,
     idleRankLevel:1,idleRankKills:0,idleRankClicks:0,idleRankUpgrades:0,idleRankBosses:0,idleRankStartedAt:new Date(),
     idleStage:1,idleRunBestStage:1,idleBestStage:1,idleEnemyHp:enemyMaxHp(1),idleWaveKills:0,idleMilestoneClaimed: 0, idleRecruitPity: 0, idleEssenceRecruitCount:0, idleOnboardingComplete: true, prestigeLevel: 0,
-    wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigePath:'balanced',idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null, ...over,
+    wisdomPoints: 0,idleSeals:2,tokens:100,idleBossProgress:0,idleBossStartedAt:null,idleBestBossMs:null,idleFormation:'balanced',idleLeaderCharacterId:null,idlePrestigeMilestone:0,idleBurstReadyAt:null,idleTeamReadyAt:null,idleBuffKey:null,idleBuffUntil:null,idleCompletedSeries:0, ...over,
   };
 }
 
@@ -145,8 +145,8 @@ test('DPS héros : la somme réelle inclut équipement et multiplicateurs d équ
     ]},
     {slotIndex:1,characterId:2,level:20,ascension:0,awakened:false,character:{id:2,name:'Emiya',rarity:'rare',series:'Fate'},items:[]},
   ];
-  const extras={achievementsCompleted:3,autoClickDps:17,runBlessings:'berserker'};
-  const result=computeRateBreakdown(slots,5,12,.04,'warrior','none',1,true,5,'balanced','army',1,extras);
+  const extras={achievementsCompleted:3,autoClickDps:17,runBlessings:'berserker',completedSeries:2,buffProd:2};
+  const result=computeRateBreakdown(slots,5,12,.04,'warrior','none',1,true,5,'balanced',1,extras);
   assert.equal(result.heroes.length,2);
   assert.ok(result.heroes[0].personalMultiplier>result.heroes[1].personalMultiplier);
   assert.ok(result.heroes.every((hero)=>hero.rate===hero.personalRate*hero.teamMultiplier));
@@ -1349,8 +1349,11 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(recruitsReset.data.idleAscension, 0);
   assert.equal(userUpdate.essence, 0);
   assert.equal(userUpdate.idleSlotsUnlocked, START_SLOTS);
-  assert.equal(userUpdate.idleProdLevel, 0);
-  assert.equal(userUpdate.idleClickLevel, 0);
+  // Mémoire du Maître (fast-start) : la nouvelle run (Prestige 2 ici) démarre
+  // avec 2 niveaux gratuits de Discipline/Concentration par Prestige.
+  assert.equal(userUpdate.idleProdLevel, prestigeStartingLevels(2));
+  assert.equal(userUpdate.idleClickLevel, prestigeStartingLevels(2));
+  assert.equal(userUpdate.idleProdLevel, 4);
   assert.equal(userUpdate.idleCritLevel, 0);
   assert.equal(userUpdate.idleCooldownLevel, 0);
   assert.equal(userUpdate.idleRunBlessings, '');

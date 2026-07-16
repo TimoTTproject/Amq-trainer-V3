@@ -260,6 +260,36 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 
+test('étoiles d’Éveil : coût croissant en Sceaux, bonus plafonné à 5 étoiles',()=>{
+  const {AWAKEN_STAR_MAX,awakenStarCost,awakenStarMultiplier}=require('../src/idle/idle');
+  assert.equal(AWAKEN_STAR_MAX,5);
+  assert.ok(awakenStarCost(1)>awakenStarCost(0));
+  assert.ok(awakenStarCost(4)>awakenStarCost(3));
+  assert.equal(awakenStarMultiplier(0),1);
+  assert.ok(Math.abs(awakenStarMultiplier(5)-1.4)<1e-9);
+  assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(5)); // jamais au-delà du cap
+});
+
+test('complétion de licence et Mémoire du Maître : bonus permanents bornés',()=>{
+  const {completedSeriesMultiplier,prestigeStartingLevels,PRESTIGE_START_LEVELS_MAX}=require('../src/idle/idle');
+  assert.equal(completedSeriesMultiplier(0),1);
+  assert.ok(Math.abs(completedSeriesMultiplier(10)-1.2)<1e-9);
+  assert.equal(prestigeStartingLevels(0),0);
+  assert.equal(prestigeStartingLevels(1),2);
+  assert.equal(prestigeStartingLevels(100),PRESTIGE_START_LEVELS_MAX); // plafonné
+});
+
+test('buffs d’orbe : actifs uniquement avant expiration, un seul à la fois',()=>{
+  const {ORB_BUFFS,activeOrbBuff}=require('../src/idle/idle');
+  assert.ok(ORB_BUFFS.frenzy.prod>1&&ORB_BUFFS.precision.click>1);
+  const now=new Date();
+  assert.equal(activeOrbBuff({idleBuffKey:null,idleBuffUntil:null},now),null);
+  assert.equal(activeOrbBuff({idleBuffKey:'frenzy',idleBuffUntil:new Date(now.getTime()-1000)},now),null); // expiré
+  assert.equal(activeOrbBuff({idleBuffKey:'inconnu',idleBuffUntil:new Date(now.getTime()+9000)},now),null); // clé invalide
+  const active=activeOrbBuff({idleBuffKey:'frenzy',idleBuffUntil:new Date(now.getTime()+9000)},now);
+  assert.equal(active.prod,2);
+});
+
 test('raretés : un personnage favori reste viable face à un Mythique', () => {
   for (const level of [1, 10, 50, 100, 500]) {
     const rare=slotRate('rare',level);
