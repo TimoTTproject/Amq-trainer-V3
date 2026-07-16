@@ -1301,7 +1301,7 @@ async function buildState(userId) {
         awakenStarMax: AWAKEN_STAR_MAX,
         awakenStarBonus: AWAKEN_STAR_BONUS,
         awakenStarMultiplier: awakenStarMultiplier(row.awakenStars),
-        awakenStarCost: (row.awakenStars || 0) < AWAKEN_STAR_MAX ? awakenStarCost(row.awakenStars) : null,
+        awakenStarCost: (row.awakenStars || 0) < AWAKEN_STAR_MAX ? awakenStarCost(row.character.rarity, row.awakenStars, progressionStage) : null,
       };
     }
     slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
@@ -2053,24 +2053,27 @@ router.post('/slot-ascend', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
-// Étoile d'Éveil : investissement PERMANENT par héros, payé en Sceaux (le
-// deuxième usage des Sceaux après l'invocation). +8% de production
-// personnelle par étoile, conservé au Prestige comme le roster — l'éveil
-// progressif d'un favori, façon Summoners War.
+// Étoile d'Éveil : investissement PERMANENT par héros, payé en ESSENCE (pas
+// en Sceaux — retour unanime des testeurs : les Sceaux sont la seule monnaie
+// d'invocation, les faire aussi payer l'éveil forçait à choisir entre
+// recruter et éveiller). +8% de production personnelle par étoile, conservé
+// au Prestige comme le roster — l'éveil progressif d'un favori, façon
+// Summoners War, payé dans le même budget que les niveaux/l'Ascension.
 router.post('/hero-awaken', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-awaken' }), async (req, res) => {
   const characterId = Number(req.body?.characterId);
   if (!Number.isInteger(characterId)) return res.status(400).json({ error: 'Personnage invalide' });
   let stars = 0, cost = 0;
   try {
     await withSettle(req.user.id, async (tx, user) => {
-      const recruit = await tx.dojoRecruit.findUnique({ where: { userId_characterId: { userId: user.id, characterId } } });
+      const recruit = await tx.dojoRecruit.findUnique({ where: { userId_characterId: { userId: user.id, characterId } }, include: { character: { select: { rarity: true } } } });
       if (!recruit) throw new IdleError(400, "Tu n'as pas recruté ce personnage");
       if ((recruit.awakenStars || 0) >= AWAKEN_STAR_MAX) throw new IdleError(400, 'Éveil maximal atteint');
-      cost = awakenStarCost(recruit.awakenStars);
+      const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
+      cost = awakenStarCost(recruit.character.rarity, recruit.awakenStars, bestStage);
       // Garde optimiste sur le solde ET le nombre d'étoiles : deux requêtes
       // simultanées ne peuvent ni payer deux fois ni sauter une étoile.
-      const debit = await tx.user.updateMany({ where: { id: user.id, idleSeals: { gte: cost } }, data: { idleSeals: { decrement: cost } } });
-      if (!debit.count) throw new IdleError(400, 'Sceaux insuffisants');
+      const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost } } });
+      if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
       const upgraded = await tx.dojoRecruit.updateMany({
         where: { userId: user.id, characterId, awakenStars: recruit.awakenStars || 0 },
         data: { awakenStars: { increment: 1 } },

@@ -262,11 +262,16 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 
-test('étoiles d’Éveil : coût croissant en Sceaux, bonus plafonné à 5 étoiles',()=>{
+test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus plafonné à 5 étoiles',()=>{
   const {AWAKEN_STAR_MAX,awakenStarCost,awakenStarMultiplier}=require('../src/idle/idle');
   assert.equal(AWAKEN_STAR_MAX,5);
-  assert.ok(awakenStarCost(1)>awakenStarCost(0));
-  assert.ok(awakenStarCost(4)>awakenStarCost(3));
+  assert.ok(awakenStarCost('rare',1,50)>awakenStarCost('rare',0,50));
+  assert.ok(awakenStarCost('rare',4,50)>awakenStarCost('rare',3,50));
+  // Indexé sur la progression (comme le recyclage/l'amélioration des runes) :
+  // plus le meilleur stage atteint est élevé, plus le coût suit.
+  assert.ok(awakenStarCost('rare',0,200)>awakenStarCost('rare',0,50));
+  // Une rareté plus élevée coûte plus cher à éveiller, à stage égal.
+  assert.ok(awakenStarCost('mythic',0,50)>awakenStarCost('rare',0,50));
   assert.equal(awakenStarMultiplier(0),1);
   assert.ok(Math.abs(awakenStarMultiplier(5)-1.4)<1e-9);
   assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(5)); // jamais au-delà du cap

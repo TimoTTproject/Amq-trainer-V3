@@ -1062,6 +1062,40 @@ test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé r
   assert.equal(upsertArgs.update.level, 1);
 });
 
+test('hero-awaken : débite de l’ESSENCE (pas des Sceaux) et incrémente les étoiles', async () => {
+  const user = dbUser({ essence: 1e9, idleSeals: 0, idleBestStage: 50, idleStage: 50 });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.dojoRecruit.findUnique = async () => ({ userId: 'u1', characterId: 7, awakenStars: 0, character: { rarity: 'rare' } });
+  let debitArgs = null;
+  prisma.user.updateMany = async (args) => { debitArgs = args; return { count: 1 }; };
+  let upgradeArgs = null;
+  prisma.dojoRecruit.updateMany = async (args) => { upgradeArgs = args; return { count: 1 }; };
+
+  const res = await app.request('/api/idle/hero-awaken', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { characterId: 7 },
+  });
+  assert.equal(res.status, 200);
+  assert.ok('essence' in debitArgs.where, 'la garde optimiste porte sur le solde en essence');
+  assert.equal('idleSeals' in debitArgs.where, false, 'les Sceaux ne doivent plus être touchés');
+  assert.ok(debitArgs.data.essence.decrement > 0);
+  assert.equal(upgradeArgs.data.awakenStars.increment, 1);
+  assert.equal(res.json.awaken.stars, 1);
+});
+
+test('hero-awaken : refuse si l’essence est insuffisante', async () => {
+  const user = dbUser({ essence: 0, idleBestStage: 50, idleStage: 50 });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async () => user;
+  prisma.dojoRecruit.findUnique = async () => ({ userId: 'u1', characterId: 7, awakenStars: 0, character: { rarity: 'rare' } });
+  prisma.user.updateMany = async () => ({ count: 0 });
+  const res = await app.request('/api/idle/hero-awaken', {
+    method: 'POST', cookie: app.authCookie('u1'), body: { characterId: 7 },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /Essence insuffisante/);
+});
+
 test('assign : réassigner un personnage restaure son niveau propre', async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;

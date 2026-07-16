@@ -874,18 +874,26 @@ function achievementProdMultiplier(completedCount) {
 const AWAKENED_CHANCE = 0.025;
 const AWAKENED_BONUS = 1.10;
 
-// ── Étoiles d'Éveil : investissement PERMANENT par héros, payé en Sceaux —
-// le deuxième usage des Sceaux après l'invocation, et le pendant « éveil
-// progressif » de Summoners War / AFK Arena. Chaque étoile ajoute +8% de
-// production personnelle ; conservées au Prestige comme le roster. Le coût
-// croît par étoile — éveiller un favori au maximum est un objectif de longue
-// haleine, pas un achat réflexe.
+// ── Étoiles d'Éveil : investissement PERMANENT par héros, payé en Essence —
+// le pendant « éveil progressif » de Summoners War / AFK Arena. Chaque
+// étoile ajoute +8% de production personnelle ; conservées au Prestige comme
+// le roster. Payé en Sceaux au départ, comme l'invocation : retour unanime
+// des testeurs, les Sceaux sont trop précieux (seule monnaie d'invocation)
+// pour être aussi le prix de l'éveil — payer en Essence, indexée sur la
+// progression comme le recyclage/l'amélioration des runes, remet l'éveil
+// dans le même budget que le reste des investissements de héros (niveaux,
+// Ascension), sans jamais entrer en concurrence avec le recrutement.
 const AWAKEN_STAR_MAX = 5;
 const AWAKEN_STAR_BONUS = 0.08;
-const AWAKEN_STAR_COSTS = [3, 6, 12, 24, 48]; // Sceaux pour l'étoile N+1
-function awakenStarCost(stars) {
+// Coût = N fois la récompense d'un ennemi au meilleur stage atteint, pondéré
+// par rareté (mêmes facteurs relatifs que SALVAGE_STAGE_FACTOR) et croissant
+// par étoile — même famille de formule que itemSalvageValue/runeEnhanceCost.
+const AWAKEN_STAR_STAGE_FACTOR = { rare: 40, epic: 90, legendary: 180, mythic: 350 };
+const AWAKEN_STAR_GROWTH = [1, 2.2, 4.8, 10.5, 23]; // multiplicateur pour l'étoile N+1
+function awakenStarCost(rarity, stars, bestStage = 1) {
   const s = Math.max(0, Math.min(AWAKEN_STAR_MAX - 1, Math.floor(stars || 0)));
-  return AWAKEN_STAR_COSTS[s];
+  const factor = AWAKEN_STAR_STAGE_FACTOR[rarity] || AWAKEN_STAR_STAGE_FACTOR.rare;
+  return Math.round(finiteIdleNumber(enemyReward(Math.max(1, bestStage)) * factor * AWAKEN_STAR_GROWTH[s], 1));
 }
 function awakenStarMultiplier(stars) {
   return 1 + Math.max(0, Math.min(AWAKEN_STAR_MAX, Math.floor(stars || 0))) * AWAKEN_STAR_BONUS;
@@ -1089,7 +1097,8 @@ module.exports = {
   AWAKENED_BONUS,
   AWAKEN_STAR_MAX,
   AWAKEN_STAR_BONUS,
-  AWAKEN_STAR_COSTS,
+  AWAKEN_STAR_STAGE_FACTOR,
+  AWAKEN_STAR_GROWTH,
   awakenStarCost,
   awakenStarMultiplier,
   SERIES_COMPLETION_BONUS,
