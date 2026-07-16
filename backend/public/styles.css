@@ -7626,6 +7626,60 @@ body.idle-fullscreen .feedback-fab { display: none; }
   #view-idle .idle-item-status{grid-column:2;justify-self:start}
   #view-idle .idle-item-card-actions{grid-column:3;grid-row:1/3}
 }
+
+/* Synergie : résultat, condition et prochain palier sont séparés pour éviter
+   qu'un simple “+10 %” soit confondu avec le bonus de réserve ou la formation. */
+#view-idle .idle-synergy-bar{
+  display:block;margin:6px 0 14px;padding:0;border:1px solid color-mix(in srgb,#8a6cff 48%,var(--border));
+  border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,#8a6cff 10%,var(--bg-2)),var(--bg-2));overflow:hidden;
+}
+#view-idle .idle-synergy-bar>header{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--border)}
+#view-idle .idle-synergy-bar>header>i{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;background:#8a6cff1f;color:#b997ff}
+#view-idle .idle-synergy-bar>header>span{display:flex;min-width:0;flex-direction:column}
+#view-idle .idle-synergy-bar>header small{color:#b997ff;font-size:7px;font-weight:900;letter-spacing:.1em}
+#view-idle .idle-synergy-bar>header b{font-size:12px}
+#view-idle .idle-synergy-bar>header>strong{color:var(--text-2);font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-size:20px}
+#view-idle .idle-synergy-bar.active>header>strong{color:#c4b5fd}
+#view-idle .idle-synergy-status{display:grid;grid-template-columns:1fr 1.35fr 1fr;background:var(--border);gap:1px}
+#view-idle .idle-synergy-status>span{display:flex;min-width:0;flex-direction:column;gap:2px;padding:9px 11px;background:var(--bg-2)}
+#view-idle .idle-synergy-status small{color:var(--text-2);font-size:7px;font-weight:900}
+#view-idle .idle-synergy-status b{font-size:9px;line-height:1.3}
+#view-idle .idle-synergy-status em{color:var(--text-2);font-size:7px;font-style:normal}
+#view-idle .idle-synergy-rules{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:9px 10px}
+#view-idle .idle-synergy-rules>span{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--border);border-radius:7px;color:var(--text-2)}
+#view-idle .idle-synergy-rules>span>i{font-size:8px}
+#view-idle .idle-synergy-rules>span>span{display:flex;min-width:0;flex-direction:column}
+#view-idle .idle-synergy-rules small{font-size:7px;font-weight:900}
+#view-idle .idle-synergy-rules b{font-size:7px;font-weight:600}
+#view-idle .idle-synergy-rules strong{font-size:9px}
+#view-idle .idle-synergy-rules>span.met{border-color:#8a6cff66;background:#8a6cff10;color:#c4b5fd}
+
+/* Bonus de set : distingue explicitement les objets possédés des objets
+   réellement équipés sur un même héros, seule condition qui active le bonus. */
+#view-idle .idle-loadout-set-status{display:grid;gap:1px;padding:8px 10px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg-3) 45%,var(--bg-2))}
+#view-idle .idle-loadout-set-status>span{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:var(--bg-2);color:var(--text-2)}
+#view-idle .idle-loadout-set-status>span>i{font-size:9px}
+#view-idle .idle-loadout-set-status>span>span{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px}
+#view-idle .idle-loadout-set-status small{grid-column:1/-1;color:var(--text-2);font-size:6px;font-weight:900}
+#view-idle .idle-loadout-set-status b{font-size:8px}
+#view-idle .idle-loadout-set-status em{color:#fbbf24;font-size:7px;font-style:normal;font-weight:900;text-align:right}
+#view-idle .idle-loadout-set-status>span.active{background:#22c55e0c;color:#86efac}
+#view-idle .idle-loadout-set-status>span.active em{color:#86efac}
+#view-idle .idle-item-set>span>strong,#view-idle .idle-item-set>span>em{display:block}
+#view-idle .idle-item-set>span>strong{width:max-content;margin-top:5px;padding:3px 6px;border-radius:4px;font-size:7px}
+#view-idle .idle-item-set>span>em{margin-top:3px;color:var(--text-2);font-size:7px;font-style:normal}
+#view-idle .idle-item-set.active{border-color:#22c55e66;background:#22c55e0b}
+#view-idle .idle-item-set.active>i,#view-idle .idle-item-set.active>span>strong{color:#86efac}
+#view-idle .idle-item-set.active>span>strong{background:#22c55e18}
+#view-idle .idle-item-set.incomplete>span>strong{background:#f59e0b14;color:#fbbf24}
+#view-idle .idle-item-families>span{align-items:flex-start;flex-direction:column;gap:2px}
+#view-idle .idle-item-families>span>em{color:var(--text-2);font-size:7px;font-style:normal}
+#view-idle .idle-item-families>span>small{max-width:230px;white-space:normal;line-height:1.3}
+
+@media(max-width:760px){
+  #view-idle .idle-synergy-status,#view-idle .idle-synergy-rules{grid-template-columns:1fr}
+  #view-idle .idle-synergy-bar>header{grid-template-columns:32px minmax(0,1fr) auto}
+}
 .idle-relic-choice-options>button>b{font-size:11.5px}
 .idle-relic-choice-options>button>p{margin:0;color:var(--text-2);font-size:9px;line-height:1.4}
 @media(max-width:700px){.idle-relic-choice-options{grid-template-columns:1fr}}

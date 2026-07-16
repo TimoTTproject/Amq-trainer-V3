@@ -55,7 +55,7 @@ test('les protections HTTP et les contraintes de mot de passe sont actives', asy
   await expect(page.locator('#register-password')).toHaveAttribute('maxlength', '128');
 });
 
-test('Invocation reste intégrée à la navigation et l’atelier de runes expose une cible unique', async ({ page }) => {
+test('Invocation reste intégrée à la navigation et l’atelier d’objets expose une cible unique', async ({ page }) => {
   await page.goto('/');
 
   const summon = page.locator('#idle-nav-summon');
@@ -67,4 +67,5 @@ test('Invocation reste intégrée à la navigation et l’atelier de runes expos
   await expect(page.locator('#idle-equipment-target')).toHaveCount(1);
   await expect(page.locator('.idle-rune-steps > span')).toHaveCount(3);
   await expect(page.locator('#idle-inventory-grid')).toHaveCSS('display', 'grid');
+  await expect(page.locator('#idle-panel-equipment')).not.toContainText(/rune/i);
 });

@@ -320,12 +320,12 @@ function bossChestRewards(tier) {
 
 const IDLE_ITEM_CAPACITY=120;
 const ITEM_KINDS={
-  rune1:{label:'Rune 1',icon:'fa-diamond',effectKey:'assault',effectLabel:'Stat principale'},
-  rune2:{label:'Rune 2',icon:'fa-diamond',effectKey:'precision',effectLabel:'Stat principale'},
-  rune3:{label:'Rune 3',icon:'fa-diamond',effectKey:'resonance',effectLabel:'Stat principale'},
-  rune4:{label:'Rune 4',icon:'fa-diamond',effectKey:'overdrive',effectLabel:'Stat principale'},
-  rune5:{label:'Rune 5',icon:'fa-diamond',effectKey:'focus',effectLabel:'Stat principale'},
-  rune6:{label:'Rune 6',icon:'fa-diamond',effectKey:'aura',effectLabel:'Stat principale'},
+  rune1:{label:'Objet 1',icon:'fa-diamond',effectKey:'assault',effectLabel:'Stat principale'},
+  rune2:{label:'Objet 2',icon:'fa-diamond',effectKey:'precision',effectLabel:'Stat principale'},
+  rune3:{label:'Objet 3',icon:'fa-diamond',effectKey:'resonance',effectLabel:'Stat principale'},
+  rune4:{label:'Objet 4',icon:'fa-diamond',effectKey:'overdrive',effectLabel:'Stat principale'},
+  rune5:{label:'Objet 5',icon:'fa-diamond',effectKey:'focus',effectLabel:'Stat principale'},
+  rune6:{label:'Objet 6',icon:'fa-diamond',effectKey:'aura',effectLabel:'Stat principale'},
 };
 const RUNE_KINDS=Object.keys(ITEM_KINDS);
 const ITEM_EFFECTS={
@@ -843,10 +843,16 @@ function synergyForSlots(slots) {
   const counts = new Map();
   for (const s of active) if (s.character.series) counts.set(s.character.series, (counts.get(s.character.series) || 0) + 1);
   const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  if (best?.[1] >= 3) return { key: 'license', name: `Alliance ${best[0]}`, bonus: .25, multiplier: 1.25 };
-  if (best?.[1] === 2) return { key: 'license', name: `Duo ${best[0]}`, bonus: .10, multiplier: 1.10 };
-  if (active.length >= 3) return { key: 'crossover', name: 'Crossover', bonus: .05, multiplier: 1.05 };
-  return { key: 'none', name: 'Aucune synergie', bonus: 0, multiplier: 1 };
+  const sameSeries=best?.[1]||0;const bestSeries=best?.[0]||null;
+  const shared={activeCount:active.length,sameSeries,bestSeries,rules:[
+    {key:'duo',label:'Duo de licence',condition:'2 héros de la même licence',bonus:.10,met:sameSeries>=2},
+    {key:'alliance',label:'Alliance de licence',condition:'3 héros de la même licence',bonus:.25,met:sameSeries>=3},
+    {key:'crossover',label:'Crossover',condition:'3 héros de licences différentes',bonus:.05,met:active.length>=3&&sameSeries<2},
+  ]};
+  if (sameSeries >= 3) return { ...shared,key:'license',name:`Alliance ${bestSeries}`,bonus:.25,multiplier:1.25,condition:`${sameSeries}/3 héros ${bestSeries}`,next:'Bonus de synergie maximum atteint' };
+  if (sameSeries === 2) return { ...shared,key:'license',name:`Duo ${bestSeries}`,bonus:.10,multiplier:1.10,condition:`2/2 héros ${bestSeries}`,next:`Ajoute un 3e héros ${bestSeries} pour passer à +25%` };
+  if (active.length >= 3) return { ...shared,key:'crossover',name:'Crossover',bonus:.05,multiplier:1.05,condition:`${active.length} héros de licences différentes`,next:'Aligne 2 héros de la même licence pour passer à +10%' };
+  return { ...shared,key:'none',name:'Aucune synergie',bonus:0,multiplier:1,condition:`${active.length}/3 héros actifs`,next:'2 héros de la même licence = +10% · 3 licences différentes = +5%' };
 }
 
 // Décomposition pédagogique de la production d'équipe. Cette structure est
@@ -1210,7 +1216,7 @@ async function buildState(userId) {
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
     {key:'train',title:'Entraîne un héros',description:'Monte un membre de l’équipe au niveau 10 pour activer son passif.',done:activeSlots.some((s)=>(s.level||1)>=10),tab:'team'},
     {key:'boss',title:'Vaincs un boss',description:'Atteins la vague 10 puis ouvre son coffre.',done:stage>10,tab:'home'},
-    {key:'gear',title:'Équipe une rune',description:'Les coffres donnent des runes à placer sur les six emplacements.',done:slots.some((s)=>(s.items||s.equipments||[]).length>0),tab:'equipment'},
+    {key:'gear',title:'Équipe un objet',description:'Les coffres donnent des objets à placer sur les six emplacements.',done:slots.some((s)=>(s.items||s.equipments||[]).length>0),tab:'equipment'},
     {key:'prestige',title:'Prépare ton premier Prestige',description:'Atteins le niveau requis pour obtenir de la Sagesse permanente.',done:user.prestigeLevel>0,tab:'upgrades'},
   ];
   // Équipé sur un personnage : reste vrai même si ce personnage est
@@ -1233,7 +1239,7 @@ async function buildState(userId) {
     summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.flatMap((item)=>item.affixesDetailed.map((a)=>a.key))).size,equipped:preparedInventoryItems.filter((item)=>item.equipped).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
     families:inventoryFamilies,
     sets:Object.entries(RUNE_SETS).map(([key,set])=>({key,...set})),
-    setBonus:{label:'Équipe 2 ou 4 runes du même set pour activer son bonus.'},
+    setBonus:{label:'Équipe 2 ou 4 objets du même set sur un héros pour activer son bonus.'},
   };
   const runBestStage=Math.max(user.idleRunBestStage||1,stage);const blessingSlots=Math.min(12,Math.floor((runBestStage-1)/20));const blessingPending=runBlessingKeys.length<blessingSlots;
   // `buildState` charge volontairement une projection sans `id`. La graine
@@ -1904,7 +1910,7 @@ router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max:
       if(!item)throw new IdleError(404,'Objet introuvable');
       if(!item.equippedCharacterId)throw new IdleError(400,'Cet objet doit être équipé pour être amélioré');
       let bonus=item.bonus,total=0,level=Math.max(0,item.enhancementLevel||0),subStats=item.subStats||{};
-      if(level>=15)throw new IdleError(400,'Cette rune est déjà au niveau +15');
+      if(level>=15)throw new IdleError(400,'Cet objet est déjà au niveau +15');
       const wanted=amount==='max'?15-level:Math.min(amount,15-level);
       for(let i=0;i<wanted;i++){const current={...item,enhancementLevel:level};const next=runeEnhanceCost(current);if(total+next>user.essence)break;total+=next;level++;bonus=Number((bonus+.006+(ITEM_RARITY_ORDER[item.rarity]||1)*.001).toFixed(3));subStats=enhancedRuneSubStats({...item,subStats},level);bought++;}
       if(!bought)throw new IdleError(400,'Essence insuffisante');
@@ -2530,6 +2536,7 @@ module.exports = {
   equipmentItemScore,
   buildAutoEquipmentPlan,
   progressionBossesCrossed,
+  synergyForSlots,
   teamMetaBreakdown,
   computeRateBreakdown,
   characterLeaderSkill,

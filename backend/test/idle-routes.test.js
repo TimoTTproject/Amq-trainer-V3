@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetMultiplier,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -39,6 +39,23 @@ test('Ultime : reste significatif face au Combo à tous les niveaux de progressi
   assert.equal(ULTIMATE_TEAM_SECONDS,15);
   assert.equal(ultimateBaseDamage(10,0),750);
   assert.equal(ultimateBaseDamage(10,100),1500);
+});
+
+test('synergie : expose le bonus actif, sa condition et le prochain palier',()=>{
+  const slot=(id,series)=>({characterId:id,character:{series}});
+  const none=synergyForSlots([slot(1,'Naruto')]);
+  assert.equal(none.multiplier,1);
+  assert.match(none.next,/2 héros de la même licence/);
+  const duo=synergyForSlots([slot(1,'Naruto'),slot(2,'Naruto')]);
+  assert.equal(duo.bonus,.10);
+  assert.match(duo.condition,/2\/2/);
+  assert.match(duo.next,/3e héros Naruto/);
+  const alliance=synergyForSlots([slot(1,'Naruto'),slot(2,'Naruto'),slot(3,'Naruto')]);
+  assert.equal(alliance.bonus,.25);
+  assert.match(alliance.next,/maximum/);
+  const crossover=synergyForSlots([slot(1,'Naruto'),slot(2,'Bleach'),slot(3,'One Piece')]);
+  assert.equal(crossover.bonus,.05);
+  assert.equal(crossover.rules.find((rule)=>rule.key==='crossover').met,true);
 });
 
 test.beforeEach(() => {
