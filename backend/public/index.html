@@ -1724,6 +1724,7 @@
               <span><i class="fas fa-users"></i> Équipe <b id="idle-combat-team">0/s</b></span>
             </div>
             <div class="idle-combat-quests" id="idle-combat-quests" aria-label="Quêtes actives"></div>
+            <button type="button" class="idle-run-shortcut" id="idle-run-shortcut"><i class="fas fa-dice-d20"></i><span><small>AVENTURE ROGUELIKE</small><b id="idle-run-shortcut-label">Prochain choix au stage 21</b></span><i class="fas fa-arrow-right"></i></button>
             <!-- Dock d'achats rapides : monter ses héros SANS quitter le combat
                  (la boucle cœur d'un Clicker Heroes tient sur un seul écran).
                  Placé APRÈS l'objectif et les quêtes — retour utilisateur :
@@ -1751,13 +1752,6 @@
             <p class="idle-action-help" id="idle-collect-help"><i class="fas fa-coins"></i> <b>Encaisser</b> transfère le butin des ennemis vaincus automatiquement depuis la dernière collecte.</p>
           </div>
 
-          <section class="profile-section idle-run-journey" aria-labelledby="idle-run-title">
-            <header><span><small>AVENTURE ROGUELIKE</small><h3 id="idle-run-title"><i class="fas fa-dice-d20"></i> Expédition actuelle</h3></span><strong id="idle-run-act">ACTE 1</strong></header>
-            <div class="idle-run-rpg-stats"><span><small>ARCHÉTYPE</small><b id="idle-run-archetype">Escouade novice</b></span><span><small>PUISSANCE</small><b id="idle-run-power">0</b></span><span><small>PROCHAIN CHOIX</small><b id="idle-run-next">Stage 21</b></span></div>
-            <div class="idle-run-blessings" id="idle-run-blessings"></div>
-            <div class="idle-run-choice hidden" id="idle-run-choice"><header><i class="fas fa-wand-sparkles"></i><span><small>NOUVEAU PALIER ATTEINT</small><b>Choisis une bénédiction pour cette run</b><em>Le choix est définitif jusqu’au prochain Prestige.</em></span><button type="button" class="btn-secondary" id="idle-run-reroll" title="Proposer 3 autres pouvoirs contre de l'Essence"><i class="fas fa-dice"></i> Reroll · <span id="idle-run-reroll-cost">–</span></button></header><div id="idle-run-choices"></div></div>
-          </section>
-
           <section class="profile-section idle-community-chat" id="idle-community-chat" aria-labelledby="idle-chat-title">
             <header><span><small>CHAT MONDE</small><h3 id="idle-chat-title"><i class="fas fa-comments"></i> Chat des joueurs</h3></span><strong id="idle-chat-online">Connexion…</strong><button type="button" id="idle-chat-close" aria-label="Fermer le chat" title="Fermer"><i class="fas fa-xmark"></i></button></header>
             <p>Canal global · drops rares et Prestiges annoncés automatiquement.</p>
@@ -1777,6 +1771,13 @@
             <div class="idle-rank-quests" id="idle-rank-quests"></div>
             <div class="idle-rank-footer"><span id="idle-rank-reward"><i class="fas fa-ticket"></i> Récompense : +1 Sceau</span><button class="btn-primary" id="idle-rank-advance" disabled><i class="fas fa-lock"></i> Objectifs incomplets</button></div>
           </div>
+
+          <section class="profile-section idle-run-journey" id="idle-run-journey" aria-labelledby="idle-run-title">
+            <header><span><small>AVENTURE ROGUELIKE</small><h3 id="idle-run-title"><i class="fas fa-dice-d20"></i> Expédition actuelle</h3><em>Les pouvoirs temporaires de ta run et ton prochain choix stratégique.</em></span><strong id="idle-run-act">ACTE 1</strong></header>
+            <div class="idle-run-rpg-stats"><span><small>ARCHÉTYPE</small><b id="idle-run-archetype">Escouade novice</b></span><span><small>PUISSANCE</small><b id="idle-run-power">0</b></span><span><small>PROCHAIN CHOIX</small><b id="idle-run-next">Stage 21</b></span></div>
+            <div class="idle-run-blessings" id="idle-run-blessings"></div>
+            <div class="idle-run-choice hidden" id="idle-run-choice"><header><i class="fas fa-wand-sparkles"></i><span><small>NOUVEAU PALIER ATTEINT</small><b>Choisis une bénédiction pour cette run</b><em>Le choix est définitif jusqu’au prochain Prestige.</em></span><button type="button" class="btn-secondary" id="idle-run-reroll" title="Proposer 3 autres pouvoirs contre de l'Essence"><i class="fas fa-dice"></i> Reroll · <span id="idle-run-reroll-cost">–</span></button></header><div id="idle-run-choices"></div></div>
+          </section>
 
           <!-- Panneau Progression : frise des paliers de décor (équivalent
                simplifié d'une Town Map — notre monde est une séquence
@@ -1919,6 +1920,7 @@
     <div id="idle-player-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-player-title"><div class="modal-card idle-player-card"><button class="modal-close" id="idle-player-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-player-content"><p class="hint">Chargement…</p></div></div></div>
     <div id="idle-settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-settings-title"><div class="modal-card idle-settings-card"><button class="modal-close" id="idle-settings-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-settings-title"><i class="fas fa-sliders"></i> Confort de jeu</h3><label class="idle-setting-row" for="idle-volume"><span><b>Volume de l’Idle</b><small>Impacts, victoires et récompenses</small></span><input id="idle-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label class="idle-setting-toggle" for="idle-effects-reduced"><span><b>Animations et effets visuels</b><small>Affiche les impacts, mouvements, particules et célébrations</small></span><input id="idle-effects-reduced" type="checkbox" checked></label><label class="idle-setting-toggle" for="idle-large-text"><span><b>Texte agrandi</b><small>Augmente la taille des informations et des boutons</small></span><input id="idle-large-text" type="checkbox"></label><label class="idle-setting-toggle" for="idle-high-contrast"><span><b>Contraste renforcé</b><small>Accentue les bordures, textes secondaires et focus clavier</small></span><input id="idle-high-contrast" type="checkbox"></label><label class="idle-setting-toggle" for="idle-data-saver"><span><b>Économie de données</b><small>Réduit les effets décoratifs et espace les synchronisations</small></span><input id="idle-data-saver" type="checkbox"></label></div></div>
     <div id="idle-character-sheet" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-character-sheet-title"><div class="modal-card wide idle-character-sheet-card"><button class="modal-close" id="idle-character-sheet-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-character-sheet-body"></div></div></div>
+    <div id="idle-equipment-picker" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-equipment-picker-title"><div class="modal-card wide idle-equipment-picker-card"><button class="modal-close" id="idle-equipment-picker-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><div id="idle-equipment-picker-body"></div></div></div>
     <div id="idle-collection-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="idle-collection-title"><div class="modal-card wide idle-collection-card"><button class="modal-close" id="idle-collection-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button><h3 id="idle-collection-title"><i class="fas fa-book-open"></i> Collection</h3><p class="hint" id="idle-collection-hint"></p><div class="idle-collection-grid" id="idle-collection-grid"></div></div></div>
     <!-- Choix de relique de Faille : offert tous les 5 paliers franchis dans la
          semaine, jamais bloquant (le joueur peut fermer et revenir plus tard

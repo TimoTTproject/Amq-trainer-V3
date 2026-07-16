@@ -160,3 +160,32 @@ test('laboratoire tactique Idle : compare sans mutation puis laisse appliquer un
   assert.match(styles, /\.idle-lab-summary/);
   assert.match(styles, /\.idle-lab-card\.best/);
 });
+
+test('équipement Idle : les emplacements ouvrent un sélecteur rapide qui priorise les sets', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.match(html, /id="idle-equipment-picker"[^>]*role="dialog"/);
+  assert.match(source, /function openIdleEquipmentPicker\(slotIndex,kind\)/);
+  assert.match(source, /data-loadout-empty=/);
+  assert.match(source, /data-picker-equip=/);
+  assert.match(source, /impact\.completes/);
+  assert.match(source, /ACTIVE UN BONUS DE SET/);
+  assert.match(source, /recommendedId/);
+  assert.match(styles, /\.idle-picker-item\.set-complete/);
+  assert.match(styles, /button\.idle-loadout-empty/);
+});
+
+test('aventure roguelike Idle : vit dans Progression et garde un raccourci contextuel depuis Combat', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const homeStart = html.indexOf('id="idle-panel-home"');
+  const progressionStart = html.indexOf('id="idle-panel-progression"');
+  const activitiesStart = html.indexOf('id="idle-panel-activities"');
+  const journey = html.indexOf('id="idle-run-journey"');
+  assert.ok(homeStart >= 0 && progressionStart > homeStart && journey > progressionStart && journey < activitiesStart);
+  assert.match(html.slice(homeStart, progressionStart), /id="idle-run-shortcut"/);
+  assert.doesNotMatch(html.slice(homeStart, progressionStart), /id="idle-run-journey"/);
+  assert.match(source, /idle-run-shortcut-label/);
+  assert.match(source, /idleShowPanel\('progression'\)/);
+});
