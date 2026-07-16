@@ -152,25 +152,38 @@ const SQUAD_SLOT_DEFS = [
 const AUTO_SKILLS_UNLOCK_LEVEL = 40;
 const BATTLE_SPEED_UNLOCKS = { 1: 1, 2: 30, 4: 60 };
 
-function unlockedSquadPresetCount(user = {}) {
+// Condition de déverrouillage PROPRE à ce slot (pas de dépendance à l'ordre
+// des autres slots).
+function isSquadSlotUnlocked(slot, user = {}) {
   const prestige = Math.max(0, Number(user.prestigeLevel) || 0);
   const rank = Math.max(1, Number(user.idleRankLevel) || 1);
   const bestStage = Math.max(1, Number(user.idleBestStage || user.idleRunBestStage || user.idleStage) || 1);
-  return SQUAD_SLOT_DEFS.filter((slot) => {
-    if (slot.unlock.type === 'start') return true;
-    if (slot.unlock.type === 'prestige') return prestige >= slot.unlock.value;
-    if (slot.unlock.type === 'rank') return rank >= slot.unlock.value;
-    if (slot.unlock.type === 'rift') return rank >= 20 || bestStage >= 120;
-    return false;
-  }).length;
+  if (slot.unlock.type === 'start') return true;
+  if (slot.unlock.type === 'prestige') return prestige >= slot.unlock.value;
+  if (slot.unlock.type === 'rank') return rank >= slot.unlock.value;
+  if (slot.unlock.type === 'rift') return rank >= 20 || bestStage >= 120;
+  return false;
+}
+
+function unlockedSquadPresetCount(user = {}) {
+  return SQUAD_SLOT_DEFS.filter((slot) => isSquadSlotUnlocked(slot, user)).length;
 }
 
 function squadPresetSlots(user = {}, presets = []) {
   const byName = new Map(presets.map((preset) => [preset.name, preset]));
-  const unlocked = unlockedSquadPresetCount(user);
+  // Chaque slot vérifie SA PROPRE condition, plutôt qu'un seuil `index <
+  // unlocked` fondé sur un simple COMPTE de slots débloqués : ce comptage
+  // supposait que les conditions étaient strictement croissantes dans l'ordre
+  // des index (Alpha < Boss < Farm < Faille < Libre), ce qui n'est pas le cas
+  // (Farm ne demande qu'un rang 25, atteignable bien avant le premier
+  // Prestige qui débloque Boss). Un joueur pouvait donc voir Boss affiché
+  // comme débloqué sans remplir sa condition, et Farm affiché comme verrouillé
+  // alors qu'il la remplissait déjà — sauvegarder/charger échouait ou
+  // réussissait sur le mauvais slot (retour joueur : « les slots d'équipe ne
+  // sont pas fonctionnels »).
   return SQUAD_SLOT_DEFS.map((slot) => {
     const preset = byName.get(slot.name) || null;
-    return { ...slot, unlocked: slot.index < unlocked, saved: !!preset, formation: preset?.formation || null, size: Array.isArray(preset?.slots) ? preset.slots.length : 0 };
+    return { ...slot, unlocked: isSquadSlotUnlocked(slot, user), saved: !!preset, formation: preset?.formation || null, size: Array.isArray(preset?.slots) ? preset.slots.length : 0 };
   });
 }
 
@@ -932,17 +945,50 @@ function synergyForSlots(slots) {
   const active = slots.filter((s) => s.characterId && s.character);
   const counts = new Map();
   for (const s of active) if (s.character.series) counts.set(s.character.series, (counts.get(s.character.series) || 0) + 1);
-  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  const sameSeries=best?.[1]||0;const bestSeries=best?.[0]||null;
-  const shared={activeCount:active.length,sameSeries,bestSeries,rules:[
-    {key:'duo',label:'Duo de licence',condition:'2 héros de la même licence',bonus:.10,met:sameSeries>=2},
-    {key:'alliance',label:'Alliance de licence',condition:'3 héros de la même licence',bonus:.25,met:sameSeries>=3},
-    {key:'crossover',label:'Crossover',condition:'3 héros de licences différentes',bonus:.05,met:active.length>=3&&sameSeries<2},
-  ]};
-  if (sameSeries >= 3) return { ...shared,key:'license',name:`Alliance ${bestSeries}`,bonus:.25,multiplier:1.25,condition:`${sameSeries}/3 héros ${bestSeries}`,next:'Bonus de synergie maximum atteint' };
-  if (sameSeries === 2) return { ...shared,key:'license',name:`Duo ${bestSeries}`,bonus:.10,multiplier:1.10,condition:`2/2 héros ${bestSeries}`,next:`Ajoute un 3e héros ${bestSeries} pour passer à +25%` };
-  if (active.length >= 3) return { ...shared,key:'crossover',name:'Crossover',bonus:.05,multiplier:1.05,condition:`${active.length} héros de licences différentes`,next:'Aligne 2 héros de la même licence pour passer à +10%' };
-  return { ...shared,key:'none',name:'Aucune synergie',bonus:0,multiplier:1,condition:`${active.length}/3 héros actifs`,next:'2 héros de la même licence = +10% · 3 licences différentes = +5%' };
+  // Chaque licence alignée en Duo (2) ou Alliance (3+) apporte SON PROPRE
+  // bonus, cumulé additivement avec les autres — auparavant, seule la
+  // MEILLEURE licence comptait (`sort(...)[0]`) : un joueur avec deux duos de
+  // licences différentes dans une équipe de 4+ ne touchait que le bonus d'une
+  // seule paire, ce qui rendait toute diversité au-delà de la meilleure
+  // licence strictement punitive plutôt que récompensée.
+  const series = [...counts.entries()]
+    .filter(([, count]) => count >= 2)
+    .map(([name, count]) => ({ name, count, tier: count >= 3 ? 'alliance' : 'duo', bonus: count >= 3 ? .25 : .10 }))
+    .sort((a, b) => b.bonus - a.bonus || b.count - a.count);
+  const totalBonus = series.reduce((sum, s) => sum + s.bonus, 0);
+  const best = series[0] || null;
+  const shared = { activeCount: active.length, sameSeries: best?.count || 0, bestSeries: best?.name || null, series };
+
+  if (series.length) {
+    const duoToUpgrade = series.find((s) => s.tier === 'duo');
+    const next = duoToUpgrade
+      ? `Ajoute un 3e héros ${duoToUpgrade.name} pour passer cette paire à +25%`
+      : `Alliance${series.length > 1 ? 's' : ''} déjà au maximum pour ${series.length > 1 ? 'ces licences' : 'cette licence'} · ajoute une autre licence en duo pour cumuler un bonus supplémentaire`;
+    return {
+      ...shared, key: 'license',
+      name: series.length > 1 ? `${series.length} synergies de licence actives` : `${best.tier === 'alliance' ? 'Alliance' : 'Duo'} ${best.name}`,
+      bonus: totalBonus, multiplier: 1 + totalBonus,
+      condition: series.map((s) => `${s.count}/${s.tier === 'alliance' ? 3 : 2} héros ${s.name}`).join(' · '),
+      next,
+      rules: series.map((s) => ({ key: s.tier, label: s.tier === 'alliance' ? 'Alliance de licence' : 'Duo de licence', condition: `${s.count} héros ${s.name}`, bonus: s.bonus, met: true })),
+    };
+  }
+  if (active.length >= 3) return {
+    ...shared, key: 'crossover', name: 'Crossover', bonus: .05, multiplier: 1.05,
+    condition: `${active.length} héros de licences différentes`,
+    next: 'Aligne 2 héros de la même licence pour démarrer un bonus de licence (+10%, remplace le Crossover)',
+    rules: [{ key: 'crossover', label: 'Crossover', condition: '3 héros de licences différentes', bonus: .05, met: true }],
+  };
+  return {
+    ...shared, key: 'none', name: 'Aucune synergie', bonus: 0, multiplier: 1,
+    condition: `${active.length}/3 héros actifs`,
+    next: '2 héros de la même licence = +10% · 3 licences différentes = +5%',
+    rules: [
+      { key: 'duo', label: 'Duo de licence', condition: '2 héros de la même licence', bonus: .10, met: false },
+      { key: 'alliance', label: 'Alliance de licence', condition: '3 héros de la même licence', bonus: .25, met: false },
+      { key: 'crossover', label: 'Crossover', condition: '3 héros de licences différentes', bonus: .05, met: active.length >= 3 },
+    ],
+  };
 }
 
 // Décomposition pédagogique de la production d'équipe. Cette structure est
@@ -2668,6 +2714,10 @@ module.exports = {
   buildAutoEquipmentPlan,
   progressionBossesCrossed,
   synergyForSlots,
+  SQUAD_SLOT_DEFS,
+  isSquadSlotUnlocked,
+  unlockedSquadPresetCount,
+  squadPresetSlots,
   teamMetaBreakdown,
   computeRateBreakdown,
   characterLeaderSkill,

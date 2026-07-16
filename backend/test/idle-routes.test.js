@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent }=idleRoutes;
+const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,equipmentItemScore,buildAutoEquipmentPlan,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,SQUAD_SLOT_DEFS }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -56,6 +56,39 @@ test('synergie : expose le bonus actif, sa condition et le prochain palier',()=>
   const crossover=synergyForSlots([slot(1,'Naruto'),slot(2,'Bleach'),slot(3,'One Piece')]);
   assert.equal(crossover.bonus,.05);
   assert.equal(crossover.rules.find((rule)=>rule.key==='crossover').met,true);
+});
+
+test('synergie : plusieurs licences cumulent leurs bonus au lieu de ne garder que la meilleure',()=>{
+  const slot=(id,series)=>({characterId:id,character:{series}});
+  // Deux duos différents (Naruto + Bleach) : les deux bonus s'additionnent,
+  // au lieu de ne compter que le meilleur comme avant ce correctif.
+  const twoDuos=synergyForSlots([slot(1,'Naruto'),slot(2,'Naruto'),slot(3,'Bleach'),slot(4,'Bleach')]);
+  assert.equal(twoDuos.bonus,.20);
+  assert.equal(twoDuos.multiplier,1.20);
+  assert.equal(twoDuos.rules.length,2);
+  assert.ok(twoDuos.rules.every((rule)=>rule.met));
+  // Un duo ET une alliance différents cumulent aussi (.10 + .25).
+  const duoPlusAlliance=synergyForSlots([slot(1,'Naruto'),slot(2,'Naruto'),slot(3,'Bleach'),slot(4,'Bleach'),slot(5,'Bleach')]);
+  assert.equal(duoPlusAlliance.bonus,.35);
+  assert.match(duoPlusAlliance.next,/3e héros Naruto/); // priorité au duo qu'on peut encore upgrader
+});
+
+test('squadPresetSlots : chaque slot vérifie SA PROPRE condition (pas un simple comptage par index)',()=>{
+  // Rang 22 sans aucun Prestige : Faille (index 3, condition = rang ≥20) doit
+  // être débloquée, mais Boss (index 1, condition = Prestige ≥1) doit rester
+  // verrouillée. L'ancien calcul par comptage (`index < unlocked`, où
+  // `unlocked` ne comptait QUE le nombre total de slots déblocables) mélangeait
+  // les deux : ici Alpha+Faille remplissent leur condition (2 au total), donc
+  // l'ancien code marquait à tort les 2 PREMIERS index (Alpha, Boss) comme
+  // débloqués, et Faille (index 3, pourtant bien débloquée) comme verrouillée.
+  const user={prestigeLevel:0,idleRankLevel:22,idleBestStage:1,idleRunBestStage:1,idleStage:1};
+  const slots=squadPresetSlots(user,[]);
+  const byName=(name)=>slots.find((s)=>s.name===name);
+  assert.equal(byName('Composition Alpha').unlocked,true);
+  assert.equal(byName('Composition Boss').unlocked,false);
+  assert.equal(byName('Composition Farm').unlocked,false);
+  assert.equal(byName('Composition Faille').unlocked,true);
+  assert.equal(byName('Composition Libre').unlocked,false);
 });
 
 test.beforeEach(() => {
