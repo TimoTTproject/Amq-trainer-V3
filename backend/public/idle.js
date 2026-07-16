@@ -1909,7 +1909,14 @@ async function clickIdle() {
   const predicted=idleState?.click?.damage||idleState?.click?.yield||1;
   const comboTier=idleComboCount>=40?'huge':idleComboCount>=15?'big':'';
   idleClickFeedback(predicted);idleSpawnFloat(`−${idleFormatNumber(predicted)}`,['damage',comboTier||idleFloatTier(predicted)].filter(Boolean).join(' '));
-  idleClickPending=Math.min(10,idleClickPending+1);
+  // Chaque tap animé doit finir par être envoyé au serveur : plafonner ici à
+  // 10 faisait perdre en silence les taps au-delà pendant qu'un envoi était
+  // déjà en vol (le joueur voyait le coup, mais rien n'était jamais transmis
+  // — retour testeur « les kills ne donnent pas toujours de gold »). Le
+  // plafond de 200 n'est qu'un garde-fou, pas un mécanisme de troncature :
+  // flushIdleClicks() envoie par lots de 10 (limite serveur) et rattrape
+  // le solde tout seul, sans jamais perdre de tap.
+  idleClickPending=Math.min(200,idleClickPending+1);
   if(!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,160);
 }
 
@@ -1926,13 +1933,24 @@ function idleRenderCombo() {
 
 async function flushIdleClicks(){
   idleClickFlushTimer=null;if(idleClickSending||(!idleClickPending&&!idleClickRetryBatch))return;
-  const batch=idleClickRetryBatch||{count:idleClickPending,requestId:(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9_-]/g,'')};if(!idleClickRetryBatch)idleClickPending=0;idleClickSending=true;let r;
+  // Le serveur ne traite jamais plus de 10 frappes par requête (POST /click).
+  // On envoie donc par lots de 10 maximum et on ne retire du solde QUE ce qui
+  // part réellement dans ce lot — tout reliquat déclenche automatiquement un
+  // lot suivant (cf. fin de fonction), au lieu de vider tout le solde d'un
+  // coup et perdre ce que le serveur n'aurait pas pu absorber.
+  const batch=idleClickRetryBatch||{count:Math.min(10,idleClickPending),requestId:(globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9_-]/g,'')};if(!idleClickRetryBatch)idleClickPending-=batch.count;idleClickSending=true;let r;
   try{r=await api('/api/idle/click',{method:'POST',body:JSON.stringify(batch)});idleClickRetryBatch=null;}
   catch{idleClickRetryBatch=batch;}
   finally{idleClickSending=false;}
   if(!r){if((idleClickPending||idleClickRetryBatch)&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,250);return;}
   if(r.duplicate){await refreshIdleState();if(idleClickPending&&!idleClickFlushTimer)idleClickFlushTimer=setTimeout(flushIdleClicks,80);return;}
   const count=r.count||batch.count;
+  // Le budget serveur par seconde peut n'accepter qu'une partie du lot
+  // envoyé (count < batch.count) sans renvoyer d'erreur — le reliquat non
+  // traité doit revenir dans le solde, sinon ces taps (déjà animés côté
+  // client) disparaissent silencieusement au lieu d'être repris au lot
+  // suivant.
+  if(count<batch.count)idleClickPending+=batch.count-count;
   if(idleState)idleState.essence=r.essence;
   if(r.criticals){idleSpawnFloat(`${r.criticals>1?`${r.criticals}× `:''}CRITIQUE −${idleFormatNumber(r.damage||r.gained)}`,'damage crit huge');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);idleCombatMotion('hero');}
   if(r.passiveKills)idleSpawnFloat(`ÉQUIPE AUTO · ${r.passiveKills} élimination${r.passiveKills>1?'s':''}`,'xp');

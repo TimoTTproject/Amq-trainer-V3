@@ -106,7 +106,13 @@ async function incrementIdleCounter(userId,key,amount=1,now=new Date()) {
       create:{userId,key,period,value:increment},
       update:{value:{increment}},
     })),...(rankField&&increment?[prisma.user.update({where:{id:userId},data:{[rankField]:{increment}}})]:[])]);
-  } catch { /* Compteurs non bloquants pendant une migration. */ }
+  } catch (e) {
+    // Non bloquant (ne doit jamais faire échouer le kill/l'essence déjà
+    // crédités ailleurs) — mais avaler l'erreur en silence rendait ce genre
+    // d'échec partiel (pool de connexions, verrou transitoire) impossible à
+    // distinguer d'un vrai « la quête n'a pas avancé » côté joueur.
+    console.error(`incrementIdleCounter échoué (userId=${userId}, key=${key}):`, e?.message || e);
+  }
 }
 
 async function loadIdleCounters(userId,now=new Date()) {
