@@ -446,7 +446,7 @@ function investmentCostIndex(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
   return finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(INVESTMENT_COST_GROWTH, s - 1), 1);
 }
-// ── Donjon des Runes : farm RÉPÉTABLE et CIBLÉ d'objets, façon donjon Caiross
+// ── Donjon des Objets : farm RÉPÉTABLE et CIBLÉ d'objets, façon donjon Caiross
 // de Summoners War — jusque-là, un objet ne tombait que du coffre de boss
 // (une fois par palier de 10 stages) ou de la Faille (4 fois/semaine max),
 // jamais assez pour compléter plusieurs sets sur plusieurs héros (retour

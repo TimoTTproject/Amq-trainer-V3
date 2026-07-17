@@ -1510,7 +1510,7 @@ async function buildState(userId) {
   let riftRun=null;try{riftRun=await prisma.idleRiftRun.findUnique({where:{userId_period:{userId,period:periods.week}}});}catch(e){if(e?.code)throw e;}
   const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods,riftRun?.relics||[]);
   rift.pendingChoice=riftRelicDetails(riftRun?.pendingChoice||[]);
-  // Donjon des Runes : farm répétable, cf. runeDungeonExtraCost/runeDungeonRarity.
+  // Donjon des Objets : farm répétable, cf. runeDungeonExtraCost/runeDungeonRarity.
   const runeDungeonAttemptsToday=missionCounters.get(`rune_dungeon:${periods.day}`)||0;
   const runeDungeonFreeRemaining=Math.max(0,RUNE_DUNGEON_FREE_ATTEMPTS-runeDungeonAttemptsToday);
   const runeDungeon={
@@ -3112,7 +3112,7 @@ router.post('/feedback', requireAuth, requireIdleBeta, rateLimit({ max: 5, windo
 
 // Résout un drop d'objet : le stocke si l'inventaire a de la place, sinon le
 // recycle immédiatement en Essence (pondérée par la Fortune équipée). Partagé
-// par le coffre de boss et le Donjon des Runes, seules sources d'objets.
+// par le coffre de boss et le Donjon des Objets, seules sources d'objets.
 async function resolveIdleItemDrop(tx, userId, bestStage, tier, kind, rarity, bonus, sourceWorld) {
   const drop = idleItemDrop(tier, kind, rarity, bonus, sourceWorld);
   const inventoryCount = await tx.idleItem.count({ where: { userId } });
@@ -3152,7 +3152,7 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
-// ── Donjon des Runes : farm répétable et CIBLÉ (le joueur choisit le kind,
+// ── Donjon des Objets : farm répétable et CIBLÉ (le joueur choisit le kind,
 // donc l'emplacement qu'il veut garnir) — façon donjon Caiross de Summoners
 // War. Quelques tentatives gratuites par jour (RUNE_DUNGEON_FREE_ATTEMPTS),
 // puis un coût croissant en Essence, remis à zéro chaque jour avec le
@@ -3194,7 +3194,7 @@ router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ m
       const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
       const tier = Math.max(1, Math.floor(bestStage / 10));
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
-      const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, 'Donjon des Runes');
+      const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, 'Donjon des Objets');
       result = { cost, loot };
     });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }

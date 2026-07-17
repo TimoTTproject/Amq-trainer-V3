@@ -282,7 +282,7 @@ test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus pl
   assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(10)); // jamais au-delà du cap
 });
 
-test('Donjon des Runes : gratuit puis coût croissant en Essence, rareté tirée au sort selon le monde',()=>{
+test('Donjon des Objets : gratuit puis coût croissant en Essence, rareté tirée au sort selon le monde',()=>{
   const {RUNE_DUNGEON_FREE_ATTEMPTS,runeDungeonExtraCost,runeDungeonRarity}=require('../src/idle/idle');
   assert.equal(RUNE_DUNGEON_FREE_ATTEMPTS,5);
   // Première tentative payante (index 0) > deuxième tentative gratuite pure (coût 0 côté route),

@@ -1056,7 +1056,7 @@ function idleRuneDetailChips(item){
   const subStats=Object.entries(item.subStats||{}).map(([key,value])=>`<span><small>${escapeHtml(IDLE_STAT_LABELS[key]||key)}</small><b>+${Math.round(Number(value)*100)}%</b></span>`);
   return [...affixes,...subStats].join('')||'<em>Aucune sous-statistique débloquée</em>';
 }
-// Donjon des Runes : un bouton par emplacement (rune1..6), l'objet obtenu va
+// Donjon des Objets : un bouton par emplacement (rune1..6), l'objet obtenu va
 // toujours dans le slot choisi — façon donjon Caiross de Summoners War.
 let idleRuneDungeonBusy=false;
 function renderIdleRuneDungeon(state){
@@ -1414,7 +1414,7 @@ async function claimIdleBossChest() {
 }
 
 // Carte de butin partagée par les deux modales de révélation (coffre de boss
-// et Donjon des Runes) — même objet stocké/recyclé, même gabarit visuel.
+// et Donjon des Objets) — même objet stocké/recyclé, même gabarit visuel.
 function idleLootCardHTML(loot){
   if(!loot)return '';
   const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
@@ -1428,11 +1428,11 @@ function showIdleBossReward(reward) {
 }
 
 // Réutilise la modale de révélation du coffre de boss (même structure) pour
-// le butin du Donjon des Runes — pas d'Essence/Sceaux gagnés ici (sauf
+// le butin du Donjon des Objets — pas d'Essence/Sceaux gagnés ici (sauf
 // recyclage si l'inventaire est plein), juste l'objet obtenu dans le slot choisi.
 function showIdleRuneDungeonReward(result){
   const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');const title=document.getElementById('idle-boss-reveal-title');if(!modal||!body)return;
-  if(title)title.innerHTML='<i class="fas fa-dungeon"></i> Donjon des Runes';
+  if(title)title.innerHTML='<i class="fas fa-dungeon"></i> Donjon des Objets';
   body.innerHTML=idleLootCardHTML(result.loot);
   modal.classList.remove('hidden');
 }
