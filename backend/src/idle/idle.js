@@ -529,7 +529,7 @@ function enemiesDefeatedBeforeStage(stage) {
 const MIN_ENEMY_SECONDS = .12;
 const MIN_BOSS_SECONDS = .5;
 const MAX_STAGE_ADVANCE_PER_SYNC = 3;
-function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000, maxStageAdvance = Infinity } = {}) {
+function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000, maxStageAdvance = Infinity, bossEngaged = false } = {}) {
   const normalized = normalizeWaveProgress(stage, waveKills, mode);
   const startingStage = normalized.stage;
   let currentStage = normalized.stage;
@@ -547,6 +547,11 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
   if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
 
   while (seconds > 0 && kills < maxKills) {
+    // Un Boss attend un clic explicite d'engagement — l'auto-DPS (en ligne
+    // comme hors-ligne) s'arrête pile devant lui tant que ce n'est pas fait,
+    // au lieu de l'encaisser silencieusement pendant que le joueur regarde
+    // ailleurs.
+    if (isBossStage(currentStage) && !bossEngaged) break;
     // Un ennemi doit rester perceptible à l'écran : sans cadence minimale,
     // 1,5 M DPS au stage 1 convertissait l'overkill en ~10 M Essence/minute.
     // Le DPS conserve toute sa valeur sur le contenu adapté, mais ne permet
@@ -963,7 +968,9 @@ const AWAKEN_STAR_BONUS = 0.08;
 // Coût = N fois la récompense d'un ennemi au meilleur stage atteint, pondéré
 // par rareté (mêmes facteurs relatifs que SALVAGE_STAGE_FACTOR) et croissant
 // par étoile — même famille de formule que itemSalvageValue/runeEnhanceCost.
-const AWAKEN_STAR_STAGE_FACTOR = { rare: 40, epic: 90, legendary: 180, mythic: 350 };
+// ×1.75 (retour joueur : pas assez cher) — même rapport entre raretés,
+// juste un budget d'Essence plus consistant à chaque palier.
+const AWAKEN_STAR_STAGE_FACTOR = { rare: 70, epic: 157, legendary: 315, mythic: 612 };
 // Multiplicateur pour l'étoile N+1 — les 5 premiers paliers gardaient le même
 // ratio (~×2.19) d'un cran à l'autre ; les 5 suivants prolongent cette même
 // progression géométrique plutôt que d'inventer une nouvelle courbe.

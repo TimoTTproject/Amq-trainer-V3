@@ -139,10 +139,18 @@ test('économie : progresser ne rend jamais le farm moins rentable que le stage 
 test('simulateCombat : progresse et ne rétrograde plus devant un boss trop fort', () => {
   const push = simulateCombat({stage:1,hp:enemyMaxHp(1),dps:10,elapsedSeconds:30,mode:'progress'});
   assert.ok(push.stage > 1);
-  const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:1,mode:'progress'});
+  const wall = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:1,mode:'progress',bossEngaged:true});
   assert.equal(wall.stage,10);
   assert.equal(wall.bossFailed,false);
   assert.ok(wall.hp<enemyMaxHp(10));
+});
+
+test('simulateCombat : un Boss non engagé n’encaisse aucun dégât, engagé il en encaisse', () => {
+  const untouched = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:30,mode:'progress'});
+  assert.equal(untouched.stage,10);
+  assert.equal(untouched.hp,enemyMaxHp(10));
+  const engaged = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:1,elapsedSeconds:30,mode:'progress',bossEngaged:true});
+  assert.ok(engaged.hp<enemyMaxHp(10));
 });
 
 test('anti-overkill : un DPS extrême ne saute plus plusieurs mondes ni des milliers de cibles faibles',()=>{
@@ -159,7 +167,9 @@ test('le dixième ennemi de la vague 9 ouvre le boss même avec un DPS insuffisa
   assert.equal(result.stage,10);
   assert.equal(result.waveKills,0);
   assert.equal(result.bossFailed,false);
-  assert.ok(result.hp<enemyUnitMaxHp(10,0));
+  // Le Boss attend un clic d'engagement explicite (cf. /boss/engage) : il
+  // s'ouvre bien à pleins PV, mais n'encaisse rien tant que non engagé.
+  assert.equal(result.hp,enemyUnitMaxHp(10,0));
 });
 
 test('chaque vague normale demande 10 ennemis et le boss reste un combat unique', () => {
@@ -172,7 +182,7 @@ test('chaque vague normale demande 10 ennemis et le boss reste un combat unique'
   const finishWave = simulateCombat({stage:1,hp:enemyMaxHp(1),waveKills:9,dps:20,elapsedSeconds:1,mode:'progress'});
   assert.equal(finishWave.stage, 2);
   assert.equal(finishWave.waveKills, 0);
-  const finishBoss = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:enemyMaxHp(10),elapsedSeconds:1,mode:'progress'});
+  const finishBoss = simulateCombat({stage:10,hp:enemyMaxHp(10),dps:enemyMaxHp(10),elapsedSeconds:1,mode:'progress',bossEngaged:true});
   assert.equal(finishBoss.stage, 11);
   assert.equal(finishBoss.waveKills, 0);
 });

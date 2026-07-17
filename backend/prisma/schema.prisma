@@ -160,6 +160,11 @@ model User {
   idleTeamReadyAt         DateTime?
   idleBossProgress        Int       @default(0)
   idleBossStartedAt       DateTime?
+  // Un Boss (toutes les 10 vagues) attend un clic explicite avant de pouvoir
+  // être endommagé (auto-DPS, clic, Ultime/Combo) — retour joueur : il
+  // arrivait sans s'en rendre compte, sans temps de préparation avant le
+  // combat. Remis à false dès que le Boss est vaincu ou quitté.
+  idleBossEngaged         Boolean   @default(false)
   idleBestBossMs          Int?
   idleFormation           String    @default("balanced")
   // Chef affiché dans la scène. Choix purement visuel : les bonus viennent des

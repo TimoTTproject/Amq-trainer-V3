@@ -1335,8 +1335,10 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   }
   if(bossTimer){const total=Math.max(1,(battle?.timerSeconds||30)*1000);const remaining=Math.max(0,battle?.timerRemainingMs??total);bossTimer.classList.toggle('hidden',!boss);bossTimer.dataset.total=String(total);bossTimer.dataset.deadline=String(Date.now()+remaining);if(boss)idleUpdateBossTimer();else document.getElementById('idle-boss-ring')?.classList.add('hidden');}
   if (zoneEl) zoneEl.textContent = `ACTE ${battle?.world?.act||1} · ${battle?.world?.difficulty?.name?.toUpperCase()||'NORMAL'} · MONDE ${battle?.world?.index||zone}/10 · ${boss ? `VAGUE 10/10 · BOSS · PHASE ${battle.phase||1}/2${battle.enraged?' · ENRAGÉ':''}` : `VAGUE ${wave}/10 · ENNEMI ${enemyNumber}/${enemiesRequired}`}`;
-  if (tagEl) { tagEl.textContent = battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
+  if (tagEl) { tagEl.textContent = battle?.needsBossEngage ? 'BOSS · VERROUILLÉ' : battle?.bossFailed ? 'MUR · FARM AUTO' : boss ? 'BOSS' : battle?.enemy?.name?.toUpperCase()||(battle?.isElite?'ÉLITE':'ENNEMI'); tagEl.className=`idle-battle-tag ${boss?'boss':`enemy-${battle?.enemy?.key||'standard'}`}`; }
   if (titleEl) titleEl.textContent = guardianName;
+  const engageBtn = document.getElementById('idle-boss-engage-btn');
+  if (engageBtn) engageBtn.classList.toggle('hidden', !battle?.needsBossEngage);
   const sameVisualEnemy = idleVisualStage === stage && idleVisualEnemyNumber === enemyNumber && idleVisualHp !== null;
   if (!sameVisualEnemy || idleForceHpSync) {
     idleResetVisualHp({ ...battle, hp: remaining, maxHp: total });
@@ -1424,6 +1426,19 @@ async function idleUseTeamSkill(event) {
   idleRenderSkillCooldown();
 }
 
+let idleBossEngagePending = false;
+async function engageIdleBoss() {
+  if (idleBossEngagePending) return;
+  idleBossEngagePending = true;
+  const btn = document.getElementById('idle-boss-engage-btn'); if (btn) btn.disabled = true;
+  try {
+    const state = await api('/api/idle/boss/engage', { method: 'POST', body: JSON.stringify({}) });
+    renderIdleState(state);
+    idleAnnounce('Le combat contre le Boss commence !');
+  } catch (e) { idleNotify(e.message, 'error'); }
+  idleBossEngagePending = false;
+  const btnAfter = document.getElementById('idle-boss-engage-btn'); if (btnAfter) btnAfter.disabled = false;
+}
 function renderIdleBossChest(chest) {
   const btn = document.getElementById('idle-boss-chest'); if (!btn) return;
   btn.classList.toggle('hidden', !chest?.available);
@@ -2323,6 +2338,10 @@ async function collectIdle() {
 
 async function clickIdle() {
   const now=Date.now();if(now<idleNextClickAt)return;idleNextClickAt=now+45;
+  // Le Boss n'encaisse plus rien tant qu'il n'est pas engagé (cf. bouton
+  // dédié) : mieux vaut le dire clairement que de laisser croire au joueur
+  // que ses frappes comptent pour rien, silencieusement.
+  if(idleState?.battle?.needsBossEngage){idleNotify('Clique « Affronter le Boss » pour lancer le combat.','info');return;}
   // Frénésie : enchaîner les frappes fait monter un combo purement visuel —
   // les chiffres grossissent, le compteur s'affiche à partir de 5. Aucune
   // influence sur les dégâts réels (le serveur reste seul juge).
@@ -2449,8 +2468,10 @@ async function awakenIdleHero(characterId){
   try{
     const state=await api('/api/idle/hero-awaken',{method:'POST',body:JSON.stringify({characterId})});
     if(typeof burstConfetti==='function')burstConfetti(40);
+    const character=(state.slots||[]).map((slot)=>slot.character).find((c)=>c?.id===(state.awaken?.characterId??characterId));
+    const starMax=character?.awakenStarMax||10;const starBonus=Math.round((character?.awakenStarBonus||.08)*100);
     idleSpawnFloat(`ÉVEIL ${'★'.repeat(state.awaken?.stars||1)}`,'crit');
-    idleNotify(`Éveil ${state.awaken?.stars||1}/5 : +8% de production personnelle permanente.`,'success');
+    idleNotify(`Éveil ${state.awaken?.stars||1}/${starMax} : +${starBonus}% de production personnelle permanente.`,'success');
     renderIdleState(state);
   }catch(e){idleNotify(e.message,'error');}
 }
@@ -2832,6 +2853,7 @@ function initIdleUI() {
   // Taper la scène = entraîner (comme frapper le monstre dans un idle game).
   // L'anti-spam serveur (900 ms) borne le rythme, l'échec 429 est silencieux.
   document.getElementById('idle-scene')?.addEventListener('pointerdown', clickIdle);
+  document.getElementById('idle-boss-engage-btn')?.addEventListener('click', (e) => { e.stopPropagation(); engageIdleBoss(); });
   document.getElementById('idle-tabs')?.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-idle-tab]');
     if (tab) idleShowPanel(tab.dataset.idleTab);
