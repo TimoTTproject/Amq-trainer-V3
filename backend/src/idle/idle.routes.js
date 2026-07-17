@@ -1953,7 +1953,7 @@ router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, na
   } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e; }
 });
 
-const IDLE_LEADERBOARD_TYPES = new Set(['stage','speed','rift','collection']);
+const IDLE_LEADERBOARD_TYPES = new Set(['stage','level','speed','rift','collection']);
 const idlePublicUserSelect = {id:true,displayName:true,avatarUrl:true,idleBestStage:true,idleRankLevel:true,prestigeLevel:true,idleHeroClass:true};
 
 function idleLeaderboardPlayer(user, metric, metricLabel, me) {
@@ -1981,10 +1981,25 @@ router.get('/leaderboard', requireAuth, requireIdleBeta, async(req,res)=>{
       orderBy:[{value:'desc'},{updatedAt:'asc'}],take:50,
     });
     players=rows.filter((row)=>row.user).map((row)=>idleLeaderboardPlayer(row.user,row.value,'Palier de Faille',req.user.id));
+  }else if(type==='level'){
+    // Classement dédié au niveau de COMPTE (Rang du Dojo), distinct de la
+    // progression de combat (stage) — retour : les deux étaient mélangés,
+    // le classement « Progression » triait en réalité par Rang d'abord et
+    // ne reflétait pas vraiment la meilleure vague affichée.
+    const users=await prisma.user.findMany({
+      where:{idleRankLevel:{gt:1}},select:idlePublicUserSelect,
+      orderBy:[{idleRankLevel:'desc'},{prestigeLevel:'desc'},{updatedAt:'asc'}],take:50,
+    });
+    players=users.map((user)=>idleLeaderboardPlayer(user,user.idleRankLevel||1,'Niveau de compte',req.user.id));
   }else{
+    // type==='stage' (progression) ou 'collection' : la métrique affichée
+    // (meilleure vague / héros recrutés) doit être le VRAI critère de tri,
+    // pas un tie-break derrière idleRankLevel — sinon un joueur moins avancé
+    // en stage mais de Rang plus élevé apparaissait au-dessus d'un joueur
+    // ayant réellement atteint une vague bien plus haute.
     const users=await prisma.user.findMany({
       where:type==='collection'?{dojoRecruits:{some:{}}}:{idleBestStage:{gt:1}},select:{...idlePublicUserSelect,_count:{select:{dojoRecruits:true}}},
-      orderBy:type==='collection'?[{dojoRecruits:{_count:'desc'}},{idleBestStage:'desc'},{updatedAt:'asc'}]:[{idleRankLevel:'desc'},{idleBestStage:'desc'},{updatedAt:'asc'}],take:50,
+      orderBy:type==='collection'?[{dojoRecruits:{_count:'desc'}},{idleBestStage:'desc'},{updatedAt:'asc'}]:[{idleBestStage:'desc'},{idleRankLevel:'desc'},{updatedAt:'asc'}],take:50,
     });
     players=users.map((user)=>idleLeaderboardPlayer(user,type==='collection'?(user._count?.dojoRecruits||0):(user.idleBestStage||1),type==='collection'?'Héros recrutés':'Meilleure vague',req.user.id));
   }

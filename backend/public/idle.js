@@ -1687,7 +1687,7 @@ function idleRankingRows(players,type){
   if(!players.length)return idleEmptyState(type==='friends'?'fa-user-group':'fa-ranking-star',type==='friends'?'Aucun ami à comparer':'Aucun joueur classé',type==='friends'?'Ajoute des amis depuis la Communauté pour suivre leur progression.':'Ce classement se remplira avec les prochaines aventures.');
   const rankOf=(p,index)=>type==='friends'?index+1:p.rank;
   const metricOf=(p)=>idleRankingMetric(type,type==='friends'?p.stage:p.metric);
-  const metricLabel=type==='speed'?'CHRONO':type==='collection'?'HÉROS':type==='rift'?'PALIER':'VAGUE';
+  const metricLabel=type==='speed'?'CHRONO':type==='collection'?'HÉROS':type==='rift'?'PALIER':type==='level'?'RANG':'VAGUE';
   const playerName=(p)=>`${escapeHtml(p.name)}${p.isMe?'<em>VOUS</em>':''}`;
   const podium=players.slice(0,3).map((p,index)=>{const rank=rankOf(p,index);return `<button type="button" class="idle-ranking-podium rank-${rank} ${p.isMe?'me':''}" data-idle-player="${escapeHtml(p.id)}" aria-label="${escapeHtml(p.name)}, rang ${rank}"><span class="idle-podium-rank"><i class="fas ${rank===1?'fa-crown':'fa-medal'}"></i><b>${rank}</b></span><span class="avatar" ${p.avatarUrl?`style="background-image:url('${escapeHtml(p.avatarUrl)}')"`:''}></span><span class="idle-podium-player"><b>${playerName(p)}</b><small>${escapeHtml(p.className)}</small></span><strong>${metricOf(p)}</strong><small>${metricLabel}</small></button>`;}).join('');
   const rows=players.slice(3).map((p,index)=>{const rank=rankOf(p,index+3);return `<button type="button" class="idle-ranking-row ${p.isMe?'me':''}" data-idle-player="${escapeHtml(p.id)}"><strong><span>${rank}</span></strong><span class="idle-ranking-player"><span class="avatar" ${p.avatarUrl?`style="background-image:url('${escapeHtml(p.avatarUrl)}')"`:''}></span><span><b>${playerName(p)}</b><small>${escapeHtml(p.className)}</small></span></span><b>${metricOf(p)}</b><b>${idleFormatNumber(p.level)}</b><b>${idleFormatNumber(p.prestige)}</b><i class="fas fa-chevron-right" aria-hidden="true"></i></button>`;}).join('');
@@ -1696,11 +1696,16 @@ function idleRankingRows(players,type){
 async function openIdleRanking(type=idleRankingType){
   idleRankingType=type;const modal=document.getElementById('idle-ranking-modal');const list=document.getElementById('idle-ranking-list');const metric=document.getElementById('idle-ranking-metric-title');const hint=document.getElementById('idle-ranking-hint');
   modal?.classList.remove('hidden');document.querySelectorAll('[data-idle-ranking]').forEach((button)=>button.classList.toggle('active',button.dataset.idleRanking===type));
-  const titles={stage:'Vague',speed:'Temps',rift:'Palier',collection:'Héros',friends:'Vague'};if(metric)metric.textContent=titles[type]||'Score';
+  const titles={stage:'Vague',level:'Niveau',speed:'Temps',rift:'Palier',collection:'Héros',friends:'Vague'};if(metric)metric.textContent=titles[type]||'Score';
   // Une phrase par classement : ce qu'il mesure ET comment y grimper — un
   // nouveau joueur ne devine pas ce que « Prestige » ou « Palier » classe.
+  // « Progression » (stage) et « Niveau » (Rang de compte) sont deux
+  // classements DISTINCTS : la vague la plus haute n'est pas le même critère
+  // que le Rang, qui mesure des séries d'épreuves indépendantes de la
+  // progression de combat (cf. rankQuestSeries côté serveur).
   const hints={
     stage:'Meilleure vague jamais atteinte, toutes runs confondues. Améliore ton DPS pour aller plus loin. Clique un joueur pour voir son équipe.',
+    level:'Rang de compte le plus élevé (séries d’épreuves validées : ennemis, frappes, améliorations, compétences, recrues) — indépendant de la vague atteinte. Termine tes objectifs de Rang pour grimper.',
     speed:'Prestige le plus rapide : le temps de la meilleure run terminée. Optimise ta boucle pour prestiger plus vite.',
     rift:'Meilleur palier de la Faille dimensionnelle cette semaine (remise à zéro chaque lundi). Débloquée au niveau 20.',
     collection:'Nombre de héros distincts recrutés. Invoque avec tes Sceaux pour compléter ta collection.',

@@ -147,13 +147,18 @@ test('classements Idle : progression, vitesse, Faille et collection exposent une
   const me=dbUser({id:'u1',idleBestStage:80,idleRankLevel:12});
   const rival={...dbUser({id:'u2',displayName:'Rivale',idleBestStage:120,idleRankLevel:18,prestigeLevel:2}),_count:{dojoRecruits:14}};
   prisma.user.findUnique=async()=>me;
-  prisma.user.findMany=async()=>[rival,{...me,_count:{dojoRecruits:6}}];
+  let capturedArgs=null;
+  prisma.user.findMany=async(args)=>{capturedArgs=args;return[rival,{...me,_count:{dojoRecruits:6}}];};
   prisma.idleRunHistory.findMany=async()=>[
     {userId:'u2',durationSeconds:900,bestStage:100,completedAt:new Date(),user:rival},
     {userId:'u2',durationSeconds:1200,bestStage:110,completedAt:new Date(),user:rival},
   ];
   prisma.idleProgressCounter.findMany=async(args)=>args.where?.key==='rift_floor'?[{userId:'u2',value:17,user:rival}]:[];
   const stage=await app.request('/api/idle/leaderboard?type=stage',{cookie:app.authCookie('u1')});
+  // Le classement "Progression" doit trier par MEILLEURE VAGUE en premier
+  // critère — pas par Rang de compte (bug : ces deux notions distinctes
+  // étaient mélangées, "Progression" triait en réalité par idleRankLevel).
+  assert.deepEqual(Object.keys(capturedArgs.orderBy[0]),['idleBestStage']);
   const speed=await app.request('/api/idle/leaderboard?type=speed',{cookie:app.authCookie('u1')});
   const rift=await app.request('/api/idle/leaderboard?type=rift',{cookie:app.authCookie('u1')});
   const collection=await app.request('/api/idle/leaderboard?type=collection',{cookie:app.authCookie('u1')});
@@ -161,6 +166,23 @@ test('classements Idle : progression, vitesse, Faille et collection exposent une
   assert.equal(speed.json.players.length,1);assert.equal(speed.json.players[0].metric,900);
   assert.equal(rift.json.players[0].metric,17);assert.ok(rift.json.period);
   assert.equal(collection.json.players[0].metric,14);
+});
+
+test('classement Idle "level" : classement de Rang de compte séparé de la progression de combat',async()=>{
+  const me=dbUser({id:'u1',idleBestStage:80,idleRankLevel:12});
+  const rival=dbUser({id:'u2',displayName:'Rivale',idleBestStage:20,idleRankLevel:45,prestigeLevel:1});
+  prisma.user.findUnique=async()=>me;
+  let capturedArgs=null;
+  prisma.user.findMany=async(args)=>{capturedArgs=args;return[rival,me];};
+  const res=await app.request('/api/idle/leaderboard?type=level',{cookie:app.authCookie('u1')});
+  assert.equal(res.status,200);
+  // Trie par idleRankLevel en premier critère, indépendamment du stage.
+  assert.deepEqual(Object.keys(capturedArgs.orderBy[0]),['idleRankLevel']);
+  assert.equal(res.json.players[0].metric,45);
+  assert.equal(res.json.players[0].metricLabel,'Niveau de compte');
+  // Le stage reste exposé (colonne informative) mais n'est jamais le critère
+  // de tri de ce classement, même s'il est plus bas que celui d'un rival.
+  assert.equal(res.json.players[0].stage,20);
 });
 
 test('social Idle : compare les amis et rend leur composition active inspectable',async()=>{
