@@ -111,6 +111,21 @@ app.use(express.json({ limit: '2mb' })); // marge pour les avatars en base64
 app.use(cookieParser());
 app.use(attachUser);
 
+// Trace les requêtes API anormalement lentes (>1.5s) — signalements répétés
+// de latence sur les compétences actives Idle (Ultime/Combo) sans accès aux
+// métriques d'hébergement pour l'instant : ce log donne un point de départ
+// concret (route + durée réelle) la prochaine fois que ça se reproduit.
+const SLOW_REQUEST_MS = 1500;
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  const start = process.hrtime.bigint();
+  res.once('finish', () => {
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    if (ms > SLOW_REQUEST_MS) console.warn(`  ⚠ requête lente : ${req.method} ${req.path} · ${Math.round(ms)}ms · status ${res.statusCode}`);
+  });
+  next();
+});
+
 // API
 app.use('/api/auth', authRoutes.router);
 app.use('/api/auth', anilistOAuthRoutes.router);

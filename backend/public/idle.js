@@ -1381,9 +1381,12 @@ function idleShowSkillImpact(kind, damage, killed) {
   scene.appendChild(impact);setTimeout(()=>impact.remove(),1350);
 }
 
+let idleBurstPending = false;
 async function idleUseBurst(event) {
   event?.stopPropagation();
-  if (Date.now() < idleBurstReadyAt) return;
+  if (Date.now() < idleBurstReadyAt || idleBurstPending) return;
+  idleBurstPending = true;
+  const btn = document.getElementById('idle-skill-burst'); if (btn) btn.disabled = true;
   try {
     const result = await api('/api/idle/skill/burst', { method: 'POST', body: JSON.stringify({}) });
     idleBurstReadyAt = result.readyAt ? new Date(result.readyAt).getTime() : Date.now() + result.cooldownMs;
@@ -1396,13 +1399,18 @@ async function idleUseBurst(event) {
     idleCombatMotion('hero');
     await refreshIdleState();
   } catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
+  idleBurstPending = false;
   idleRenderSkillCooldown();
 }
 
+let idleTeamSkillPending = false;
 async function idleUseTeamSkill(event) {
-  event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt) return;
+  event?.stopPropagation(); if (Date.now() < idleTeamSkillReadyAt || idleTeamSkillPending) return;
+  idleTeamSkillPending = true;
+  const teamBtn = document.getElementById('idle-skill-team'); if (teamBtn) teamBtn.disabled = true;
   try { const r = await api('/api/idle/skill/team', { method: 'POST', body: JSON.stringify({}) }); idleTeamSkillReadyAt = r.readyAt ? new Date(r.readyAt).getTime() : Date.now() + r.cooldownMs; idleSpawnFloat(`COMBO −${idleFormatNumber(r.gained)}`, 'damage crit huge'); idleApplyVisualDamage(r.damage ?? r.gained); idleShowSkillImpact('combo',r.damage??r.gained,r.killed);sfx?.idleCombo?.();document.getElementById('idle-scene')?.classList.add('skill-team');setTimeout(()=>document.getElementById('idle-scene')?.classList.remove('skill-team'),850);idleCombatMotion('team'); await refreshIdleState(); }
   catch (e) { if (!String(e.message).includes('Trop')) idleNotify(e.message,'error'); }
+  idleTeamSkillPending = false;
   idleRenderSkillCooldown();
 }
 

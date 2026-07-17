@@ -359,12 +359,29 @@ let sessionSeenAnilistIds = new Set();
 let sessionHistory = [];
 
 // ── helpers API ──
+// Sans délai maximal, une requête qui ne reçoit jamais de réponse (connexion
+// coupée en silence, notamment mobile) reste en attente indéfiniment — un
+// bouton (ex. Ultime/Combo en Idle) semble alors figé pour toujours, sans
+// aucune erreur visible ni possibilité de réessayer. Le timeout transforme
+// ce blocage silencieux en erreur explicite après 15s.
+const API_TIMEOUT_MS = 15000;
 async function api(path, opts = {}) {
-  const res = await fetch(API + path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(API + path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Le serveur ne répond pas, réessaie dans un instant.');
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
   let data = null;
   try { data = await res.json(); } catch {}
   if (!res.ok) {
