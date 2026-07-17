@@ -322,7 +322,7 @@ async function idleBackgroundSync() {
 // Navigation latérale sur ordinateur et barre compacte sur mobile.
 function idleShowPanel(name) {
   idleActivePanel = name;
-  for (const p of ['home', 'progression', 'team', 'equipment', 'upgrades', 'activities']) {
+  for (const p of ['home', 'progression', 'team', 'equipment', 'farm', 'upgrades', 'activities']) {
     const panel=document.getElementById('idle-panel-' + p);panel?.classList.toggle('hidden', p !== name);panel?.setAttribute('aria-hidden',p===name?'false':'true');
   }
   document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => {
@@ -637,10 +637,10 @@ function renderIdleState(state) {
     renderIdleMissions(state.missions || [],state.rank);
     renderIdleChallenges(state.challenges||[]);
     renderIdleEvent(state.event);
-    renderIdleRift(state.rift);
     renderIdleSeason(state.season);
     renderIdleSessionReport(state);
   }
+  if (idleActivePanel === 'farm') { renderIdleRift(state.rift); renderIdleRuneDungeon(state); }
   if (idleActivePanel === 'upgrades') renderIdleAchievements(state.achievements || [], state.achievementsBonus);
   if (idleActivePanel === 'home') renderIdleQuickBuy(state);
   renderIdleTabBadges(state);
@@ -694,7 +694,7 @@ function renderIdleState(state) {
     renderIdleMasteries(state.codex);
     renderIdleRecruitHistory(state.recruitHistory || []);
   }
-  if (idleActivePanel === 'equipment') { renderIdleInventory(state); renderIdleRuneDungeon(state); }
+  if (idleActivePanel === 'equipment') renderIdleInventory(state);
   if (idleActivePanel === 'upgrades') {
     renderIdleMilestone(state.dojo);
     renderIdlePrestige(state.dojo);
@@ -782,7 +782,10 @@ function idleTabBadgeCounts(state) {
   const progression = state.rank?.ready ? 1 : 0;
   // Coffres en attente (boss + jalon) : signalés sur l'onglet Combat, où ils s'ouvrent.
   const home = (state.battle?.bossChest?.available ? 1 : 0) + (state.dojo?.milestone?.available ? 1 : 0);
-  return { team, upgrades, activities, progression, home, equipment: 0 };
+  // Farm : record de Faille battable ou tentative gratuite du Donjon des Objets disponible.
+  const farm = ((state.rift?.unlocked && state.rift?.projectedFloor > state.rift?.bestFloor) ? 1 : 0)
+    + ((state.runeDungeon?.freeRemaining > 0) ? 1 : 0);
+  return { team, upgrades, activities, progression, home, farm, equipment: 0 };
 }
 function renderIdleTabBadges(state) {
   const counts = idleTabBadgeCounts(state);
