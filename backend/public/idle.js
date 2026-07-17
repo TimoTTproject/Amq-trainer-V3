@@ -1413,12 +1413,17 @@ async function claimIdleBossChest() {
   catch (e) { idleNotify(e.message,'error'); }
 }
 
+// Carte de butin partagée par les deux modales de révélation (coffre de boss
+// et Donjon des Runes) — même objet stocké/recyclé, même gabarit visuel.
+function idleLootCardHTML(loot){
+  if(!loot)return '';
+  const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
+  return `<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())} · SET ${escapeHtml(loot.setKey||'energy').toUpperCase()}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Objet ajouté · ${escapeHtml(names[loot.kind]||'Objet')} · +0`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-diamond"></i> Voir et équiper l’objet</button>':''}`;
+}
 function showIdleBossReward(reward) {
   const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');const title=document.getElementById('idle-boss-reveal-title');if(!modal||!body)return;
   if(title)title.innerHTML='<i class="fas fa-box-open"></i> Coffre de boss';
-  const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
-  const loot=reward.loot;
-  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span></div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())} · SET ${escapeHtml(loot.setKey||'energy').toUpperCase()}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Objet ajouté · ${escapeHtml(names[loot.kind]||'Objet')} · +0`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-diamond"></i> Voir et équiper l’objet</button>':''}`:''}`;
+  body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span></div>${idleLootCardHTML(reward.loot)}`;
   modal.classList.remove('hidden');
 }
 
@@ -1427,10 +1432,8 @@ function showIdleBossReward(reward) {
 // recyclage si l'inventaire est plein), juste l'objet obtenu dans le slot choisi.
 function showIdleRuneDungeonReward(result){
   const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');const title=document.getElementById('idle-boss-reveal-title');if(!modal||!body)return;
-  const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
-  const loot=result.loot;
   if(title)title.innerHTML='<i class="fas fa-dungeon"></i> Donjon des Runes';
-  body.innerHTML=`${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())} · SET ${escapeHtml(loot.setKey||'energy').toUpperCase()}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Objet ajouté · ${escapeHtml(names[loot.kind]||'Objet')} · +0`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-diamond"></i> Voir et équiper l’objet</button>':''}`:''}`;
+  body.innerHTML=idleLootCardHTML(result.loot);
   modal.classList.remove('hidden');
 }
 

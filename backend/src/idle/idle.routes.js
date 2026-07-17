@@ -1518,7 +1518,6 @@ async function buildState(userId) {
     freeAttempts:RUNE_DUNGEON_FREE_ATTEMPTS,
     freeRemaining:runeDungeonFreeRemaining,
     nextCost:runeDungeonFreeRemaining>0?0:runeDungeonExtraCost(runeDungeonAttemptsToday-RUNE_DUNGEON_FREE_ATTEMPTS,progressionStage),
-    rarity:runeDungeonRarity(progressionStage),
     kinds:RUNE_KINDS.map((kind)=>({kind,label:ITEM_KINDS[kind].label,icon:ITEM_KINDS[kind].icon})),
   };
   const guide=[
@@ -3111,6 +3110,23 @@ router.post('/feedback', requireAuth, requireIdleBeta, rateLimit({ max: 5, windo
   res.status(201).json({ ok: true });
 });
 
+// Résout un drop d'objet : le stocke si l'inventaire a de la place, sinon le
+// recycle immédiatement en Essence (pondérée par la Fortune équipée). Partagé
+// par le coffre de boss et le Donjon des Runes, seules sources d'objets.
+async function resolveIdleItemDrop(tx, userId, bestStage, tier, kind, rarity, bonus, sourceWorld) {
+  const drop = idleItemDrop(tier, kind, rarity, bonus, sourceWorld);
+  const inventoryCount = await tx.idleItem.count({ where: { userId } });
+  if (inventoryCount < IDLE_ITEM_CAPACITY) {
+    const item = await tx.idleItem.create({ data: { userId, ...drop } });
+    return { ...drop, itemId: item.id, equipped: false, stored: true };
+  }
+  const equippedItems = await tx.idleItem.findMany({ where: { userId, equippedCharacterId: { not: null } }, select: { effectKey: true, effectValue: true, affixes: true, setKey: true, equippedCharacterId: true } });
+  const fortuneBonus = equippedItems.flatMap((it) => itemAffixList(it)).filter((a) => ITEM_EFFECTS[a.effectKey]?.mode === 'salvage').reduce((sum, a) => sum + (a.effectValue || 0), 0);
+  const salvage = Math.round(itemSalvageValue(drop, bestStage) * (1 + fortuneBonus) * equipmentSetFlatMultiplier(equippedItems, 'salvage'));
+  await tx.user.update({ where: { id: userId }, data: { essence: { increment: salvage }, essenceEarnedTotal: { increment: salvage } } });
+  return { ...drop, equipped: false, stored: false, salvage };
+}
+
 router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-boss-chest' }), async (req, res) => {
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -3127,9 +3143,8 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
       if (!updated.count) throw new IdleError(409, 'Coffre déjà réclamé');
       const kind=RUNE_KINDS[(tier-1)%RUNE_KINDS.length];const rarity=lootRarity;
       const base={rare:.03,epic:.06,legendary:.10,mythic:.16}[rarity];const bonus=Number((base+Math.min(.25,tier*.002)).toFixed(3));
-      const sourceWorld=campaignForStage(tier*10).name;const drop=idleItemDrop(tier,kind,rarity,bonus,sourceWorld);const inventoryCount=await tx.idleItem.count({where:{userId:user.id}});let loot;
-      if(inventoryCount<IDLE_ITEM_CAPACITY){const item=await tx.idleItem.create({data:{userId:user.id,...drop}});loot={...drop,itemId:item.id,equipped:false,stored:true};}
-      else{const equippedItems=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}},select:{effectKey:true,effectValue:true,affixes:true,setKey:true,equippedCharacterId:true}});const fortuneBonus=equippedItems.flatMap((it)=>itemAffixList(it)).filter((a)=>ITEM_EFFECTS[a.effectKey]?.mode==='salvage').reduce((sum,a)=>sum+(a.effectValue||0),0);const salvage=Math.round(itemSalvageValue(drop,Math.max(user.idleBestStage||1,user.idleStage||1))*(1+fortuneBonus)*equipmentSetFlatMultiplier(equippedItems,'salvage'));await tx.user.update({where:{id:user.id},data:{essence:{increment:salvage},essenceEarnedTotal:{increment:salvage}}});loot={...drop,equipped:false,stored:false,salvage};}
+      const sourceWorld=campaignForStage(tier*10).name;
+      const loot=await resolveIdleItemDrop(tx,user.id,Math.max(user.idleBestStage||1,user.idleStage||1),tier,kind,rarity,bonus,sourceWorld);
       return { tier,reward:totalEssence,baseReward:amount,bonusEssence,seals:sealReward,loot };
     });
     await incrementIdleCounter(req.user.id,'boss_chest',1);
@@ -3153,34 +3168,33 @@ router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ m
       const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
       const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
       const attemptsToday = counterRow?.value || 0;
+      // Garde optimiste sur la valeur lue AVANT tout débit d'Essence : sans
+      // elle, deux requêtes concurrentes lisaient le même attemptsToday et
+      // payaient toutes les deux le même prix (trop bas), au lieu d'une
+      // escalade correcte — même faille que celle déjà corrigée sur le débit
+      // de Sceaux du recrutement (cf. /recruit ci-dessus).
+      if (counterRow) {
+        const bump = await tx.idleProgressCounter.updateMany({ where: { id: counterRow.id, value: attemptsToday }, data: { value: { increment: 1 } } });
+        if (!bump.count) throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+      } else {
+        try {
+          await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 } });
+        } catch (e) {
+          if (e?.code === 'P2002') throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+          throw e;
+        }
+      }
       let cost = 0;
       if (attemptsToday >= RUNE_DUNGEON_FREE_ATTEMPTS) {
         cost = runeDungeonExtraCost(attemptsToday - RUNE_DUNGEON_FREE_ATTEMPTS, bestStage);
         const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost } } });
         if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
       }
-      await tx.idleProgressCounter.upsert({
-        where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } },
-        create: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 },
-        update: { value: { increment: 1 } },
-      });
       const rarity = runeDungeonRarity(bestStage);
       const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
       const tier = Math.max(1, Math.floor(bestStage / 10));
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
-      const drop = idleItemDrop(tier, kind, rarity, bonus, 'Donjon des Runes');
-      const inventoryCount = await tx.idleItem.count({ where: { userId: user.id } });
-      let loot;
-      if (inventoryCount < IDLE_ITEM_CAPACITY) {
-        const item = await tx.idleItem.create({ data: { userId: user.id, ...drop } });
-        loot = { ...drop, itemId: item.id, equipped: false, stored: true };
-      } else {
-        const equippedItems = await tx.idleItem.findMany({ where: { userId: user.id, equippedCharacterId: { not: null } }, select: { effectKey: true, effectValue: true, affixes: true, setKey: true, equippedCharacterId: true } });
-        const fortuneBonus = equippedItems.flatMap((it) => itemAffixList(it)).filter((a) => ITEM_EFFECTS[a.effectKey]?.mode === 'salvage').reduce((sum, a) => sum + (a.effectValue || 0), 0);
-        const salvage = Math.round(itemSalvageValue(drop, bestStage) * (1 + fortuneBonus) * equipmentSetFlatMultiplier(equippedItems, 'salvage'));
-        await tx.user.update({ where: { id: user.id }, data: { essence: { increment: salvage }, essenceEarnedTotal: { increment: salvage } } });
-        loot = { ...drop, equipped: false, stored: false, salvage };
-      }
+      const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, 'Donjon des Runes');
       result = { cost, loot };
     });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
