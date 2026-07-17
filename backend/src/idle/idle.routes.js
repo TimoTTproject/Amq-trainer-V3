@@ -262,22 +262,27 @@ function idleMissionList(user, recruitCount, activeCount, stage, counters=new Ma
   return [...daily,...weekly];
 }
 
+// Plafonds ×10 (et paliers ×10 à l'identique, même courbe relative) : retour
+// utilisateur "fini en deux jours" — un joueur actif épuisait les 6 compteurs
+// (20 coffres de boss, 20 invocations, 300 compétences...) en une fraction du
+// mois, puis n'avait plus rien à viser jusqu'à la saison suivante. Le parcours
+// doit demander un mois d'engagement soutenu, pas un week-end.
 const SEASON_TIERS = [
-  {tier:1,level:1000,reward:1,essence:0},{tier:2,level:2500,reward:2,essence:0},
-  {tier:3,level:5000,reward:2,essence:25000},{tier:4,level:8000,reward:3,essence:0},
-  {tier:5,level:12000,reward:3,essence:0},{tier:6,level:16000,reward:4,essence:75000},
-  {tier:7,level:20000,reward:5,essence:0},{tier:8,level:24000,reward:7,essence:200000},
+  {tier:1,level:10000,reward:1,essence:0},{tier:2,level:25000,reward:2,essence:0},
+  {tier:3,level:50000,reward:2,essence:25000},{tier:4,level:80000,reward:3,essence:0},
+  {tier:5,level:120000,reward:3,essence:0},{tier:6,level:160000,reward:4,essence:75000},
+  {tier:7,level:200000,reward:5,essence:0},{tier:8,level:240000,reward:7,essence:200000},
 ];
 
 function seasonActivityScore(counters, period) {
   const value=(key)=>counters.get(`${key}:${period}`)||0;
   const breakdown=[
-    {key:'click',label:'Frappes',value:Math.min(value('click'),3000),cap:3000,weight:1},
-    {key:'kill',label:'Victoires',value:Math.min(value('kill'),5000),cap:5000,weight:1},
-    {key:'skill',label:'Compétences',value:Math.min(value('skill'),300),cap:300,weight:15},
-    {key:'upgrade',label:'Améliorations',value:Math.min(value('upgrade'),300),cap:300,weight:12},
-    {key:'boss_chest',label:'Coffres',value:Math.min(value('boss_chest'),20),cap:20,weight:300},
-    {key:'recruit',label:'Invocations',value:Math.min(value('recruit'),20),cap:20,weight:100},
+    {key:'click',label:'Frappes',value:Math.min(value('click'),30000),cap:30000,weight:1},
+    {key:'kill',label:'Victoires',value:Math.min(value('kill'),50000),cap:50000,weight:1},
+    {key:'skill',label:'Compétences',value:Math.min(value('skill'),3000),cap:3000,weight:15},
+    {key:'upgrade',label:'Améliorations',value:Math.min(value('upgrade'),3000),cap:3000,weight:12},
+    {key:'boss_chest',label:'Coffres',value:Math.min(value('boss_chest'),200),cap:200,weight:300},
+    {key:'recruit',label:'Invocations',value:Math.min(value('recruit'),200),cap:200,weight:100},
   ];
   return { score:breakdown.reduce((sum,x)=>sum+x.value*x.weight,0),breakdown:breakdown.map((x)=>({...x,score:x.value*x.weight})) };
 }

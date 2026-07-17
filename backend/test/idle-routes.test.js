@@ -283,7 +283,7 @@ test('saison : huit paliers et aucune action unique ne termine le parcours', () 
   const killsOnly=seasonActivityScore(new Map([[`kill:${period}`,999999]]),period);
   assert.equal(SEASON_TIERS.length,8);
   assert.ok(killsOnly.score<SEASON_TIERS.at(-1).level);
-  assert.equal(killsOnly.breakdown.find((x)=>x.key==='kill').value,5000);
+  assert.equal(killsOnly.breakdown.find((x)=>x.key==='kill').value,50000);
 });
 
 test('défi hebdomadaire : toutes les familles d actions sont obligatoires', () => {
