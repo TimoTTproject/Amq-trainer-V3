@@ -815,33 +815,57 @@ function wisdomForRunStage(stage, prestigeLevel = 0) {
 // ascension. Chaque pouvoir apporte un avantage net avec un vrai compromis ;
 // la liste entière est remise à zéro au Prestige.
 const RUN_BLESSINGS = [
-  {key:'berserker',name:'Pacte du Berserker',icon:'fa-hand-fist',rarity:'epic',upside:'+25 % DPS d’équipe',downside:'−15 % dégâts de clic',prod:1.25,click:.85},
-  {key:'deadeye',name:'Œil du Destin',icon:'fa-crosshairs',rarity:'rare',upside:'+10 % de critique',downside:'−8 % DPS d’équipe',prod:.92,crit:.10},
-  {key:'overcharge',name:'Surcharge arcanique',icon:'fa-burst',rarity:'legendary',upside:'+40 % dégâts d’Ultime',downside:'Recharge +12 %',burst:1.40,cooldown:1.12},
-  {key:'brotherhood',name:'Serment de la Meute',icon:'fa-people-group',rarity:'epic',upside:'+35 % dégâts de Combo',downside:'−10 % dégâts de clic',team:1.35,click:.90},
-  {key:'tempo',name:'Danse du Temps',icon:'fa-hourglass-half',rarity:'legendary',upside:'Recharges −18 %',downside:'−10 % DPS d’équipe',cooldown:.82,prod:.90},
-  {key:'glass_cannon',name:'Lame de Verre',icon:'fa-khanda',rarity:'epic',upside:'+35 % dégâts de clic',downside:'−15 % DPS d’équipe',click:1.35,prod:.85},
-  {key:'discipline',name:'Discipline parfaite',icon:'fa-yin-yang',rarity:'rare',upside:'+15 % à tous les dégâts',downside:'Recharges +15 %',prod:1.15,click:1.15,burst:1.15,team:1.15,cooldown:1.15},
-  {key:'echo',name:'Écho des héros',icon:'fa-wand-sparkles',rarity:'mythic',upside:'+22 % DPS et Combo',downside:'−6 % de critique',prod:1.22,team:1.22,crit:-.06},
+  {key:'berserker',name:'Pacte du Berserker',icon:'fa-hand-fist',rarity:'epic',affinity:'assault',upside:'+25 % DPS d’équipe',downside:'−15 % dégâts de clic',prod:1.25,click:.85},
+  {key:'deadeye',name:'Œil du Destin',icon:'fa-crosshairs',rarity:'rare',affinity:'precision',upside:'+10 % de critique',downside:'−8 % DPS d’équipe',prod:.92,crit:.10},
+  {key:'overcharge',name:'Surcharge arcanique',icon:'fa-burst',rarity:'legendary',affinity:'arcane',upside:'+40 % dégâts d’Ultime',downside:'Recharge +12 %',burst:1.40,cooldown:1.12},
+  {key:'brotherhood',name:'Serment de la Meute',icon:'fa-people-group',rarity:'epic',affinity:'unity',upside:'+35 % dégâts de Combo',downside:'−10 % dégâts de clic',team:1.35,click:.90},
+  {key:'tempo',name:'Danse du Temps',icon:'fa-hourglass-half',rarity:'legendary',affinity:'arcane',upside:'Recharges −18 %',downside:'−10 % DPS d’équipe',cooldown:.82,prod:.90},
+  {key:'glass_cannon',name:'Lame de Verre',icon:'fa-khanda',rarity:'epic',affinity:'assault',upside:'+35 % dégâts de clic',downside:'−15 % DPS d’équipe',click:1.35,prod:.85},
+  {key:'discipline',name:'Discipline parfaite',icon:'fa-yin-yang',rarity:'rare',affinity:'precision',upside:'+15 % à tous les dégâts',downside:'Recharges +15 %',prod:1.15,click:1.15,burst:1.15,team:1.15,cooldown:1.15},
+  {key:'echo',name:'Écho des héros',icon:'fa-wand-sparkles',rarity:'mythic',affinity:'unity',upside:'+22 % DPS et Combo',downside:'−6 % de critique',prod:1.22,team:1.22,crit:-.06},
+  {key:'execution',name:'Marque de l’Exécuteur',icon:'fa-skull-crossbones',rarity:'legendary',affinity:'assault',upside:'+30 % clic et Ultime',downside:'−12 % dégâts de Combo',click:1.30,burst:1.30,team:.88},
+  {key:'hunter',name:'Instinct du Chasseur',icon:'fa-eye',rarity:'epic',affinity:'precision',upside:'+7 % critique et +18 % clic',downside:'−10 % Ultime',crit:.07,click:1.18,burst:.90},
+  {key:'resonance',name:'Résonance astrale',icon:'fa-wave-square',rarity:'mythic',affinity:'arcane',upside:'+28 % Ultime et recharges −10 %',downside:'−12 % clic',burst:1.28,cooldown:.90,click:.88},
+  {key:'banner',name:'Bannière de l’Alliance',icon:'fa-flag',rarity:'legendary',affinity:'unity',upside:'+20 % DPS et +25 % Combo',downside:'Recharges +8 %',prod:1.20,team:1.25,cooldown:1.08},
 ];
+const RUN_AFFINITIES = {
+  assault:{key:'assault',name:'Assaut',icon:'fa-khanda',description:'2 pouvoirs : +8 % DPS et +12 % clic',prod:1.08,click:1.12},
+  precision:{key:'precision',name:'Précision',icon:'fa-crosshairs',description:'2 pouvoirs : +5 % critique',crit:.05},
+  arcane:{key:'arcane',name:'Arcanes',icon:'fa-wand-magic-sparkles',description:'2 pouvoirs : +15 % Ultime et recharges −8 %',burst:1.15,cooldown:.92},
+  unity:{key:'unity',name:'Alliance',icon:'fa-people-group',description:'2 pouvoirs : +5 % DPS et +18 % Combo',prod:1.05,team:1.18},
+};
 function parseRunBlessings(value) {
   const values=Array.isArray(value)?value:String(value||'').split(',');
   return values.map((key)=>String(key).trim()).filter((key)=>RUN_BLESSINGS.some((item)=>item.key===key)).slice(0,12);
 }
 function runBlessingEffects(value) {
-  const effects={prod:1,click:1,crit:0,cooldown:1,burst:1,team:1};
-  for(const key of parseRunBlessings(value)){
+  const keys=parseRunBlessings(value);const effects={prod:1,click:1,crit:0,cooldown:1,burst:1,team:1,combos:[]};const affinityCounts={};
+  for(const key of keys){
     const item=RUN_BLESSINGS.find((entry)=>entry.key===key);if(!item)continue;
     for(const stat of ['prod','click','cooldown','burst','team'])effects[stat]*=item[stat]||1;
     effects.crit+=item.crit||0;
+    affinityCounts[item.affinity]=(affinityCounts[item.affinity]||0)+1;
   }
+  for(const [key,count] of Object.entries(affinityCounts)){
+    const affinity=RUN_AFFINITIES[key];if(!affinity||count<2)continue;
+    for(const stat of ['prod','click','cooldown','burst','team'])effects[stat]*=affinity[stat]||1;
+    effects.crit+=affinity.crit||0;effects.combos.push({...affinity,count});
+  }
+  const dominant=Object.entries(affinityCounts).sort((a,b)=>b[1]-a[1])[0];
+  effects.archetype=dominant&&dominant[1]>=2?RUN_AFFINITIES[dominant[0]].name:keys.length?'Hybride':'À construire';
   return effects;
 }
 function runBlessingChoices(userId,prestigeLevel,choiceIndex,owned=[],rerollCount=0) {
-  const ownedKeys=parseRunBlessings(owned);const score=(item,salt)=>String(`${userId}:${prestigeLevel}:${choiceIndex}:${rerollCount}:${salt}:${item.key}`).split('').reduce((n,char)=>((n*33)^char.charCodeAt(0))>>>0,2166136261);
+  const ownedKeys=parseRunBlessings(owned);const score=(item,salt)=>String(`${userId}:${prestigeLevel}:${choiceIndex}:0:${salt}:${item.key}`).split('').reduce((n,char)=>((n*33)^char.charCodeAt(0))>>>0,2166136261);
   const fresh=RUN_BLESSINGS.filter((item)=>!ownedKeys.includes(item.key)).sort((a,b)=>score(a,'fresh')-score(b,'fresh'));
   const repeats=RUN_BLESSINGS.filter((item)=>ownedKeys.includes(item.key)).sort((a,b)=>score(a,'repeat')-score(b,'repeat'));
-  return [...fresh,...repeats].slice(0,3);
+  // Un reroll parcourt le pool stable par groupes de trois au lieu de refaire
+  // un tri indépendant. Ainsi deux rerolls consécutifs proposent toujours
+  // trois pouvoirs différents, y compris en fin de run lorsqu'il ne reste que
+  // trois pouvoirs encore jamais choisis (l'ancien tri reproposait alors
+  // systématiquement le même trio tout en débitant l'Essence).
+  const pool=[...fresh,...repeats];const offset=(Math.max(0,rerollCount||0)*3)%pool.length;
+  return Array.from({length:Math.min(3,pool.length)},(_,index)=>pool[(offset+index)%pool.length]);
 }
 // Reroll payant des 3 choix proposés (retour testeur : « peut-être offrir la
 // possibilité de reroll ») : coût croissant en Essence, remis à zéro au
@@ -1170,6 +1194,7 @@ module.exports = {
   prestigeRequiredStage,
   wisdomForRunStage,
   RUN_BLESSINGS,
+  RUN_AFFINITIES,
   parseRunBlessings,
   runBlessingEffects,
   runBlessingChoices,

@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
+const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -71,6 +71,36 @@ test('synergie : plusieurs licences cumulent leurs bonus au lieu de ne garder qu
   const duoPlusAlliance=synergyForSlots([slot(1,'Naruto'),slot(2,'Naruto'),slot(3,'Bleach'),slot(4,'Bleach'),slot(5,'Bleach')]);
   assert.equal(duoPlusAlliance.bonus,.35);
   assert.match(duoPlusAlliance.next,/3e héros Naruto/); // priorité au duo qu'on peut encore upgrader
+});
+
+test('synergie : les saisons et parties d’un anime comptent comme une seule licence',()=>{
+  const slot=(id,series)=>({characterId:id,character:{series}});
+  const sameLicense=synergyForSlots([
+    slot(1,'[Oshi no Ko]'),
+    slot(2,'[Oshi no Ko] 2nd Season'),
+    slot(3,'[Oshi no Ko] Season 3'),
+  ]);
+  assert.equal(sameLicense.key,'license');
+  assert.equal(sameLicense.bonus,.25);
+  assert.equal(sameLicense.series.length,1);
+  assert.equal(sameLicense.series[0].name,'[Oshi no Ko]');
+  assert.equal(sameLicense.series[0].count,3);
+
+  const mergedInsteadOfTwoDuos=synergyForSlots([
+    slot(1,'Jujutsu Kaisen'),
+    slot(2,'Jujutsu Kaisen Season 2'),
+    slot(3,'Jujutsu Kaisen Part 2'),
+    slot(4,'Jujutsu Kaisen Cour 3'),
+  ]);
+  assert.equal(mergedInsteadOfTwoDuos.series.length,1);
+  assert.equal(mergedInsteadOfTwoDuos.bonus,.25);
+});
+
+test('activités : le défi de licence reconnaît une alliance entre saisons',()=>{
+  const counters=new Map([['kill:2026-07-17',150]]);
+  const slots=['Jujutsu Kaisen','Jujutsu Kaisen Season 2','Jujutsu Kaisen Part 2'].map((series,index)=>({characterId:index+1,character:{series}}));
+  const challenge=idleChallengeList(counters,slots,{day:'2026-07-17',week:'2026-07-13',month:'2026-07'}).find((item)=>item.key==='license_vanguard');
+  assert.equal(challenge.completed,true);assert.equal(challenge.progress,100);
 });
 
 test('squadPresetSlots : chaque slot vérifie SA PROPRE condition (pas un simple comptage par index)',()=>{
@@ -455,6 +485,17 @@ test('équipement automatique : comble uniquement les emplacements vides, sans j
   assert.equal(updates[0].where.id,'free-strong');
   assert.equal(updates[0].data.equippedCharacterId,1);
   assert.equal(res.json.optimization.equipped,1);
+});
+
+test('équipement : le meulage sécurisé conserve un meilleur ancien jet',async()=>{
+  const user=dbUser({essence:1e9,idleBestStage:10,idleStage:10});const item={id:'safe-reroll',userId:'u1',kind:'rune1',rarity:'epic',bonus:.03,effectKey:'assault',effectValue:.5,affixes:[{effectKey:'boss',effectValue:.4}],setKey:'energy',enhancementLevel:0,equippedCharacterId:null};
+  prisma.user.findUnique=async()=>user;prisma.user.update=async()=>user;prisma.user.updateMany=async()=>({count:1});prisma.idleItem.findFirst=async()=>item;prisma.idleItem.findMany=async()=>[];
+  let updated=false;prisma.idleItem.update=async()=>{updated=true;return item;};
+  const originalRandom=Math.random;Math.random=()=>0;
+  try{
+    const res=await app.request('/api/idle/equipment/reroll',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:item.id,keepBest:true}});
+    assert.equal(res.status,200);assert.equal(res.json.reroll.kept,true);assert.equal(updated,false);assert.equal(res.json.reroll.after.score,.9);
+  }finally{Math.random=originalRandom;}
 });
 
 test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{

@@ -79,8 +79,20 @@ test('roguelike : les choix de bénédictions sont stables, variés et cumulent 
   assert.equal(effects.prod,1.25*.92);assert.equal(effects.click,.85);assert.equal(effects.crit,.10);
   assert.deepEqual(parseRunBlessings('inconnu,berserker'),['berserker']);
   assert.ok(RUN_BLESSINGS.every((item)=>item.upside&&item.downside));
-  const almostAll=RUN_BLESSINGS.slice(0,6).map((item)=>item.key);const late=runBlessingChoices('u1',2,6,almostAll);
-  assert.ok(RUN_BLESSINGS.slice(6).every((item)=>late.some((choice)=>choice.key===item.key)));
+  const almostAll=RUN_BLESSINGS.slice(0,-3).map((item)=>item.key);const late=runBlessingChoices('u1',2,9,almostAll);
+  assert.ok(RUN_BLESSINGS.slice(-3).every((item)=>late.some((choice)=>choice.key===item.key)));
+  const assault=runBlessingEffects('berserker,glass_cannon');
+  assert.equal(assault.archetype,'Assaut');assert.equal(assault.combos.length,1);
+  assert.equal(assault.prod,1.25*.85*1.08);assert.equal(assault.click,.85*1.35*1.12);
+});
+
+test('roguelike : chaque reroll consécutif remplace visiblement les trois choix, même en fin de pool',()=>{
+  const owned=RUN_BLESSINGS.slice(0,5).map((item)=>item.key);
+  for(let reroll=0;reroll<8;reroll++){
+    const before=runBlessingChoices('u-reroll',3,5,owned,reroll).map((item)=>item.key);
+    const after=runBlessingChoices('u-reroll',3,5,owned,reroll+1).map((item)=>item.key);
+    assert.equal(after.some((key)=>before.includes(key)),false,`reroll ${reroll+1} doit remplacer tout le trio`);
+  }
 });
 
 test('améliorations de run : critique et recharge progressent et plafonnent', () => {

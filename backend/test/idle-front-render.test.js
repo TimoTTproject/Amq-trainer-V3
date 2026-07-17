@@ -46,7 +46,7 @@ test('conseiller Idle : une recommandation contextualisée dirige vers un onglet
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 
   assert.match(html, /id="idle-advisor"/);
-  assert.match(source, /function renderIdleAdvisor\(advisor\)/);
+  assert.match(source, /function renderIdleAdvisor\(advisor,roadmap=/);
   assert.match(source, /data-advisor-command/);
   assert.match(source, /command==='claim-all'/);
 });
@@ -188,4 +188,27 @@ test('aventure roguelike Idle : vit dans Progression et garde un raccourci conte
   assert.doesNotMatch(html.slice(homeStart, progressionStart), /id="idle-run-journey"/);
   assert.match(source, /idle-run-shortcut-label/);
   assert.match(source, /idleShowPanel\('progression'\)/);
+});
+
+test('aventure roguelike Idle : une erreur de reroll réactive le bouton selon le dernier état connu', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const start = source.indexOf('async function rerollIdleRunBlessing()');
+  const end = source.indexOf('function renderIdleOnboarding', start);
+  assert.ok(start >= 0 && end > start, 'gestionnaire de reroll introuvable');
+  assert.match(source.slice(start, end), /catch\(e\)\{idleNotify\(e\.message,'error'\);if\(idleState\)renderIdleRunJourney\(idleState\);\}/);
+});
+
+test('pilotage stratégique Idle : builds, diagnostic combat et profils automatiques restent exposés', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  for (const id of ['idle-run-combos', 'idle-combat-analysis', 'idle-automation-profiles']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(source, /function renderIdleCombatAnalysis\(/);
+  assert.match(source, /async function applyIdleAutomationProfile\(/);
+  assert.match(source, /keepBest:true/);
+  assert.match(styles, /\.idle-advisor ol/);
+  assert.match(styles, /\.idle-run-combos/);
+  assert.match(styles, /\.idle-automation-profiles/);
 });

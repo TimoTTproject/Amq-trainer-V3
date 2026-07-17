@@ -1738,6 +1738,7 @@
               <span><i class="fas fa-hand-fist"></i> Clic <b id="idle-combat-click">+0</b></span>
               <span><i class="fas fa-users"></i> Équipe <b id="idle-combat-team">0/s</b></span>
             </div>
+            <div class="idle-combat-analysis" id="idle-combat-analysis" aria-live="polite"></div>
             <div class="idle-combat-quests" id="idle-combat-quests" aria-label="Quêtes actives"></div>
             <button type="button" class="idle-run-shortcut" id="idle-run-shortcut"><i class="fas fa-dice-d20"></i><span><small>AVENTURE ROGUELIKE</small><b id="idle-run-shortcut-label">Prochain choix au stage 21</b></span><i class="fas fa-arrow-right"></i></button>
             <!-- Dock d'achats rapides : monter ses héros SANS quitter le combat
@@ -1755,6 +1756,10 @@
             <details class="idle-combat-options">
               <summary><span><i class="fas fa-sliders"></i> Réglages de combat</span><i class="fas fa-chevron-down"></i></summary>
               <div class="idle-combat-options-body">
+                <div class="idle-automation-profiles" id="idle-automation-profiles" aria-label="Profils d'automatisation">
+                  <span><i class="fas fa-gears"></i><b>Pilotage rapide</b><small>Applique vitesse, mode et compétences en un clic.</small></span>
+                  <div><button type="button" data-automation-profile="push"><i class="fas fa-route"></i> Progression</button><button type="button" data-automation-profile="farm"><i class="fas fa-wheat-awn"></i> Farm</button><button type="button" data-automation-profile="boss"><i class="fas fa-skull"></i> Boss manuel</button></div>
+                </div>
                 <div class="idle-speed-control"><span><i class="fas fa-forward-fast"></i> Vitesse</span><div id="idle-speed-buttons"></div></div>
                 <div class="idle-mode-control" id="idle-mode-control"><button data-battle-mode="progress"><i class="fas fa-route"></i><span><b>Progression</b><small>Passe à la vague suivante</small></span></button><button data-battle-mode="farm"><i class="fas fa-repeat"></i><span><b>Répéter la vague</b><small>Bloque volontairement la progression</small></span></button></div>
                 <button class="idle-auto-skills" id="idle-auto-skills"><i class="fas fa-robot"></i><span><b>Auto-compétences</b><small id="idle-auto-skills-label">Niveau 50</small></span><i class="fas fa-toggle-off"></i></button>
@@ -1790,6 +1795,7 @@
           <section class="profile-section idle-run-journey" id="idle-run-journey" aria-labelledby="idle-run-title">
             <header><span><small>AVENTURE ROGUELIKE</small><h3 id="idle-run-title"><i class="fas fa-dice-d20"></i> Expédition actuelle</h3><em>Les pouvoirs temporaires de ta run et ton prochain choix stratégique.</em></span><strong id="idle-run-act">ACTE 1</strong></header>
             <div class="idle-run-rpg-stats"><span><small>ARCHÉTYPE</small><b id="idle-run-archetype">Escouade novice</b></span><span><small>PUISSANCE</small><b id="idle-run-power">0</b></span><span><small>PROCHAIN CHOIX</small><b id="idle-run-next">Stage 21</b></span></div>
+            <div class="idle-run-combos" id="idle-run-combos"></div>
             <div class="idle-run-blessings" id="idle-run-blessings"></div>
             <div class="idle-run-choice hidden" id="idle-run-choice"><header><i class="fas fa-wand-sparkles"></i><span><small>NOUVEAU PALIER ATTEINT</small><b>Choisis une bénédiction pour cette run</b><em>Le choix est définitif jusqu’au prochain Prestige.</em></span><button type="button" class="btn-secondary" id="idle-run-reroll" title="Proposer 3 autres pouvoirs contre de l'Essence"><i class="fas fa-dice"></i> Reroll · <span id="idle-run-reroll-cost">–</span></button></header><div id="idle-run-choices"></div></div>
           </section>

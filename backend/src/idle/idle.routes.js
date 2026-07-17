@@ -308,8 +308,10 @@ function challengeProgress(requirements) {
 function idleChallengeList(counters, slots, periods=idlePeriods()) {
   const value=(key,period)=>counters.get(`${key}:${period}`)||0;
   const uniqueRoles=new Set(slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character))).size;
+  const licenseSynergy=synergyForSlots(slots);
   const defs=[
     {key:'disciplined_assault',name:'Assaut discipliné',cadence:'Quotidien',difficulty:'Expert',description:'Combine activité manuelle et techniques.',period:periods.day,reward:3,icon:'fa-hand-fist',requirements:[{label:'Frappes',progress:value('click',periods.day),target:250},{label:'Compétences',progress:value('skill',periods.day),target:6}]},
+    {key:'license_vanguard',name:'Avant-garde de licence',cadence:'Quotidien',difficulty:'Composition',description:'Fais combattre ensemble trois héros d’une même licence, saisons confondues.',period:periods.day,reward:3,icon:'fa-flag',requirements:[{label:'Héros de la même licence',progress:licenseSynergy.sameSeries||0,target:3},{label:'Ennemis vaincus',progress:value('kill',periods.day),target:150}]},
     {key:'complete_squad',name:'Escouade complète',cadence:'Hebdomadaire',difficulty:'Tactique',description:'Construis une équipe variée qui tient sur la durée.',period:periods.week,reward:5,icon:'fa-people-group',requirements:[{label:'Rôles actifs',progress:uniqueRoles,target:3},{label:'Ennemis vaincus',progress:value('kill',periods.week),target:1000}]},
     {key:'guardian_hunt',name:'Chasse aux gardiens',cadence:'Hebdomadaire',difficulty:'Endurance',description:'Franchis trois nouveaux murs de boss.',period:periods.week,reward:6,icon:'fa-crown',requirements:[{label:'Gardiens vaincus',progress:value('boss_kill',periods.week),target:3}]},
   ];
@@ -1081,19 +1083,39 @@ async function applyActiveDamage(tx, user, damage) {
   return { updated, killed:true, bossKilled:isBossStage(stage) && waveComplete && user.idleBattleMode !== 'farm' };
 }
 
+// Les personnages AniList peuvent pointer vers des saisons différentes d'une
+// même œuvre. Pour la synergie, ces libellés sont une seule licence :
+// "Jujutsu Kaisen" et "Jujutsu Kaisen Season 2" doivent donc se cumuler.
+// On ne retire que les marqueurs explicites de saison/partie/cour afin de ne
+// pas fusionner arbitrairement les spin-offs et suites portant un autre nom.
+function synergyLicenseName(series) {
+  const original=String(series||'').replace(/\s+/g,' ').trim();if(!original)return'';
+  const withoutSeason=original
+    .replace(/\s*[:\-\u2013\u2014]?\s*(?:(?:the\s+)?final\s+season|the\s+final|kanketsu-?hen)\s*$/i,'')
+    .replace(/\s*[:\-\u2013\u2014]?\s*(?:(?:\d+(?:st|nd|rd|th)\s+)?(?:season|saison|cour|part|partie)\s*\d*|(?:season|saison|cour|part|partie)\s*\d+|s\d+)\s*$/i,'')
+    .trim();
+  return withoutSeason||original;
+}
+function synergyLicenseKey(series) {
+  return synergyLicenseName(series).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+
 function synergyForSlots(slots) {
   const active = slots.filter((s) => s.characterId && s.character);
   const counts = new Map();
-  for (const s of active) if (s.character.series) counts.set(s.character.series, (counts.get(s.character.series) || 0) + 1);
+  for (const s of active) {
+    const name=synergyLicenseName(s.character.series);const key=synergyLicenseKey(s.character.series);if(!key)continue;
+    const entry=counts.get(key)||{name,count:0};entry.count++;counts.set(key,entry);
+  }
   // Chaque licence alignée en Duo (2) ou Alliance (3+) apporte SON PROPRE
   // bonus, cumulé additivement avec les autres — auparavant, seule la
   // MEILLEURE licence comptait (`sort(...)[0]`) : un joueur avec deux duos de
   // licences différentes dans une équipe de 4+ ne touchait que le bonus d'une
   // seule paire, ce qui rendait toute diversité au-delà de la meilleure
   // licence strictement punitive plutôt que récompensée.
-  const series = [...counts.entries()]
-    .filter(([, count]) => count >= 2)
-    .map(([name, count]) => ({ name, count, tier: count >= 3 ? 'alliance' : 'duo', bonus: count >= 3 ? .25 : .10 }))
+  const series = [...counts.values()]
+    .filter(({count}) => count >= 2)
+    .map(({name, count}) => ({ name, count, tier: count >= 3 ? 'alliance' : 'duo', bonus: count >= 3 ? .25 : .10 }))
     .sort((a, b) => b.bonus - a.bonus || b.count - a.count);
   const totalBonus = series.reduce((sum, s) => sum + s.bonus, 0);
   const best = series[0] || null;
@@ -1606,13 +1628,34 @@ async function buildState(userId) {
     recommendation:historyRows.length?(currentWisdomPerHour<averageWisdomPerHour*.8?'push':'prestige'):'learn',
   };
   const advisorSeason={tiers:SEASON_TIERS.map((x)=>({...x,completed:seasonActivity.score>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))};
-  const advisorFormations=Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,active:key===(user.idleFormation||'balanced'),conditionMet:key==='balanced'||multiplier>1,requirements};});
+  const advisorFormations=Object.entries(FORMATIONS).map(([key,f])=>{const roles=slots.filter((s)=>s.character).map((s)=>roleForCharacter(s.character));const multiplier=f.bonus(roles);const requirements=(f.requirements||[]).map((requirement)=>{const current=roles.filter((role)=>requirement.roles.includes(role)).length;return {label:requirement.label,current,required:requirement.count,met:current>=requirement.count};});return {key,name:f.name,active:key===(user.idleFormation||'balanced'),multiplier,conditionMet:key==='balanced'||multiplier>1,requirements};});
   const advisor=idleProgressAdvisor({
     user,slotsOut,totalRate,stage,maxEnemyHp,pending,inventory,missions,challenges,season:advisorSeason,
     weeklyEvent:{...weeklyConvergence(missionCounters,periods),claimed:weeklyClaimed},rank,
     prestige:{eligible:dojoLevel>=PRESTIGE_MIN_DOJO_LEVEL&&runBestStage>=prestigeRequiredStage(user.prestigeLevel||0)&&Date.now()-new Date(user.idleRunStartedAt).getTime()>=prestigeMinimumRunMs(user.prestigeLevel||0),reward:wisdomForRunStage(runBestStage,user.prestigeLevel||0)},
     formations:advisorFormations,
   });
+  const roadmapCandidates=[
+    advisor,
+    strategy.key==='none'?{key:'license_synergy',priority:'normal',icon:'fa-flag',title:'Construis une synergie de licence',description:'Aligne deux héros d’une même licence pour +10 %, ou trois pour +25 %. Les saisons comptent ensemble.',action:'Composer l’équipe',tab:'team'}:null,
+    preparedInventoryItems.some((item)=>!item.equipped)&&activeSlots.some((slot)=>(slot.items||[]).length<RUNE_KINDS.length)?{key:'fill_gear',priority:'normal',icon:'fa-shield-halved',title:'Complète les emplacements d’objets',description:'Des objets libres peuvent encore renforcer les héros actifs. Commence par combler les emplacements vides.',action:'Optimiser les objets',tab:'equipment'}:null,
+    blessingPending?{key:'run_choice',priority:'high',icon:'fa-dice-d20',title:'Un choix roguelike est disponible',description:'Choisis un pouvoir et rapproche deux affinités identiques pour activer un bonus de build.',action:'Voir les pouvoirs',tab:'progression'}:null,
+    {key:'next_stage',priority:'normal',icon:'fa-route',title:`Prépare le stage ${stage+1}`,description:isBossStage(stage)?'Analyse le déficit de DPS et la mécanique du Gardien avant de l’engager.':'Surveille le prochain boss, les paliers de héros et le rendement de tes achats.',action:'Retour au combat',tab:'home'},
+  ].filter(Boolean).filter((item,index,list)=>list.findIndex((candidate)=>candidate.key===item.key)===index).slice(0,3);
+  const ancientFocuses=ANCIENT_BRANCHES.map((branch)=>{const nodes=ANCIENTS.filter((item)=>item.branch===branch.key);const levels=nodes.reduce((sum,item)=>sum+(ancientLevelsByKey.get(item.key)||0),0);const next=nodes.find((item)=>!item.requires||(ancientLevelsByKey.get(item.requires)||0)>0&&!(ancientLevelsByKey.get(item.key)||0))||nodes.find((item)=>(ancientLevelsByKey.get(item.key)||0)>0)||nodes[0];return {...branch,levels,nextKey:next?.key||null,nextName:next?.name||null,nextCost:next?ancientCost(ancientLevelsByKey.get(next.key)||0):null};}).sort((a,b)=>b.levels-a.levels);
+  const ancientFocus=ancientFocuses[0]?.levels?ancientFocuses[0]:null;
+  const bossRequiredDps=maxEnemyHp/Math.max(1,BOSS_TIMER_SECONDS);
+  const combatAnalysis={
+    status:isBossStage(stage)?(totalRate>=bossRequiredDps?'ready':'blocked'):'progress',
+    title:isBossStage(stage)?(totalRate>=bossRequiredDps?'Puissance suffisante pour le Gardien':'Mur de Gardien détecté'):'Progression automatique stable',
+    requiredDps:isBossStage(stage)?Math.ceil(bossRequiredDps):null,
+    gap:isBossStage(stage)?Math.ceil(totalRate-bossRequiredDps):null,
+    factors:[
+      {label:'Synergie',value:strategy.name,multiplier:strategy.multiplier},
+      {label:'Formation',value:(advisorFormations.find((item)=>item.active)?.conditionMet?'Active':'Inactive'),multiplier:advisorFormations.find((item)=>item.active)?.conditionMet?advisorFormations.find((item)=>item.active)?.multiplier||1:1},
+      {label:'Build de run',value:blessingEffects.archetype,multiplier:blessingEffects.prod},
+    ],
+  };
   return {
     essence: user.essence,
     pendingEssence: pending,
@@ -1621,8 +1664,8 @@ async function buildState(userId) {
     // Buff temporaire d'orbe en cours (ou null) — le client affiche le bandeau
     // et le compte à rebours ; le serveur reste seul juge de l'expiration.
     buff:(()=>{const active=activeOrbBuff(user);return active?{key:active.key,label:active.label,description:active.description,prod:active.prod,click:active.click,until:active.until.toISOString(),remainingSeconds:Math.max(0,Math.round((active.until.getTime()-Date.now())/1000))}:null;})(),
-    run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,pending:blessingPending,choices:blessingChoices,rerollCost:blessingRerollCost,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
-    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld},
+    run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,build:{blessings:selectedBlessings,effects:blessingEffects,archetype:blessingEffects.archetype,combos:blessingEffects.combos,pending:blessingPending,choices:blessingChoices,rerollCost:blessingRerollCost,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
+    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld,analysis:combatAnalysis},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     rank:{...rank,startedAt:user.idleRankStartedAt?.toISOString()||null},
     collection:{recruits:recruitCount,masteries,worldsDiscovered},
@@ -1689,6 +1732,7 @@ async function buildState(userId) {
     achievements,
     achievementsBonus,
     advisor,
+    advisorRoadmap:roadmapCandidates,
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     // La première vraie saison utilisera une progression dédiée. L'ancien
     // pass mensuel fondé sur le niveau à vie est volontairement masqué.
@@ -1742,6 +1786,8 @@ async function buildState(userId) {
     ancients: {
       points: user.wisdomPoints,
       branches: ANCIENT_BRANCHES,
+      focus:ancientFocus,
+      focuses:ancientFocuses,
       items: ANCIENTS.map((a) => {
         const level = ancientLevelsByKey.get(a.key) || 0;
         const unlocked = !a.requires || (ancientLevelsByKey.get(a.requires) || 0) > 0;
@@ -2624,10 +2670,10 @@ router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max:
 // Meulage : re-tire la magnitude de l'affixe primaire et des affixes
 // secondaires (types conservés) aux valeurs du tier ACTUEL du joueur —
 // revalorise les vieux objets et sert de puits d'essence répétable. Le
-// résultat peut être meilleur OU moins bon : c'est un pari, comme le
-// « grind » de Summoners War, pas une amélioration garantie.
+// meilleur jet est conservé par défaut : la dépense reste un pari sur le gain,
+// mais ne peut plus dégrader un objet déjà optimisé.
 router.post('/equipment/reroll',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-equipment-reroll'}),async(req,res)=>{
-  const itemId=String(req.body?.itemId||'');if(!itemId)return res.status(400).json({error:'Objet invalide'});
+  const itemId=String(req.body?.itemId||'');const keepBest=req.body?.keepBest!==false;if(!itemId)return res.status(400).json({error:'Objet invalide'});
   let rerolled=null;
   try{
     await withSettle(req.user.id,async(tx,user)=>{
@@ -2640,8 +2686,10 @@ router.post('/equipment/reroll',requireAuth,requireIdleBeta,rateLimit({max:30,na
       const tier=Math.max(1,Math.floor(bestStage/10));
       const effectValue=rerolledAffixValue(item.effectKey,tier);
       const affixes=(Array.isArray(item.affixes)?item.affixes:[]).map((affix)=>({...affix,effectValue:rerolledAffixValue(affix.effectKey,tier)}));
-      await tx.idleItem.update({where:{id:item.id},data:{effectValue,affixes}});
-      rerolled={itemId:item.id,cost,before:{effectValue:item.effectValue,affixes:item.affixes},after:{effectValue,affixes}};
+      const score=(primary,list)=>Number(primary||0)+(Array.isArray(list)?list:[]).reduce((sum,affix)=>sum+Number(affix.effectValue||0),0);
+      const beforeScore=score(item.effectValue,item.affixes);const rolledScore=score(effectValue,affixes);const kept=keepBest&&rolledScore<beforeScore;
+      if(!kept)await tx.idleItem.update({where:{id:item.id},data:{effectValue,affixes}});
+      rerolled={itemId:item.id,cost,kept,before:{effectValue:item.effectValue,affixes:item.affixes,score:beforeScore},rolled:{effectValue,affixes,score:rolledScore},after:kept?{effectValue:item.effectValue,affixes:item.affixes,score:beforeScore}:{effectValue,affixes,score:rolledScore}};
     });
     void recordIdleEvent(req.user.id,'rune_reroll');
     res.json({...(await buildState(req.user.id)),reroll:rerolled});
@@ -3468,6 +3516,7 @@ module.exports = {
   itemSalvageValue,
   progressionBossesCrossed,
   synergyForSlots,
+  synergyLicenseName,
   SQUAD_SLOT_DEFS,
   isSquadSlotUnlocked,
   unlockedSquadPresetCount,
