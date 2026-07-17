@@ -237,9 +237,15 @@ function idleChatReactionBar(message){
 function idleChatLine(message){
   const m=message||{};const time=m.ts?new Date(m.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
   if(m.type==='recruit'&&['legendary','mythic'].includes(m.rarity)){
-    return `<div class="idle-chat-drop r-${m.rarity}" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas ${m.rarity==='mythic'?'fa-star':'fa-crown'}"></i><span><small>INVOCATION ${m.rarity==='mythic'?'MYTHIQUE':'LÉGENDAIRE'}</small><b>${escapeHtml(m.player||'Un joueur')}</b> a recruté <strong>${escapeHtml(m.character||'un héros')}</strong></span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
+    // Pas de barre de réactions ici (contrairement aux messages de joueur) :
+    // dans le panneau de chat étroit (~380px), les 6 boutons emoji forçaient
+    // un retour à la ligne sous l'icône/texte/heure, cassant la carte en un
+    // pavé "empilé" (retour utilisateur). Ces annonces sont des diffusions
+    // façon système (comme .idle-chat-system, qui n'en a jamais eu), pas des
+    // messages à commenter.
+    return `<div class="idle-chat-drop r-${m.rarity}" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas ${m.rarity==='mythic'?'fa-star':'fa-crown'}"></i><span><small>INVOCATION ${m.rarity==='mythic'?'MYTHIQUE':'LÉGENDAIRE'}</small><b>${escapeHtml(m.player||'Un joueur')}</b> a recruté <strong>${escapeHtml(m.character||'un héros')}</strong></span><time>${time}</time></div>`;
   }
-  if(m.type==='prestige')return `<div class="idle-chat-drop r-prestige" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas fa-brain"></i><span><small>NOUVEAU PRESTIGE</small><b>${escapeHtml(m.player||'Un joueur')}</b> atteint le <strong>Prestige ${idleFormatNumber(m.prestigeLevel||1)}</strong><em>Stage ${idleFormatNumber(m.stage||1)} · +${idleFormatNumber(m.reward||0)} Sagesse</em></span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
+  if(m.type==='prestige')return `<div class="idle-chat-drop r-prestige" data-chat-id="${escapeHtml(m.id||'')}"><i class="fas fa-brain"></i><span><small>NOUVEAU PRESTIGE</small><b>${escapeHtml(m.player||'Un joueur')}</b> atteint le <strong>Prestige ${idleFormatNumber(m.prestigeLevel||1)}</strong><em>Stage ${idleFormatNumber(m.stage||1)} · +${idleFormatNumber(m.reward||0)} Sagesse</em></span><time>${time}</time></div>`;
   if(m.system)return `<div class="idle-chat-system"><i class="fas fa-bullhorn"></i>${escapeHtml(m.text||'')}<time>${time}</time></div>`;
   return `<div class="idle-chat-message" data-chat-id="${escapeHtml(m.id||'')}"><span><b>${escapeHtml(m.name||'Joueur')}</b>${escapeHtml(m.text||'')}</span><time>${time}</time>${idleChatReactionBar(m)}</div>`;
 }
