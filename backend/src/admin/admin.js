@@ -23,11 +23,12 @@ function hasRole(user, role) {
   return !!(user && Array.isArray(user.roles) && user.roles.includes(role));
 }
 
-// Accès restreint aux admins et aux bêta-testeurs (idle_beta) : la sortie
-// publique du 2026-07-17 a été annulée en urgence suite à un bug de
-// progression bloquée après Prestige (retour joueur du même jour).
+// Anime Ascension est ouvert à tout compte non invité (réouverture du
+// 2026-07-17 au soir : le bug de progression bloquée après Prestige qui avait
+// forcé l'annulation de la sortie du jour est corrigé, cf. 322b660). Le rôle
+// idle_beta reste géré (admin, tests) mais ne conditionne plus l'accès.
 function canAccessIdle(user) {
-  return isAdmin(user) || hasRole(user, IDLE_BETA_ROLE);
+  return !!user && !user.isGuest;
 }
 
 // Accès au jeu bêta uniquement : ce middleware ne donne aucun privilège admin.
