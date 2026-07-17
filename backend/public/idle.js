@@ -1094,23 +1094,32 @@ function idleRuneDetailChips(item){
 // Donjon des Objets : un bouton par emplacement (rune1..6), l'objet obtenu va
 // toujours dans le slot choisi — façon donjon Caiross de Summoners War.
 let idleRuneDungeonBusy=false;
+let idleRuneDungeonActiveKind=null;
+const IDLE_RUNE_DUNGEON_EXPLORE_MS=2600;
 function renderIdleRuneDungeon(state){
   const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');
   if(!dungeon||!grid)return;
-  if(status)status.innerHTML=dungeon.freeRemaining>0
+  if(status)status.innerHTML=idleRuneDungeonBusy
+    ?`<i class="fas fa-spinner fa-spin"></i> Exploration en cours…`
+    :dungeon.freeRemaining>0
     ?`<i class="fas fa-bolt"></i> ${dungeon.freeRemaining}/${dungeon.freeAttempts} tentative${dungeon.freeRemaining>1?'s':''} gratuite${dungeon.freeRemaining>1?'s':''} aujourd’hui`
     :`<i class="fas fa-coins"></i> Tentatives gratuites épuisées · prochaine : ${idleFormatNumber(dungeon.nextCost)} Essence`;
-  grid.innerHTML=(dungeon.kinds||[]).map((k)=>`<button type="button" class="idle-rune-dungeon-btn" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${escapeHtml(k.icon)}"></i><b>${escapeHtml(k.label)}</b></button>`).join('');
+  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Exploration…':escapeHtml(k.label)}</b></button>`;}).join('');
 }
 async function runIdleRuneDungeon(kind){
-  if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;renderIdleRuneDungeon(idleState);
+  if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;idleRuneDungeonActiveKind=kind;renderIdleRuneDungeon(idleState);
   try{
-    const result=await api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})});
+    // Le donjon répond instantanément côté serveur : on impose un délai
+    // d'exploration côté client pour que la fouille se ressente dans le jeu.
+    const [result]=await Promise.all([
+      api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})}),
+      new Promise((resolve)=>setTimeout(resolve,IDLE_RUNE_DUNGEON_EXPLORE_MS))
+    ]);
     idleState=result.state;renderIdleState(result.state);
     showIdleRuneDungeonReward(result);
     if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();
   }catch(e){idleNotify(e.message,'error');}
-  finally{idleRuneDungeonBusy=false;renderIdleRuneDungeon(idleState);}
+  finally{idleRuneDungeonBusy=false;idleRuneDungeonActiveKind=null;renderIdleRuneDungeon(idleState);}
 }
 function renderIdleInventory(state){
   const inventory=state.inventory;const grid=document.getElementById('idle-inventory-grid');if(!inventory||!grid)return;
