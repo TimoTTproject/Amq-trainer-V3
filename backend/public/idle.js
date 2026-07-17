@@ -2951,9 +2951,19 @@ function initIdleUI() {
     const pickBtn = e.target.closest('[data-action="pick"]');
     if (pickBtn) return openIdlePicker(Number(pickBtn.dataset.slot));
   });
+  // #idle-upgrade-buy-amount est un voisin de #idle-upgrades dans le DOM (pas
+  // un descendant, cf. index.html) : un clic dessus ne remontait jamais
+  // jusqu'à l'écouteur posé sur #idle-upgrades ci-dessous, qui l'attendait en
+  // vain via closest() — le sélecteur de quantité ×1/×5/×10/×100 de l'écran
+  // Améliorer ne réagissait donc à AUCUN clic (retour joueur : la quantité
+  // semble figée sur ce que l'onglet Équipe avait laissé, "en fonction du
+  // multiplicateur d'équipe"). Écouteur dédié, même schéma que
+  // #idle-buy-amount et #idle-team-buy-amount juste au-dessus.
+  document.getElementById('idle-upgrade-buy-amount')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-buy-amount]');
+    if (b) chooseIdleBuyAmount(b.dataset.buyAmount);
+  });
   document.getElementById('idle-upgrades')?.addEventListener('click', (e) => {
-    const amountBtn = e.target.closest('#idle-upgrade-buy-amount [data-buy-amount]');
-    if (amountBtn) { chooseIdleBuyAmount(amountBtn.dataset.buyAmount); return; }
     const btn = e.target.closest('.idle-upgrade-btn');
     if (btn) buyIdleUpgrade(btn.dataset.upgrade, btn.closest('.idle-upgrade-card'), btn.dataset.upgradeAmount==='max'?'max':Number(btn.dataset.upgradeAmount||1));
   });
