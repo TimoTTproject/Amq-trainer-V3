@@ -2853,7 +2853,11 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
   res.json(result);
 });
 
-router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 30000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
+// La vraie recharge est vérifiée en base (idleBurstReadyAt) : le rate-limit ne
+// sert qu'à absorber les double-clics. Sa fenêtre doit rester SOUS le cooldown
+// minimum atteignable (plancher 5s d'activeSkillCooldown), sinon un joueur
+// avancé (Supports + Flux) se fait rejeter des lancers légitimes en 429.
+router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 4000, max: 1, name: 'idle-skill-burst' }), async (req, res) => {
   let gained=0;let readyAt;let cooldownMs=ULTIMATE_COOLDOWN_MS;let killed=false,bossKilled=false;
   try{await withSettle(req.user.id, async(tx,user,levels)=>{if(user.idleBurstReadyAt&&new Date(user.idleBurstReadyAt)>new Date())throw new IdleError(429,'Ultime encore en recharge');if(isBossStage(user.idleStage||1)&&!user.idleBossEngaged)throw new IdleError(400,'Affronte d’abord le Boss (bouton dédié) avant d’utiliser cette compétence.');const slots=await loadSlots(tx,user.id);const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});const blessingEffects=runBlessingEffects(user.idleRunBlessings);const teamRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(levels,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,levels));const supportCount=slots.filter((slot)=>slot.character&&roleForCharacter(slot.character)==='support').length;cooldownMs=activeSkillCooldown(ULTIMATE_COOLDOWN_MS,supportCount,user.idleCooldownLevel,blessingEffects.cooldown,characterPassiveTeamBonus(slots,'cooldown'));const mechanic=bossMechanicForStage(user.idleStage||1);let multiplier=campaignForStage(user.idleStage||1).modifier?.burst||1;let progress=user.idleBossProgress||0;if(mechanic?.key==='regen'){progress=1;multiplier*=1.5;}if(mechanic?.key==='counter'){if(progress===2)multiplier*=.35;progress=2;}if(mechanic?.key==='ward'&&progress<1)multiplier*=.5;if(mechanic?.key==='focus'){if(progress>=mechanic.required){multiplier*=2;progress=0;}else multiplier*=.5;}readyAt=new Date(Date.now()+cooldownMs);await tx.user.update({where:{id:user.id},data:{idleBurstReadyAt:readyAt,idleBossProgress:progress}});gained=Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,ancientBonus(levels,'clickMult')),teamRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*multiplier*itemActionBonus(slots,'burst')*blessingEffects.burst);({killed,bossKilled}=await applyActiveDamage(tx,user,gained));});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   // L'Ultime représente 75 frappes : cette équivalence doit aussi alimenter
@@ -2868,7 +2872,8 @@ router.post('/skill/burst', requireAuth, requireIdleBeta, rateLimit({ windowMs: 
   res.json({ ok: true, gained, damage:gained, killed, bossKilled, progressClicks:ULTIMATE_CLICK_MULTIPLIER, cooldownMs,readyAt:readyAt.toISOString() });
 });
 
-router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 60000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
+// Même logique que /skill/burst : fenêtre anti-double-clic sous le cooldown minimum.
+router.post('/skill/team', requireAuth, requireIdleBeta, rateLimit({ windowMs: 4000, max: 1, name: 'idle-skill-team' }), async (req, res) => {
   let gained=0,uniqueRoles=0,cooldownMs=TEAM_COMBO_COOLDOWN_MS,killed=false,bossKilled=false;
   try {
     await withSettle(req.user.id,async(tx,user,levels)=>{
