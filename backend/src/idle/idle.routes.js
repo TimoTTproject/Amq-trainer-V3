@@ -463,6 +463,7 @@ const WORLD_ITEM_NAMES={
   'Shibuya':{weapon:'Dague maudite',relic:'Doigt scellé',accessory:'Talisman d’Exorciste'},
   'Aincrad':{weapon:'Épée de Fer Noir',relic:'Cristal de téléportation',accessory:'Anneau de guilde'},
   'Monde du Néant':{weapon:'Lame du Néant',relic:'Cœur abyssal',accessory:'Sceau dimensionnel'},
+  'Donjon des Objets':{weapon:'Croc du Labyrinthe',relic:'Prisme runique',accessory:'Sceau du Gardien'},
 };
 const ITEM_RARITY_ORDER={rare:1,epic:2,legendary:3,mythic:4};
 // La rareté décrit la qualité trouvée dans le coffre. L'amélioration augmente
