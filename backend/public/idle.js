@@ -262,9 +262,19 @@ function idleChatLine(message){
 
 function idleAppendChat(message){
   const feed=document.getElementById('idle-chat-feed');if(!feed)return;
+  // Ne recoller en bas QUE si le joueur y était déjà : sans cette garde, tout
+  // nouveau message (fréquents sur un chat vivant — recrues, Prestige…)
+  // renvoyait de force en bas quiconque avait remonté pour lire l'historique
+  // (retour joueur : « le chat fait des trucs bizarres pour le défilement »).
+  // Idem pour la purge au-delà de 60 messages : retirer le premier enfant
+  // pendant que le joueur lit plus bas décale sa position sans qu'il ait
+  // scrollé — on ne purge donc que si on est déjà en bas.
+  const wasAtBottom=feed.scrollHeight-feed.scrollTop-feed.clientHeight<40;
   feed.insertAdjacentHTML('beforeend',idleChatLine(message));
-  while(feed.children.length>60)feed.firstElementChild?.remove();
-  feed.scrollTop=feed.scrollHeight;
+  if(wasAtBottom){
+    while(feed.children.length>60)feed.firstElementChild?.remove();
+    feed.scrollTop=feed.scrollHeight;
+  }
   if(!idleChatDrawerOpened){idleChatUnread++;idleRenderChatUnread();}
 }
 

@@ -891,18 +891,27 @@ function chatLine(m) {
   if (m.system) return `<div class="mp-chat-sys">— ${escapeHtml(m.text)} —</div>`;
   return `<div class="mp-chat-msg"><b>${escapeHtml(m.name)}:</b> ${escapeHtml(m.text)}</div>`;
 }
+// Ne recolle en bas que si le joueur y était déjà : sinon chaque nouveau
+// message renvoyait de force en bas quiconque avait remonté pour relire un
+// échange (retour joueur : « le chat fait des trucs bizarres pour le
+// défilement »).
+function chatWasAtBottom(box) {
+  return box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+}
 function appendChat(m) {
   const box = document.getElementById('mp-chat');
+  const stick = chatWasAtBottom(box);
   box.insertAdjacentHTML('beforeend', chatLine(m));
-  box.scrollTop = box.scrollHeight;
+  if (stick) box.scrollTop = box.scrollHeight;
 }
 
 // ── Chat global (menu multi) ──
 function appendGchat(m) {
   const box = document.getElementById('mp-gchat');
   if (!box) return;
+  const stick = chatWasAtBottom(box);
   box.insertAdjacentHTML('beforeend', chatLine(m));
-  box.scrollTop = box.scrollHeight;
+  if (stick) box.scrollTop = box.scrollHeight;
 }
 // Recharge l'historique (50 derniers) + le compteur de connectés.
 function refreshGlobalChat() {
