@@ -36,6 +36,7 @@ const {
   enemyUnitMaxHp,
   enemyArchetype,
   enemyReward,
+  investmentCostIndex,
   enemiesRequiredForStage,
   normalizeWaveProgress,
   enemyUnitReward,
@@ -475,7 +476,16 @@ function rollItemAffixes(tier,rarity) {
 
 function idleItemDrop(tier,kind,rarity,bonus,sourceWorld='Dojo ancestral') {
   const def=ITEM_KINDS[kind];
-  const setKey=RUNE_SET_KEYS[Math.max(0,tier-1)%RUNE_SET_KEYS.length];
+  // Rotation DÉCOUPLÉE de celle du kind (RUNE_KINDS[(tier-1)%6], notamment au
+  // coffre de boss) : avec le même modulo pour les deux, chaque nature d'objet
+  // (rune1..6) retombait TOUJOURS sur le même set, à vie — bijection rigide
+  // qui rendait un 2/4 pièces structurellement impossible depuis les coffres
+  // (retour utilisateur : "impossible de faire des ensembles"). En avançant le
+  // set d'un cran seulement tous les RUNE_KINDS.length tiers, un cycle complet
+  // de coffres (6 tiers consécutifs) livre les 6 natures dans le MÊME set —
+  // largement de quoi compléter un 2 ou 4 pièces — avant de tourner vers le
+  // set suivant au cycle d'après.
+  const setKey=RUNE_SET_KEYS[Math.floor(Math.max(0,tier-1)/RUNE_KINDS.length)%RUNE_SET_KEYS.length];
   const effectKey=RUNE_SETS[setKey].effectKey;
   const effect=ITEM_EFFECTS[effectKey];
   const effectValue=effect.mode==='salvage'?Number((.05+Math.min(.25,tier*.005)).toFixed(3)):Number((.01+Math.min(.09,tier*.002)).toFixed(3));
@@ -548,7 +558,7 @@ const SALVAGE_STAGE_FACTOR={rare:5,epic:12,legendary:25,mythic:50};
 function itemSalvageValue(item,bestStage=1) {
   const rarity=ITEM_RARITY_ORDER[item.rarity]||1;
   const flat=Math.round(160*rarity*Math.pow(1+item.bonus,4)*(1+(item.enhancementLevel||0)*.08));
-  const progression=Math.round(enemyReward(Math.max(1,bestStage))*(SALVAGE_STAGE_FACTOR[item.rarity]||SALVAGE_STAGE_FACTOR.rare)*(1+(item.enhancementLevel||0)*.08));
+  const progression=Math.round(investmentCostIndex(Math.max(1,bestStage))*(SALVAGE_STAGE_FACTOR[item.rarity]||SALVAGE_STAGE_FACTOR.rare)*(1+(item.enhancementLevel||0)*.08));
   return Math.max(25,flat,progression);
 }
 // Coût d'amélioration (+15) : formule plate historique + plancher indexé sur
@@ -560,7 +570,7 @@ function runeEnhanceCost(item,bestStage=1){
   const level=Math.max(0,Math.min(15,Number(item?.enhancementLevel)||0));if(level>=15)return 0;
   const rarity=ITEM_RARITY_ORDER[item?.rarity]||1;
   const flat=Math.round(120*(level+1)*Math.pow(1.22,level)*rarity);
-  const progression=Math.round(enemyReward(Math.max(1,bestStage))*.5*(level+1)*rarity);
+  const progression=Math.round(investmentCostIndex(Math.max(1,bestStage))*.5*(level+1)*rarity);
   return Math.max(flat,progression);
 }
 // Meulage (reroll) : re-tire la MAGNITUDE de l'affixe primaire et des affixes
@@ -569,7 +579,7 @@ function runeEnhanceCost(item,bestStage=1){
 // d'essence de fin de partie (« grind » de Summoners War).
 function runeRerollCost(item,bestStage=1){
   const rarity=ITEM_RARITY_ORDER[item?.rarity]||1;
-  return Math.max(400,Math.round(enemyReward(Math.max(1,bestStage))*8*rarity));
+  return Math.max(400,Math.round(investmentCostIndex(Math.max(1,bestStage))*8*rarity));
 }
 function rerolledAffixValue(effectKey,tier){
   const mode=ITEM_EFFECTS[effectKey]?.mode||'dps';
@@ -1452,10 +1462,14 @@ async function buildState(userId) {
     if (r.awakened) entry.awakened++;
     ownedBySeries.set(r.character.series, entry);
   }
+  // Séries à un seul personnage catalogué exclues : elles se « complètent »
+  // dès la toute première invocation (total==owned==1), ce qui polluait la
+  // grille de collection de dizaines d'entrées triviales et versait des
+  // Sceaux de complétion à chaque pull touchant un perso isolé.
   const seriesCollection = [...ownedBySeries.entries()].map(([series, entry]) => {
     const total = Math.max(entry.owned, seriesTotals.get(series) || entry.owned);
     return { series, owned: entry.owned, awakened: entry.awakened, total, percent: Math.round((entry.owned / total) * 100), complete: entry.owned >= total };
-  }).sort((a, b) => b.percent - a.percent || b.owned - a.owned);
+  }).filter((s) => s.total > 1).sort((a, b) => b.percent - a.percent || b.owned - a.owned);
   const catalogTotal = [...seriesTotals.values()].reduce((sum, n) => sum + n, 0);
   // ── Complétion de licence : synchronisation paresseuse du compteur
   // permanent (User.idleCompletedSeries). Monotone : ne descend jamais, même

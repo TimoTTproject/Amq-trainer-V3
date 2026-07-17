@@ -154,7 +154,11 @@ function characterPassiveDescription(character, rarity) {
 const HERO_MILESTONES = [10, 25, 50, 100, 150, 200];
 const HERO_ASCENSION_LEVEL = 100;
 const HERO_ASCENSION_LEVEL_STEP = 10;
-const HERO_ASCENSION_MAX = 5;
+// 5 → 10 paliers : à 5/5, un héros aussi Éveil 5/5 n'avait plus AUCUN objectif
+// de puissance discret à viser (retour utilisateur : "l'ascension et l'éveil
+// sont tout les 2 bloqués"). Les 5 paliers suivants gardent la même formule
+// de coût/gain, juste étendue plus loin dans la courbe.
+const HERO_ASCENSION_MAX = 10;
 const HERO_ASCENSION_GROWTH = 1.6;
 // Équivalent-niveaux du coût d'une Ascension (voir heroAscensionCost).
 const HERO_ASCENSION_LEVEL_EQUIVALENT = 12;
@@ -418,6 +422,19 @@ function enemyReward(stage) {
   // vague 5 était une pure punition de rendement en farm.
   const special = isBossStage(s) ? 3 : isEliteStage(s) ? ELITE_HP_MULTIPLIER : 1;
   return Math.max(1, Math.round(finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(ENEMY_REWARD_GROWTH, s - 1) * special * campaignDifficulty(s).reward, 1)));
+}
+// Plancher d'investissement (amélioration d'objets, Étoiles d'Éveil) : ces
+// coûts réutilisaient enemyReward(bestStage), donc la MÊME croissance ×1.151
+// que les PV ennemis. Or bestStage avance quasiment tout seul (DPS auto vs
+// PV, courbes déjà appariées), alors que l'Essence produite dépend d'un
+// investissement actif (niveaux/équipement/éveil) bien plus lent à monter —
+// retour utilisateur : "quasiment impossible" de suivre. Courbe dédiée, bien
+// plus douce (×1.08/stage), décorrélée des pics de difficulté de campagne :
+// le coût continue de suivre la progression sans jamais la devancer.
+const INVESTMENT_COST_GROWTH = 1.08;
+function investmentCostIndex(stage) {
+  const s = Math.max(1, Math.floor(stage || 1));
+  return finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(INVESTMENT_COST_GROWTH, s - 1), 1);
 }
 const ENEMY_ARCHETYPES = {
   standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
@@ -895,17 +912,23 @@ const AWAKENED_BONUS = 1.10;
 // progression comme le recyclage/l'amélioration des runes, remet l'éveil
 // dans le même budget que le reste des investissements de héros (niveaux,
 // Ascension), sans jamais entrer en concurrence avec le recrutement.
-const AWAKEN_STAR_MAX = 5;
+// 5 → 10 étoiles, même raison que HERO_ASCENSION_MAX ci-dessus : un héros
+// Éveil 5/5 n'avait plus rien à investir dès qu'il était aussi Ascension
+// max, ce qui se lisait comme un blocage plutôt qu'un plafond de contenu.
+const AWAKEN_STAR_MAX = 10;
 const AWAKEN_STAR_BONUS = 0.08;
 // Coût = N fois la récompense d'un ennemi au meilleur stage atteint, pondéré
 // par rareté (mêmes facteurs relatifs que SALVAGE_STAGE_FACTOR) et croissant
 // par étoile — même famille de formule que itemSalvageValue/runeEnhanceCost.
 const AWAKEN_STAR_STAGE_FACTOR = { rare: 40, epic: 90, legendary: 180, mythic: 350 };
-const AWAKEN_STAR_GROWTH = [1, 2.2, 4.8, 10.5, 23]; // multiplicateur pour l'étoile N+1
+// Multiplicateur pour l'étoile N+1 — les 5 premiers paliers gardaient le même
+// ratio (~×2.19) d'un cran à l'autre ; les 5 suivants prolongent cette même
+// progression géométrique plutôt que d'inventer une nouvelle courbe.
+const AWAKEN_STAR_GROWTH = [1, 2.2, 4.8, 10.5, 23, 50, 110, 241, 528, 1156];
 function awakenStarCost(rarity, stars, bestStage = 1) {
   const s = Math.max(0, Math.min(AWAKEN_STAR_MAX - 1, Math.floor(stars || 0)));
   const factor = AWAKEN_STAR_STAGE_FACTOR[rarity] || AWAKEN_STAR_STAGE_FACTOR.rare;
-  return Math.round(finiteIdleNumber(enemyReward(Math.max(1, bestStage)) * factor * AWAKEN_STAR_GROWTH[s], 1));
+  return Math.round(finiteIdleNumber(investmentCostIndex(Math.max(1, bestStage)) * factor * AWAKEN_STAR_GROWTH[s], 1));
 }
 function awakenStarMultiplier(stars) {
   return 1 + Math.max(0, Math.min(AWAKEN_STAR_MAX, Math.floor(stars || 0))) * AWAKEN_STAR_BONUS;
@@ -1028,6 +1051,7 @@ module.exports = {
   isEliteStage,
   enemyMaxHp,
   enemyReward,
+  investmentCostIndex,
   ENEMY_ARCHETYPES,
   enemyArchetype,
   enemyUnitMaxHp,

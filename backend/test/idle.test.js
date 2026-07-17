@@ -267,9 +267,9 @@ test('nouveaux Ancients : Frappe Fantôme, Pas du Conquérant et Fortune des Gar
   assert.ok(AWAKENED_BONUS>1&&AWAKENED_CHANCE>0&&AWAKENED_CHANCE<.1);
 });
 
-test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus plafonné à 5 étoiles',()=>{
+test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus plafonné à 10 étoiles',()=>{
   const {AWAKEN_STAR_MAX,awakenStarCost,awakenStarMultiplier}=require('../src/idle/idle');
-  assert.equal(AWAKEN_STAR_MAX,5);
+  assert.equal(AWAKEN_STAR_MAX,10);
   assert.ok(awakenStarCost('rare',1,50)>awakenStarCost('rare',0,50));
   assert.ok(awakenStarCost('rare',4,50)>awakenStarCost('rare',3,50));
   // Indexé sur la progression (comme le recyclage/l'amélioration des runes) :
@@ -278,8 +278,8 @@ test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus pl
   // Une rareté plus élevée coûte plus cher à éveiller, à stage égal.
   assert.ok(awakenStarCost('mythic',0,50)>awakenStarCost('rare',0,50));
   assert.equal(awakenStarMultiplier(0),1);
-  assert.ok(Math.abs(awakenStarMultiplier(5)-1.4)<1e-9);
-  assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(5)); // jamais au-delà du cap
+  assert.ok(Math.abs(awakenStarMultiplier(10)-1.8)<1e-9);
+  assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(10)); // jamais au-delà du cap
 });
 
 test('complétion de licence et Mémoire du Maître : bonus permanents bornés',()=>{
@@ -387,12 +387,12 @@ test('simulation 1000 h : même une production extrême ne rend pas les invocati
   assert.ok(Number.isFinite(at1000h.nextCost));
 });
 
-test('ascension : cinq paliers à rendement décroissant, sans boucle auto-accélérante', () => {
+test('ascension : dix paliers à rendement décroissant, sans boucle auto-accélérante', () => {
   assert.deepEqual(
     Array.from({ length: HERO_ASCENSION_MAX }, (_, ascension) => heroAscensionRequiredLevel(ascension)),
-    [100, 110, 120, 130, 140],
+    [100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
   );
-  assert.ok(heroAscensionMultiplier(HERO_ASCENSION_MAX) < 11);
+  assert.ok(heroAscensionMultiplier(HERO_ASCENSION_MAX) < 111);
   assert.equal(heroAscensionMultiplier(HERO_ASCENSION_MAX + 100), heroAscensionMultiplier(HERO_ASCENSION_MAX));
   for (let ascension = 0; ascension < HERO_ASCENSION_MAX; ascension++) {
     const requiredLevel = heroAscensionRequiredLevel(ascension);

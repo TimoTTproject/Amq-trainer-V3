@@ -380,8 +380,17 @@ test('améliorer un objet conserve toujours sa rareté d’origine',()=>{
 });
 
 test('inventaire : les mondes et les paliers créent des familles variées',()=>{
-  const effects=new Set([1,2,3].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
+  // Le set ne tourne plus à CHAQUE palier (tiers 1,2,3 partageaient le même
+  // kind au coffre de boss ET un set toujours différent : bijection kind↔set
+  // rigide qui rendait un 2/4 pièces impossible — cf. idleItemDrop). Il tourne
+  // désormais par LOT de RUNE_KINDS.length paliers, pour qu'un cycle complet
+  // de coffres (paliers 1 à 6, un par nature d'objet) livre le même set —
+  // largement de quoi compléter un 2 ou 4 pièces — avant de changer de famille
+  // au lot suivant (palier 7).
+  const effects=new Set([1,7,13].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
   assert.equal(effects.size,3);
+  const sameBatch=new Set([1,2,3,4,5,6].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
+  assert.equal(sameBatch.size,1);
   assert.match(idleItemDrop(1,'rune1','rare',.03,'Konoha').name,/Kunai de la Feuille/);
   assert.match(idleItemDrop(1,'rune1','rare',.03,'Namek').name,/Lame de Ki/);
 });

@@ -105,7 +105,12 @@ function idleSetConnectionState(mode,message){
   clearTimeout(idleConnectionHideTimer);box.className=`idle-connection-status ${mode}`;box.querySelector('i').className=`fas ${mode==='offline'?'fa-wifi-slash':mode==='retrying'?'fa-rotate fa-spin':'fa-circle-check'}`;label.textContent=message||(mode==='offline'?'Hors ligne · ta progression locale reste affichée':mode==='retrying'?'Reconnexion en cours…':'Progression synchronisée');box.querySelector('button')?.classList.toggle('hidden',mode==='online');
   if(mode==='online')idleConnectionHideTimer=setTimeout(()=>box.classList.add('hidden'),2200);
 }
-function idleStartSyncTicker(){clearInterval(idleSyncTicker);idleSyncTicker=setInterval(()=>{if(idleActivePanel==='home'&&!document.hidden)idleBackgroundSync();},idleStoredSetting('data-saver')?30000:15000);}
+// La synchro tournait uniquement sur l'onglet Combat : sur l'onglet Niveaux
+// (aventure roguelike), la production continuait côté serveur mais plus rien
+// ne redescendait tant qu'on ne revenait pas sur Combat — le nouveau choix de
+// pouvoir semblait n'arriver "qu'en changeant d'onglet", au hasard. La sync
+// doit tourner sur tous les onglets tant que l'écran est visible.
+function idleStartSyncTicker(){clearInterval(idleSyncTicker);idleSyncTicker=setInterval(()=>{if(!document.hidden)idleBackgroundSync();},idleStoredSetting('data-saver')?30000:15000);}
 
 function idleAddCombatLog(message,icon='fa-bolt'){
   idleCombatEntries.unshift({message,icon,at:new Date()});idleCombatEntries=idleCombatEntries.slice(0,4);
@@ -326,6 +331,9 @@ function idleShowPanel(name) {
   // données périmées depuis la dernière fois qu'il était actif.
   if (idleState) renderIdleState(idleState);
   if(name==='activities')loadIdleCommunityBoss();
+  // Ouvrir l'onglet Niveaux (aventure roguelike) synchronise tout de suite —
+  // sinon le choix de pouvoir en attente peut sembler figé jusqu'à 15-30s.
+  if(name==='progression')idleBackgroundSync();
 }
 
 // Nombre flottant dans la scène (+essence, façon dégâts/gains d'un jeu mobile).
@@ -2072,10 +2080,10 @@ function idleSlotHTML(slot) {
     <div class="idle-equipment-title"><i class="fas fa-shield-halved"></i> ÉQUIPEMENT <small>6 runes · sets 2/4 pièces</small></div>
     <div class="idle-equipment">${equipment}</div>
     <div class="idle-level-buys">${[1,5,10,100,'max'].map((n) => {const cost=n==='max'?c.levelUpCost:c.levelCosts[n];return `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="${n==='max'?'Acheter le maximum abordable':`Monter de ${n} niveaux · coût ${idleFormatNumber(cost)}`}"${idleState && idleState.essence < cost ? ' disabled' : ''}><b>${n==='max'?'MAX':`×${n}`}</b><small>${n==='max'?'budget':idleFormatNumber(cost)}</small></button>`;}).join('')}</div>
-    ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" title="Augmente la puissance sans perdre les niveaux · réinitialisée au Prestige" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= (c.ascensionMax||5) ? `<span class="idle-ascend-max">ASCENSION MAXIMALE · ×${Number(c.ascensionMultiplier||1).toFixed(2)} · RESET AU PRESTIGE</span>` : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau ${c.ascensionLevel||100} · niveaux conservés · prochain ×${Number(c.nextAscensionMultiplier||c.ascensionMultiplier||1).toFixed(2)}</span>`}
-    ${(c.awakenStars||0)<(c.awakenStarMax||5)
-      ? `<button class="idle-ascend-btn idle-awaken-btn" data-character="${c.id}" data-action="awaken" title="+${Math.round((c.awakenStarBonus||.08)*100)}% de production personnelle par étoile · permanent, conservé au Prestige" ${idleState && idleState.essence < c.awakenStarCost ? 'disabled' : ''}><i class="fas fa-star"></i> ÉVEIL ${'★'.repeat(c.awakenStars||0)}${'☆'.repeat((c.awakenStarMax||5)-(c.awakenStars||0))} · ${idleFormatNumber(c.awakenStarCost)}</button>`
-      : `<span class="idle-ascend-max">ÉVEIL MAXIMAL ★★★★★ · ×${Number(c.awakenStarMultiplier||1).toFixed(2)} permanent</span>`}
+    ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" title="Augmente la puissance sans perdre les niveaux · réinitialisée au Prestige" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ASCENSION · ${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= (c.ascensionMax||10) ? `<span class="idle-ascend-max">ASCENSION MAXIMALE · ×${Number(c.ascensionMultiplier||1).toFixed(2)} · RESET AU PRESTIGE</span>` : `<span class="idle-ascend-hint"><i class="fas fa-lock"></i> Ascension au niveau ${c.ascensionLevel||100} · niveaux conservés · prochain ×${Number(c.nextAscensionMultiplier||c.ascensionMultiplier||1).toFixed(2)}</span>`}
+    ${(c.awakenStars||0)<(c.awakenStarMax||10)
+      ? `<button class="idle-ascend-btn idle-awaken-btn" data-character="${c.id}" data-action="awaken" title="+${Math.round((c.awakenStarBonus||.08)*100)}% de production personnelle par étoile · permanent, conservé au Prestige" ${idleState && idleState.essence < c.awakenStarCost ? 'disabled' : ''}><i class="fas fa-star"></i> ÉVEIL ${'★'.repeat(c.awakenStars||0)}${'☆'.repeat((c.awakenStarMax||10)-(c.awakenStars||0))} · ${idleFormatNumber(c.awakenStarCost)}</button>`
+      : `<span class="idle-ascend-max">ÉVEIL MAXIMAL ${'★'.repeat(c.awakenStarMax||10)} · ×${Number(c.awakenStarMultiplier||1).toFixed(2)} permanent</span>`}
   </div>`;
 }
 
