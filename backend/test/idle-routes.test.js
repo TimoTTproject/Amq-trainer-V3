@@ -527,10 +527,10 @@ test('inventaire : le recyclage refuse une sélection partiellement introuvable'
   assert.match(res.json.error,/introuvable/);
 });
 
-test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {
+test('GET /state : accessible à tout joueur non-invité depuis la sortie officielle (2026-07-17)', async () => {
   prisma.user.findUnique = async () => dbUser({ email: 'joueur@example.com' });
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
-  assert.equal(res.status, 403);
+  assert.equal(res.status, 200);
 });
 
 test('GET /state : un joueur portant idle_beta accède au jeu sans être administrateur', async () => {
@@ -668,7 +668,7 @@ test('GET /state : le stage de run et le décompte de vague sont indépendants d
 
 test('GET /state : un boss expose un décompte serveur avant son enrage', async () => {
   const startedAt=new Date(Date.now()-10000);
-  const user=dbUser({idleStage:10,idleWaveKills:0,idleEnemyHp:enemyMaxHp(10),idleBossStartedAt:startedAt,idleLastCollectAt:new Date()});
+  const user=dbUser({idleStage:10,idleWaveKills:0,idleEnemyHp:enemyMaxHp(10),idleBossStartedAt:startedAt,idleBossEngaged:true,idleLastCollectAt:new Date()});
   prisma.user.findUnique=async()=>user;
   const res=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
   assert.equal(res.status,200);
@@ -1431,7 +1431,7 @@ test('click : regroupe plusieurs frappes dans une seule requête autoritaire', a
 });
 
 test('click : Frappes Multiples augmente les dégâts simulés sans changer le compteur de clics (retour testeur)', async () => {
-  const stage=100;
+  const stage=99; // stage élevé mais hors vague de Boss (cf. gate idleBossEngaged), sinon le clic n'inflige plus rien tant que non engagé
   const originalRandom=Math.random;
   Math.random=()=>0.99; // neutralise les critiques (aléatoires) : sans ça, un crit chanceux sur le seul coup du baseline peut ponctuellement dépasser 2 coups non-crit du boosté
   try{

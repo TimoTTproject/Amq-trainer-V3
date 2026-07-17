@@ -23,8 +23,11 @@ function hasRole(user, role) {
   return !!(user && Array.isArray(user.roles) && user.roles.includes(role));
 }
 
+// Anime Ascension est sorti de bêta (2026-07-17) : ouvert à tout compte non
+// invité. Le rôle idle_beta reste géré (admin, tests) mais ne conditionne
+// plus l'accès — gardé pour ne pas casser les comptes qui le portent encore.
 function canAccessIdle(user) {
-  return isAdmin(user) || hasRole(user, IDLE_BETA_ROLE);
+  return !!user && !user.isGuest;
 }
 
 // Accès au jeu bêta uniquement : ce middleware ne donne aucun privilège admin.
