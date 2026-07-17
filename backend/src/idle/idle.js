@@ -548,8 +548,16 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
     // Un Boss attend un clic explicite d'engagement — l'auto-DPS (en ligne
     // comme hors-ligne) s'arrête pile devant lui tant que ce n'est pas fait,
     // au lieu de l'encaisser silencieusement pendant que le joueur regarde
-    // ailleurs.
-    if (isBossStage(currentStage) && !bossEngaged) break;
+    // ailleurs. `seconds = 0` (pas juste `break`) : sans ça, le temps passé
+    // devant un Boss verrouillé restait "en banque" (jamais consommé, cf. le
+    // elapsedSeconds renvoyé plus bas) — au moment de l'engager, TOUT ce
+    // temps accumulé se simulait d'un coup, capable de le tuer puis
+    // d'enchaîner plusieurs vagues du monde suivant dans la foulée (retour
+    // joueur : "j'arrive vague 3 après avoir cliqué sur affronter le boss,
+    // comme si ça tournait en fond"). Attendre devant un Boss verrouillé ne
+    // doit rien faire produire ET ne doit rien mettre de côté à débloquer
+    // plus tard.
+    if (isBossStage(currentStage) && !bossEngaged) { seconds = 0; break; }
     // Un ennemi doit rester perceptible à l'écran : sans cadence minimale,
     // 1,5 M DPS au stage 1 convertissait l'overkill en ~10 M Essence/minute.
     // Le DPS conserve toute sa valeur sur le contenu adapté, mais ne permet

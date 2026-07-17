@@ -199,6 +199,22 @@ test('chaque vague normale demande 10 ennemis et le boss reste un combat unique'
   assert.equal(finishBoss.waveKills, 0);
 });
 
+test("Boss verrouillé : le temps d'attente ne reste pas 'en banque' pour se déclencher d'un coup à l'engagement", () => {
+  // Retour joueur : "j'arrive vague 3 après avoir cliqué sur affronter le
+  // boss, comme si ça tournait en fond". Avant ce correctif, le temps passé
+  // devant un Boss non engagé n'était jamais consommé (elapsedSeconds:0
+  // renvoyé), donc settleUnlocked ne faisait jamais avancer idleLastCollectAt
+  // — au moment d'engager, TOUT ce temps accumulé (même très long) se
+  // simulait d'un coup, capable de tuer le Boss puis d'enchaîner plusieurs
+  // vagues du monde suivant.
+  const locked = simulateCombat({ stage: 10, hp: enemyMaxHp(10), dps: 1e9, elapsedSeconds: 600, mode: 'progress', bossEngaged: false });
+  assert.equal(locked.stage, 10, 'aucune progression pendant que le Boss est verrouillé');
+  assert.equal(locked.kills, 0);
+  // Le temps est bien consommé (pas de "reliquat" à rejouer plus tard) même
+  // si rien ne s'est passé pendant ce laps de temps.
+  assert.equal(locked.elapsedSeconds, 600);
+});
+
 test('un ancien compteur enregistré à 10 est réparé vers la vague suivante',()=>{
   assert.deepEqual(normalizeWaveProgress(1,10,'progress'),{stage:2,waveKills:0});
   assert.deepEqual(normalizeWaveProgress(9,10,'progress'),{stage:10,waveKills:0});
