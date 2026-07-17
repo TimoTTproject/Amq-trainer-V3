@@ -1570,8 +1570,8 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(userUpdate.idleStage,1);
   assert.equal(userUpdate.idleRunBestStage,1);
   // Tokens gacha : croissants avec le niveau de Prestige atteint (ici Prestige 2).
-  assert.equal(userUpdate.tokens.increment, 120);
-  assert.equal(tokenTx.amount, 120);
+  assert.equal(userUpdate.tokens.increment, 140);
+  assert.equal(tokenTx.amount, 140);
   assert.equal(tokenTx.reason, 'idle_prestige');
 });
 
@@ -1791,10 +1791,10 @@ test('claim-all : réclame en un appel tous les succès complétés et crédite 
   assert.equal(res.json.claimed, 2);
   assert.equal(res.json.seals, 2);
   assert.equal(userUpdate.idleSeals.increment, 2);
-  // Les deux succès complétés sont tous deux au palier I (tokenReward 20 chacun).
-  assert.equal(res.json.tokens, 40);
-  assert.equal(userUpdate.tokens.increment, 40);
-  assert.equal(tokenTx.amount, 40);
+  // Les deux succès complétés sont tous deux au palier I (tokenReward 25 chacun).
+  assert.equal(res.json.tokens, 50);
+  assert.equal(userUpdate.tokens.increment, 50);
+  assert.equal(tokenTx.amount, 50);
   assert.equal(tokenTx.reason, 'idle_claim_all');
   assert.equal(createManyData.length, 2);
   assert.ok(createManyData.every((c) => c.userId === 'u1'));

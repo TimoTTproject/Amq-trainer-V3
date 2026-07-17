@@ -274,10 +274,10 @@ function idleMissionList(user, recruitCount, activeCount, stage, counters=new Ma
 // prend un mois complet, cf. balance ×10 plus haut), donc une récompense
 // nettement plus généreuse qu'un défi quotidien est justifiée.
 const SEASON_TIERS = [
-  {tier:1,level:10000,reward:1,essence:0,tokens:30},{tier:2,level:25000,reward:2,essence:0,tokens:45},
-  {tier:3,level:50000,reward:2,essence:25000,tokens:60},{tier:4,level:80000,reward:3,essence:0,tokens:75},
-  {tier:5,level:120000,reward:3,essence:0,tokens:95},{tier:6,level:160000,reward:4,essence:75000,tokens:115},
-  {tier:7,level:200000,reward:5,essence:0,tokens:130},{tier:8,level:240000,reward:7,essence:200000,tokens:150},
+  {tier:1,level:10000,reward:1,essence:0,tokens:35},{tier:2,level:25000,reward:2,essence:0,tokens:50},
+  {tier:3,level:50000,reward:2,essence:25000,tokens:65},{tier:4,level:80000,reward:3,essence:0,tokens:85},
+  {tier:5,level:120000,reward:3,essence:0,tokens:105},{tier:6,level:160000,reward:4,essence:75000,tokens:125},
+  {tier:7,level:200000,reward:5,essence:0,tokens:145},{tier:8,level:240000,reward:7,essence:200000,tokens:170},
 ];
 
 function seasonActivityScore(counters, period) {
@@ -379,6 +379,10 @@ function riftRelicDetails(keys = []) {
   return keys.filter((k) => RIFT_RELICS[k]).map((k) => ({ key: k, name: RIFT_RELICS[k].name, icon: RIFT_RELICS[k].icon, description: RIFT_RELICS[k].description }));
 }
 
+// Tokens gacha par palier de 5 étages franchi (max 4/semaine, comme les
+// Sceaux de palier ci-dessous) : la Faille est un système délaissé, ce lien
+// avec le gacha lui donne une vraie raison d'y retourner chaque semaine.
+const RIFT_TOKENS_PER_MILESTONE = 20;
 function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods(),relicKeys=[]) {
   const best=Math.max(0,counters.get(`rift_floor:${periods.week}`)||0);
   const variants=[
@@ -394,7 +398,7 @@ function weeklyRift(counters,totalRate,bestStage,rankLevel,periods=idlePeriods()
   const baseHp=enemyMaxHp(Math.max(1,bestStage||1));
   const targetFor=(floor)=>Math.round(baseHp*Math.pow(1.48,Math.max(0,floor-1))*variant.multiplier*mods.resistanceMult);
   let projected=0;for(let floor=1;floor<=20;floor++){if(effectiveRate*20<targetFor(floor))break;projected=floor;}
-  return {period:periods.week,unlocked:(rankLevel||1)>=20,unlockLevel:20,maxFloor:20,bestFloor:best,projectedFloor:projected,nextFloor:Math.min(20,best+1),nextTarget:targetFor(Math.min(20,best+1)),variant,relics:riftRelicDetails(relicKeys),modifiers:mods,reward:{essence:Math.max(0,Math.round((250*projected*projected-250*best*best)*mods.rewardMult)),seals:Math.max(0,Math.floor(projected/5)-Math.floor(best/5)+(projected>=10?mods.sealBonus:0))}};
+  return {period:periods.week,unlocked:(rankLevel||1)>=20,unlockLevel:20,maxFloor:20,bestFloor:best,projectedFloor:projected,nextFloor:Math.min(20,best+1),nextTarget:targetFor(Math.min(20,best+1)),variant,relics:riftRelicDetails(relicKeys),modifiers:mods,reward:{essence:Math.max(0,Math.round((250*projected*projected-250*best*best)*mods.rewardMult)),seals:Math.max(0,Math.floor(projected/5)-Math.floor(best/5)+(projected>=10?mods.sealBonus:0)),tokens:Math.max(0,Math.floor(projected/5)-Math.floor(best/5))*RIFT_TOKENS_PER_MILESTONE}};
 }
 
 function bossChestRewards(tier) {
@@ -635,7 +639,7 @@ function bossMechanicForStage(stage) {
 // Tokens gacha par palier de succès (I→IV) : un « haut fait » relie
 // explicitement les deux jeux, pour un montant qui reste comparable à un
 // défi quotidien (20-100 tokens) plutôt qu'un raccourci qui le dépasserait.
-const ACHIEVEMENT_TOKEN_REWARD = [20, 30, 45, 60];
+const ACHIEVEMENT_TOKEN_REWARD = [25, 35, 50, 65];
 function idleAchievementDefs({ stage, recruits, teamLevels, worlds, prestige }) {
   const groups=[
     ['boss_hunter','Chasseur de boss','fa-skull',stage,[25,50,100,250]],
@@ -2655,7 +2659,7 @@ router.post('/claim-milestone', requireAuth, requireIdleBeta, rateLimit({ max: 1
 // d'une run), donc la récompense la plus généreuse — croissante avec le
 // niveau de Prestige déjà atteint (plus dur à obtenir), plafonnée à 300.
 function prestigeTokenReward(nextPrestigeLevel) {
-  return Math.min(300, 100 + Math.max(0, nextPrestigeLevel - 1) * 20);
+  return Math.min(320, 120 + Math.max(0, nextPrestigeLevel - 1) * 20);
 }
 router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
   let prestigeReward=0,prestigeStage=0,milestoneSeals=0,prestigeLevel=0,prestigePlayer=req.user.displayName||'Un joueur',prestigeTokens=0;
@@ -3051,7 +3055,7 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
   const state=await buildState(req.user.id);const rift=state.rift;
   if(!rift.unlocked)return res.status(403).json({error:`Faille débloquée au niveau ${rift.unlockLevel}`});
   if(rift.projectedFloor<=rift.bestFloor)return res.status(400).json({error:'Ton équipe manque encore de puissance pour battre ton record'});
-  const floor=rift.projectedFloor;const essence=rift.reward.essence;const seals=rift.reward.seals;
+  const floor=rift.projectedFloor;const essence=rift.reward.essence;const seals=rift.reward.seals;const tokens=rift.reward.tokens||0;
   const currentRelicKeys=rift.relics.map((r)=>r.key);
   // Choix de relique : tous les 5 paliers franchis pour la première fois cette
   // semaine (et tant qu'aucun choix n'est déjà en attente), propose 3 options —
@@ -3082,7 +3086,8 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
     if((existing?.value||0)!==rift.bestFloor)throw new IdleError(409,'La Faille a déjà été actualisée');
     if(existing){const advanced=await tx.idleProgressCounter.updateMany({where:{userId:req.user.id,key:'rift_floor',period:rift.period,value:rift.bestFloor},data:{value:floor}});if(!advanced.count)throw new IdleError(409,'La Faille a déjà été actualisée');}
     else{try{await tx.idleProgressCounter.create({data:{userId:req.user.id,key:'rift_floor',period:rift.period,value:floor}});}catch(error){if(error?.code==='P2002')throw new IdleError(409,'La Faille a déjà été actualisée');throw error;}}
-    await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals}}});
+    await tx.user.update({where:{id:req.user.id},data:{essence:{increment:essence},essenceEarnedTotal:{increment:essence},idleSeals:{increment:seals},...(tokens?{tokens:{increment:tokens}}:{})}});
+    if(tokens)await tx.tokenTransaction.create({data:{userId:req.user.id,amount:tokens,reason:'idle_rift'}});
     if(offeredKeys)await tx.idleRiftRun.upsert({where:{userId_period:{userId:req.user.id,period:rift.period}},create:{userId:req.user.id,period:rift.period,relics:currentRelicKeys,pendingChoice:offeredKeys},update:{pendingChoice:offeredKeys}});
     // Inventaire plein → recyclage automatique (même règle que les coffres de
     // boss) : le drop n'est jamais silencieusement perdu.
@@ -3093,7 +3098,7 @@ router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowM
     }
   });}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   void recordIdleEvent(req.user.id,'rift_record',{value:floor,stage:state.battle.stage});
-  res.json({ok:true,floor,essence,seals,loot:lootResults,state:await buildState(req.user.id)});
+  res.json({ok:true,floor,essence,seals,tokens,loot:lootResults,state:await buildState(req.user.id)});
 });
 
 router.post('/rift/relic',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-rift-relic'}),async(req,res)=>{
