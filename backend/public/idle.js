@@ -38,6 +38,10 @@ let idleSelectedItems = new Set();
 // accumuler des dizaines) : mémorisé par id, sinon chaque synchro d'état
 // (re-render innerHTML) refermerait la ligne en cours de consultation.
 let idleExpandedItems = new Set();
+// Petit menu déroulant ×1/×5/×10/×100/MAX ouvert directement sur une carte
+// héros (retour joueur : le sélecteur global en tête de panneau se voyait
+// mal, la quantité semblait bloquée sur ×1). Un seul ouvert à la fois.
+let idleLevelupMenuSlot = null;
 function toggleIdleItemExpand(itemId){if(idleExpandedItems.has(itemId))idleExpandedItems.delete(itemId);else idleExpandedItems.add(itemId);renderIdleInventory(idleState);}
 let idleSalvageRules = (()=>{try{return {...{rarity:'rare',enhancement:0,keepSets:true},...JSON.parse(localStorage.getItem('idle-salvage-rules')||'{}')}}catch{return {rarity:'rare',enhancement:0,keepSets:true}}})();
 // Sections dépliables (<details>) des cartes héros/objets : l'état ouvert est
@@ -2203,7 +2207,7 @@ function idleSlotHTML(slot) {
     </details>
     <div class="idle-equipment-title"><i class="fas fa-shield-halved"></i> ÉQUIPEMENT <small>6 runes · sets 2/4 pièces</small></div>
     <div class="idle-equipment">${equipment}</div>
-    <div class="idle-level-buys">${(()=>{const buyCost=idleQuickBuyCost(c,idleBuyAmount);const affordable=idleState&&(idleBuyAmount==='max'?idleState.essence>=(c.levelUpCost||1):idleState.essence>=buyCost);return `<button class="idle-hero-levelup ${affordable?'idle-affordable':''}" data-slot="${slot.index}" data-amount="${idleBuyAmount}" data-action="levelup" ${affordable?'':'disabled'} title="Monter ${escapeHtml(c.name)} de ${idleBuyAmount==='max'?'tous les niveaux abordables':`${idleBuyAmount} niveau${idleBuyAmount==='1'?'':'x'}`}"><i class="fas fa-arrow-up"></i> <b>${idleBuyAmount==='max'?'MAX':`×${idleBuyAmount}`}</b><small>${idleBuyAmount==='max'?'budget dispo':idleFormatNumber(buyCost)}</small></button>`;})()}</div>
+    <div class="idle-level-buys">${(()=>{const buyCost=idleQuickBuyCost(c,idleBuyAmount);const affordable=idleState&&(idleBuyAmount==='max'?idleState.essence>=(c.levelUpCost||1):idleState.essence>=buyCost);const menuOpen=idleLevelupMenuSlot===slot.index;return `<button class="idle-hero-levelup ${affordable?'idle-affordable':''}" data-slot="${slot.index}" data-amount="${idleBuyAmount}" data-action="levelup" ${affordable?'':'disabled'} title="Monter ${escapeHtml(c.name)} de ${idleBuyAmount==='max'?'tous les niveaux abordables':`${idleBuyAmount} niveau${idleBuyAmount==='1'?'':'x'}`}"><i class="fas fa-arrow-up"></i> <b>${idleBuyAmount==='max'?'MAX':`×${idleBuyAmount}`}</b><small>${idleBuyAmount==='max'?'budget dispo':idleFormatNumber(buyCost)}</small></button><button type="button" class="idle-hero-levelup-caret" data-slot="${slot.index}" data-action="levelup-menu" aria-haspopup="true" aria-expanded="${menuOpen}" title="Choisir la quantité"><i class="fas fa-chevron-down"></i></button>${menuOpen?`<div class="idle-levelup-menu">${IDLE_BUY_AMOUNTS.map((a)=>`<button type="button" data-buy-amount="${a}" class="${a===idleBuyAmount?'active':''}">${a==='max'?'MAX':`×${a}`}</button>`).join('')}</div>`:''}`;})()}</div>
     <div class="idle-power-row">
       ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" title="Augmente la puissance sans perdre les niveaux · réinitialisée au Prestige" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ×${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= (c.ascensionMax||10) ? `<span class="idle-ascend-max" title="Ascension maximale · ×${Number(c.ascensionMultiplier||1).toFixed(2)}, réinitialisée au Prestige"><i class="fas fa-sun"></i> MAX ×${Number(c.ascensionMultiplier||1).toFixed(2)}</span>` : `<span class="idle-ascend-hint" title="Ascension au niveau ${c.ascensionLevel||100} · niveaux conservés"><i class="fas fa-lock"></i> Nv. ${c.ascensionLevel||100}</span>`}
       ${(c.awakenStars||0)<(c.awakenStarMax||10)
@@ -2888,6 +2892,10 @@ function initIdleUI() {
     if(detailsBtn)return openIdleCharacterSheet(idleState?.slots?.find((slot)=>slot.index===Number(detailsBtn.dataset.slot))?.character);
     const levelBtn = e.target.closest('[data-action="levelup"]');
     if (levelBtn) return levelUpIdleSlot(Number(levelBtn.dataset.slot), levelBtn.closest('.idle-hero'), levelBtn.dataset.amount==='max'?'max':Number(levelBtn.dataset.amount || 1));
+    const menuToggle = e.target.closest('[data-action="levelup-menu"]');
+    if (menuToggle) { const slotIndex=Number(menuToggle.dataset.slot); idleLevelupMenuSlot = idleLevelupMenuSlot===slotIndex?null:slotIndex; const slots=document.getElementById('idle-slots');if(slots)slots.innerHTML=renderIdleSlots(idleState.slots||[]); return; }
+    const menuAmount = e.target.closest('.idle-levelup-menu [data-buy-amount]');
+    if (menuAmount) { idleLevelupMenuSlot = null; return chooseIdleBuyAmount(menuAmount.dataset.buyAmount); }
     const ascendBtn = e.target.closest('[data-action="ascend"]');
     if (ascendBtn) return ascendIdleSlot(Number(ascendBtn.dataset.slot));
     const awakenBtn = e.target.closest('[data-action="awaken"]');
