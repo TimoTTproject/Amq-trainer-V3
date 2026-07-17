@@ -1367,7 +1367,7 @@ async function buildState(userId) {
         awakenStarCost: (row.awakenStars || 0) < AWAKEN_STAR_MAX ? awakenStarCost(row.character.rarity, row.awakenStars, progressionStage) : null,
       };
     }
-    slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i) : null });
+    slotsOut.push({ index: i, locked, character, unlockCost: locked ? slotUpgradeCost(i, progressionStage) : null });
   }
 
   const { current: decor, next: nextDecor } = decorForLevel(dojoLevel);
@@ -2273,7 +2273,7 @@ router.post('/upgrade', requireAuth, requireIdleBeta, rateLimit({ max: 120, name
         await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: total }, idleMultiStrikeLevel: { increment: bought } } });
       } else if (type === 'slot') {
         if (user.idleSlotsUnlocked >= MAX_SLOTS) throw new IdleError(400, 'Tous les emplacements sont débloqués');
-        const cost = slotUpgradeCost(user.idleSlotsUnlocked);
+        const cost = slotUpgradeCost(user.idleSlotsUnlocked, Math.max(user.idleBestStage || 1, user.idleStage || 1));
         if (user.essence < cost) throw new IdleError(400, 'Essence insuffisante');
         await tx.user.update({ where: { id: user.id }, data: { essence: { decrement: cost }, idleSlotsUnlocked: { increment: 1 } } });
       }
