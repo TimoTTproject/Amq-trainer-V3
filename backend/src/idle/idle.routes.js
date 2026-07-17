@@ -1873,6 +1873,17 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
       const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
       const series = rankQuestSeries({ level:user.idleRankLevel, kills:user.idleRankKills, clicks:user.idleRankClicks, upgrades:user.idleRankUpgrades, skills:user.idleRankSkills, recruits:user.idleRankRecruits, bestStage });
       if (!series.ready) throw new IdleError(400, 'Termine tous les objectifs avant de passer au niveau suivant');
+      // Seuls 3 des 5 types de quête (RANK_QUEST_POOL) tournent dans la série
+      // affichée à ce rang — les 2 autres continuent d'accumuler en silence
+      // pour un futur rang où ils reviendront dans la rotation. Ne remettre à
+      // zéro QUE les compteurs des quêtes réellement validées ici, sinon un
+      // achat groupé (ex. 20 améliorations) fait pendant que "Améliorations
+      // achetées" n'est pas dans la rotation active se fait effacer par un
+      // rang validé via d'autres quêtes, avant d'avoir jamais compté (retour
+      // joueur : « j'en ai acheté 20 d'un coup [...] ça met 0/5 »).
+      const rankCounterField={kills:'idleRankKills',clicks:'idleRankClicks',upgrades:'idleRankUpgrades',skills:'idleRankSkills',recruits:'idleRankRecruits'};
+      const consumedReset={};
+      for(const quest of series.quests){const field=rankCounterField[quest.key];if(field)consumedReset[field]=0;}
       // `idleRankBosses` n'entre plus dans la garde optimiste : le stage
       // (bestStage) ne peut que progresser entre la lecture et cette écriture,
       // jamais régresser, donc aucune course à protéger sur ce compteur.
@@ -1884,8 +1895,7 @@ router.post('/rank/advance', requireAuth, requireIdleBeta, rateLimit({ max: 10, 
           idleRankRecruits:user.idleRankRecruits,
         },
         data:{
-          idleRankLevel:{increment:1}, idleRankKills:0, idleRankClicks:0,
-          idleRankUpgrades:0, idleRankBosses:0, idleRankSkills:0, idleRankRecruits:0,
+          idleRankLevel:{increment:1}, ...consumedReset, idleRankBosses:0,
           idleRankStartedAt:new Date(),
           idleSeals:{increment:series.sealReward},
         },

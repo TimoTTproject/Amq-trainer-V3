@@ -733,6 +733,34 @@ test('passage de niveau : refuse une série incomplète puis valide atomiquement
   assert.equal(res.json.state.economy.seals, 3);
 });
 
+test("passage de niveau : ne remet à zéro QUE les compteurs des 3 quêtes de la rotation active — retour joueur \"j'ai acheté 20 améliorations d'un coup, ça remet à 0/5\"", async () => {
+  // Au Rang 4 (rotation (4-1)%5=3), la série tourne sur skills/recruits/kills
+  // — PAS clicks ni upgrades. Un joueur qui a accumulé de la progression sur
+  // ces deux-là (ex. un gros achat groupé d'améliorations) ne doit pas la
+  // perdre simplement parce qu'un rang a été validé via d'autres quêtes.
+  let user = dbUser({
+    idleRankLevel:4, idleBestStage:30, idleStage:30,
+    idleRankKills:47, idleRankSkills:4, idleRankRecruits:1, // complètent kills/skills/recruits + stage (rang multiple de 5)
+    idleRankUpgrades:20, idleRankClicks:15, // PAS dans la rotation de ce rang : doivent survivre
+  });
+  prisma.user.findUnique = async () => user;
+  let updateData = null;
+  prisma.user.updateMany = async ({ where, data }) => {
+    updateData = data;
+    user = { ...user, idleRankLevel:5, ...data, idleRankStartedAt:data.idleRankStartedAt };
+    delete user.idleRankLevel_increment;
+    return { count:1 };
+  };
+  const res = await app.request('/api/idle/rank/advance', { method:'POST', cookie:app.authCookie('u1'), body:{} });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.level, 5);
+  assert.equal(updateData.idleRankKills, 0);
+  assert.equal(updateData.idleRankSkills, 0);
+  assert.equal(updateData.idleRankRecruits, 0);
+  assert.equal(updateData.idleRankUpgrades, undefined, 'upgrades hors rotation : ne doit pas être remis à zéro');
+  assert.equal(updateData.idleRankClicks, undefined, 'clicks hors rotation : ne doit pas être remis à zéro');
+});
+
 test("GET /state : le décor porte un gardien mythique réel + le fond de son anime quand disponibles", async () => {
   const user = dbUser();
   prisma.user.findUnique = async () => user;
