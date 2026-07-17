@@ -1393,6 +1393,7 @@
       </div>
       <div id="lb-note" class="lb-note hidden"></div>
       <div id="lb-me" class="lb-me"></div>
+      <div id="lb-podium" class="lb-podium hidden" aria-label="Podium des trois premiers"></div>
       <ol id="lb-list" class="lb-list"></ol>
     </div>
 
@@ -1661,6 +1662,19 @@
             <button type="button" id="idle-spend-summon"><i class="fas fa-ticket"></i><span><small>SCEAUX</small><b id="idle-seals-val">0</b></span><em>Invoquer un héros <i class="fas fa-arrow-right"></i></em></button>
           </div>
 
+          <!-- Boucle de jeu en 4 étapes pour les nouveaux joueurs : masquée dès
+               qu'elle est fermée (localStorage) ou que le joueur dépasse le
+               niveau 3 — les vétérans ne la voient jamais. -->
+          <section class="idle-howto hidden" id="idle-howto" aria-label="Comment jouer">
+            <header><i class="fas fa-graduation-cap"></i><span><small>BIEN DÉBUTER</small><b>La boucle du jeu en 4 étapes</b></span><button type="button" id="idle-howto-close"><i class="fas fa-check"></i> J’ai compris</button></header>
+            <ol>
+              <li><i class="fas fa-hand-fist"></i><span><b>1. Attaque le gardien</b><small>Clique pour frapper — ton équipe attaque aussi toute seule, même hors ligne.</small></span></li>
+              <li><i class="fas fa-mortar-pestle"></i><span><b>2. Récolte l’Essence</b><small>Chaque ennemi vaincu en lâche : c’est la monnaie qui paie tout le reste.</small></span></li>
+              <li><button type="button" data-idle-goto="upgrades"><i class="fas fa-arrow-trend-up"></i><span><b>3. Améliore</b><small>Dépense l’Essence sur tes héros et bonus pour frapper plus fort.</small></span><i class="fas fa-arrow-right"></i></button></li>
+              <li><button type="button" data-open-idle-summon><i class="fas fa-wand-sparkles"></i><span><b>4. Invoque</b><small>Recrute de nouveaux héros avec tes Sceaux pour agrandir l’équipe.</small></span><i class="fas fa-arrow-right"></i></button></li>
+            </ol>
+          </section>
+
           <!-- Panneau Combat : la scène (décor + gardien) encadrée, plus une
                ligne de stats façon "Pokémon Attack / Click Attack". -->
           <div class="profile-section idle-combat-panel">
@@ -1878,13 +1892,15 @@
       </div>
 
       <!-- Barre d'onglets bas d'écran, façon appli mobile -->
+      <!-- Onglets rangés dans l'ordre de la boucle de jeu : Combat → Équipe →
+           Améliorer (le cœur), puis Niveaux/Objets/Farm/Activités (l'avancé). -->
       <nav class="idle-tabs" id="idle-tabs" role="tablist" aria-label="Navigation Anime Ascension">
         <button class="idle-tab active" id="idle-tab-home" role="tab" aria-selected="true" aria-controls="idle-panel-home" data-idle-tab="home" title="Combattre et récupérer l'Essence"><i class="fas fa-fire"></i><span>Combat</span></button>
         <button class="idle-tab" id="idle-tab-team" role="tab" aria-selected="false" aria-controls="idle-panel-team" data-idle-tab="team" title="Choisir les héros qui produisent automatiquement"><i class="fas fa-users"></i><span>Équipe</span></button>
+        <button class="idle-tab" id="idle-tab-upgrades" role="tab" aria-selected="false" aria-controls="idle-panel-upgrades" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
         <button class="idle-tab" id="idle-tab-progression" role="tab" aria-selected="false" aria-controls="idle-panel-progression" data-idle-tab="progression" title="Monter de niveau et explorer les mondes"><i class="fas fa-arrow-up-right-dots"></i><span>Niveaux</span></button>
         <button class="idle-tab" id="idle-tab-equipment" role="tab" aria-selected="false" aria-controls="idle-panel-equipment" data-idle-tab="equipment" title="Gérer les objets et les panoplies"><i class="fas fa-shield-halved"></i><span>Objets</span></button>
         <button class="idle-tab" id="idle-tab-farm" role="tab" aria-selected="false" aria-controls="idle-panel-farm" data-idle-tab="farm" title="La Faille hebdomadaire et le Donjon des Objets"><i class="fas fa-dungeon"></i><span>Farm</span></button>
-        <button class="idle-tab" id="idle-tab-upgrades" role="tab" aria-selected="false" aria-controls="idle-panel-upgrades" data-idle-tab="upgrades" title="Dépenser l'Essence et obtenir des bonus"><i class="fas fa-arrow-trend-up"></i><span>Améliorer</span></button>
         <button class="idle-tab" id="idle-tab-activities" role="tab" aria-selected="false" aria-controls="idle-panel-activities" data-idle-tab="activities" title="Voir les événements, missions et défis"><i class="fas fa-bullseye"></i><span>Activités</span></button>
         <button class="idle-tab idle-nav-summon" id="idle-nav-summon" type="button" aria-haspopup="dialog" aria-controls="idle-summon" title="Invoquer un nouveau personnage"><i class="fas fa-wand-sparkles"></i><span><b>Invocation</b><small id="idle-nav-summon-price">1 Sceau ou Essence</small></span><em>NOUVEAU</em></button>
       </nav>
