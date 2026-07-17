@@ -527,10 +527,10 @@ test('inventaire : le recyclage refuse une sélection partiellement introuvable'
   assert.match(res.json.error,/introuvable/);
 });
 
-test('GET /state : accessible à tout joueur non-invité depuis la sortie officielle (2026-07-17)', async () => {
+test('GET /state : refusé (403) pour un joueur non-admin — Dojo en phase de test', async () => {
   prisma.user.findUnique = async () => dbUser({ email: 'joueur@example.com' });
   const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 403);
 });
 
 test('GET /state : un joueur portant idle_beta accède au jeu sans être administrateur', async () => {
