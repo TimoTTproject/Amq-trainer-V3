@@ -1566,7 +1566,7 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   // Plus de multiplicateur automatique : la Sagesse gagnée dépend du niveau
   // du Dojo AU MOMENT du Prestige, à dépenser ensuite dans les Ancients.
   assert.equal(userUpdate.wisdomPoints.increment, wisdomForRunStage(prestigeRequiredStage(1),1));
-  assert.equal(userUpdate.idleEssenceRecruitCount, undefined); // coût des pulls permanent entre les runs
+  assert.equal(userUpdate.idleEssenceRecruitCount, 0); // le prix d'invocation en Essence redescend au Prestige
   assert.equal(userUpdate.idleStage,1);
   assert.equal(userUpdate.idleRunBestStage,1);
   // Tokens gacha : croissants avec le niveau de Prestige atteint (ici Prestige 2).

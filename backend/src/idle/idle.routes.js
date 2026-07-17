@@ -2738,9 +2738,12 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleSeals:{increment:milestoneSeals},
           idlePrestigeMilestone:lastMilestone,
           tokens:{increment:prestigeTokens},
-          // Le roster est permanent : le compteur des invocations en Essence
-          // l'est donc aussi. Le remettre à zéro permettrait de répéter une
-          // série de pulls bon marché après chaque Prestige.
+          // Retour utilisateur : le prix d'invocation en Essence doit
+          // redescendre au Prestige comme le reste de la run (niveaux,
+          // emplacements). Le roster recruté reste permanent, seul CE
+          // compteur (qui ne pilote que le prix, pas l'accès aux persos)
+          // repart à zéro.
+          idleEssenceRecruitCount: 0,
         },
       });
       await tx.tokenTransaction.create({ data: { userId: user.id, amount: prestigeTokens, reason: 'idle_prestige' } });
