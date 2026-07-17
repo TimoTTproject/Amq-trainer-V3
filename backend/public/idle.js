@@ -648,7 +648,7 @@ function renderIdleState(state) {
   const collectHelp = document.getElementById('idle-collect-help');
   if (collectHelp) collectHelp.innerHTML = state.pendingEssence > 0 ? `<i class="fas fa-rotate"></i> <b>${idleFormatNumber(state.pendingEssence)} Essence en synchronisation.</b> Elle sera créditée automatiquement.` : '<i class="fas fa-check"></i> Les gains sont crédités automatiquement. Ton équipe continue à produire hors ligne.';
   document.getElementById('idle-click-yield').textContent = `${idleFormatNumber(state.click.damage ?? state.click.yield)} dégâts`;
-  if (idleActivePanel === 'team') document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots);
+  if (idleActivePanel === 'team') { document.getElementById('idle-slots').innerHTML = renderIdleSlots(state.slots); renderIdleBuyAmountControl('idle-team-buy-amount'); }
   if (idleActivePanel === 'upgrades') document.getElementById('idle-upgrades').innerHTML = renderIdleUpgrades(state);
   if (idleActivePanel === 'progression') { renderIdleRank(state.rank); renderIdleRoadmap(state.codex,state.battle); }
   if (idleActivePanel === 'activities') {
@@ -750,9 +750,12 @@ function chooseIdleBuyAmount(amount) {
   if (idleState) {
     renderIdleQuickBuy(idleState);
     const upgrades=document.getElementById('idle-upgrades');if(upgrades)upgrades.innerHTML=renderIdleUpgrades(idleState);
+    // MàJ le coût/quantité affiché sur les cartes héros du panneau Équipe.
+    if (idleActivePanel==='team') { const slots=document.getElementById('idle-slots');if(slots)slots.innerHTML=renderIdleSlots(idleState.slots||[]); }
   }
   renderIdleBuyAmountControl('idle-buy-amount');
   renderIdleBuyAmountControl('idle-upgrade-buy-amount');
+  renderIdleBuyAmountControl('idle-team-buy-amount');
 }
 function renderIdleQuickBuy(state) {
   const box = document.getElementById('idle-quick-buy');
@@ -2192,7 +2195,7 @@ function idleSlotHTML(slot) {
     </details>
     <div class="idle-equipment-title"><i class="fas fa-shield-halved"></i> ÉQUIPEMENT <small>6 runes · sets 2/4 pièces</small></div>
     <div class="idle-equipment">${equipment}</div>
-    <div class="idle-level-buys">${[5,10,100,'max'].map((n) => {const cost=n==='max'?c.levelUpCost:c.levelCosts[n];return `<button class="idle-hero-levelup" data-slot="${slot.index}" data-amount="${n}" data-action="levelup" title="${n==='max'?'Acheter le maximum abordable':`Monter de ${n} niveaux · coût ${idleFormatNumber(cost)}`}"${idleState && idleState.essence < cost ? ' disabled' : ''}><b>${n==='max'?'MAX':`×${n}`} · ${idleFormatNumber(cost)}</b></button>`;}).join('')}</div>
+    <div class="idle-level-buys">${(()=>{const buyCost=idleQuickBuyCost(c,idleBuyAmount);const affordable=idleState&&(idleBuyAmount==='max'?idleState.essence>=(c.levelUpCost||1):idleState.essence>=buyCost);return `<button class="idle-hero-levelup ${affordable?'idle-affordable':''}" data-slot="${slot.index}" data-amount="${idleBuyAmount}" data-action="levelup" ${affordable?'':'disabled'} title="Monter ${escapeHtml(c.name)} de ${idleBuyAmount==='max'?'tous les niveaux abordables':`${idleBuyAmount} niveau${idleBuyAmount==='1'?'':'x'}`}"><i class="fas fa-arrow-up"></i> <b>${idleBuyAmount==='max'?'MAX':`×${idleBuyAmount}`}</b><small>${idleBuyAmount==='max'?'budget dispo':idleFormatNumber(buyCost)}</small></button>`;})()}</div>
     <div class="idle-power-row">
       ${c.canAscend ? `<button class="idle-ascend-btn" data-slot="${slot.index}" data-action="ascend" title="Augmente la puissance sans perdre les niveaux · réinitialisée au Prestige" ${idleState && idleState.essence < c.ascensionCost ? 'disabled' : ''}><i class="fas fa-sun"></i> ×${idleFormatNumber(c.ascensionCost)}</button>` : c.ascension >= (c.ascensionMax||10) ? `<span class="idle-ascend-max" title="Ascension maximale · ×${Number(c.ascensionMultiplier||1).toFixed(2)}, réinitialisée au Prestige"><i class="fas fa-sun"></i> MAX ×${Number(c.ascensionMultiplier||1).toFixed(2)}</span>` : `<span class="idle-ascend-hint" title="Ascension au niveau ${c.ascensionLevel||100} · niveaux conservés"><i class="fas fa-lock"></i> Nv. ${c.ascensionLevel||100}</span>`}
       ${(c.awakenStars||0)<(c.awakenStarMax||10)
@@ -2712,6 +2715,10 @@ function initIdleUI() {
   document.getElementById('idle-collect-btn')?.addEventListener('click', collectIdle);
   document.getElementById('idle-click-btn')?.addEventListener('click', clickIdle);
   document.getElementById('idle-buy-amount')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-buy-amount]');
+    if (b) chooseIdleBuyAmount(b.dataset.buyAmount);
+  });
+  document.getElementById('idle-team-buy-amount')?.addEventListener('click', (e) => {
     const b = e.target.closest('[data-buy-amount]');
     if (b) chooseIdleBuyAmount(b.dataset.buyAmount);
   });
