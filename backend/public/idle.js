@@ -516,11 +516,17 @@ function idleTick() {
   // La production automatique frappe par impulsions visibles. La barre de PV
   // descend donc à chaque proc, au lieu de lancer une transition continue vers
   // 0 qui la laissait vide presque tout le temps sur les équipes puissantes.
-  if (idleActivePanel === 'home' && idleState.totalRate > 0) {
+  // Un Boss verrouillé (needsBossEngage, cf. 049eb5e) n'encaisse RIEN tant que
+  // le joueur n'a pas cliqué « Affronter le Boss » côté serveur — mais cette
+  // simulation visuelle locale l'ignorait totalement : sa barre de vie
+  // descendait quand même à chaque tick, avec dégâts flottants et animation
+  // de combat, donnant l'impression que le combat avait déjà commencé.
+  const bossLocked = !!idleState.battle?.needsBossEngage;
+  if (idleActivePanel === 'home' && idleState.totalRate > 0 && !bossLocked) {
     idleApplyVisualDamage(idleState.totalRate * .4);
   }
   const passiveGain = idleState.totalRate * 3.2;
-  if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home') {
+  if (idleTickCount % 8 === 0 && passiveGain >= 1 && idleActivePanel === 'home' && !bossLocked) {
     idleSpawnFloat(`−${idleFormatNumber(passiveGain)}`, 'damage passive');
     idleCombatMotion('team');
   }
