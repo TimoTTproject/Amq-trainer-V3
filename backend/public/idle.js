@@ -1470,7 +1470,19 @@ function renderIdleStrategyLab(data){
 async function loadIdleStrategyLab(){const box=document.getElementById('idle-strategy-lab-results');if(!box)return;box.innerHTML='<p class="hint"><i class="fas fa-spinner fa-spin"></i> Calcul exact des variantes…</p>';try{renderIdleStrategyLab(await api('/api/idle/strategy-lab'));}catch(e){box.innerHTML=`<p class="idle-lab-error">${escapeHtml(e.message)}</p>`;}}
 function refreshIdleStrategyLabIfOpen(){const box=document.getElementById('idle-strategy-lab-results');if(box?.dataset.loaded==='1')loadIdleStrategyLab();}
 async function chooseIdleFormation(formation){try{renderIdleState(await api('/api/idle/formation',{method:'POST',body:JSON.stringify({formation})}));refreshIdleStrategyLabIfOpen();}catch(e){alert(e.message);}}
-async function chooseIdleStage(stage){if(!Number.isInteger(stage)||stage<1||stage===idleState?.battle?.stage)return;try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}}
+async function chooseIdleStage(stage){
+  if(!Number.isInteger(stage)||stage<1||stage===idleState?.battle?.stage)return;
+  // Revisiter un niveau déjà dépassé active automatiquement le mode Farm côté
+  // serveur (cf. /api/idle/stage) — jusqu'ici sans confirmation, contrairement
+  // au bouton dédié "Répéter la vague" qui, lui, demande toujours confirmation
+  // avant de figer la progression. Un simple clic curieux sur "Niveau
+  // précédent" ou le voyage rapide piégeait donc le joueur en Farm sans qu'il
+  // l'ait choisi (retour joueur : "bloqué stage 1" après coup, sans se
+  // souvenir avoir activé quoi que ce soit).
+  const bestStage=idleState?.battle?.runBestStage||idleState?.battle?.bestStage||stage;
+  if(stage<bestStage&&!window.confirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression. Continuer ?`))return;
+  try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}
+}
 async function chooseIdleLeader(characterId){try{const state=await api('/api/idle/team-leader',{method:'POST',body:JSON.stringify({characterId})});renderIdleState(state);idleNotify(`Lead Skill actif : ${state.strategy?.leaderSkill?.name||'bonus du chef'} · ${state.strategy?.leaderSkill?.description||'bonus appliqué au DPS.'}`,'success');document.getElementById('idle-character-sheet')?.classList.add('hidden');}catch(e){idleNotify(e.message,'error');}}
 async function saveIdlePreset(slotIndex=null){const squad=(idleState?.strategy?.squads?.slots||[]).find((slot)=>slot.index===Number(slotIndex));const name=squad?.name||document.getElementById('idle-preset-name')?.value.trim();if(!name)return;try{renderIdleState(await api('/api/idle/team-preset/save',{method:'POST',body:JSON.stringify({name,slotIndex:squad?.index})}));idleAddCombatLog(`Squad ${name} sauvegardée`,'fa-floppy-disk');refreshIdleStrategyLabIfOpen();}catch(e){alert(e.message);}}
 async function loadIdlePreset(name){try{renderIdleState(await api('/api/idle/team-preset/load',{method:'POST',body:JSON.stringify({name})}));idleAddCombatLog(`Preset ${name} chargé`,'fa-users-gear');refreshIdleStrategyLabIfOpen();}catch(e){alert(e.message);}}
