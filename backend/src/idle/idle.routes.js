@@ -270,11 +270,14 @@ function idleMissionList(user, recruitCount, activeCount, stage, counters=new Ma
 // (20 coffres de boss, 20 invocations, 300 compétences...) en une fraction du
 // mois, puis n'avait plus rien à viser jusqu'à la saison suivante. Le parcours
 // doit demander un mois d'engagement soutenu, pas un week-end.
+// Tokens gacha par palier (30-150) : rythme mensuel lent (le parcours entier
+// prend un mois complet, cf. balance ×10 plus haut), donc une récompense
+// nettement plus généreuse qu'un défi quotidien est justifiée.
 const SEASON_TIERS = [
-  {tier:1,level:10000,reward:1,essence:0},{tier:2,level:25000,reward:2,essence:0},
-  {tier:3,level:50000,reward:2,essence:25000},{tier:4,level:80000,reward:3,essence:0},
-  {tier:5,level:120000,reward:3,essence:0},{tier:6,level:160000,reward:4,essence:75000},
-  {tier:7,level:200000,reward:5,essence:0},{tier:8,level:240000,reward:7,essence:200000},
+  {tier:1,level:10000,reward:1,essence:0,tokens:30},{tier:2,level:25000,reward:2,essence:0,tokens:45},
+  {tier:3,level:50000,reward:2,essence:25000,tokens:60},{tier:4,level:80000,reward:3,essence:0,tokens:75},
+  {tier:5,level:120000,reward:3,essence:0,tokens:95},{tier:6,level:160000,reward:4,essence:75000,tokens:115},
+  {tier:7,level:200000,reward:5,essence:0,tokens:130},{tier:8,level:240000,reward:7,essence:200000,tokens:150},
 ];
 
 function seasonActivityScore(counters, period) {
@@ -629,6 +632,10 @@ function bossMechanicForStage(stage) {
   ][(zone - 1) % 6];
 }
 
+// Tokens gacha par palier de succès (I→IV) : un « haut fait » relie
+// explicitement les deux jeux, pour un montant qui reste comparable à un
+// défi quotidien (20-100 tokens) plutôt qu'un raccourci qui le dépasserait.
+const ACHIEVEMENT_TOKEN_REWARD = [20, 30, 45, 60];
 function idleAchievementDefs({ stage, recruits, teamLevels, worlds, prestige }) {
   const groups=[
     ['boss_hunter','Chasseur de boss','fa-skull',stage,[25,50,100,250]],
@@ -640,6 +647,7 @@ function idleAchievementDefs({ stage, recruits, teamLevels, worlds, prestige }) 
   return groups.flatMap(([key,title,icon,progress,targets])=>targets.map((target,index)=>({
     key:`${key}_${index+1}`,title:`${title} ${['I','II','III','IV'][index]}`,
     description:`Atteindre ${target}`,icon,progress:Math.min(progress,target),target,reward:index+1,rewardCurrency:'seals',
+    tokenReward:ACHIEVEMENT_TOKEN_REWARD[index],
   })));
 }
 
@@ -2643,8 +2651,14 @@ router.post('/claim-milestone', requireAuth, requireIdleBeta, rateLimit({ max: 1
 // déjà recrutés. Passe par withSettle (comme toutes les autres actions) pour
 // que la production en attente soit soldée AVANT le reset : sinon elle
 // disparaissait sans même compter dans l'historique économique.
+// Tokens gacha par Retraite : le plus gros jalon de l'idle (reset complet
+// d'une run), donc la récompense la plus généreuse — croissante avec le
+// niveau de Prestige déjà atteint (plus dur à obtenir), plafonnée à 300.
+function prestigeTokenReward(nextPrestigeLevel) {
+  return Math.min(300, 100 + Math.max(0, nextPrestigeLevel - 1) * 20);
+}
 router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name: 'idle-prestige' }), async (req, res) => {
-  let prestigeReward=0,prestigeStage=0,milestoneSeals=0,prestigeLevel=0,prestigePlayer=req.user.displayName||'Un joueur';
+  let prestigeReward=0,prestigeStage=0,milestoneSeals=0,prestigeLevel=0,prestigePlayer=req.user.displayName||'Un joueur',prestigeTokens=0;
   try {
     await withSettle(req.user.id, async (tx, user, ancientLevelsByKey) => {
       const runBestStage = user.idleRunBestStage || 1;
@@ -2655,7 +2669,7 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
       const minimumRunMs=prestigeMinimumRunMs(user.prestigeLevel);const runElapsedMs=Date.now()-new Date(user.idleRunStartedAt||user.createdAt||Date.now()).getTime();
       if(runElapsedMs<minimumRunMs)throw new IdleError(400,`Cette run doit durer encore ${Math.ceil((minimumRunMs-runElapsedMs)/60000)} min avant le Prestige`);
       prestigeStage=runBestStage;prestigeReward=wisdomForRunStage(runBestStage,user.prestigeLevel);
-      const nextPrestige=(user.prestigeLevel||0)+1;prestigeLevel=nextPrestige;prestigePlayer=user.displayName||prestigePlayer;const reached=[{level:1,reward:1},{level:3,reward:2},{level:5,reward:3},{level:10,reward:5}].filter((m)=>m.level>(user.idlePrestigeMilestone||0)&&m.level<=nextPrestige);milestoneSeals=reached.reduce((n,m)=>n+m.reward,0);const lastMilestone=reached.length?reached[reached.length-1].level:(user.idlePrestigeMilestone||0);
+      const nextPrestige=(user.prestigeLevel||0)+1;prestigeLevel=nextPrestige;prestigeTokens=prestigeTokenReward(nextPrestige);prestigePlayer=user.displayName||prestigePlayer;const reached=[{level:1,reward:1},{level:3,reward:2},{level:5,reward:3},{level:10,reward:5}].filter((m)=>m.level>(user.idlePrestigeMilestone||0)&&m.level<=nextPrestige);milestoneSeals=reached.reduce((n,m)=>n+m.reward,0);const lastMilestone=reached.length?reached[reached.length-1].level:(user.idlePrestigeMilestone||0);
       const completedSlots=await loadSlots(tx,user.id);
       const recruitCount=await tx.dojoRecruit.count({where:{userId:user.id}});
       const completedRate=computeTotalRate(completedSlots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(ancientLevelsByKey,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,completedSlots,recruitCount,ancientLevelsByKey));
@@ -2719,11 +2733,13 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           wisdomPoints: { increment: prestigeReward },
           idleSeals:{increment:milestoneSeals},
           idlePrestigeMilestone:lastMilestone,
+          tokens:{increment:prestigeTokens},
           // Le roster est permanent : le compteur des invocations en Essence
           // l'est donc aussi. Le remettre à zéro permettrait de répéter une
           // série de pulls bon marché après chaque Prestige.
         },
       });
+      await tx.tokenTransaction.create({ data: { userId: user.id, amount: prestigeTokens, reason: 'idle_prestige' } });
     });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
@@ -2733,7 +2749,7 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
   // `prestige` : bilan de CETTE Retraite (gains + rappel de ce qui est
   // conservé), affiché par la modale de confirmation côté client.
   publishGlobalChatSystem({type:'prestige',player:prestigePlayer,prestigeLevel,stage:prestigeStage,reward:prestigeReward,text:`${prestigePlayer} atteint le Prestige ${prestigeLevel} au stage ${prestigeStage}`});
-  res.json({ ...(await buildState(req.user.id)), prestige: { gained: prestigeReward, stage: prestigeStage, seals: milestoneSeals } });
+  res.json({ ...(await buildState(req.user.id)), prestige: { gained: prestigeReward, stage: prestigeStage, seals: milestoneSeals, tokens: prestigeTokens } });
 });
 
 // Clic manuel : gain instantané indépendant de la production passive (pas de
@@ -2932,10 +2948,11 @@ router.post('/achievement/claim', requireAuth, requireIdleBeta, rateLimit({ max:
       if (!achievement) throw new IdleError(400, 'Succès inconnu');
       if (achievement.progress < achievement.target) throw new IdleError(400, 'Succès incomplet');
       await tx.idleMissionClaim.create({ data: { userId: user.id, missionKey: `achievement_${key}`, period: 'lifetime' } });
-      await tx.user.update({ where: { id: user.id }, data: { idleSeals: { increment: achievement.reward } } });
-      return achievement.reward;
+      await tx.user.update({ where: { id: user.id }, data: { idleSeals: { increment: achievement.reward }, tokens: { increment: achievement.tokenReward || 0 } } });
+      if (achievement.tokenReward) await tx.tokenTransaction.create({ data: { userId: user.id, amount: achievement.tokenReward, reason: 'idle_achievement' } });
+      return { seals: achievement.reward, tokens: achievement.tokenReward || 0 };
     });
-    res.json({ ok: true, reward });
+    res.json({ ok: true, reward: reward.seals, tokens: reward.tokens });
   } catch (e) {
     if (e instanceof IdleError) return res.status(e.status).json({ error: e.message });
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Succès déjà réclamé' });
@@ -2945,7 +2962,7 @@ router.post('/achievement/claim', requireAuth, requireIdleBeta, rateLimit({ max:
 router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-season'}),async(req,res)=>{
   const tier=Number(req.body?.tier);const def=SEASON_TIERS.find((x)=>x.tier===tier);if(!def)return res.status(400).json({error:'Palier inconnu'});
   const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const activity=seasonActivityScore(counters,periods.month);if(activity.score<def.level)return res.status(400).json({error:'Palier de saison incomplet'});
-  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},...(def.essence?{essence:{increment:def.essence},essenceEarnedTotal:{increment:def.essence}}:{})}});});res.json({ok:true,reward:def.reward,essence:def.essence,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
+  try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},tokens:{increment:def.tokens||0},...(def.essence?{essence:{increment:def.essence},essenceEarnedTotal:{increment:def.essence}}:{})}});if(def.tokens)await tx.tokenTransaction.create({data:{userId:req.user.id,amount:def.tokens,reason:'idle_season'}});});res.json({ok:true,reward:def.reward,essence:def.essence,tokens:def.tokens||0,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
 });
 router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
@@ -2996,15 +3013,15 @@ router.post('/claim-all', requireAuth, requireIdleBeta, rateLimit({ max: 10, nam
   const claimedSet = new Set(claimedRows.map((c) => `${c.missionKey}:${c.period}`));
 
   const toClaim = [];
-  let seals = 0, essence = 0;
+  let seals = 0, essence = 0, tokens = 0;
   for (const m of missions) if (m.progress >= m.target && !claimedSet.has(`${m.key}:${m.period}`)) { toClaim.push({ missionKey: m.key, period: m.period }); seals += m.reward; }
-  for (const a of achievements) if (a.progress >= a.target && !claimedSet.has(`achievement_${a.key}:lifetime`)) { toClaim.push({ missionKey: `achievement_${a.key}`, period: 'lifetime' }); seals += a.reward; }
+  for (const a of achievements) if (a.progress >= a.target && !claimedSet.has(`achievement_${a.key}:lifetime`)) { toClaim.push({ missionKey: `achievement_${a.key}`, period: 'lifetime' }); seals += a.reward; tokens += a.tokenReward || 0; }
   for (const c of challenges) if (c.completed && !claimedSet.has(`challenge_${c.key}:${c.period}`)) { toClaim.push({ missionKey: `challenge_${c.key}`, period: c.period }); seals += c.reward; }
-  for (const t of SEASON_TIERS) if (seasonActivity.score >= t.level && !claimedSet.has(`season_tier_${t.tier}:${seasonPeriod}`)) { toClaim.push({ missionKey: `season_tier_${t.tier}`, period: seasonPeriod }); seals += t.reward; essence += t.essence || 0; }
+  for (const t of SEASON_TIERS) if (seasonActivity.score >= t.level && !claimedSet.has(`season_tier_${t.tier}:${seasonPeriod}`)) { toClaim.push({ missionKey: `season_tier_${t.tier}`, period: seasonPeriod }); seals += t.reward; essence += t.essence || 0; tokens += t.tokens || 0; }
   if (weekly.completed && !claimedSet.has(`weekly_convergence:${periods.week}`)) { toClaim.push({ missionKey: 'weekly_convergence', period: periods.week }); seals += weekly.reward; essence += weekly.essence || 0; }
   if (communityBoss.eligible && !communityBoss.claimed && !claimedSet.has(`community_boss:${periods.week}`)) { toClaim.push({ missionKey:'community_boss',period:periods.week }); seals += communityBoss.reward.seals; essence += communityBoss.reward.essence; }
 
-  if (!toClaim.length) return res.json({ ok: true, claimed: 0, seals: 0, essence: 0, state: await buildState(req.user.id) });
+  if (!toClaim.length) return res.json({ ok: true, claimed: 0, seals: 0, essence: 0, tokens: 0, state: await buildState(req.user.id) });
 
   try {
     await prisma.$transaction(async(tx)=>{
@@ -3014,9 +3031,11 @@ router.post('/claim-all', requireAuth, requireIdleBeta, rateLimit({ max: 10, nam
         where:{id:user.id},
         data:{
           idleSeals:{increment:seals},
+          ...(tokens?{tokens:{increment:tokens}}:{}),
           ...(essence?{essence:{increment:essence},essenceEarnedTotal:{increment:essence}}:{}),
         },
       });
+      if(tokens)await tx.tokenTransaction.create({data:{userId:user.id,amount:tokens,reason:'idle_claim_all'}});
     });
   } catch(e) {
     if(e instanceof IdleError)return res.status(e.status).json({error:e.message});
@@ -3024,7 +3043,7 @@ router.post('/claim-all', requireAuth, requireIdleBeta, rateLimit({ max: 10, nam
     throw e;
   }
   void recordIdleEvent(req.user.id, 'claim_all', { value: seals });
-  res.json({ ok: true, claimed: toClaim.length, seals, essence, state: await buildState(req.user.id) });
+  res.json({ ok: true, claimed: toClaim.length, seals, essence, tokens, state: await buildState(req.user.id) });
 });
 
 router.post('/rift/attempt',requireAuth,requireIdleBeta,rateLimit({max:6,windowMs:60000,name:'idle-rift'}),async(req,res)=>{

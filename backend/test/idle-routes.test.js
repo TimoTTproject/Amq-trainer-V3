@@ -1534,6 +1534,8 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   prisma.dojoRecruit.updateMany = async (args) => { recruitsReset = args; return { count: 3 }; };
   prisma.idleRunHistory.create = async (args) => { runHistory=args.data;return {id:1,...args.data}; };
   prisma.user.update = async (args) => { userUpdate = args.data; return eligible; };
+  let tokenTx = null;
+  prisma.tokenTransaction.create = async (args) => { tokenTx = args.data; return { id: 1, ...args.data }; };
   const okRes = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(okRes.status, 200);
   assert.equal(slotsReset.length, 2);
@@ -1567,6 +1569,10 @@ test('prestige : refuse sous le niveau minimum, sinon reset la run (essence/empl
   assert.equal(userUpdate.idleEssenceRecruitCount, undefined); // coût des pulls permanent entre les runs
   assert.equal(userUpdate.idleStage,1);
   assert.equal(userUpdate.idleRunBestStage,1);
+  // Tokens gacha : croissants avec le niveau de Prestige atteint (ici Prestige 2).
+  assert.equal(userUpdate.tokens.increment, 120);
+  assert.equal(tokenTx.amount, 120);
+  assert.equal(tokenTx.reason, 'idle_prestige');
 });
 
 test("prestige : solde la production en attente AVANT le reset — elle compte dans l'XP du Dojo au lieu d'être perdue", async () => {
@@ -1579,6 +1585,7 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   prisma.idleSlot.updateMany = async () => ({ count: 1 });
   const updateCalls = [];
   prisma.user.update = async (args) => { updateCalls.push(args.data); return eligible; };
+  prisma.tokenTransaction.create = async (args) => ({ id: 1, ...args.data });
   const res = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(res.status, 200);
   // 1er appel = solde de la production en attente (avant le reset) : doit créditer essenceEarnedTotal.
@@ -1600,6 +1607,7 @@ test('prestige : une même run ne peut pas être encaissée deux fois', async ()
     }
     return user;
   };
+  prisma.tokenTransaction.create = async (args) => ({ id: 1, ...args.data });
   const first = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   const second = await app.request('/api/idle/prestige', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(first.status, 200);
@@ -1776,11 +1784,18 @@ test('claim-all : réclame en un appel tous les succès complétés et crédite 
   prisma.idleMissionClaim.createMany = async (args) => { createManyData = args.data; return { count: args.data.length }; };
   let userUpdate = null;
   prisma.user.update = async (args) => { userUpdate = args.data; return user; };
+  let tokenTx = null;
+  prisma.tokenTransaction.create = async (args) => { tokenTx = args.data; return { id: 1, ...args.data }; };
   const res = await app.request('/api/idle/claim-all', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
   assert.equal(res.status, 200);
   assert.equal(res.json.claimed, 2);
   assert.equal(res.json.seals, 2);
   assert.equal(userUpdate.idleSeals.increment, 2);
+  // Les deux succès complétés sont tous deux au palier I (tokenReward 20 chacun).
+  assert.equal(res.json.tokens, 40);
+  assert.equal(userUpdate.tokens.increment, 40);
+  assert.equal(tokenTx.amount, 40);
+  assert.equal(tokenTx.reason, 'idle_claim_all');
   assert.equal(createManyData.length, 2);
   assert.ok(createManyData.every((c) => c.userId === 'u1'));
   assert.ok(createManyData.some((c) => c.missionKey === 'achievement_boss_hunter_1' && c.period === 'lifetime'));

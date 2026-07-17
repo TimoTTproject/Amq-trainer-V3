@@ -1563,7 +1563,7 @@ async function chooseIdleRiftRelic(key){
   try{const result=await api('/api/idle/rift/relic',{method:'POST',body:JSON.stringify({key})});document.getElementById('idle-relic-choice')?.classList.add('hidden');idleRelicChoiceOffer=null;idleSpawnFloat('RELIQUE ACTIVÉE','crit');renderIdleState(result.state);}
   catch(e){idleNotify(e.message,'error');}
 }
-async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');await refreshIdleState();}catch(e){idleNotify(e.message,'error');}}
+async function claimIdleSeason(tier){try{const r=await api('/api/idle/season/claim',{method:'POST',body:JSON.stringify({tier})});idleSpawnFloat(`SAISON +${idleFormatNumber(r.reward)}`,'crit');if(r.tokens)idleNotify(`+${idleFormatNumber(r.tokens)} tokens gacha gagnés !`,'success');await refreshIdleState();}catch(e){idleNotify(e.message,'error');}}
 function openIdleGuide(){document.getElementById('idle-guide-modal')?.classList.remove('hidden');}
 function idleRankingMetric(type,value){if(type==='speed')return idleFormatDuration(Number(value)||0)||'—';return idleFormatNumber(value);}
 function idleRankingRows(players,type){
@@ -1585,7 +1585,7 @@ async function openIdlePlayer(userId){
   }catch(e){if(content)content.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}
 }
 async function shareIdlePlayer(){const p=idleInspectedPlayer;if(!p)return;const text=`Anime Ascension — ${p.name}\nVague ${p.stage} · Rang ${p.level} · ${idleFormatNumber(p.totalRate)} DPS\n${idlePlayerTeamText(p)}`;try{if(navigator.share)await navigator.share({title:`Équipe de ${p.name}`,text});else{await navigator.clipboard.writeText(text);idleNotify('Composition copiée dans le presse-papiers.','success');}}catch(e){if(e?.name!=='AbortError')idleNotify('Impossible de partager cette composition.','error');}}
-async function claimIdleAchievement(key) { try { const r = await api('/api/idle/achievement/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`SUCCÈS +${idleFormatNumber(r.reward)}`, 'crit'); if (typeof burstConfetti === 'function') burstConfetti(25); await refreshIdleState(); } catch (e) { alert(e.message); } }
+async function claimIdleAchievement(key) { try { const r = await api('/api/idle/achievement/claim', { method: 'POST', body: JSON.stringify({ key }) }); idleSpawnFloat(`SUCCÈS +${idleFormatNumber(r.reward)}`, 'crit'); if(r.tokens)idleNotify(`+${idleFormatNumber(r.tokens)} tokens gacha gagnés !`,'success'); if (typeof burstConfetti === 'function') burstConfetti(25); await refreshIdleState(); } catch (e) { alert(e.message); } }
 async function claimIdleEvent() { try { const r = await api('/api/idle/event/claim', { method: 'POST', body: JSON.stringify({}) }); idleSpawnFloat(`CONVERGENCE +${idleFormatNumber(r.reward)}`, 'crit'); await refreshIdleState(); } catch (e) { alert(e.message); } }
 
 async function claimIdleMission(key) {
@@ -1603,7 +1603,7 @@ async function claimAllIdle() {
     const r = await api('/api/idle/claim-all', { method: 'POST', body: JSON.stringify({}) });
     if (r.claimed > 0) {
       idleSpawnFloat(`TOUT RÉCLAMÉ · +${idleFormatNumber(r.seals)} SCEAUX${r.essence ? ` · +${idleFormatNumber(r.essence)} ESSENCE` : ''}`, 'crit huge');
-      idleNotify(`${r.claimed} récompense${r.claimed > 1 ? 's' : ''} réclamée${r.claimed > 1 ? 's' : ''} : +${idleFormatNumber(r.seals)} Sceaux${r.essence ? ` · +${idleFormatNumber(r.essence)} Essence` : ''}.`, 'success');
+      idleNotify(`${r.claimed} récompense${r.claimed > 1 ? 's' : ''} réclamée${r.claimed > 1 ? 's' : ''} : +${idleFormatNumber(r.seals)} Sceaux${r.essence ? ` · +${idleFormatNumber(r.essence)} Essence` : ''}${r.tokens ? ` · +${idleFormatNumber(r.tokens)} tokens gacha` : ''}.`, 'success');
       if (typeof burstConfetti === 'function') burstConfetti(30);
       if (typeof sfx !== 'undefined' && sfx.idleChest) sfx.idleChest();
     } else {
@@ -2613,6 +2613,7 @@ async function confirmIdlePrestige() {
     <span><i class="fas fa-brain"></i><b>+${idleFormatNumber(recap.gained || 0)}</b><small>Sagesse gagnée</small></span>
     <span><i class="fas fa-flag-checkered"></i><b>${idleFormatNumber(recap.stage || 0)}</b><small>Stage atteint cette run</small></span>
     ${recap.seals ? `<span><i class="fas fa-ticket"></i><b>+${idleFormatNumber(recap.seals)}</b><small>Sceaux de palier</small></span>` : ''}
+    ${recap.tokens ? `<span><i class="fas fa-coins"></i><b>+${idleFormatNumber(recap.tokens)}</b><small>Tokens gacha</small></span>` : ''}
     <span><i class="fas fa-tags"></i><b>Minimum</b><small>Prix d’invocation Essence</small></span>`;
   document.getElementById('idle-prestige-confirm-view')?.classList.add('hidden');
   document.getElementById('idle-prestige-result-view')?.classList.remove('hidden');
