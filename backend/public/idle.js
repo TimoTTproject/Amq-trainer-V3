@@ -319,8 +319,21 @@ async function idleBackgroundSync() {
   }
 }
 
+// Onglet verrouillé tant que son contenu n'a aucun sens pour le joueur :
+// « Objets » sans le moindre objet n'est qu'un écran vide plein de filtres.
+// Le clic explique comment débloquer au lieu de changer d'écran.
+function idleTabLockReason(name, state) {
+  if (!state) return null;
+  if (name === 'equipment' && !((state.inventory?.count || 0) > 0)) {
+    return 'Objets : obtiens ton premier objet via les coffres de boss (Combat) ou le Donjon des Objets (Farm).';
+  }
+  return null;
+}
+
 // Navigation latérale sur ordinateur et barre compacte sur mobile.
 function idleShowPanel(name) {
+  const lockReason = idleTabLockReason(name, idleState);
+  if (lockReason) { idleNotify(lockReason, 'info'); return; }
   idleActivePanel = name;
   for (const p of ['home', 'progression', 'team', 'equipment', 'farm', 'upgrades', 'activities']) {
     const panel=document.getElementById('idle-panel-' + p);panel?.classList.toggle('hidden', p !== name);panel?.setAttribute('aria-hidden',p===name?'false':'true');
@@ -673,6 +686,7 @@ function renderIdleState(state) {
   idleBurstReadyAt=state.battle?.skills?.burstReadyAt?new Date(state.battle.skills.burstReadyAt).getTime():0;
   idleTeamSkillReadyAt=state.battle?.skills?.teamReadyAt?new Date(state.battle.skills.teamReadyAt).getTime():0;
   if (idleActivePanel === 'home') {
+    renderIdleHowto(state);
     renderIdleDecor(state.dojo, prev?.dojo, state.battle, prev?.battle);
     renderIdleBattle(state.battle, state.dojo, prev?.battle);
     renderIdleBattleSpeed(state.battle?.speed);
@@ -790,12 +804,30 @@ function idleTabBadgeCounts(state) {
 function renderIdleTabBadges(state) {
   const counts = idleTabBadgeCounts(state);
   document.querySelectorAll('#idle-tabs [data-idle-tab]').forEach((tab) => {
-    const count = counts[tab.dataset.idleTab] || 0;
+    const locked = !!idleTabLockReason(tab.dataset.idleTab, state);
+    tab.classList.toggle('locked', locked);
+    tab.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    const count = locked ? 0 : counts[tab.dataset.idleTab] || 0;
     let badge = tab.querySelector('.idle-tab-badge');
-    if (!count) { badge?.remove(); return; }
-    if (!badge) { badge = document.createElement('b'); badge.className = 'idle-tab-badge'; tab.appendChild(badge); }
-    badge.textContent = count > 9 ? '9+' : String(count);
+    if (!count) { badge?.remove(); }
+    else {
+      if (!badge) { badge = document.createElement('b'); badge.className = 'idle-tab-badge'; tab.appendChild(badge); }
+      badge.textContent = count > 9 ? '9+' : String(count);
+    }
+    let lockIcon = tab.querySelector('.idle-tab-lock');
+    if (!locked) { lockIcon?.remove(); return; }
+    if (!lockIcon) { lockIcon = document.createElement('i'); lockIcon.className = 'fas fa-lock idle-tab-lock'; tab.appendChild(lockIcon); }
   });
+}
+
+// Carte « Comment jouer » de l'onglet Combat : visible uniquement pour les
+// nouveaux joueurs (niveau ≤ 3) tant qu'ils ne l'ont pas fermée eux-mêmes.
+function renderIdleHowto(state) {
+  const box = document.getElementById('idle-howto');
+  if (!box) return;
+  const dismissed = localStorage.getItem('idle-howto-dismissed') === '1';
+  const isNew = (state.rank?.level || 1) <= 3;
+  box.classList.toggle('hidden', dismissed || !isNew);
 }
 
 // ── Collection par licence (façon Pokédex) : % de complétion par série, et
@@ -1575,7 +1607,16 @@ async function openIdleRanking(type=idleRankingType){
   idleRankingType=type;const modal=document.getElementById('idle-ranking-modal');const list=document.getElementById('idle-ranking-list');const metric=document.getElementById('idle-ranking-metric-title');const hint=document.getElementById('idle-ranking-hint');
   modal?.classList.remove('hidden');document.querySelectorAll('[data-idle-ranking]').forEach((button)=>button.classList.toggle('active',button.dataset.idleRanking===type));
   const titles={stage:'Vague',speed:'Temps',rift:'Palier',collection:'Héros',friends:'Vague'};if(metric)metric.textContent=titles[type]||'Score';
-  if(hint)hint.textContent=type==='friends'?'Tes amis sont triés par meilleure vague. Ouvre une ligne pour comparer leur build.':type==='rift'?'Classement de la Faille de la semaine en cours.':'Ouvre un joueur pour inspecter sa composition active.';
+  // Une phrase par classement : ce qu'il mesure ET comment y grimper — un
+  // nouveau joueur ne devine pas ce que « Prestige » ou « Palier » classe.
+  const hints={
+    stage:'Meilleure vague jamais atteinte, toutes runs confondues. Améliore ton DPS pour aller plus loin. Clique un joueur pour voir son équipe.',
+    speed:'Prestige le plus rapide : le temps de la meilleure run terminée. Optimise ta boucle pour prestiger plus vite.',
+    rift:'Meilleur palier de la Faille dimensionnelle cette semaine (remise à zéro chaque lundi). Débloquée au niveau 20.',
+    collection:'Nombre de héros distincts recrutés. Invoque avec tes Sceaux pour compléter ta collection.',
+    friends:'Tes amis triés par meilleure vague. Ouvre une ligne pour comparer leur build.',
+  };
+  if(hint)hint.textContent=hints[type]||'Ouvre un joueur pour inspecter sa composition active.';
   if(list)list.innerHTML='<p class="hint">Chargement…</p>';
   try{const data=type==='friends'?await api('/api/idle/social'):await api(`/api/idle/leaderboard?type=${encodeURIComponent(type)}`);const players=type==='friends'?data.friends:data.players;if(list)list.innerHTML=idleRankingRows(players,type);}catch(e){if(list)list.innerHTML=`<p class="hint">${escapeHtml(e.message)}</p>`;}
 }
@@ -2767,6 +2808,8 @@ function initIdleUI() {
   document.getElementById('idle-open-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-open-hero-style')?.addEventListener('click',openIdleClassPicker);
   document.querySelectorAll('[data-open-idle-summon]').forEach((button)=>button.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden')));
+  document.getElementById('idle-howto-close')?.addEventListener('click',()=>{localStorage.setItem('idle-howto-dismissed','1');document.getElementById('idle-howto')?.classList.add('hidden');});
+  document.querySelectorAll('#idle-howto [data-idle-goto]').forEach((button)=>button.addEventListener('click',()=>idleShowPanel(button.dataset.idleGoto)));
   document.getElementById('idle-nav-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   document.getElementById('idle-spend-summon')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.remove('hidden'));
   // OUVRE toujours la section Ancients (jamais de bascule qui pourrait la

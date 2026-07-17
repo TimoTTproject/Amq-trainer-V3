@@ -48,13 +48,14 @@ async function rankedBoard(meId) {
     rank: i + 1, userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl, frame: frameOf(u),
     value: u.mmr, tier: tierFromMmr(u.mmr), isMe: u.id === meId,
   }));
+  const total = await prisma.user.count({ where: { rankedGames: { gt: 0 } } });
   const me = await prisma.user.findUnique({ where: { id: meId }, select: { mmr: true, rankedGames: true } });
   let myRank = null;
   if (me?.rankedGames > 0) {
     const better = await prisma.user.count({ where: { rankedGames: { gt: 0 }, mmr: { gt: me.mmr } } });
     myRank = { rank: better + 1, value: me.mmr, tier: tierFromMmr(me.mmr) };
   }
-  return { top, me: myRank };
+  return { top, me: myRank, total };
 }
 
 // Solo classé (défi du jour) : classement par MMR solo
@@ -69,13 +70,14 @@ async function soloBoard(meId) {
     rank: i + 1, userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl, frame: frameOf(u),
     value: u.soloMmr, tier: tierFromMmr(u.soloMmr), isMe: u.id === meId,
   }));
+  const total = await prisma.user.count({ where: { soloGames: { gt: 0 } } });
   const me = await prisma.user.findUnique({ where: { id: meId }, select: { soloMmr: true, soloGames: true } });
   let myRank = null;
   if (me?.soloGames > 0) {
     const better = await prisma.user.count({ where: { soloGames: { gt: 0 }, soloMmr: { gt: me.soloMmr } } });
     myRank = { rank: better + 1, value: me.soloMmr, tier: tierFromMmr(me.soloMmr) };
   }
-  return { top, me: myRank };
+  return { top, me: myRank, total };
 }
 
 // Château : classement par meilleur étage atteint
@@ -95,13 +97,14 @@ async function towerBoard(meId) {
     value: u.towerBestFloor,
     isMe: u.id === meId,
   }));
+  const total = await prisma.user.count({ where: { towerBestFloor: { gt: 0 } } });
   const me = await prisma.user.findUnique({ where: { id: meId }, select: { towerBestFloor: true } });
   let myRank = null;
   if (me?.towerBestFloor > 0) {
     const better = await prisma.user.count({ where: { towerBestFloor: { gt: me.towerBestFloor } } });
     myRank = { rank: better + 1, value: me.towerBestFloor };
   }
-  return { top, me: myRank };
+  return { top, me: myRank, total };
 }
 
 // Coop (Tour en équipe) : meilleur étage de la SEMAINE en cours. Les 2 premiers
@@ -118,13 +121,14 @@ async function coopBoard(meId) {
     rank: i + 1, userId: r.userId, displayName: r.user.displayName, avatarUrl: r.user.avatarUrl,
     frame: frameOf(r.user), value: r.floor, isMe: r.userId === meId,
   }));
+  const total = await prisma.coopWeeklyScore.count({ where: { week, floor: { gt: 0 } } });
   const mineRow = await prisma.coopWeeklyScore.findUnique({ where: { userId_week: { userId: meId, week } }, select: { floor: true } });
   let myRank = null;
   if (mineRow && mineRow.floor > 0) {
     const better = await prisma.coopWeeklyScore.count({ where: { week, floor: { gt: mineRow.floor } } });
     myRank = { rank: better + 1, value: mineRow.floor };
   }
-  return { top, me: myRank, week, rewards: [800, 400] };
+  return { top, me: myRank, week, rewards: [800, 400], total };
 }
 
 // Tokens : classement par solde
@@ -144,9 +148,10 @@ async function tokensBoard(meId) {
     value: u.tokens,
     isMe: u.id === meId,
   }));
+  const total = await prisma.user.count({ where: { tokens: { gt: 0 } } });
   const me = await prisma.user.findUnique({ where: { id: meId }, select: { tokens: true } });
   const better = await prisma.user.count({ where: { tokens: { gt: me?.tokens || 0 } } });
-  return { top, me: { rank: better + 1, value: me?.tokens || 0 } };
+  return { top, me: { rank: better + 1, value: me?.tokens || 0 }, total };
 }
 
 // Collection : classement par nombre de personnages distincts possédés
@@ -176,7 +181,7 @@ async function collectionBoard(meId) {
   if (myValue > 0) {
     myRank = { rank: grouped.filter((g) => g._count._all > myValue).length + 1, value: myValue };
   }
-  return { top, me: myRank };
+  return { top, me: myRank, total: grouped.length };
 }
 
 // Chance gacha : classement par indice relatif de raretés obtenues.
@@ -224,6 +229,7 @@ async function luckBoard(meId) {
     top: withRanks.slice(0, TOP_N),
     me: me ? { rank: me.rank, value: me.value, pullCount: me.pullCount } : null,
     minPulls: LUCK_MIN_PULLS,
+    total: withRanks.length,
   };
 }
 
