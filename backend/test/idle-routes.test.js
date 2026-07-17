@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossTacticalProfile,weeklyRoguelikeEvent,expeditionPayload,expeditionReward,EXPEDITION_MISSIONS,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,itemQualityScore,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
+const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossTacticalProfile,weeklyRoguelikeEvent,expeditionPayload,expeditionReward,EXPEDITION_MISSIONS,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,itemQualityScore,planBulkEnhancement,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -529,6 +529,25 @@ test('équipement : la protection intelligente verrouille les meilleurs jets de 
   const items=[{id:'a',kind:'rune1',rarity:'rare',effectValue:.1,affixes:[],enhancementLevel:0,equippedCharacterId:null},{id:'b',kind:'rune1',rarity:'legendary',effectValue:.3,affixes:[],enhancementLevel:5,equippedCharacterId:null},{id:'c',kind:'rune2',rarity:'epic',effectValue:.2,affixes:[],enhancementLevel:0,equippedCharacterId:7}];
   prisma.user.findUnique=async()=>dbUser();prisma.idleItem.findMany=async()=>items;let locked=[];prisma.idleItem.updateMany=async({where})=>{locked=where.id.in;return{count:locked.length};};
   const res=await app.request('/api/idle/equipment/auto-lock',{method:'POST',cookie:app.authCookie('u1'),body:{}});assert.equal(res.status,200);assert.ok(locked.includes('b'));assert.ok(locked.includes('c'));
+});
+
+test('équipement : le plan groupé améliore équitablement les objets portés et ignore le sac',()=>{
+  const items=[{id:'low',rarity:'rare',bonus:.03,enhancementLevel:0,equippedCharacterId:1,subStats:{}},{id:'high',rarity:'epic',bonus:.05,enhancementLevel:4,equippedCharacterId:9,subStats:{}},{id:'bag',rarity:'mythic',bonus:.2,enhancementLevel:0,equippedCharacterId:null,subStats:{}}];
+  const plan=planBulkEnhancement(items,1,Number.MAX_SAFE_INTEGER,20);
+  assert.equal(plan.items.length,2);assert.equal(plan.bought,2);assert.ok(plan.spent>0);assert.equal(plan.items.find((item)=>item.id==='low').enhancementLevel,1);assert.equal(plan.items.find((item)=>item.id==='high').enhancementLevel,5);assert.equal(plan.items.some((item)=>item.id==='bag'),false);
+});
+
+test('équipement : tout retirer cible aussi les héros au repos sans toucher aux objets libres',async()=>{
+  prisma.user.findUnique=async()=>dbUser();let where=null;prisma.idleItem.updateMany=async(args)=>{where=args.where;return{count:7};};
+  const res=await app.request('/api/idle/equipment/unequip-all',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(res.status,200);assert.equal(res.json.removed,7);assert.equal(where.userId,'u1');assert.deepEqual(where.equippedCharacterId,{not:null});
+});
+
+test('équipement : améliorer tout répartit un niveau sur chaque objet porté',async()=>{
+  const user=dbUser({essence:100000,idleBestStage:20,idleStage:20});const items=[{id:'a',userId:'u1',rarity:'rare',bonus:.03,enhancementLevel:0,equippedCharacterId:1,subStats:{}},{id:'b',userId:'u1',rarity:'epic',bonus:.05,enhancementLevel:2,equippedCharacterId:8,subStats:{}}];
+  prisma.user.findUnique=async()=>user;let spent=0;prisma.user.update=async({data})=>{if(data.essence?.decrement)spent=data.essence.decrement;return user;};prisma.idleItem.findMany=async({where})=>where?.equippedCharacterId?.not===null?items:items;const updates=[];prisma.idleItem.update=async(args)=>{updates.push(args);return{};};
+  const res=await app.request('/api/idle/equipment/enhance-all',{method:'POST',cookie:app.authCookie('u1'),body:{levels:1}});
+  assert.equal(res.status,200);assert.equal(res.json.bought,2);assert.equal(res.json.items,2);assert.equal(updates.length,2);assert.ok(spent>0);assert.deepEqual(updates.map((entry)=>entry.data.enhancementLevel).sort((a,b)=>a-b),[1,3]);
 });
 
 test('expéditions : démarre avec les réserves puis réclame atomiquement la récompense terminée',async()=>{

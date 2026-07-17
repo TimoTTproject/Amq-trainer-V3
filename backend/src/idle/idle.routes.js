@@ -617,6 +617,16 @@ function enhancedRuneSubStats(item,nextLevel){
   if(nextLevel%3===0){const keys=['dps','click','burst','team','boss'];const key=keys[(Math.floor(nextLevel/3)-1)%keys.length];stats[key]=Number((Number(stats[key]||0)+.01).toFixed(3));}
   return stats;
 }
+function planBulkEnhancement(items,levels,budget,bestStage){
+  const rounds=Math.max(1,Math.min(5,Math.floor(Number(levels)||1)));const limit=Number.isFinite(Number(budget))?Math.max(0,Number(budget)):Number.MAX_SAFE_INTEGER;
+  const working=(items||[]).filter((item)=>item.equippedCharacterId&&(item.enhancementLevel||0)<15).map((item)=>({...item,subStats:{...(item.subStats||{})},startLevel:item.enhancementLevel||0})).sort((a,b)=>(a.enhancementLevel||0)-(b.enhancementLevel||0)||(ITEM_RARITY_ORDER[b.rarity]||0)-(ITEM_RARITY_ORDER[a.rarity]||0)||String(a.id).localeCompare(String(b.id)));
+  let spent=0,bought=0;
+  for(let round=0;round<rounds;round++)for(const item of working){
+    const level=item.enhancementLevel||0;if(level>=15)continue;const cost=runeEnhanceCost(item,bestStage);if(spent+cost>limit)continue;
+    spent+=cost;bought++;item.enhancementLevel=level+1;item.bonus=Number((Number(item.bonus||0)+.006+(ITEM_RARITY_ORDER[item.rarity]||1)*.001).toFixed(3));item.subStats=enhancedRuneSubStats(item,item.enhancementLevel);
+  }
+  return {spent,bought,items:working.filter((item)=>item.enhancementLevel>item.startLevel).map((item)=>({id:item.id,bonus:item.bonus,enhancementLevel:item.enhancementLevel,subStats:item.subStats,levels:item.enhancementLevel-item.startLevel}))};
+}
 
 // (L'ancien plan d'auto-équipement — score pondéré par rôle
 // (EQUIPMENT_ROLE_WEIGHTS), recherche de panoplies sur plusieurs ordres —
@@ -1641,6 +1651,7 @@ async function buildState(userId) {
     summary:{worlds:inventoryFamilies.length,effects:new Set(preparedInventoryItems.flatMap((item)=>item.affixesDetailed.map((a)=>a.key))).size,equipped:preparedInventoryItems.filter((item)=>item.equipped).length,completeFamilies:inventoryFamilies.filter((family)=>family.complete).length},
     families:inventoryFamilies,
     sets:Object.entries(RUNE_SETS).map(([key,set])=>({key,...set})),
+    bulkEnhance:{one:planBulkEnhancement(inventoryItems,1,Number.MAX_SAFE_INTEGER,progressionStage).spent,five:planBulkEnhancement(inventoryItems,5,Number.MAX_SAFE_INTEGER,progressionStage).spent,eligible:inventoryItems.filter((item)=>item.equippedCharacterId&&(item.enhancementLevel||0)<15).length},
     setBonus:{label:'Équipe 2 ou 4 objets du même set sur un héros pour activer son bonus.'},
   };
   const runBestStage=Math.max(user.idleRunBestStage||1,stage);const blessingSlots=Math.min(12,Math.floor((runBestStage-1)/20));const blessingPending=runBlessingKeys.length<blessingSlots;
@@ -2723,6 +2734,25 @@ router.post('/equipment/enhance', requireAuth, requireIdleBeta, rateLimit({ max:
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
+router.post('/equipment/enhance-all',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-equipment-enhance-all'}),async(req,res)=>{
+  const levels=Number(req.body?.levels||1);if(![1,5].includes(levels))return res.status(400).json({error:'Quantité invalide'});
+  let result=null;
+  try{
+    await withSettle(req.user.id,async(tx,user)=>{
+      const items=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}}});const bestStage=Math.max(user.idleBestStage||1,user.idleStage||1);
+      result=planBulkEnhancement(items,levels,user.essence,bestStage);if(!result.bought)throw new IdleError(400,items.some((item)=>(item.enhancementLevel||0)<15)?'Essence insuffisante':'Aucun objet équipé à améliorer');
+      await tx.user.update({where:{id:user.id},data:{essence:{decrement:result.spent}}});
+      for(const item of result.items)await tx.idleItem.update({where:{id:item.id},data:{bonus:item.bonus,enhancementLevel:item.enhancementLevel,subStats:item.subStats}});
+    });
+    await incrementIdleCounter(req.user.id,'upgrade',result.bought);res.json({ok:true,bought:result.bought,items:result.items.length,spent:result.spent,state:await buildState(req.user.id)});
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+});
+
+router.post('/equipment/unequip-all',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-equipment-unequip-all'}),async(req,res)=>{
+  const result=await prisma.idleItem.updateMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},data:{equippedCharacterId:null}});
+  void recordIdleEvent(req.user.id,'equipment_unequip_all',{value:result.count});res.json({ok:true,removed:result.count,state:await buildState(req.user.id)});
+});
+
 // Meulage : re-tire la magnitude de l'affixe primaire et des affixes
 // secondaires (types conservés) aux valeurs du tier ACTUEL du joueur —
 // revalorise les vieux objets et sert de puits d'essence répétable. Le
@@ -3594,6 +3624,7 @@ module.exports = {
   RUNE_SETS,
   itemSalvageValue,
   itemQualityScore,
+  planBulkEnhancement,
   progressionBossesCrossed,
   synergyForSlots,
   synergyLicenseName,

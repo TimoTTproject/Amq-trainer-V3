@@ -224,3 +224,9 @@ test('endgame Idle : expéditions, mutateur hebdomadaire et protection intellige
   assert.match(source,/function renderIdleExpeditions\(/);assert.match(source,/\/api\/idle\/expedition\/start/);assert.match(source,/\/api\/idle\/expedition\/claim/);assert.match(source,/\/api\/idle\/equipment\/auto-lock/);
   assert.match(styles,/\.idle-expedition-grid/);assert.match(styles,/\.idle-weekly-rogue\.active/);
 });
+
+test('équipement Idle : tout retirer et amélioration groupée couvrent aussi les héros au repos',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'..','public','idle.js'),'utf8');const html=fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');const styles=fs.readFileSync(path.join(__dirname,'..','public','styles.css'),'utf8');
+  for(const id of ['idle-unequip-all','idle-enhance-all-one','idle-enhance-all-five','idle-equipment-bulk-summary'])assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(source,/function unequipAllIdleEquipment\(\)/);assert.match(source,/\/api\/idle\/equipment\/unequip-all/);assert.match(source,/function enhanceAllIdleEquipment\(levels\)/);assert.match(source,/\/api\/idle\/equipment\/enhance-all/);assert.match(styles,/idle-equipment-bulk-tools/);
+});
