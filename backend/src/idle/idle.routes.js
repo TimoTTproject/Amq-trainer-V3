@@ -37,6 +37,9 @@ const {
   enemyArchetype,
   enemyReward,
   investmentCostIndex,
+  RUNE_DUNGEON_FREE_ATTEMPTS,
+  runeDungeonExtraCost,
+  runeDungeonRarity,
   enemiesRequiredForStage,
   normalizeWaveProgress,
   enemyUnitReward,
@@ -1507,6 +1510,17 @@ async function buildState(userId) {
   let riftRun=null;try{riftRun=await prisma.idleRiftRun.findUnique({where:{userId_period:{userId,period:periods.week}}});}catch(e){if(e?.code)throw e;}
   const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods,riftRun?.relics||[]);
   rift.pendingChoice=riftRelicDetails(riftRun?.pendingChoice||[]);
+  // Donjon des Runes : farm répétable, cf. runeDungeonExtraCost/runeDungeonRarity.
+  const runeDungeonAttemptsToday=missionCounters.get(`rune_dungeon:${periods.day}`)||0;
+  const runeDungeonFreeRemaining=Math.max(0,RUNE_DUNGEON_FREE_ATTEMPTS-runeDungeonAttemptsToday);
+  const runeDungeon={
+    attemptsToday:runeDungeonAttemptsToday,
+    freeAttempts:RUNE_DUNGEON_FREE_ATTEMPTS,
+    freeRemaining:runeDungeonFreeRemaining,
+    nextCost:runeDungeonFreeRemaining>0?0:runeDungeonExtraCost(runeDungeonAttemptsToday-RUNE_DUNGEON_FREE_ATTEMPTS,progressionStage),
+    rarity:runeDungeonRarity(progressionStage),
+    kinds:RUNE_KINDS.map((kind)=>({kind,label:ITEM_KINDS[kind].label,icon:ITEM_KINDS[kind].icon})),
+  };
   const guide=[
     {key:'recruit',title:'Invoque ton premier héros',description:'Utilise 1 Sceau ou de l’Essence pour obtenir une recrue Rare ou supérieure.',done:recruitCount>0,tab:'home'},
     {key:'assign',title:'Forme ton équipe',description:'Assigne une recrue dans un emplacement pour produire automatiquement.',done:activeSlots.length>0,tab:'team'},
@@ -1640,6 +1654,7 @@ async function buildState(userId) {
     codex: { discovered: recruitCount, masteries, collection: seriesCollection, catalogTotal, completion:{completed:completedSeries,perSeriesBonus:SERIES_COMPLETION_BONUS,sealsPerSeries:SERIES_COMPLETION_SEALS,multiplier:completedSeriesMultiplier(completedSeries)}, worlds: Array.from({length:Math.max(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1)},(_,i)=>{const level=i*10+1;const world=campaignForStage(level);return {name:world.name,level,act:world.act,difficulty:world.difficulty.name,discovered:Math.max(user.idleBestStage||1,stage)>=level};}) },
     event: { ...currentIdleEvent(), weekly: { ...weeklyConvergence(missionCounters,periods), claimed: weeklyClaimed } },
     rift,
+    runeDungeon,
     achievements,
     achievementsBonus,
     advisor,
@@ -3120,6 +3135,57 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
     await incrementIdleCounter(req.user.id,'boss_chest',1);
     res.json({ ok: true, ...result });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
+});
+
+// ── Donjon des Runes : farm répétable et CIBLÉ (le joueur choisit le kind,
+// donc l'emplacement qu'il veut garnir) — façon donjon Caiross de Summoners
+// War. Quelques tentatives gratuites par jour (RUNE_DUNGEON_FREE_ATTEMPTS),
+// puis un coût croissant en Essence, remis à zéro chaque jour avec le
+// compteur (période 'day' de idlePeriods).
+router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-rune-dungeon' }), async (req, res) => {
+  const kind = String(req.body?.kind || '');
+  if (!RUNE_KINDS.includes(kind)) return res.status(400).json({ error: 'Emplacement invalide' });
+  let result;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: req.user.id } });
+      const periods = idlePeriods();
+      const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
+      const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
+      const attemptsToday = counterRow?.value || 0;
+      let cost = 0;
+      if (attemptsToday >= RUNE_DUNGEON_FREE_ATTEMPTS) {
+        cost = runeDungeonExtraCost(attemptsToday - RUNE_DUNGEON_FREE_ATTEMPTS, bestStage);
+        const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost } } });
+        if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
+      }
+      await tx.idleProgressCounter.upsert({
+        where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } },
+        create: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 },
+        update: { value: { increment: 1 } },
+      });
+      const rarity = runeDungeonRarity(bestStage);
+      const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
+      const tier = Math.max(1, Math.floor(bestStage / 10));
+      const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
+      const drop = idleItemDrop(tier, kind, rarity, bonus, 'Donjon des Runes');
+      const inventoryCount = await tx.idleItem.count({ where: { userId: user.id } });
+      let loot;
+      if (inventoryCount < IDLE_ITEM_CAPACITY) {
+        const item = await tx.idleItem.create({ data: { userId: user.id, ...drop } });
+        loot = { ...drop, itemId: item.id, equipped: false, stored: true };
+      } else {
+        const equippedItems = await tx.idleItem.findMany({ where: { userId: user.id, equippedCharacterId: { not: null } }, select: { effectKey: true, effectValue: true, affixes: true, setKey: true, equippedCharacterId: true } });
+        const fortuneBonus = equippedItems.flatMap((it) => itemAffixList(it)).filter((a) => ITEM_EFFECTS[a.effectKey]?.mode === 'salvage').reduce((sum, a) => sum + (a.effectValue || 0), 0);
+        const salvage = Math.round(itemSalvageValue(drop, bestStage) * (1 + fortuneBonus) * equipmentSetFlatMultiplier(equippedItems, 'salvage'));
+        await tx.user.update({ where: { id: user.id }, data: { essence: { increment: salvage }, essenceEarnedTotal: { increment: salvage } } });
+        loot = { ...drop, equipped: false, stored: false, salvage };
+      }
+      result = { cost, loot };
+    });
+  } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
+  void recordIdleEvent(req.user.id, 'rune_dungeon', { value: 1 });
+  res.json({ ok: true, ...result, state: await buildState(req.user.id) });
 });
 
 // ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un

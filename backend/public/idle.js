@@ -694,7 +694,7 @@ function renderIdleState(state) {
     renderIdleMasteries(state.codex);
     renderIdleRecruitHistory(state.recruitHistory || []);
   }
-  if (idleActivePanel === 'equipment') renderIdleInventory(state);
+  if (idleActivePanel === 'equipment') { renderIdleInventory(state); renderIdleRuneDungeon(state); }
   if (idleActivePanel === 'upgrades') {
     renderIdleMilestone(state.dojo);
     renderIdlePrestige(state.dojo);
@@ -1056,6 +1056,27 @@ function idleRuneDetailChips(item){
   const subStats=Object.entries(item.subStats||{}).map(([key,value])=>`<span><small>${escapeHtml(IDLE_STAT_LABELS[key]||key)}</small><b>+${Math.round(Number(value)*100)}%</b></span>`);
   return [...affixes,...subStats].join('')||'<em>Aucune sous-statistique débloquée</em>';
 }
+// Donjon des Runes : un bouton par emplacement (rune1..6), l'objet obtenu va
+// toujours dans le slot choisi — façon donjon Caiross de Summoners War.
+let idleRuneDungeonBusy=false;
+function renderIdleRuneDungeon(state){
+  const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');
+  if(!dungeon||!grid)return;
+  if(status)status.innerHTML=dungeon.freeRemaining>0
+    ?`<i class="fas fa-bolt"></i> ${dungeon.freeRemaining}/${dungeon.freeAttempts} tentative${dungeon.freeRemaining>1?'s':''} gratuite${dungeon.freeRemaining>1?'s':''} aujourd’hui`
+    :`<i class="fas fa-coins"></i> Tentatives gratuites épuisées · prochaine : ${idleFormatNumber(dungeon.nextCost)} Essence`;
+  grid.innerHTML=(dungeon.kinds||[]).map((k)=>`<button type="button" class="idle-rune-dungeon-btn" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${escapeHtml(k.icon)}"></i><b>${escapeHtml(k.label)}</b></button>`).join('');
+}
+async function runIdleRuneDungeon(kind){
+  if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;renderIdleRuneDungeon(idleState);
+  try{
+    const result=await api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})});
+    idleState=result.state;renderIdleState(result.state);
+    showIdleRuneDungeonReward(result);
+    if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();
+  }catch(e){idleNotify(e.message,'error');}
+  finally{idleRuneDungeonBusy=false;renderIdleRuneDungeon(idleState);}
+}
 function renderIdleInventory(state){
   const inventory=state.inventory;const grid=document.getElementById('idle-inventory-grid');if(!inventory||!grid)return;
   const capacity=document.getElementById('idle-inventory-capacity');if(capacity)capacity.textContent=`${inventory.count} / ${inventory.capacity}`;
@@ -1393,10 +1414,23 @@ async function claimIdleBossChest() {
 }
 
 function showIdleBossReward(reward) {
-  const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');if(!modal||!body)return;
+  const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');const title=document.getElementById('idle-boss-reveal-title');if(!modal||!body)return;
+  if(title)title.innerHTML='<i class="fas fa-box-open"></i> Coffre de boss';
   const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
   const loot=reward.loot;
   body.innerHTML=`<div class="idle-boss-reward-main"><i class="fas fa-trophy"></i><span><small>COFFRE ${reward.tier}</small><b>Butin du gardien</b></span></div><div class="idle-boss-reward-grid"><span><i class="fas fa-bolt"></i><b>+${idleFormatNumber(reward.reward)}</b><small>Essence</small></span><span><i class="fas fa-ticket"></i><b>+${reward.seals}</b><small>Sceau${reward.seals>1?'x':''}</small></span></div>${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())} · SET ${escapeHtml(loot.setKey||'energy').toUpperCase()}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Objet ajouté · ${escapeHtml(names[loot.kind]||'Objet')} · +0`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-diamond"></i> Voir et équiper l’objet</button>':''}`:''}`;
+  modal.classList.remove('hidden');
+}
+
+// Réutilise la modale de révélation du coffre de boss (même structure) pour
+// le butin du Donjon des Runes — pas d'Essence/Sceaux gagnés ici (sauf
+// recyclage si l'inventaire est plein), juste l'objet obtenu dans le slot choisi.
+function showIdleRuneDungeonReward(result){
+  const modal=document.getElementById('idle-boss-reveal');const body=document.getElementById('idle-boss-reveal-body');const title=document.getElementById('idle-boss-reveal-title');if(!modal||!body)return;
+  const names = Object.fromEntries(IDLE_RUNE_KINDS.map((kind,index)=>[kind,`Objet ${index+1}`]));
+  const loot=result.loot;
+  if(title)title.innerHTML='<i class="fas fa-dungeon"></i> Donjon des Runes';
+  body.innerHTML=`${loot?`<div class="idle-boss-loot ${escapeHtml(loot.rarity)}">${idleItemArt(loot,'reveal')}<div><small>${escapeHtml(loot.rarity.toUpperCase())} · SET ${escapeHtml(loot.setKey||'energy').toUpperCase()}</small><b>${escapeHtml(loot.name||names[loot.kind])}</b><span>${loot.stored?`Objet ajouté · ${escapeHtml(names[loot.kind]||'Objet')} · +0`:`Inventaire plein · converti en +${idleFormatNumber(loot.salvage||0)} Essence`}</span></div><em>${loot.stored?'NOUVEAU':'RECYCLÉ'}</em></div>${loot.stored?'<button class="btn-secondary idle-boss-open-items" data-open-equipment><i class="fas fa-diamond"></i> Voir et équiper l’objet</button>':''}`:''}`;
   modal.classList.remove('hidden');
 }
 
@@ -2694,6 +2728,7 @@ function initIdleUI() {
   salvageRarity?.addEventListener('change',saveSalvageRules);salvageEnhancement?.addEventListener('change',saveSalvageRules);salvageKeepSets?.addEventListener('change',saveSalvageRules);
   document.getElementById('idle-select-recyclable')?.addEventListener('click',selectIdleItemsBySalvageRules);
   document.getElementById('idle-auto-equip')?.addEventListener('click',autoEquipIdleItems);
+  document.getElementById('idle-rune-dungeon-grid')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-rune-dungeon]');if(b&&!b.disabled)runIdleRuneDungeon(b.dataset.runeDungeon);});
   document.getElementById('idle-equipment-target')?.addEventListener('change',(e)=>{idleEquipmentTargetSlot=Number(e.target.value);renderIdleInventory(idleState);});
   document.getElementById('idle-loadouts')?.addEventListener('click',(e)=>{const quick=e.target.closest('[data-loadout-empty]');if(quick)return openIdleEquipmentPicker(Number(quick.dataset.loadoutSlot),quick.dataset.loadoutEmpty);const target=e.target.closest('[data-loadout-target]');if(target){idleEquipmentTargetSlot=Number(target.dataset.loadoutTarget);renderIdleInventory(idleState);return;}const item=e.target.closest('[data-loadout-item]');if(item)focusIdleInventoryItem(item.dataset.loadoutItem);});
   const equipmentPicker=document.getElementById('idle-equipment-picker');document.getElementById('idle-equipment-picker-close')?.addEventListener('click',()=>equipmentPicker?.classList.add('hidden'));equipmentPicker?.addEventListener('click',async(e)=>{if(e.target===equipmentPicker)return equipmentPicker.classList.add('hidden');if(e.target.closest('[data-picker-full]')){equipmentPicker.classList.add('hidden');openIdleEquipmentForSlot(idleEquipmentPickerSlot,idleEquipmentPickerKind);return;}const equip=e.target.closest('[data-picker-equip]');if(equip&&!equip.disabled){equip.disabled=true;const success=await equipIdleItem(equip.dataset.pickerEquip,idleEquipmentPickerSlot);if(success)equipmentPicker.classList.add('hidden');else equip.disabled=false;}});

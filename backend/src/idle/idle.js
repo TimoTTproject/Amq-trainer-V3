@@ -446,6 +446,30 @@ function investmentCostIndex(stage) {
   const s = Math.max(1, Math.floor(stage || 1));
   return finiteIdleNumber(ENEMY_REWARD_BASE * Math.pow(INVESTMENT_COST_GROWTH, s - 1), 1);
 }
+// ── Donjon des Runes : farm RÉPÉTABLE et CIBLÉ d'objets, façon donjon Caiross
+// de Summoners War — jusque-là, un objet ne tombait que du coffre de boss
+// (une fois par palier de 10 stages) ou de la Faille (4 fois/semaine max),
+// jamais assez pour compléter plusieurs sets sur plusieurs héros (retour
+// utilisateur). Ici le joueur choisit directement le kind (rune1..6, donc
+// l'emplacement qu'il veut garnir) : quelques tentatives gratuites par jour,
+// puis un coût croissant en Essence pour continuer au-delà, remis à zéro
+// chaque jour avec les tentatives gratuites.
+const RUNE_DUNGEON_FREE_ATTEMPTS = 3;
+const RUNE_DUNGEON_EXTRA_BASE = 20;
+const RUNE_DUNGEON_EXTRA_GROWTH = 1.6;
+function runeDungeonExtraCost(extraIndex, bestStage = 1) {
+  const i = Math.max(0, Math.floor(extraIndex || 0));
+  return Math.round(finiteIdleNumber(investmentCostIndex(Math.max(1, bestStage)) * RUNE_DUNGEON_EXTRA_BASE * Math.pow(RUNE_DUNGEON_EXTRA_GROWTH, i), 1));
+}
+// Rareté alignée sur les mêmes jalons de monde que le décor (DOJO_DECOR) :
+// repères déjà familiers au joueur plutôt que des seuils arbitraires.
+function runeDungeonRarity(bestStage = 1) {
+  const s = Math.max(1, Math.floor(bestStage || 1));
+  if (s >= 650) return 'mythic';
+  if (s >= 250) return 'legendary';
+  if (s >= 50) return 'epic';
+  return 'rare';
+}
 const ENEMY_ARCHETYPES = {
   standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
   swift: { key:'swift', name:'Rapide', description:'Peu de PV, récompense normale.', hpMultiplier:.68, rewardMultiplier:1 },
@@ -1062,6 +1086,11 @@ module.exports = {
   enemyMaxHp,
   enemyReward,
   investmentCostIndex,
+  RUNE_DUNGEON_FREE_ATTEMPTS,
+  RUNE_DUNGEON_EXTRA_BASE,
+  RUNE_DUNGEON_EXTRA_GROWTH,
+  runeDungeonExtraCost,
+  runeDungeonRarity,
   ENEMY_ARCHETYPES,
   enemyArchetype,
   enemyUnitMaxHp,

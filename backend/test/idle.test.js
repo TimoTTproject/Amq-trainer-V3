@@ -282,6 +282,19 @@ test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus pl
   assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(10)); // jamais au-delà du cap
 });
 
+test('Donjon des Runes : gratuit puis coût croissant en Essence, rareté indexée sur les mondes',()=>{
+  const {RUNE_DUNGEON_FREE_ATTEMPTS,runeDungeonExtraCost,runeDungeonRarity}=require('../src/idle/idle');
+  assert.equal(RUNE_DUNGEON_FREE_ATTEMPTS,3);
+  // Première tentative payante (index 0) > deuxième tentative gratuite pure (coût 0 côté route),
+  // et chaque tentative payante suivante coûte plus cher que la précédente.
+  assert.ok(runeDungeonExtraCost(1,50)>runeDungeonExtraCost(0,50));
+  assert.ok(runeDungeonExtraCost(0,200)>runeDungeonExtraCost(0,50)); // suit la progression
+  assert.equal(runeDungeonRarity(1),'rare');
+  assert.equal(runeDungeonRarity(50),'epic');
+  assert.equal(runeDungeonRarity(250),'legendary');
+  assert.equal(runeDungeonRarity(650),'mythic');
+});
+
 test('complétion de licence et Mémoire du Maître : bonus permanents bornés',()=>{
   const {completedSeriesMultiplier,prestigeStartingLevels,PRESTIGE_START_LEVELS_MAX}=require('../src/idle/idle');
   assert.equal(completedSeriesMultiplier(0),1);
