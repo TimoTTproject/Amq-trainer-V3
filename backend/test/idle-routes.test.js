@@ -1158,7 +1158,7 @@ test('chef d’équipe : mémorise un personnage actif sans modifier ses bonus',
 });
 
 test('navigation : revient sur un niveau débloqué en mode Farm puis reprend au maximum', async () => {
-  let user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12)});
+  let user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12),idleRankLevel:10});
   prisma.user.findUnique=async()=>user;
   prisma.user.update=async({data})=>{user={...user,...data};return user;};
   const previous=await app.request('/api/idle/stage',{method:'POST',cookie:app.authCookie('u1'),body:{stage:5}});
@@ -1172,6 +1172,36 @@ test('navigation : revient sur un niveau débloqué en mode Farm puis reprend au
   assert.equal(maximum.status,200);
   assert.equal(user.idleBattleMode,'progress');
   assert.equal(maximum.json.battle.stage,12);
+});
+
+test('mode Farm : verrouillé sous le Rang requis, autant via /stage que via /battle-mode', async () => {
+  // Retour joueur : un compte tout juste arrivé pouvait se retrouver piégé en
+  // Farm sans comprendre pourquoi sa progression ne bougeait plus. Le mode ne
+  // doit être accessible qu'à partir d'un Rang minimum.
+  const user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12),idleRankLevel:9});
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async()=>user;
+
+  const viaStage=await app.request('/api/idle/stage',{method:'POST',cookie:app.authCookie('u1'),body:{stage:5}});
+  assert.equal(viaStage.status,403);
+  assert.match(viaStage.json.error,/Rang/);
+
+  const viaMode=await app.request('/api/idle/battle-mode',{method:'POST',cookie:app.authCookie('u1'),body:{mode:'farm',confirmed:true}});
+  assert.equal(viaMode.status,403);
+  assert.match(viaMode.json.error,/Rang/);
+});
+
+test('GET /state : expose le déblocage du mode Farm (unlocked + Rang requis)', async () => {
+  const locked=dbUser({idleRankLevel:3});
+  prisma.user.findUnique=async()=>locked;
+  const lockedRes=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(lockedRes.json.battle.farmMode.unlocked,false);
+  assert.equal(lockedRes.json.battle.farmMode.level,10);
+
+  const unlocked=dbUser({idleRankLevel:10});
+  prisma.user.findUnique=async()=>unlocked;
+  const unlockedRes=await app.request('/api/idle/state',{cookie:app.authCookie('u1')});
+  assert.equal(unlockedRes.json.battle.farmMode.unlocked,true);
 });
 
 test("assign : remplacer un AUTRE personnage sur un emplacement déjà occupé remet le niveau à 1 (sinon héritage gratuit de puissance)", async () => {

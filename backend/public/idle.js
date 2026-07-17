@@ -699,7 +699,7 @@ function renderIdleState(state) {
     renderIdleDecor(state.dojo, prev?.dojo, state.battle, prev?.battle);
     renderIdleBattle(state.battle, state.dojo, prev?.battle);
     renderIdleBattleSpeed(state.battle?.speed);
-    renderIdleBattleMode(state.battle?.mode);
+    renderIdleBattleMode(state.battle?.mode, state.battle?.farmMode);
     renderIdleAutoSkills(state.battle?.autoSkills);
     idleRenderSkillCooldown();
     renderIdleBossChest(state.battle?.bossChest);
@@ -1446,7 +1446,13 @@ function renderIdleBossChest(chest) {
   if (label && chest) label.textContent = `Coffre ${chest.tier} · objet ${chest.lootRarity||'rare'} · +${idleFormatNumber(chest.reward+(chest.bonusEssence||0))} Essence · +${chest.sealReward||1} Sceau`;
 }
 function renderIdleBattleSpeed(speed){const box=document.getElementById('idle-speed-buttons');const view=document.getElementById('view-idle');if(!box||!speed)return;view?.style.setProperty('--battle-speed',speed.current);box.innerHTML=speed.choices.map((x)=>`<button data-battle-speed="${x.value}" class="${x.value===speed.current?'active':''}" ${x.unlocked?'':'disabled'} title="${x.unlocked?'Vitesse disponible':`Débloquée au Rang ${x.level}`}">×${x.value}${x.unlocked?'':` · rang ${x.level}`}</button>`).join('');}
-function renderIdleBattleMode(mode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>{const active=b.dataset.battleMode===mode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});}
+function renderIdleBattleMode(mode,farmMode){document.querySelectorAll('[data-battle-mode]').forEach((b)=>{const active=b.dataset.battleMode===mode;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');
+  // Le mode Farm se débloque à un Rang minimum (retour joueur : les nouveaux
+  // arrivants s'y retrouvaient piégés sans comprendre pourquoi la
+  // progression s'était arrêtée). Bouton grisé + explication tant que non
+  // débloqué, même traitement que les Auto-compétences.
+  if(b.dataset.battleMode==='farm'&&farmMode){b.disabled=!farmMode.unlocked;const small=b.querySelector('small');if(small)small.textContent=farmMode.unlocked?'Bloque volontairement la progression':`Débloqué au Rang ${farmMode.level}`;}
+});}
 function renderIdleAutoSkills(auto){const btn=document.getElementById('idle-auto-skills');const label=document.getElementById('idle-auto-skills-label');if(!btn||!auto)return;btn.disabled=!auto.unlocked;btn.classList.toggle('active',auto.enabled);btn.dataset.enabled=auto.enabled?'1':'0';btn.querySelector(':scope > i:last-child').className=`fas ${auto.enabled?'fa-toggle-on':'fa-toggle-off'}`;label.textContent=!auto.unlocked?`Débloquées au Rang ${auto.level}`:auto.enabled?`Simulation active · rendement moyen +${Math.round(auto.bonus*100)}%`:'Simulation inactive · cliquer pour activer';}
 async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleBattleMode(mode){
@@ -1480,7 +1486,11 @@ async function chooseIdleStage(stage){
   // l'ait choisi (retour joueur : "bloqué stage 1" après coup, sans se
   // souvenir avoir activé quoi que ce soit).
   const bestStage=idleState?.battle?.runBestStage||idleState?.battle?.bestStage||stage;
-  if(stage<bestStage&&!window.confirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression. Continuer ?`))return;
+  if(stage<bestStage){
+    const farmMode=idleState?.battle?.farmMode;
+    if(farmMode&&!farmMode.unlocked){idleNotify(`Mode Farm débloqué au Rang ${farmMode.level} — reviens plus tard pour rejouer un niveau passé.`,'info');return;}
+    if(!window.confirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression. Continuer ?`))return;
+  }
   try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}
 }
 async function chooseIdleLeader(characterId){try{const state=await api('/api/idle/team-leader',{method:'POST',body:JSON.stringify({characterId})});renderIdleState(state);idleNotify(`Lead Skill actif : ${state.strategy?.leaderSkill?.name||'bonus du chef'} · ${state.strategy?.leaderSkill?.description||'bonus appliqué au DPS.'}`,'success');document.getElementById('idle-character-sheet')?.classList.add('hidden');}catch(e){idleNotify(e.message,'error');}}
@@ -2798,7 +2808,7 @@ function initIdleUI() {
   document.getElementById('idle-achievements')?.addEventListener('click', (e) => { const b = e.target.closest('[data-achievement]'); if (b && !b.disabled) claimIdleAchievement(b.dataset.achievement); });
   document.getElementById('idle-optimize-team')?.addEventListener('click', optimizeIdleTeam);
   document.getElementById('idle-speed-buttons')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-speed]');if(b&&!b.disabled)chooseIdleBattleSpeed(Number(b.dataset.battleSpeed));});
-  document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b)chooseIdleBattleMode(b.dataset.battleMode);});
+  document.getElementById('idle-mode-control')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-battle-mode]');if(b&&!b.disabled)chooseIdleBattleMode(b.dataset.battleMode);});
   document.getElementById('idle-stage-nav')?.addEventListener('click',(e)=>{const button=e.target.closest('button[data-stage]');if(button&&!button.disabled)chooseIdleStage(Number(button.dataset.stage));});
   document.getElementById('idle-world-open')?.addEventListener('click',()=>{const panel=document.getElementById('idle-world-jump');const open=panel?.classList.toggle('hidden')===false;document.getElementById('idle-world-open')?.setAttribute('aria-expanded',String(open));});
   document.getElementById('idle-world-current')?.addEventListener('click',()=>document.getElementById('idle-world-open')?.click());

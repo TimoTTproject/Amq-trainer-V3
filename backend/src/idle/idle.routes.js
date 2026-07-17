@@ -166,6 +166,12 @@ const SQUAD_SLOT_DEFS = [
 ];
 const AUTO_SKILLS_UNLOCK_LEVEL = 40;
 const BATTLE_SPEED_UNLOCKS = { 1: 1, 2: 30, 4: 60 };
+// Le mode Farm (répéter volontairement une vague) était accessible dès le
+// stage 1 : un joueur tout juste arrivé pouvait s'y retrouver piégé sans
+// comprendre pourquoi sa progression ne bouge plus (retour joueur, cf. le
+// correctif de confirmation sur la navigation de niveau). Verrouillé
+// jusqu'à un rang minimum, le temps d'avoir compris la boucle de base.
+const FARM_MODE_UNLOCK_LEVEL = 10;
 
 // Condition de déverrouillage PROPRE à ce slot (pas de dépendance à l'ordre
 // des autres slots).
@@ -1671,6 +1677,7 @@ async function buildState(userId) {
       mechanic: clickMechanic?{...clickMechanic,progress:user.idleBossProgress||0,active:['shield','ward','focus'].includes(clickMechanic.key)?(user.idleBossProgress||0)<(clickMechanic.required||1):true}:null,
       speed: { current:user.idleBattleSpeed||1, choices:Object.entries(BATTLE_SPEED_UNLOCKS).map(([value,level])=>({value:Number(value),level,unlocked:dojoLevel>=level})) },
       mode: user.idleBattleMode||'progress',
+      farmMode:{unlocked:dojoLevel>=FARM_MODE_UNLOCK_LEVEL,level:FARM_MODE_UNLOCK_LEVEL},
       autoSkills:{enabled:!!user.idleAutoSkills,unlocked:dojoLevel>=AUTO_SKILLS_UNLOCK_LEVEL,level:AUTO_SKILLS_UNLOCK_LEVEL,bonus:.15},
       skills:{burstReadyAt:user.idleBurstReadyAt?.toISOString()||null,teamReadyAt:user.idleTeamReadyAt?.toISOString()||null,burstDamage:burstPreview,teamDamage:teamPreview,uniqueRoles:uniqueActiveRoles,teamWindowSeconds:20+uniqueActiveRoles*5,supportCount:activeSupportCount,cooldownReductionPercent:Math.round((1-activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/ULTIMATE_COOLDOWN_MS)*100),burstBaseCooldownSeconds:ULTIMATE_COOLDOWN_MS/1000,teamBaseCooldownSeconds:TEAM_COMBO_COOLDOWN_MS/1000,burstCooldownSeconds:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),teamCooldownSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000)},
     },
@@ -2466,6 +2473,10 @@ router.post('/battle-mode', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
   const mode=String(req.body?.mode||'');
   if(!['progress','farm'].includes(mode))return res.status(400).json({error:'Mode invalide'});
   if(mode==='farm'&&req.body?.confirmed!==true)return res.status(400).json({error:'Confirme que tu souhaites répéter cette vague sans progresser'});
+  if(mode==='farm'){
+    const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});
+    if((user.idleRankLevel||1)<FARM_MODE_UNLOCK_LEVEL)return res.status(403).json({error:`Mode Farm débloqué au Rang ${FARM_MODE_UNLOCK_LEVEL}`});
+  }
   await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleBattleMode:mode}});});
   res.json(await buildState(req.user.id));
 });
@@ -2486,7 +2497,13 @@ router.post('/boss/engage', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
   res.json(await buildState(req.user.id));
 });
 router.post('/formation',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-formation'}),async(req,res)=>{const formation=String(req.body?.formation||'');if(!FORMATIONS[formation])return res.status(400).json({error:'Formation invalide'});await withSettle(req.user.id,async(tx,u)=>tx.user.update({where:{id:u.id},data:{idleFormation:formation}}));void recordIdleEvent(req.user.id,'formation_change');res.json(await buildState(req.user.id));});
-router.post('/stage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-stage-select'}),async(req,res)=>{const target=Number(req.body?.stage);if(!Number.isInteger(target)||target<1)return res.status(400).json({error:'Niveau de combat invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const best=Math.max(1,user.idleRunBestStage||1,user.idleStage||1);if(target>best)throw new IdleError(400,`Le niveau ${target} n’est pas encore débloqué`);await tx.user.update({where:{id:user.id},data:{idleStage:target,idleWaveKills:0,idleEnemyHp:enemyUnitMaxHp(target,0),idleBossProgress:0,idleBossStartedAt:null,idleBossEngaged:false,idleBattleMode:target<best?'farm':'progress'}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}void recordIdleEvent(req.user.id,'stage_select',{stage:target});res.json(await buildState(req.user.id));});
+router.post('/stage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-stage-select'}),async(req,res)=>{const target=Number(req.body?.stage);if(!Number.isInteger(target)||target<1)return res.status(400).json({error:'Niveau de combat invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const best=Math.max(1,user.idleRunBestStage||1,user.idleStage||1);if(target>best)throw new IdleError(400,`Le niveau ${target} n’est pas encore débloqué`);
+  // Revisiter un niveau sous le record active le mode Farm (cf. plus bas) : même
+  // verrou de Rang que le bouton dédié "Répéter la vague", sinon la navigation
+  // de niveau devient une porte dérobée pour y entrer avant d'avoir compris ce
+  // que ce mode implique.
+  if(target<best&&(user.idleRankLevel||1)<FARM_MODE_UNLOCK_LEVEL)throw new IdleError(403,`Mode Farm débloqué au Rang ${FARM_MODE_UNLOCK_LEVEL}`);
+  await tx.user.update({where:{id:user.id},data:{idleStage:target,idleWaveKills:0,idleEnemyHp:enemyUnitMaxHp(target,0),idleBossProgress:0,idleBossStartedAt:null,idleBossEngaged:false,idleBattleMode:target<best?'farm':'progress'}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}void recordIdleEvent(req.user.id,'stage_select',{stage:target});res.json(await buildState(req.user.id));});
 router.post('/team-leader',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-team-leader'}),async(req,res)=>{const characterId=Number(req.body?.characterId);if(!Number.isInteger(characterId))return res.status(400).json({error:'Personnage invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const active=await tx.idleSlot.findFirst({where:{userId:user.id,characterId},select:{id:true}});if(!active)throw new IdleError(400,'Ce personnage doit être dans ton équipe');await tx.user.update({where:{id:user.id},data:{idleLeaderCharacterId:characterId}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}res.json(await buildState(req.user.id));});
 
 // Choix roguelike tous les 20 stages. Le solde préalable garantit que le DPS
