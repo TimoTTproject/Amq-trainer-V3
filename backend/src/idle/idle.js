@@ -348,10 +348,11 @@ const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood rése
 // la croissance de l'Essence en fin de partie, mais ça rendait le prix d'un
 // même emplacement imprévisible d'un compte à l'autre (retour utilisateur :
 // « doit être fixe, mais augmenter pour que ce soit cohérent »). La
-// progression reste franche (×2.25 par emplacement) pour que le dernier reste
-// un vrai investissement, sans jamais dépendre d'autre chose que sa position.
+// progression reste franche (×3.5 par emplacement, resserrée depuis ×2.25 —
+// retour utilisateur : « augmente plus que ça ») pour que le dernier reste un
+// vrai investissement, sans jamais dépendre d'autre chose que sa position.
 function slotUpgradeCost(nextSlotIndex) {
-  return Math.round(finiteIdleNumber(400 * Math.pow(2.25, nextSlotIndex - START_SLOTS), 1));
+  return Math.round(finiteIdleNumber(400 * Math.pow(3.5, nextSlotIndex - START_SLOTS), 1));
 }
 
 // Plafond de production hors-ligne : au-delà, le surplus n'est plus compté —
