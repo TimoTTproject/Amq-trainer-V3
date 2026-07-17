@@ -5004,7 +5004,7 @@ textarea::placeholder {
 .idle-upgrade-card,.idle-prestige-card,.idle-achievement,.idle-mastery,.idle-mission{border-color:var(--idle-line);background:var(--idle-surface);box-shadow:none}
 .idle-event-today,.idle-weekly{border-color:var(--idle-line);background:var(--idle-surface)}
 .idle-hero{border-width:1px!important;border-color:var(--idle-line)!important;background:var(--idle-surface);box-shadow:0 5px 15px rgba(0,0,0,.25)!important}.idle-hero.r-rare{border-left:3px solid #3b82f6!important}.idle-hero.r-epic{border-left:3px solid #a855f7!important}.idle-hero.r-legendary{border-left:3px solid #f59e0b!important}.idle-hero.r-mythic{border-left:3px solid #ef4444!important}.idle-hero:hover{transform:translateY(-2px)}
-.idle-level-buys .idle-hero-levelup{border:0;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}.idle-level-buys .idle-hero-levelup:not(:disabled):hover{filter:brightness(1.08)}
+.idle-level-buys .idle-hero-levelup{border:0;border-radius:6px;background:var(--accent)}.idle-level-buys .idle-hero-levelup:not(:disabled):hover{filter:brightness(1.1)}
 .idle-tabs{left:50%;right:auto;bottom:12px;transform:translateX(-50%);width:min(520px,calc(100% - 24px));padding:5px;border:1px solid var(--idle-line);border-radius:15px;background:rgba(15,23,42,.96);box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(12px)}.idle-tab{flex:1;flex-direction:row;justify-content:center;padding:10px 12px;font-size:11px}.idle-tab.active{color:#fff;background:#7c3aed}.idle-tab.active i{filter:none}
 @media(max-width:700px){#view-idle .profile-section{padding:12px}.idle-actions{grid-template-columns:1fr 1fr}.idle-click-btn{grid-column:1/-1}.idle-skills{overflow-x:auto}.idle-skill{min-width:145px}.idle-tab{flex-direction:column;padding:7px 5px;font-size:13px}}
 
@@ -6092,10 +6092,10 @@ body.idle-fullscreen #app { padding-top: 0; }
    largeur empilées devenaient un pavé, surtout depuis que l'Éveil va jusqu'à
    10 étoiles) — même contenu, moitié moins de hauteur. */
 .idle-power-row{grid-column:2/-1;display:flex;gap:6px}
-.idle-ascend-btn,.idle-ascend-hint,.idle-ascend-max{flex:1;min-width:0;padding:7px;border-radius:8px;text-align:center;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.idle-ascend-btn{border:1px solid #f59e0b;background:linear-gradient(135deg,#b45309,#78350f);color:#fff;box-shadow:0 0 14px #f59e0b44;cursor:pointer}.idle-ascend-hint{border:1px dashed #ffffff22;color:var(--text-2)}.idle-ascend-max{background:#f59e0b22;color:#fde68a;font-weight:800}
+.idle-ascend-btn,.idle-ascend-hint,.idle-ascend-max{flex:1;min-width:0;padding:7px;border-radius:8px;text-align:center;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.idle-ascend-btn{border:1px solid #f59e0b;background:#8a4d0f;color:#fff;cursor:pointer}.idle-ascend-hint{border:1px dashed #ffffff22;color:var(--text-2)}.idle-ascend-max{background:#f59e0b22;color:#fde68a;font-weight:800}
 /* Éveil (violet) vs Ascension (orange) : mêmes composants, couleurs
    distinctes pour les différencier au premier coup d'œil sans survol. */
-.idle-awaken-btn{border-color:#8b5cf6;background:linear-gradient(135deg,#6d28d9,#4c1d95);box-shadow:0 0 14px #8b5cf644}
+.idle-awaken-btn{border-color:#8b5cf6;background:#5b21b6}
 .idle-power-row .idle-ascend-max:last-child{background:#8b5cf622;color:#ddd6fe}
 .idle-skills{grid-column:1/-1;display:flex;align-items:center;gap:8px}.idle-skill{display:flex;align-items:center;gap:9px;padding:8px 13px;border:1px solid #fb923c;border-radius:12px;color:#fff;background:linear-gradient(135deg,#c2410c,#7c2d12);box-shadow:0 0 18px #f9731638;cursor:pointer}.idle-skill i{font-size:20px}.idle-skill span{display:flex;flex-direction:column;text-align:left}.idle-skill small{font-size:10px;opacity:.8}.idle-skill:disabled{filter:grayscale(.8);opacity:.55}.idle-boss-mechanic{font-size:11px;padding:7px 10px;border-radius:9px;background:#0f172ecc;border:1px solid #ffffff1f}.idle-scene.skill-burst{animation:idleSkillBurst .55s ease}@keyframes idleSkillBurst{30%{filter:brightness(1.8) saturate(1.7);transform:scale(1.008)}100%{filter:none;transform:none}}
 .idle-actions > button { justify-content: center; padding: 14px 8px; font-size: .92rem; white-space: nowrap; min-width: 0; }
@@ -6274,7 +6274,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 }
 .idle-hero-remove:hover { background: var(--red); }
 .idle-hero-levelup {
-  border: none; width: 100%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+  border: none; width: 100%; background: var(--accent); color: #fff;
   font-size: .76rem; font-weight: 700; padding: 6px 2px; cursor: pointer;
 }
 .idle-hero-levelup:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
@@ -6364,7 +6364,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 @keyframes idleWorldArrival{0%{filter:brightness(1);transform:scale(1)}35%{filter:brightness(1.45) saturate(1.3);transform:scale(.992)}100%{filter:none;transform:none}}
 #view-idle .idle-skill{min-height:48px;border-color:var(--border);background:var(--bg-3);box-shadow:none}#view-idle .idle-skill:first-child{border-left:3px solid var(--accent)}#view-idle .idle-skill-team{border-left:3px solid var(--accent-2)}
 #view-idle .idle-hero{border-width:1px!important;border-color:var(--border)!important;background:var(--bg-2);box-shadow:0 5px 15px rgba(0,0,0,.25)!important}#view-idle .idle-hero.r-rare{border-left:3px solid #3b82f6!important}#view-idle .idle-hero.r-epic{border-left:3px solid #a855f7!important}#view-idle .idle-hero.r-legendary{border-left:3px solid #f59e0b!important}#view-idle .idle-hero.r-mythic{border-left:3px solid var(--accent)!important}
-#view-idle .idle-level-buys .idle-hero-levelup{border:0;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}#view-idle .idle-level-buys .idle-hero-levelup:not(:disabled):hover{filter:brightness(1.08)}#view-idle .idle-level-buys .idle-hero-levelup small{color:#fff;opacity:.85}
+#view-idle .idle-level-buys .idle-hero-levelup{border:0;border-radius:8px;background:var(--accent);color:#fff}#view-idle .idle-level-buys .idle-hero-levelup:not(:disabled):hover{filter:brightness(1.1)}#view-idle .idle-level-buys .idle-hero-levelup small{color:#fff;opacity:.85}
 #view-idle .idle-tabs{left:50%;right:auto;bottom:12px;transform:translateX(-50%);width:min(520px,calc(100% - 24px));padding:5px;border:1px solid var(--border);border-radius:15px;background:color-mix(in srgb,var(--bg-2) 94%,transparent);box-shadow:0 10px 30px rgba(0,0,0,.45);backdrop-filter:blur(12px)}#view-idle .idle-tab{flex:1;flex-direction:row;justify-content:center;padding:10px 12px;font-size:11px}#view-idle .idle-tab.active{color:#fff;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#000))}#view-idle .idle-tab.active i{filter:none}
 
 /* Maîtrises : lecture confortable à distance normale, sans lignes géantes
