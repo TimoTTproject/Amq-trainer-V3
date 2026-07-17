@@ -2761,6 +2761,11 @@ router.post('/prestige', requireAuth, requireIdleBeta, rateLimit({ max: 5, name:
           idleBossProgress: 0,
           idleBossStartedAt: null,
           idleBossEngaged: false,
+          // Un joueur en mode Farm au moment du Prestige restait bloqué en
+          // Farm sur la nouvelle run — DPS normal, Essence gagnée, mais la
+          // vague ne progresse plus jamais (comportement voulu du mode Farm,
+          // mais personne ne l'a choisi ici) : retour joueur, "bloqué stage 1".
+          idleBattleMode: 'progress',
           idleBurstReadyAt: null,
           idleTeamReadyAt: null,
           prestigeLevel: { increment: 1 },

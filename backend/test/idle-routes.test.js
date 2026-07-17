@@ -1594,6 +1594,11 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   const resetCall = updateCalls.find((data) => data.essence === 0);
   assert.ok(resetCall);
   assert.equal(resetCall.essenceEarnedTotal, undefined);
+  // Bug rapporté : un joueur en mode Farm au moment du Prestige restait
+  // bloqué en Farm sur la nouvelle run (DPS normal, Essence gagnée, mais la
+  // vague ne progresse plus jamais) — le Prestige doit toujours repartir en
+  // mode Progression.
+  assert.equal(resetCall.idleBattleMode, 'progress');
 });
 
 test('prestige : une même run ne peut pas être encaissée deux fois', async () => {
