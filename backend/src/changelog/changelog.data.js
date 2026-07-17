@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 40, date: '2026-07-17', tag: 'feature',
+    title: "Anime Ascension sort de bêta — ouvert à tout le monde !",
+    description: "Notre mode idle/clicker quitte la bêta et s'ouvre à tous les comptes : recrute une équipe de héros, monte-la en puissance (niveaux, Ascension, Éveil, équipement), et laisse-la produire de l'Essence même hors ligne. Et surtout : jouer à Anime Ascension rapporte désormais des tokens pour le Gacha — hauts faits (25 à 65 tokens) et Prestige (120 à 320 tokens) viennent directement enrichir ta cagnotte de tirages. Rendez-vous dans l'onglet Jouer.",
+  },
+  {
     id: 39, date: '2026-07-06', tag: 'improvement',
     title: 'Reset du Gacha : collection remise à zéro + tirages remboursés',
     description: "Le pool de personnages a été réorganisé avec les nouvelles raretés (150 Mythiques, 550 Légendaires fixes) et un stock resserré par personnage. Pour repartir sur cette base saine, les collections ont été réinitialisées et chaque joueur a été remboursé du montant qu'il a réellement dépensé en tirages depuis toujours. Aucun autre système (quiz, Château, multijoueur, défi du jour, niveaux) n'est concerné — une fenêtre s'affiche à ta prochaine connexion pour le détail.",

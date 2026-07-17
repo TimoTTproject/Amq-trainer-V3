@@ -33,7 +33,7 @@ function canAccessIdle(user) {
 
 // Accès au jeu bêta uniquement : ce middleware ne donne aucun privilège admin.
 function requireIdleBeta(req, res, next) {
-  if (!canAccessIdle(req.user)) return res.status(403).json({ error: 'Anime Ascension est réservé aux bêta-testeurs' });
+  if (!canAccessIdle(req.user)) return res.status(403).json({ error: 'Anime Ascension nécessite un compte connecté' });
   next();
 }
 
