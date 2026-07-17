@@ -1922,7 +1922,14 @@ router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, na
           update:{characterId,assignedAt:new Date(),level:1,ascension:0},
           create:{userId:req.user.id,slotIndex:0,characterId,assignedAt:new Date(),level:1,ascension:0},
         });
-        await tx.user.update({where:{id:req.user.id},data:{idleHeroClass:classKey,idleHeroSpec:'none',idleHeroClassChangedAt:null,idleOnboardingComplete:true}});
+        // idleLastCollectAt hérite sinon de la création du compte (ou, pour un
+        // compte déjà ancien découvrant l'idle aujourd'hui, d'une valeur bien
+        // plus vieille) : au premier settle après l'assignation du héros de
+        // départ, ce délai était simulé comme du temps hors-ligne — le joueur
+        // démarrait l'aventure déjà plusieurs vagues plus loin (retour joueur :
+        // « on commence le jeu vague 4 »). L'horloge idle ne doit démarrer
+        // qu'une fois une équipe réelle assignée.
+        await tx.user.update({where:{id:req.user.id},data:{idleHeroClass:classKey,idleHeroSpec:'none',idleHeroClassChangedAt:null,idleOnboardingComplete:true,idleLastCollectAt:new Date()}});
       });
     });
     res.json(await buildState(req.user.id));

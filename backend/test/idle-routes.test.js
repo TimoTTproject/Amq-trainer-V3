@@ -541,7 +541,12 @@ test('GET /state : un joueur portant idle_beta accède au jeu sans être adminis
 });
 
 test('onboarding : impose un choix initial puis offre et assigne le starter', async () => {
-  let user=dbUser({idleOnboardingComplete:false});
+  // Compte "vieux" : idleLastCollectAt hérité d'avant l'ouverture officielle de
+  // l'idle (ou simplement de la création du compte) — sans reset, le premier
+  // settle après l'assignation du starter simulerait tout cet écart comme du
+  // temps hors-ligne et ferait démarrer la run plusieurs vagues plus loin
+  // (retour joueur : "on commence le jeu vague 4").
+  let user=dbUser({idleOnboardingComplete:false,idleLastCollectAt:new Date(Date.now()-6*60*60*1000)});
   const starter={id:77,name:'Starter',imageUrl:'https://cdn.example/starter.jpg',rarity:'rare',series:'Série'};
   prisma.user.findUnique=async()=>user;
   prisma.character.findMany=async(args)=>args.where?.rarity==='rare'?[starter]:[];
@@ -563,6 +568,7 @@ test('onboarding : impose un choix initial puis offre et assigne le starter', as
   assert.equal(recruitWrite.create.characterId,starter.id);
   assert.equal(slotWrite.create.slotIndex,0);
   assert.equal(slotWrite.create.characterId,starter.id);
+  assert.ok(Date.now()-new Date(user.idleLastCollectAt).getTime()<5000,'idleLastCollectAt doit repartir de maintenant, pas de la création du compte');
 });
 
 test('onboarding : un ancien compte marqué terminé mais sans aucun héros récupère un starter', async () => {
