@@ -55,6 +55,7 @@ let idleRosterAvailable = [];
 let idleRosterSort = 'meta';
 let idleRosterRole = 'all';
 let idleRosterRarity = 'all';
+let idleRosterSearch = '';
 let idleLastAnnouncement = '';
 let idleWaveTransitionTimers = [];
 let idleVisualHp = null;
@@ -2417,9 +2418,12 @@ function idleRosterProjection(c){
   const exactPercent=Number(c.deltaPercent);
   return {synergyBonus,formationBonus,sameSeries,exactDelta:Number.isFinite(exactDelta)?exactDelta:null,exactPercent:Number.isFinite(exactPercent)?exactPercent:null,score:Number.isFinite(exactDelta)?exactDelta:synergyBonus*1000+formationBonus*800+(IDLE_RARITY_ORDER[c.rarity]||0)*3+Math.log10(1+(c.rate||c.baseRate||0))*5};
 }
+// Insensible à la casse et aux accents (« Éveillé » doit matcher « eveille »).
+function idleNormalizeSearch(text){return String(text||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
 function renderIdleRosterList(){
   const list=document.getElementById('idle-picker-list');const hint=document.getElementById('idle-picker-hint');if(!list||!hint)return;
-  let available=idleRosterAvailable.filter((c)=>(idleRosterRole==='all'||c.role===idleRosterRole)&&(idleRosterRarity==='all'||c.rarity===idleRosterRarity));
+  const searchNeedle=idleNormalizeSearch(idleRosterSearch);
+  let available=idleRosterAvailable.filter((c)=>(idleRosterRole==='all'||c.role===idleRosterRole)&&(idleRosterRarity==='all'||c.rarity===idleRosterRarity)&&(!searchNeedle||idleNormalizeSearch(c.name).includes(searchNeedle)||idleNormalizeSearch(c.series||'').includes(searchNeedle)));
   const roleOrder={attaquant:1,producteur:2,support:3,tank:4,assassin:5};
   available=[...available].sort((a,b)=>{
     if(idleRosterSort==='name')return String(a.name).localeCompare(String(b.name),'fr');
@@ -2745,6 +2749,7 @@ function initIdleUI() {
   document.getElementById('idle-coach-close')?.addEventListener('click',()=>{const coach=document.getElementById('idle-coach');if(coach?.dataset.key)sessionStorage.setItem(coach.dataset.key,'hidden');coach?.classList.add('hidden');});
   document.getElementById('idle-summon-close')?.addEventListener('click',()=>document.getElementById('idle-summon')?.classList.add('hidden'));
   document.getElementById('idle-summon')?.addEventListener('click',(e)=>{if(e.target.id==='idle-summon')e.currentTarget.classList.add('hidden');});
+  document.getElementById('idle-roster-search')?.addEventListener('input',(e)=>{idleRosterSearch=e.target.value;renderIdleRosterList();});
   document.getElementById('idle-roster-sort')?.addEventListener('change',(e)=>{idleRosterSort=e.target.value;renderIdleRosterList();});
   document.getElementById('idle-roster-role')?.addEventListener('change',(e)=>{idleRosterRole=e.target.value;renderIdleRosterList();});
   document.getElementById('idle-roster-rarity')?.addEventListener('change',(e)=>{idleRosterRarity=e.target.value;renderIdleRosterList();});
