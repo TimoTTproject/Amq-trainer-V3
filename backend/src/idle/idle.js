@@ -343,18 +343,15 @@ function cooldownUpgradeCost(level) {
 const CLICK_COOLDOWN_MS = 100; // 10 clics/s : cadence clicker, sans flood réseau
 
 // Coût pour débloquer l'emplacement d'index `nextSlotIndex` (START_SLOTS..MAX_SLOTS-1).
-// Le palier flat (400×2.25^n) ne suivait pas du tout la progression : retour
-// utilisateur "trop facile, pas assez cher" — l'Essence produite grimpe de
-// plusieurs ordres de grandeur avec le stage, mais ce coût restait figé, donc
-// débloquer le dernier emplacement devenait dérisoire en milieu/fin de
-// partie. Plancher = l'ancien flat (préserve le ressenti en tout early game,
-// ×100 s'aligne sur ce flat autour du stage 10, référence historique de ce
-// calibrage) ; au-delà, la progression (investmentCostIndex) prend le relais.
-function slotUpgradeCost(nextSlotIndex, bestStage = 1) {
-  const growth = Math.pow(2.25, nextSlotIndex - START_SLOTS);
-  const flat = 400 * growth;
-  const progression = investmentCostIndex(Math.max(1, bestStage)) * 100 * growth;
-  return Math.round(finiteIdleNumber(Math.max(flat, progression), 1));
+// Fixe et prévisible (ne dépend QUE de l'index de l'emplacement) : une version
+// précédente indexait ce coût sur le stage (investmentCostIndex) pour suivre
+// la croissance de l'Essence en fin de partie, mais ça rendait le prix d'un
+// même emplacement imprévisible d'un compte à l'autre (retour utilisateur :
+// « doit être fixe, mais augmenter pour que ce soit cohérent »). La
+// progression reste franche (×2.25 par emplacement) pour que le dernier reste
+// un vrai investissement, sans jamais dépendre d'autre chose que sa position.
+function slotUpgradeCost(nextSlotIndex) {
+  return Math.round(finiteIdleNumber(400 * Math.pow(2.25, nextSlotIndex - START_SLOTS), 1));
 }
 
 // Plafond de production hors-ligne : au-delà, le surplus n'est plus compté —
