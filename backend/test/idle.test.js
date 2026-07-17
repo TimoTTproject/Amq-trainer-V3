@@ -282,17 +282,25 @@ test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus pl
   assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(10)); // jamais au-delà du cap
 });
 
-test('Donjon des Runes : gratuit puis coût croissant en Essence, rareté indexée sur les mondes',()=>{
+test('Donjon des Runes : gratuit puis coût croissant en Essence, rareté tirée au sort selon le monde',()=>{
   const {RUNE_DUNGEON_FREE_ATTEMPTS,runeDungeonExtraCost,runeDungeonRarity}=require('../src/idle/idle');
-  assert.equal(RUNE_DUNGEON_FREE_ATTEMPTS,3);
+  assert.equal(RUNE_DUNGEON_FREE_ATTEMPTS,5);
   // Première tentative payante (index 0) > deuxième tentative gratuite pure (coût 0 côté route),
   // et chaque tentative payante suivante coûte plus cher que la précédente.
   assert.ok(runeDungeonExtraCost(1,50)>runeDungeonExtraCost(0,50));
   assert.ok(runeDungeonExtraCost(0,200)>runeDungeonExtraCost(0,50)); // suit la progression
-  assert.equal(runeDungeonRarity(1),'rare');
-  assert.equal(runeDungeonRarity(50),'epic');
-  assert.equal(runeDungeonRarity(250),'legendary');
-  assert.equal(runeDungeonRarity(650),'mythic');
+  // Vrai tirage pondéré (pas un plancher déterministe) : sur assez d'essais,
+  // seules les raretés du bon palier de monde doivent sortir, et une rareté
+  // plus haute doit devenir davantage probable à mesure que le stage monte.
+  const rolls=(stage,n=400)=>Array.from({length:n},()=>runeDungeonRarity(stage));
+  const early=rolls(1);
+  assert.ok(early.every((r)=>['rare','epic'].includes(r)));
+  assert.ok(early.includes('rare')&&early.includes('epic'));
+  const late=rolls(650);
+  assert.ok(late.every((r)=>['rare','epic','legendary','mythic'].includes(r)));
+  assert.ok(late.includes('mythic'));
+  const mythicShare=(stage)=>rolls(stage,1000).filter((r)=>r==='mythic').length;
+  assert.ok(mythicShare(650)>mythicShare(250));
 });
 
 test('complétion de licence et Mémoire du Maître : bonus permanents bornés',()=>{

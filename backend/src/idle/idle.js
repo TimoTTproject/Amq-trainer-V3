@@ -454,21 +454,30 @@ function investmentCostIndex(stage) {
 // l'emplacement qu'il veut garnir) : quelques tentatives gratuites par jour,
 // puis un coût croissant en Essence pour continuer au-delà, remis à zéro
 // chaque jour avec les tentatives gratuites.
-const RUNE_DUNGEON_FREE_ATTEMPTS = 3;
+const RUNE_DUNGEON_FREE_ATTEMPTS = 5;
 const RUNE_DUNGEON_EXTRA_BASE = 20;
 const RUNE_DUNGEON_EXTRA_GROWTH = 1.6;
 function runeDungeonExtraCost(extraIndex, bestStage = 1) {
   const i = Math.max(0, Math.floor(extraIndex || 0));
   return Math.round(finiteIdleNumber(investmentCostIndex(Math.max(1, bestStage)) * RUNE_DUNGEON_EXTRA_BASE * Math.pow(RUNE_DUNGEON_EXTRA_GROWTH, i), 1));
 }
-// Rareté alignée sur les mêmes jalons de monde que le décor (DOJO_DECOR) :
-// repères déjà familiers au joueur plutôt que des seuils arbitraires.
+// Tirage pondéré (pas un plancher déterministe) : la moyenne progresse avec
+// les mêmes jalons de monde que le décor (DOJO_DECOR), mais chaque tentative
+// reste un vrai tirage — un coup de chance peut sortir une rareté au-dessus
+// de son palier, comme un roll d'invocation classique.
+const RUNE_DUNGEON_RARITY_WEIGHTS = [
+  { minStage: 650, weights: [['rare', 5], ['epic', 20], ['legendary', 40], ['mythic', 35]] },
+  { minStage: 250, weights: [['rare', 10], ['epic', 35], ['legendary', 45], ['mythic', 10]] },
+  { minStage: 50, weights: [['rare', 35], ['epic', 50], ['legendary', 15]] },
+  { minStage: 1, weights: [['rare', 80], ['epic', 20]] },
+];
 function runeDungeonRarity(bestStage = 1) {
   const s = Math.max(1, Math.floor(bestStage || 1));
-  if (s >= 650) return 'mythic';
-  if (s >= 250) return 'legendary';
-  if (s >= 50) return 'epic';
-  return 'rare';
+  const tier = RUNE_DUNGEON_RARITY_WEIGHTS.find((t) => s >= t.minStage) || RUNE_DUNGEON_RARITY_WEIGHTS.at(-1);
+  const total = tier.weights.reduce((sum, [, w]) => sum + w, 0);
+  let r = Math.random() * total;
+  for (const [rarity, w] of tier.weights) { if (r < w) return rarity; r -= w; }
+  return tier.weights[0][0];
 }
 const ENEMY_ARCHETYPES = {
   standard: { key:'standard', name:'Standard', description:'Adversaire équilibré.', hpMultiplier:1, rewardMultiplier:1 },
