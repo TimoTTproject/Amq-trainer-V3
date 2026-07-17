@@ -60,6 +60,9 @@ test('inventaire Idle : les filtres avancés et les règles de recyclage restent
   assert.match(html, /id="idle-item-status"/);
   assert.match(html, /id="idle-salvage-keep-sets"/);
   assert.match(source, /function selectIdleItemsBySalvageRules\(\)/);
+  assert.match(source, /function resetIdleInventoryFilters\(\)/);
+  assert.match(source, /data-item-reset-filters/);
+  assert.match(source, /confirmHighRarity:preciousConfirmation\?'RECYCLER'/);
   assert.match(source, /!item\.locked&&!item\.equipped/);
 });
 
@@ -211,4 +214,13 @@ test('pilotage stratégique Idle : builds, diagnostic combat et profils automati
   assert.match(styles, /\.idle-advisor ol/);
   assert.match(styles, /\.idle-run-combos/);
   assert.match(styles, /\.idle-automation-profiles/);
+});
+
+test('endgame Idle : expéditions, mutateur hebdomadaire et protection intelligente sont pilotables', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  for (const id of ['idle-weekly-rogue','idle-expeditions','idle-equipment-auto-lock']) assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(source,/function renderIdleExpeditions\(/);assert.match(source,/\/api\/idle\/expedition\/start/);assert.match(source,/\/api\/idle\/expedition\/claim/);assert.match(source,/\/api\/idle\/equipment\/auto-lock/);
+  assert.match(styles,/\.idle-expedition-grid/);assert.match(styles,/\.idle-weekly-rogue\.active/);
 });

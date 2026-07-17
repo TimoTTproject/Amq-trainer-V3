@@ -7,13 +7,13 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
+const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossTacticalProfile,weeklyRoguelikeEvent,expeditionPayload,expeditionReward,EXPEDITION_MISSIONS,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,itemQualityScore,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
   RARITY_PASSIVE_POOL, characterPassiveEntry, characterPassiveMagnitude, characterPassiveBonus, characterPassiveDescription,
-  heroAscensionRequiredLevel, prestigeStartingLevels,
+  heroAscensionRequiredLevel, prestigeStartingLevels, RUN_BLESSINGS,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -103,6 +103,25 @@ test('activités : le défi de licence reconnaît une alliance entre saisons',()
   assert.equal(challenge.completed,true);assert.equal(challenge.progress,100);
 });
 
+test('endgame : la faiblesse de boss récompense le bon rôle et une alliance de licence',()=>{
+  const slots=[1,2,3].map((id)=>({characterId:id,character:{name:`H${id}`,series:id===1?'Naruto Shippuden':`Naruto Shippuden Season ${id}`,rarity:'rare'}}));
+  const profile=bossTacticalProfile(10,slots);assert.ok(profile);assert.equal(profile.licenseReady,true);assert.ok(profile.licenseMultiplier>1);assert.ok(profile.multiplier>=profile.licenseMultiplier);
+});
+
+test('endgame : le mutateur roguelike hebdomadaire est stable et récompense son affinité',()=>{
+  const base=weeklyRoguelikeEvent('2026-07-13',[]);const matching=RUN_BLESSINGS.filter((item)=>item.affinity===base.affinity).slice(0,2).map((item)=>item.key);
+  const active=weeklyRoguelikeEvent('2026-07-13',matching);assert.equal(active.key,base.key);assert.equal(active.active,true);assert.equal(active.multiplier,1.18);
+});
+
+test('endgame : une expédition persistée retrouve son escouade et une récompense finie',()=>{
+  const mission=EXPEDITION_MISSIONS[0];const row={period:`${mission.key}|${Date.now()-1000}|11.12`,value:50};const payload=expeditionPayload(row,[{characterId:11,character:{name:'A'}},{characterId:12,character:{name:'B'}}]);
+  assert.equal(payload.ready,true);assert.deepEqual(payload.heroes.map((hero)=>hero.name),['A','B']);const reward=expeditionReward(mission,50,100);assert.ok(reward.essence>0);assert.ok(Number.isFinite(reward.essence));
+});
+
+test('équipement : le score qualité valorise les affixes, la rareté et le renforcement',()=>{
+  const base={rarity:'rare',effectValue:.1,affixes:[],enhancementLevel:0};assert.ok(itemQualityScore({...base,rarity:'legendary',affixes:[{effectValue:.1}],enhancementLevel:10})>itemQualityScore(base));
+});
+
 test('squadPresetSlots : chaque slot vérifie SA PROPRE condition (pas un simple comptage par index)',()=>{
   // Rang 22 sans aucun Prestige : Faille (index 3, condition = rang ≥20) doit
   // être débloquée, mais Boss (index 1, condition = Prestige ≥1) doit rester
@@ -138,6 +157,7 @@ test.beforeEach(() => {
   prisma.dojoBossArt.findUnique = async () => null;
   prisma.idleTeamPreset.findMany = async () => [];
   prisma.idleProgressCounter.findMany = async () => [];
+  prisma.idleProgressCounter.findFirst = async () => null;
   prisma.idleProgressCounter.upsert = async () => ({});
   prisma.idleItem.findMany = async () => [];
   prisma.idleRiftRun.findUnique = async () => null;
@@ -236,10 +256,11 @@ test('diagnostic d’équilibrage Idle : expose funnel, percentiles, murs et ale
   const users=Array.from({length:10},(_,index)=>({id:`u${index}`,idleBestStage:index<4?20:40+index*10,idleRankLevel:index<5?10:22,prestigeLevel:index===9?1:0}));
   const runs=[{userId:'u9',bestStage:100,wisdomGained:12,durationSeconds:3600,teamDps:5000}];
   const rifts=[{userId:'u7',value:8}];
-  const diagnostic=idleBalanceDiagnostic(users,runs,rifts,[]);
+  const diagnostic=idleBalanceDiagnostic(users,runs,rifts,[{event:'run_blessing:berserker',_count:{_all:6},_avg:{stage:50,value:0}},{event:'run_blessing:deadeye',_count:{_all:4},_avg:{stage:40,value:0}},{event:'expedition_start',_count:{_all:3},_avg:{stage:30,value:0}},{event:'rune_reroll',_count:{_all:5},_avg:{stage:80,value:.6}}]);
   assert.equal(diagnostic.players,10);assert.equal(diagnostic.funnel[1].count,10);assert.ok(diagnostic.progression.stageMedian>=20);
   assert.equal(diagnostic.prestige.wisdomPerHourMedian,12);assert.equal(diagnostic.rift.participants,1);
   assert.ok(diagnostic.walls.some((wall)=>wall.stage===20&&wall.players===4));assert.ok(diagnostic.alerts.some((alert)=>alert.key==='wall'));
+  assert.equal(diagnostic.builds.choices[0].key,'berserker');assert.equal(diagnostic.builds.choices[0].percent,60);assert.equal(diagnostic.engagement.rerollUpgradeRate,60);
 
   prisma.user.findUnique=async()=>dbUser();prisma.user.findMany=async()=>users;
   prisma.idleRunHistory.findMany=async()=>runs;prisma.idleProgressCounter.findMany=async()=>rifts;prisma.idleTelemetry.groupBy=async()=>[];
@@ -415,6 +436,8 @@ test('inventaire : la rareté détermine le nombre d’affixes tirés, sans doub
   assert.equal(new Set(affixes.map((a)=>a.effectKey)).size,4);
   assert.equal(idleItemDrop(5,'weapon','rare',.03,'Konoha').affixes.length,0);
   assert.equal(idleItemDrop(5,'weapon','mythic',.16,'Konoha').affixes.length,3);
+  assert.equal(idleItemDrop(5,'weapon','legendary',.10,'Konoha').locked,true);
+  assert.equal(idleItemDrop(5,'weapon','rare',.03,'Konoha').locked,false);
 });
 
 test('inventaire : chaque type possède un effet utile et une valeur de recyclage',()=>{
@@ -439,10 +462,14 @@ test('inventaire : les mondes et les paliers créent des familles variées',()=>
   // de coffres (paliers 1 à 6, un par nature d'objet) livre le même set —
   // largement de quoi compléter un 2 ou 4 pièces — avant de changer de famille
   // au lot suivant (palier 7).
-  const effects=new Set([1,7,13].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
-  assert.equal(effects.size,3);
-  const sameBatch=new Set([1,2,3,4,5,6].map((tier)=>idleItemDrop(tier,'rune2','rare',.03,'Konoha').effectKey));
-  assert.equal(sameBatch.size,1);
+  const firstCycle=Array.from({length:16},(_,index)=>idleItemDrop(index+1,`rune${index%6+1}`,'rare',.03,'Konoha'));
+  assert.equal(new Set(firstCycle.map((item)=>item.setKey)).size,Object.keys(RUNE_SETS).length);
+  for(const [key,set] of Object.entries(RUNE_SETS)){
+    assert.equal(firstCycle.filter((item)=>item.setKey===key).length,set.required);
+  }
+  assert.equal(firstCycle[0].setKey,'energy');
+  assert.equal(firstCycle[1].setKey,'energy');
+  assert.equal(firstCycle[2].setKey,'blade');
   assert.match(idleItemDrop(1,'rune1','rare',.03,'Konoha').name,/Kunai de la Feuille/);
   assert.match(idleItemDrop(1,'rune1','rare',.03,'Namek').name,/Lame de Ki/);
 });
@@ -496,6 +523,19 @@ test('équipement : le meulage sécurisé conserve un meilleur ancien jet',async
     const res=await app.request('/api/idle/equipment/reroll',{method:'POST',cookie:app.authCookie('u1'),body:{itemId:item.id,keepBest:true}});
     assert.equal(res.status,200);assert.equal(res.json.reroll.kept,true);assert.equal(updated,false);assert.equal(res.json.reroll.after.score,.9);
   }finally{Math.random=originalRandom;}
+});
+
+test('équipement : la protection intelligente verrouille les meilleurs jets de chaque emplacement',async()=>{
+  const items=[{id:'a',kind:'rune1',rarity:'rare',effectValue:.1,affixes:[],enhancementLevel:0,equippedCharacterId:null},{id:'b',kind:'rune1',rarity:'legendary',effectValue:.3,affixes:[],enhancementLevel:5,equippedCharacterId:null},{id:'c',kind:'rune2',rarity:'epic',effectValue:.2,affixes:[],enhancementLevel:0,equippedCharacterId:7}];
+  prisma.user.findUnique=async()=>dbUser();prisma.idleItem.findMany=async()=>items;let locked=[];prisma.idleItem.updateMany=async({where})=>{locked=where.id.in;return{count:locked.length};};
+  const res=await app.request('/api/idle/equipment/auto-lock',{method:'POST',cookie:app.authCookie('u1'),body:{}});assert.equal(res.status,200);assert.ok(locked.includes('b'));assert.ok(locked.includes('c'));
+});
+
+test('expéditions : démarre avec les réserves puis réclame atomiquement la récompense terminée',async()=>{
+  const user=dbUser({idleBestStage:80,idleStage:80});const reserves=[1,2,3].map((id)=>({characterId:id,trainingLevel:10,idleAscension:0,character:{id,name:`Réserve ${id}`,rarity:'epic',series:'Bleach'}}));let row=null;let credited=null;
+  prisma.user.findUnique=async()=>user;prisma.user.update=async({data})=>{credited=data;return user;};prisma.dojoRecruit.findMany=async()=>reserves;prisma.idleProgressCounter.findFirst=async()=>row;prisma.idleProgressCounter.create=async({data})=>{row={id:99,...data};return row;};prisma.idleProgressCounter.deleteMany=async()=>({count:1});
+  const started=await app.request('/api/idle/expedition/start',{method:'POST',cookie:app.authCookie('u1'),body:{missionKey:'patrol'}});assert.equal(started.status,200);assert.ok(row.period.startsWith('patrol|'));
+  row.period=row.period.replace(/\|\d+\|/,`|${Date.now()-1000}|`);const claimed=await app.request('/api/idle/expedition/claim',{method:'POST',cookie:app.authCookie('u1'),body:{}});assert.equal(claimed.status,200);assert.ok(claimed.json.essence>0);assert.ok(credited.essence.increment>0);
 });
 
 test('inventaire : le verrouillage vérifie que l objet appartient au joueur',async()=>{
@@ -580,6 +620,8 @@ test('inventaire : le recyclage exige une confirmation renforcée pour les objet
   const res=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['legend-1']}});
   assert.equal(res.status,400);
   assert.match(res.json.error,/Confirmation requise/);
+  const legacyConfirmation=await app.request('/api/idle/equipment/salvage',{method:'POST',cookie:app.authCookie('u1'),body:{ids:['legend-1'],confirmHighRarity:true}});
+  assert.equal(legacyConfirmation.status,400);
 });
 
 test('inventaire : le recyclage refuse une sélection partiellement introuvable',async()=>{
