@@ -76,6 +76,18 @@ const LB_UNITS = {
     : `×${Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
 };
 
+// Chaque onglet du classement explique CE qu'il mesure et COMMENT y grimper —
+// avant, seuls Coop et Chance avaient une note, les autres tableaux étaient
+// des listes de nombres sans contexte pour un nouveau joueur.
+const LB_DESCRIPTIONS = {
+  ranked: { icon: '⚔️', title: 'Classé', text: 'MMR gagné en multijoueur classé. Gagne des parties pour monter, le palier (Bronze → Champion) suit ton MMR.' },
+  solo: { icon: '📅', title: 'Solo', text: 'MMR du Défi du jour. Un défi par jour : régularité et bonnes réponses font grimper ce score.' },
+  tower: { icon: '🏰', title: 'Château', text: 'Meilleur étage jamais atteint au Château de l’Infini. Enchaîne les bonnes réponses pour monter plus haut.' },
+  coop: { icon: '🤝', title: 'Coop', text: 'Meilleur étage en équipe cette semaine.' },
+  collection: { icon: '🃏', title: 'Collection', text: 'Nombre de personnages distincts possédés. Tire au gacha, fusionne et échange pour compléter ta collection.' },
+  luck: { icon: '🍀', title: 'Chance', text: '' },
+};
+
 function openLeaderboard() {
   showView('leaderboard');
   document.querySelectorAll('.lb-tab').forEach((t) => t.classList.toggle('active', t.dataset.lb === 'ranked'));
@@ -143,40 +155,63 @@ function otherAvatar(entry, sizeClass = 'avatar-sm') {
 async function loadLeaderboard(type) {
   const list = document.getElementById('lb-list');
   const meBox = document.getElementById('lb-me');
+  const podium = document.getElementById('lb-podium');
   list.innerHTML = '<li class="muted">Chargement…</li>';
   meBox.innerHTML = '';
+  if (podium) { podium.innerHTML = ''; podium.classList.add('hidden'); }
   const unit = LB_UNITS[type] || ((v) => v);
   try {
-    const { top, me, rewards, minPulls } = await api(`/api/leaderboard?type=${type}`);
+    const { top, me, rewards, minPulls, total } = await api(`/api/leaderboard?type=${type}`);
     const note = document.getElementById('lb-note');
     if (note) {
-      const luckNote = type === 'luck';
-      note.classList.toggle('hidden', !rewards && !luckNote);
-      if (luckNote) note.innerHTML = `🍀 <b>Indice de chance</b> — minimum ${minPulls || 50} tirages. ×1 = proche des taux de base ; ce n'est pas une probabilité.`;
-      if (rewards) note.innerHTML = `🏆 <b>Récompense hebdo</b> — 1<sup>er</sup> : <b>${rewards[0]} 🪙</b> · 2<sup>e</sup> : <b>${rewards[1]} 🪙</b>. Classement remis à zéro chaque lundi.`;
+      const desc = LB_DESCRIPTIONS[type];
+      let html = '';
+      if (type === 'luck') html = `🍀 <b>Indice de chance</b> — minimum ${minPulls || 50} tirages. ×1 = proche des taux de base ; ce n'est pas une probabilité.`;
+      else if (desc) html = `${desc.icon} <b>${desc.title}</b> — ${desc.text}`;
+      if (rewards) html += `${html ? '<br>' : ''}🏆 <b>Récompense hebdo</b> — 1<sup>er</sup> : <b>${rewards[0]} 🪙</b> · 2<sup>e</sup> : <b>${rewards[1]} 🪙</b>. Classement remis à zéro chaque lundi.`;
+      note.innerHTML = html;
+      note.classList.toggle('hidden', !html);
     }
     if (me) {
+      // « Sur N joueurs » + top % : situe le rang dans la population classée,
+      // un « #12 » seul ne dit pas si c'est bon ou pas.
+      const context = total > 0
+        ? `sur ${total} joueur${total > 1 ? 's' : ''}${me.rank > 3 && total > 1 ? ` · top ${Math.max(1, Math.ceil((me.rank / total) * 100))}%` : ''}`
+        : '';
       meBox.innerHTML = `<span class="lb-rank">#${me.rank}</span>
-        <span class="lb-me-label">Ton rang</span>
+        <span class="lb-me-label">Ton rang${context ? ` <small>${context}</small>` : ''}</span>
         <span class="lb-value">${unit(me.value)}${type === 'luck' && me.pullCount ? ` · ${me.pullCount} tirages` : ''}</span>`;
     } else {
-      meBox.innerHTML = '<span class="muted">Pas encore classé sur ce tableau.</span>';
+      const hint = { ranked: 'Joue une partie en multijoueur classé pour apparaître ici.', solo: 'Termine un Défi du jour pour apparaître ici.', tower: 'Grimpe ton premier étage du Château pour apparaître ici.', coop: 'Joue une partie Coop cette semaine pour apparaître ici.', collection: 'Obtiens ta première carte pour apparaître ici.', luck: `Fais au moins ${minPulls || 50} tirages pour apparaître ici.` }[type] || 'Pas encore classé sur ce tableau.';
+      meBox.innerHTML = `<span class="muted">${hint}</span>`;
     }
     if (!top.length) {
-      list.innerHTML = '<li class="muted">Personne n\'est encore classé.</li>';
+      list.innerHTML = '<li class="muted">Personne n\'est encore classé. Sois le premier !</li>';
       return;
     }
     const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
-    list.innerHTML = top
-      .map(
-        (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
+    const rowHTML = (e) => `<li class="lb-row${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
           <span class="lb-rank">${medal(e.rank)}</span>
           ${lbAvatar(e)}
           <span class="lb-name">${escapeHtml(e.displayName)}${e.tier ? ' ' + tierBadge(e.tier) : ''}${type === 'luck' && e.pullCount ? ` <small>${e.pullCount} tirages</small>` : ''}</span>
           <span class="lb-value">${unit(e.value)}</span>
-        </li>`
-      )
-      .join('');
+        </li>`;
+    // Podium visuel pour le top 3 (ordre d'affichage 2·1·3 géré en CSS),
+    // la liste classique reprend à partir du 4e.
+    const podiumEntries = podium ? top.slice(0, 3) : [];
+    if (podium && podiumEntries.length) {
+      podium.innerHTML = podiumEntries.map((e) => `<button type="button" class="lb-podium-slot place-${e.rank}${e.isMe ? ' me' : ''}" data-userid="${e.userId}">
+          <span class="lb-podium-medal">${medal(e.rank)}</span>
+          ${otherAvatar(e, 'avatar-md')}
+          <span class="lb-podium-name">${escapeHtml(e.displayName)}</span>
+          ${e.tier ? tierBadge(e.tier) : ''}
+          <span class="lb-podium-value">${unit(e.value)}${type === 'luck' && e.pullCount ? `<small>${e.pullCount} tirages</small>` : ''}</span>
+        </button>`).join('');
+      podium.classList.remove('hidden');
+      podium.querySelectorAll('[data-userid]').forEach((b) => b.addEventListener('click', () => openPlayer(b.dataset.userid)));
+    }
+    const rest = podium ? top.slice(3) : top;
+    list.innerHTML = rest.map(rowHTML).join('') || '';
   } catch (e) {
     list.innerHTML = `<li class="muted">${escapeHtml(e.message)}</li>`;
   }
