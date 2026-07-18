@@ -80,6 +80,10 @@ let idleMissionWeekKey = null;
 // Quantité d'achat GLOBALE (×1/×5/×10/×100/MAX) façon Clicker Heroes —
 // partagée entre le dock d'achats rapides du Combat et l'onglet Équipe.
 let idleBuyAmount = localStorage.getItem('idle-buy-amount') || '1';
+// Tri de la collection par licence (retour joueur : « trier par nombre de
+// persos recrutés par licence, ça serait plus clair »).
+const IDLE_COLLECTION_SORTS = [['percent', 'Complétion'], ['owned', 'Recrutés'], ['name', 'A–Z']];
+let idleCollectionSort = localStorage.getItem('idle-collection-sort') || 'percent';
 let idleAncientsAutoOpened = false; // la section Ancients ne s'auto-déplie qu'une fois par session
 let idleOrbTimer = null; // prochain orbe bonus programmé
 let idleOrbCooldownUntil = 0; // empêche un coffre de combat d'apparaître pendant l'anti-rejeu serveur
@@ -109,6 +113,22 @@ function idleNotify(message,type='info'){
   toast.querySelector('button').addEventListener('click',()=>toast.remove());box.appendChild(toast);setTimeout(()=>toast.remove(),4200);
 }
 function idleAnnounce(message){if(!message||message===idleLastAnnouncement)return;idleLastAnnouncement=message;const live=document.getElementById('idle-live-status');if(live)live.textContent=message;}
+// Confirmation intégrée au jeu : window.confirm() est silencieusement ignoré
+// dans certaines WebViews mobiles (PWA installée, navigateur intégré Discord) —
+// le clic semblait alors « ne rien faire » (retour joueur : impossible de
+// changer de monde). Même approche que le bilan de Prestige, en générique.
+function idleConfirm(message,{title='Confirmer ?',confirmLabel='Continuer',cancelLabel='Annuler'}={}){
+  return new Promise((resolve)=>{
+    document.getElementById('idle-confirm-modal')?.remove();
+    const overlay=document.createElement('div');
+    overlay.id='idle-confirm-modal';overlay.className='modal-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','idle-confirm-title');
+    overlay.innerHTML=`<div class="modal-card idle-confirm-card"><h3 id="idle-confirm-title"><i class="fas fa-circle-question"></i> ${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p><div class="modal-actions"><button type="button" class="btn-secondary" data-confirm="no">${escapeHtml(cancelLabel)}</button><button type="button" class="btn-primary" data-confirm="yes">${escapeHtml(confirmLabel)}</button></div></div>`;
+    const done=(value)=>{overlay.remove();resolve(value);};
+    overlay.addEventListener('click',(e)=>{const button=e.target.closest('[data-confirm]');if(button)return done(button.dataset.confirm==='yes');if(e.target===overlay)done(false);});
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-confirm="yes"]')?.focus();
+  });
+}
 function idleStoredSetting(key){return localStorage.getItem(`idle-${key}`)==='1';}
 function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);view?.classList.toggle('idle-effects-full',!reduced);view?.classList.toggle('idle-large-text',idleStoredSetting('large-text'));view?.classList.toggle('idle-high-contrast',idleStoredSetting('high-contrast'));view?.classList.toggle('idle-data-saver',idleStoredSetting('data-saver'));const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggles={"idle-effects-reduced":!reduced,"idle-large-text":idleStoredSetting('large-text'),"idle-high-contrast":idleStoredSetting('high-contrast'),"idle-data-saver":idleStoredSetting('data-saver')};Object.entries(toggles).forEach(([id,checked])=>{const input=document.getElementById(id);if(input)input.checked=checked;});}
 function idleSetConnectionState(mode,message){
@@ -732,10 +752,15 @@ function renderIdleState(state) {
   }
   if (idleActivePanel === 'team') {
     renderIdleTeamStrategy(state);
-    renderIdleRunJourney(state);
     renderIdleMasteries(state.codex);
     renderIdleRecruitHistory(state.recruitHistory || []);
   }
+  // L'aventure roguelike touche deux panneaux à la fois (raccourci sur Combat,
+  // section complète sur Niveaux) et son DOM est minuscule : rendu à chaque
+  // synchro, sinon les choix de bénédiction, le reroll et la sélection ne se
+  // reflétaient qu'après un F5 (la fonction ne tournait que depuis l'onglet
+  // Équipe, où la section ne vit plus — retour joueurs).
+  renderIdleRunJourney(state);
   if (idleActivePanel === 'equipment') renderIdleInventory(state);
   if (idleActivePanel === 'upgrades') {
     renderIdleMilestone(state.dojo);
@@ -876,7 +901,11 @@ function renderIdleCollection(codex) {
   const box = document.getElementById('idle-collection');
   const summary = document.getElementById('idle-collection-summary');
   if (!box) return;
-  const collection = codex?.collection || [];
+  const sortBox=document.getElementById('idle-collection-sort');
+  if(sortBox)sortBox.innerHTML=IDLE_COLLECTION_SORTS.map(([key,label])=>`<button type="button" data-collection-sort="${key}" class="${key===idleCollectionSort?'active':''}">${label}</button>`).join('');
+  // Le serveur envoie la liste triée par complétion : les autres tris sont
+  // purement visuels, appliqués sur une copie.
+  const collection = (codex?.collection || []).slice().sort((a,b)=>idleCollectionSort==='owned'?b.owned-a.owned||b.percent-a.percent:idleCollectionSort==='name'?a.series.localeCompare(b.series,'fr'):0);
   const completion=codex?.completion;
   if (summary) summary.innerHTML = `<span><i class="fas fa-user-check"></i><b>${idleFormatNumber(codex?.discovered || 0)}</b><small>héros recrutés</small></span><span><i class="fas fa-book-open"></i><b>${idleFormatNumber(codex?.catalogTotal || 0)}</b><small>personnages au total</small></span><span><i class="fas fa-layer-group"></i><b>${collection.filter((s) => s.complete).length}</b><small>licences complètes</small></span>${completion?`<span title="+${Math.round((completion.perSeriesBonus||.02)*100)}% de production permanente et +${completion.sealsPerSeries||3} Sceaux par licence complétée"><i class="fas fa-crown"></i><b>×${Number(completion.multiplier||1).toFixed(2)}</b><small>bonus de collection</small></span>`:''}`;
   box.innerHTML = collection.length ? collection.map((entry) => `<button type="button" class="idle-collection-series ${entry.complete ? 'complete' : ''}" data-collection-series="${escapeHtml(entry.series)}">
@@ -1232,8 +1261,8 @@ function resetIdleInventoryFilters(){
 function focusIdleInventoryItem(itemId){resetIdleInventoryFilters();idleExpandedItems.add(String(itemId));renderIdleInventory(idleState);requestAnimationFrame(()=>{const card=Array.from(document.querySelectorAll('#idle-inventory-grid [data-item-id]')).find((item)=>item.dataset.itemId===String(itemId));card?.scrollIntoView({behavior:'smooth',block:'center'});card?.classList.add('idle-item-focus');setTimeout(()=>card?.classList.remove('idle-item-focus'),1400);});}
 async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){idleNotify(e.message,'error');}}
 async function autoLockIdleEquipment(){const button=document.getElementById('idle-equipment-auto-lock');if(button)button.disabled=true;try{const result=await api('/api/idle/equipment/auto-lock',{method:'POST',body:JSON.stringify({})});renderIdleState(result.state);idleNotify(`${result.locked} objets de référence sont maintenant protégés.`,'success');}catch(e){idleNotify(e.message,'error');}finally{if(button)button.disabled=false;}}
-async function unequipAllIdleEquipment(){const count=idleState?.inventory?.summary?.equipped||0;if(!count)return;if(!confirm(`Retirer les ${count} objets portés par tous tes personnages, y compris ceux qui ne sont pas dans l’équipe ?`))return;const button=document.getElementById('idle-unequip-all');if(button)button.disabled=true;try{const result=await api('/api/idle/equipment/unequip-all',{method:'POST',body:JSON.stringify({})});renderIdleState(result.state);idleNotify(`${result.removed} objet${result.removed>1?'s':''} retiré${result.removed>1?'s':''}. Tout est maintenant visible dans l’inventaire.`,'success');}catch(e){idleNotify(e.message,'error');}finally{if(button)button.disabled=false;}}
-async function enhanceAllIdleEquipment(levels){const preview=levels===5?idleState?.inventory?.bulkEnhance?.five:idleState?.inventory?.bulkEnhance?.one;if(!confirm(`Améliorer chaque objet équipé jusqu’à ${levels===1?'un niveau':'cinq niveaux'} ?\n\nCoût maximum estimé : ${idleFormatNumber(preview||0)} Essence. Si ton solde est insuffisant, le serveur améliore équitablement ce qu’il peut.`))return;const buttons=['idle-enhance-all-one','idle-enhance-all-five'].map((id)=>document.getElementById(id));buttons.forEach((button)=>{if(button)button.disabled=true;});try{const result=await api('/api/idle/equipment/enhance-all',{method:'POST',body:JSON.stringify({levels})});renderIdleState(result.state);idleSpawnFloat(`${result.bought} ${result.bought>1?'NIVEAUX':'NIVEAU'} D’OBJET`,'xp');idleNotify(`${result.items} objet${result.items>1?'s':''} amélioré${result.items>1?'s':''} · ${idleFormatNumber(result.spent)} Essence dépensée.`,'success');}catch(e){idleNotify(e.message,'error');}finally{buttons.forEach((button)=>{if(button)button.disabled=false;});}}
+async function unequipAllIdleEquipment(){const count=idleState?.inventory?.summary?.equipped||0;if(!count)return;if(!await idleConfirm(`Retirer les ${count} objets portés par tous tes personnages, y compris ceux qui ne sont pas dans l’équipe ?`,{title:'Tout déséquiper ?',confirmLabel:'Tout retirer'}))return;const button=document.getElementById('idle-unequip-all');if(button)button.disabled=true;try{const result=await api('/api/idle/equipment/unequip-all',{method:'POST',body:JSON.stringify({})});renderIdleState(result.state);idleNotify(`${result.removed} objet${result.removed>1?'s':''} retiré${result.removed>1?'s':''}. Tout est maintenant visible dans l’inventaire.`,'success');}catch(e){idleNotify(e.message,'error');}finally{if(button)button.disabled=false;}}
+async function enhanceAllIdleEquipment(levels){const preview=levels===5?idleState?.inventory?.bulkEnhance?.five:idleState?.inventory?.bulkEnhance?.one;if(!await idleConfirm(`Améliorer chaque objet équipé jusqu’à ${levels===1?'un niveau':'cinq niveaux'} ? Coût maximum estimé : ${idleFormatNumber(preview||0)} Essence. Si ton solde est insuffisant, le serveur améliore équitablement ce qu’il peut.`,{title:'Amélioration groupée ?',confirmLabel:'Améliorer'}))return;const buttons=['idle-enhance-all-one','idle-enhance-all-five'].map((id)=>document.getElementById(id));buttons.forEach((button)=>{if(button)button.disabled=true;});try{const result=await api('/api/idle/equipment/enhance-all',{method:'POST',body:JSON.stringify({levels})});renderIdleState(result.state);idleSpawnFloat(`${result.bought} ${result.bought>1?'NIVEAUX':'NIVEAU'} D’OBJET`,'xp');idleNotify(`${result.items} objet${result.items>1?'s':''} amélioré${result.items>1?'s':''} · ${idleFormatNumber(result.spent)} Essence dépensée.`,'success');}catch(e){idleNotify(e.message,'error');}finally{buttons.forEach((button)=>{if(button)button.disabled=false;});}}
 function renderIdleBulkSelection(){const items=(idleState?.inventory?.items||[]).filter((item)=>idleSelectedItems.has(item.id));const summary=document.getElementById('idle-selected-summary');const button=document.getElementById('idle-salvage-selected');const value=items.reduce((sum,item)=>sum+(item.salvageValue||0),0);if(summary)summary.textContent=items.length?`${items.length} objet${items.length>1?'s':''} · ${idleFormatNumber(value)} Essence estimée`:'Aucun objet sélectionné';if(button)button.disabled=!items.length;}
 function toggleIdleItemSelection(itemId){if(idleSelectedItems.has(itemId))idleSelectedItems.delete(itemId);else idleSelectedItems.add(itemId);renderIdleInventory(idleState);}
 function selectIdleItemsBySalvageRules(){
@@ -1248,12 +1277,12 @@ function selectIdleItemsBySalvageRules(){
   renderIdleInventory(idleState);
   idleNotify(candidates.length?`${candidates.length} objet${candidates.length>1?'s':''} sélectionné${candidates.length>1?'s':''} selon tes règles. Vérifie puis confirme le recyclage.`:'Aucun objet ne correspond aux règles de recyclage.','success');
 }
-async function salvageIdleItems(ids){const items=(idleState?.inventory?.items||[]).filter((item)=>ids.includes(item.id));if(!items.length)return;const total=items.reduce((sum,item)=>sum+(item.salvageValue||0),0);const precious=items.some((item)=>['legendary','mythic'].includes(item.rarity));if(!confirm(`Recycler ${items.length} objet${items.length>1?'s':''} contre environ ${idleFormatNumber(total)} Essence ?${precious?'\n\nATTENTION : la sélection contient un objet légendaire ou mythique.':''}`))return;let preciousConfirmation=false;if(precious){preciousConfirmation=prompt('Protection objet précieux : écris RECYCLER pour confirmer définitivement.')==='RECYCLER';if(!preciousConfirmation){idleNotify('Objet précieux conservé : confirmation annulée.','success');return;}}try{const r=await api('/api/idle/equipment/salvage',{method:'POST',body:JSON.stringify({ids,confirmHighRarity:preciousConfirmation?'RECYCLER':false})});idleSelectedItems.clear();renderIdleState(r.state);idleSpawnFloat(`RECYCLAGE +${idleFormatNumber(r.gained)}`,'xp');}catch(e){idleNotify(e.message,'error');}}
+async function salvageIdleItems(ids){const items=(idleState?.inventory?.items||[]).filter((item)=>ids.includes(item.id));if(!items.length)return;const total=items.reduce((sum,item)=>sum+(item.salvageValue||0),0);const precious=items.some((item)=>['legendary','mythic'].includes(item.rarity));if(!await idleConfirm(`Recycler ${items.length} objet${items.length>1?'s':''} contre environ ${idleFormatNumber(total)} Essence ?${precious?' ATTENTION : la sélection contient un objet légendaire ou mythique.':''}`,{title:'Recycler la sélection ?',confirmLabel:'Recycler'}))return;let preciousConfirmation=false;if(precious){preciousConfirmation=prompt('Protection objet précieux : écris RECYCLER pour confirmer définitivement.')==='RECYCLER';if(!preciousConfirmation){idleNotify('Objet précieux conservé : confirmation annulée.','success');return;}}try{const r=await api('/api/idle/equipment/salvage',{method:'POST',body:JSON.stringify({ids,confirmHighRarity:preciousConfirmation?'RECYCLER':false})});idleSelectedItems.clear();renderIdleState(r.state);idleSpawnFloat(`RECYCLAGE +${idleFormatNumber(r.gained)}`,'xp');}catch(e){idleNotify(e.message,'error');}}
 async function salvageIdleItem(itemId){return salvageIdleItems([itemId]);}
 async function rerollIdleItem(itemId){
   const item=(idleState?.inventory?.items||[]).find((x)=>x.id===itemId);
   if(!item)return;
-  if(!confirm(`Meuler ${item.name} pour ${idleFormatNumber(item.rerollCost||0)} Essence ?\n\nMeulage sécurisé : si le nouveau total d’affixes est moins bon, l’objet actuel est conservé.`))return;
+  if(!await idleConfirm(`Meulage sécurisé de ${item.name} pour ${idleFormatNumber(item.rerollCost||0)} Essence : si le nouveau total d’affixes est moins bon, l’objet actuel est conservé.`,{title:'Meuler cet objet ?',confirmLabel:'Meuler'}))return;
   try{
     const state=await api('/api/idle/equipment/reroll',{method:'POST',body:JSON.stringify({itemId,keepBest:true})});
     const before=state.reroll?.before?.effectValue||0;const after=state.reroll?.after?.effectValue||0;
@@ -1301,7 +1330,11 @@ function renderIdleRoadmap(codex,battle) {
 function renderIdleWorldJump(codex,battle){
   const list=document.getElementById('idle-world-jump-list');if(!list||!Array.isArray(codex?.worlds))return;
   const currentIndex=Math.max(0,Math.floor(((battle?.world?.startStage||battle?.stage||1)-1)/10));const bestStage=Math.max(1,battle?.runBestStage||battle?.bestStage||battle?.stage||1);
-  list.innerHTML=codex.worlds.map((world,index)=>{const unlocked=world.discovered&&world.level<=bestStage;const current=index===currentIndex;return `<button type="button" class="${current?'current':''}" data-world-stage="${world.level}" ${!unlocked?'disabled':''}><span class="idle-world-number">${unlocked?index+1:'<i class="fas fa-lock"></i>'}</span><span><small>ACTE ${world.act||1} · NIVEAUX ${world.level}–${world.level+9}</small><b>${escapeHtml(world.name.split(' · ')[0])}</b><em>${current?'Monde actuel':unlocked?`${escapeHtml(world.difficulty||'Normal')} · voyager au niveau ${world.level}`:'Pas encore découvert'}</em></span>${current?'<i class="fas fa-location-dot"></i>':'<i class="fas fa-arrow-right"></i>'}</button>`;}).join('');
+  // Un monde découvert lors d'une run précédente mais pas encore atteint dans
+  // CETTE run reste verrouillé (le voyage ne saute jamais de progression) —
+  // mais afficher « Pas encore découvert » laissait croire à un bug (retour
+  // joueur : « je peux pas changer de monde ») : on explique la vraie raison.
+  list.innerHTML=codex.worlds.map((world,index)=>{const unlocked=world.discovered&&world.level<=bestStage;const current=index===currentIndex;return `<button type="button" class="${current?'current':''}" data-world-stage="${world.level}" ${!unlocked?'disabled':''}><span class="idle-world-number">${unlocked?index+1:'<i class="fas fa-lock"></i>'}</span><span><small>ACTE ${world.act||1} · NIVEAUX ${world.level}–${world.level+9}</small><b>${escapeHtml(world.name.split(' · ')[0])}</b><em>${current?'Monde actuel':unlocked?`${escapeHtml(world.difficulty||'Normal')} · voyager au niveau ${world.level}`:world.discovered?`Atteins le niveau ${world.level} dans cette run pour y voyager`:'Pas encore découvert'}</em></span>${current?'<i class="fas fa-location-dot"></i>':'<i class="fas fa-arrow-right"></i>'}</button>`;}).join('');
 }
 
 // Le joueur est le héros actif : son apparence vient du profil (avatar + cadre),
@@ -1540,7 +1573,7 @@ async function applyIdleAutomationProfile(profile){
 }
 async function toggleIdleAutoSkills(){const btn=document.getElementById('idle-auto-skills');if(btn?.disabled)return;try{const state=await api('/api/idle/auto-skills',{method:'POST',body:JSON.stringify({enabled:btn.dataset.enabled!=='1'})});renderIdleState(state);}catch(e){idleNotify(e.message,'error');}}
 async function chooseIdleBattleMode(mode){
-  if(mode==='farm'&&!window.confirm('Le mode Farm répète volontairement la vague actuelle : le compteur revient à 0/10, mais la vague ne progresse plus. Activer ce mode ?'))return;
+  if(mode==='farm'&&!await idleConfirm('Le mode Farm répète volontairement la vague actuelle : le compteur revient à 0/10, mais la vague ne progresse plus.',{title:'Activer le mode Farm ?',confirmLabel:'Activer le Farm'}))return;
   try{
     const state=await api('/api/idle/battle-mode',{method:'POST',body:JSON.stringify({mode,confirmed:mode==='farm'})});
     renderIdleState(state);
@@ -1571,7 +1604,7 @@ async function chooseIdleStage(stage){
   // souvenir avoir activé quoi que ce soit).
   const bestStage=idleState?.battle?.runBestStage||idleState?.battle?.bestStage||stage;
   if(stage<bestStage){
-    if(!window.confirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression. Continuer ?`))return;
+    if(!await idleConfirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression.`,{title:'Voyager en mode Farm ?',confirmLabel:`Voyager au niveau ${stage}`}))return;
   }
   try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}
 }
@@ -2365,10 +2398,14 @@ function renderIdleSlots(slots) {
 // groupés, ici pour Discipline/Concentration/Instinct/Flux).
 function idleUpgradeBuyPlan(item) {
   if (idleBuyAmount === '1' || !item.bulkCosts) return { amount: 1, cost: item.cost, count: 1 };
-  if (idleBuyAmount === 'max') return { amount: 'max', cost: null, count: null }; // coût inconnu tant que non acheté (dépend du budget au moment de l'achat)
+  // `after` : stat projetée une fois le lot acheté (serveur) — sans elle, la
+  // carte affichait l'aperçu du seul niveau suivant quel que soit ×5/×10/×100
+  // (retour joueur). Pour MAX, aperçu au nombre de niveaux abordables au
+  // moment du rendu ; le coût exact reste décidé à l'achat (budget entier).
+  if (idleBuyAmount === 'max') return { amount: 'max', cost: null, count: item.bulkCosts.max?.count ?? null, after: item.bulkCosts.max?.after };
   const bulk = item.bulkCosts[idleBuyAmount];
   if (!bulk) return { amount: 1, cost: item.cost, count: 1 }; // déjà au plafond sur ce lot : retombe sur ×1
-  return { amount: idleBuyAmount === '5' ? 5 : idleBuyAmount === '10' ? 10 : 100, cost: bulk.cost, count: bulk.count };
+  return { amount: idleBuyAmount === '5' ? 5 : idleBuyAmount === '10' ? 10 : 100, cost: bulk.cost, count: bulk.count, after: bulk.after };
 }
 function renderIdleUpgrades(state) {
   const nextSlotCost = state.slots.find((s) => s.locked)?.unlockCost ?? null;
@@ -2378,11 +2415,11 @@ function renderIdleUpgrades(state) {
   const items = [
     {
       type: 'prod', icon: 'fa-brain', title: 'Discipline', level: state.prod.level, maxed: state.prod.maxed, cost: state.prod.nextCost, bulkCosts: state.prod.bulkCosts, bulk: true,
-      label:'Production automatique',before:`×${state.prod.multiplier.toFixed(2)}`,after:`×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,desc:'Augmente toute la production de l’équipe, en ligne et hors ligne.',
+      label:'Production automatique',before:`×${state.prod.multiplier.toFixed(2)}`,after:`×${(state.prod.nextMultiplier??state.prod.multiplier).toFixed(2)}`,formatAfter:(v)=>`×${Number(v).toFixed(2)}`,desc:'Augmente toute la production de l’équipe, en ligne et hors ligne.',
     },
     {
       type: 'click', icon: 'fa-hand-fist', title: 'Concentration', level: state.click.level, maxed: state.click.maxed, cost: state.click.nextCost, bulkCosts: state.click.bulkCosts, bulk: true,
-      label:'Dégâts par clic',before:idleFormatNumber(state.click.damage ?? state.click.yield),after:idleFormatNumber(state.click.nextDamage ?? state.click.damage ?? state.click.yield),desc:'Renforce les frappes manuelles et la base de dégâts de l’Ultime.',
+      label:'Dégâts par clic',before:idleFormatNumber(state.click.damage ?? state.click.yield),after:idleFormatNumber(state.click.nextDamage ?? state.click.damage ?? state.click.yield),formatAfter:(v)=>idleFormatNumber(v),desc:'Renforce les frappes manuelles et la base de dégâts de l’Ultime.',
     },
     {
       type: 'slot', icon: 'fa-square-plus', title: 'Nouvel emplacement', level: state.slotsUnlocked, maxed: state.slotsUnlocked >= state.maxSlots, cost: nextSlotCost,
@@ -2390,15 +2427,15 @@ function renderIdleUpgrades(state) {
     },
     {
       type:'crit',icon:'fa-bullseye',title:'Instinct',level:state.crit.level,maxed:state.crit.maxed,cost:state.crit.nextCost, bulkCosts: state.crit.bulkCosts, bulk: true,
-      label:'Chance de coup critique',before:`${Math.round(state.crit.chance*100)}%`,after:`${Math.round((state.crit.nextChance??state.crit.chance)*100)}%`,desc:'Ajoute +1 point de chance critique aux frappes manuelles par niveau. Un critique inflige ×2 dégâts.',
+      label:'Chance de coup critique',before:`${Math.round(state.crit.chance*100)}%`,after:`${Math.round((state.crit.nextChance??state.crit.chance)*100)}%`,formatAfter:(v)=>`${Math.round(v*100)}%`,desc:'Ajoute +1 point de chance critique aux frappes manuelles par niveau. Un critique inflige ×2 dégâts.',
     },
     {
       type:'cooldown',icon:'fa-stopwatch',title:'Flux',level:state.cooldown.level,maxed:state.cooldown.maxed,cost:state.cooldown.nextCost, bulkCosts: state.cooldown.bulkCosts, bulk: true,
-      label:'Recharge des compétences',before:`${state.cooldown.burstSeconds}s · ${state.cooldown.teamSeconds}s`,after:`${state.cooldown.nextBurstSeconds??state.cooldown.burstSeconds}s · ${state.cooldown.nextTeamSeconds??state.cooldown.teamSeconds}s`,desc:'Réduit de 2% par niveau la recharge de l’Ultime et du Combo. Se cumule avec les Supports.',
+      label:'Recharge des compétences',before:`${state.cooldown.burstSeconds}s · ${state.cooldown.teamSeconds}s`,after:`${state.cooldown.nextBurstSeconds??state.cooldown.burstSeconds}s · ${state.cooldown.nextTeamSeconds??state.cooldown.teamSeconds}s`,formatAfter:(v)=>`${v.burst}s · ${v.team}s`,desc:'Réduit de 2% par niveau la recharge de l’Ultime et du Combo. Se cumule avec les Supports.',
     },
     {
       type:'multistrike',icon:'fa-hand-sparkles',title:'Frappes Multiples',level:state.multiStrike.level,maxed:state.multiStrike.maxed,cost:state.multiStrike.nextCost, bulkCosts: state.multiStrike.bulkCosts, bulk: true,
-      label:'Frappes simulées par clic',before:`+${Math.round(state.multiStrike.bonus*100)}%`,after:`+${Math.round((state.multiStrike.nextBonus??state.multiStrike.bonus)*100)}%`,desc:'Chaque clic manuel simule des frappes supplémentaires (dégâts et kills comptés). Réinitialisé au Prestige.',
+      label:'Frappes simulées par clic',before:`+${Math.round(state.multiStrike.bonus*100)}%`,after:`+${Math.round((state.multiStrike.nextBonus??state.multiStrike.bonus)*100)}%`,formatAfter:(v)=>`+${Math.round(v*100)}%`,desc:'Chaque clic manuel simule des frappes supplémentaires (dégâts et kills comptés). Réinitialisé au Prestige.',
     },
   ];
   const available=items.filter((item)=>!item.maxed&&Number.isFinite(item.cost));
@@ -2420,7 +2457,7 @@ function renderIdleUpgrades(state) {
       <div class="idle-upgrade-info">
         <small>${it.label}</small><h4>${it.title} <span class="idle-upgrade-lvl">Nv. ${it.level}</span></h4>
         <p>${it.desc}</p>
-        <div class="idle-upgrade-comparison"><span><small>ACTUEL</small><b>${it.before}</b></span><i class="fas fa-arrow-right"></i><span><small>APRÈS ACHAT</small><b>${it.after}</b></span></div>
+        <div class="idle-upgrade-comparison"><span><small>ACTUEL</small><b>${it.before}</b></span><i class="fas fa-arrow-right"></i><span><small>APRÈS ACHAT${plan.count&&plan.count>1?` ×${plan.count}`:''}</small><b>${plan.after!=null&&it.formatAfter?it.formatAfter(plan.after):it.after}</b></span></div>
       </div>
       ${it.maxed
         ? '<span class="idle-upgrade-maxed">MAX</span>'
@@ -2590,7 +2627,7 @@ async function awakenIdleHero(characterId){
   }catch(e){idleNotify(e.message,'error');}
 }
 async function ascendIdleSlot(slotIndex) {
-  if (!confirm('L’Ascension augmente la puissance du héros sans retirer ses niveaux. Elle sera réinitialisée au prochain Prestige. Continuer ?')) return;
+  if (!await idleConfirm('L’Ascension augmente la puissance du héros sans retirer ses niveaux. Elle sera réinitialisée au prochain Prestige.',{title:'Ascensionner ce héros ?',confirmLabel:'Ascensionner'})) return;
   try { const state = await api('/api/idle/slot-ascend', { method: 'POST', body: JSON.stringify({ slotIndex }) }); if (typeof burstConfetti === 'function') burstConfetti(60); idleSpawnFloat('ASCENSION · PUISSANCE DOUBLÉE', 'crit'); renderIdleState(state); }
   catch (e) { alert(e.message); }
 }
@@ -2883,6 +2920,13 @@ function initIdleUI() {
   document.getElementById('idle-collection')?.addEventListener('click', (e) => {
     const b = e.target.closest('[data-collection-series]');
     if (b) openIdleCollectionSeries(b.dataset.collectionSeries);
+  });
+  document.getElementById('idle-collection-sort')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-collection-sort]');
+    if (!b || b.dataset.collectionSort === idleCollectionSort) return;
+    idleCollectionSort = b.dataset.collectionSort;
+    localStorage.setItem('idle-collection-sort', idleCollectionSort);
+    if (idleState) renderIdleCollection(idleState.codex);
   });
   document.getElementById('idle-collection-close')?.addEventListener('click', () => document.getElementById('idle-collection-modal')?.classList.add('hidden'));
   document.getElementById('idle-collection-modal')?.addEventListener('click', (e) => { if (e.target.id === 'idle-collection-modal') e.currentTarget.classList.add('hidden'); });
