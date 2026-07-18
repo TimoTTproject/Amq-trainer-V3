@@ -1768,7 +1768,11 @@ async function buildState(userId) {
       timerRemainingMs:bossTimerRemainingMs,
       bossFailed: combatPreview.bossFailed,
       world:combatWorld,
-      kills: enemiesDefeatedBeforeStage(stage) + waveKills,
+      // Basé sur le meilleur stage ATTEINT (pas le stage courant) : sinon,
+      // revisiter un monde passé (mode Farm, voyage rapide) faisait chuter le
+      // compteur affiché — l'ancien calcul recomptait tout depuis le stage où
+      // on se trouve, au lieu de refléter la progression réelle du compte.
+      kills: enemiesDefeatedBeforeStage(Math.max(user.idleBestStage||1, stage)) + (stage>=(user.idleBestStage||1)?waveKills:0),
       enemiesDefeated: waveKills,
       enemiesRequired,
       enemiesRemaining: enemiesRequired - waveKills,
