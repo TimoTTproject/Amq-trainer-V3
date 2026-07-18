@@ -258,3 +258,17 @@ test('retours joueurs : bénédictions rendues à chaque synchro, confirmations 
   assert.match(source, /localStorage\.setItem\('idle-collection-sort'/);
   assert.match(styles, /\.idle-collection-sort-bar/);
 });
+
+test('Donjon des Objets : la descente en 10 étages est visible et seul le dernier récompense', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  assert.match(html, /id="idle-rune-dungeon-progress"/);
+  assert.match(styles, /\.idle-rune-dungeon-progress/);
+  // La récompense (et son jingle de coffre) n'apparaît qu'à l'étage final ;
+  // les étages intermédiaires gardent une fouille brève sans loot.
+  assert.match(source, /if\(result\.cleared\)\{/);
+  assert.match(source, /IDLE_RUNE_DUNGEON_FLOOR_MS/);
+  assert.match(source, /ÉTAGE \$\{result\.floor\}\/\$\{result\.floors\}/);
+});

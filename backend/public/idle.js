@@ -1177,28 +1177,47 @@ function idleRuneDetailChips(item){
 let idleRuneDungeonBusy=false;
 let idleRuneDungeonActiveKind=null;
 const IDLE_RUNE_DUNGEON_EXPLORE_MS=2600;
+const IDLE_RUNE_DUNGEON_FLOOR_MS=800; // étages sans récompense : fouille brève
 function renderIdleRuneDungeon(state){
-  const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');
+  const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');const progress=document.getElementById('idle-rune-dungeon-progress');
   if(!dungeon||!grid)return;
+  const floors=dungeon.floors||10;const floor=dungeon.floor||0;const inRun=floor>0;
   if(status)status.innerHTML=idleRuneDungeonBusy
     ?`<i class="fas fa-spinner fa-spin"></i> Exploration en cours…`
+    :inRun
+    ?`<i class="fas fa-stairs"></i> Étage ${floor}/${floors} · l’équipement attend à l’étage ${floors}`
     :dungeon.freeRemaining>0
-    ?`<i class="fas fa-bolt"></i> ${dungeon.freeRemaining}/${dungeon.freeAttempts} tentative${dungeon.freeRemaining>1?'s':''} gratuite${dungeon.freeRemaining>1?'s':''} aujourd’hui`
-    :`<i class="fas fa-coins"></i> Tentatives gratuites épuisées · prochaine : ${idleFormatNumber(dungeon.nextCost)} Essence`;
-  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Exploration…':escapeHtml(k.label)}</b></button>`;}).join('');
+    ?`<i class="fas fa-bolt"></i> ${dungeon.freeRemaining}/${dungeon.freeAttempts} descente${dungeon.freeRemaining>1?'s':''} gratuite${dungeon.freeRemaining>1?'s':''} aujourd’hui`
+    :`<i class="fas fa-coins"></i> Descentes gratuites épuisées · prochaine : ${idleFormatNumber(dungeon.nextCost)} Essence`;
+  // Frise des étages : seul le dernier porte le coffre, les autres ne donnent
+  // rien — la frise rend cette règle lisible d'un coup d'œil.
+  if(progress)progress.innerHTML=Array.from({length:floors},(_,i)=>{const step=i+1;const done=step<=floor;const last=step===floors;return `<span class="${done?'done':''} ${last?'chest':''}" title="Étage ${step}${last?' · équipement':''}">${last?'<i class="fas fa-gift"></i>':done?'<i class="fas fa-check"></i>':step}</span>`;}).join('');
+  // Le coût ne s'applique qu'au premier étage : une descente entamée ne
+  // repaie jamais, on ne grise donc les boutons que hors descente.
+  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(!inRun&&dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Exploration…':escapeHtml(k.label)}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:'Étage 1'}</small></button>`;}).join('');
 }
 async function runIdleRuneDungeon(kind){
   if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;idleRuneDungeonActiveKind=kind;renderIdleRuneDungeon(idleState);
   try{
     // Le donjon répond instantanément côté serveur : on impose un délai
     // d'exploration côté client pour que la fouille se ressente dans le jeu.
+    // Les étages intermédiaires (sans récompense) restent courts pour que la
+    // descente complète ne devienne pas une corvée ; seul l'étage du coffre
+    // garde la fouille longue.
+    const expectedFloor=(idleState?.runeDungeon?.floor||0)+1;
+    const finalFloor=expectedFloor>=(idleState?.runeDungeon?.floors||10);
     const [result]=await Promise.all([
       api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})}),
-      new Promise((resolve)=>setTimeout(resolve,IDLE_RUNE_DUNGEON_EXPLORE_MS))
+      new Promise((resolve)=>setTimeout(resolve,finalFloor?IDLE_RUNE_DUNGEON_EXPLORE_MS:IDLE_RUNE_DUNGEON_FLOOR_MS))
     ]);
     idleState=result.state;renderIdleState(result.state);
-    showIdleRuneDungeonReward(result);
-    if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();
+    if(result.cleared){
+      showIdleRuneDungeonReward(result);
+      if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();
+    }else{
+      idleSpawnFloat(`ÉTAGE ${result.floor}/${result.floors}`,'xp');
+      if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(false);
+    }
   }catch(e){idleNotify(e.message,'error');}
   finally{idleRuneDungeonBusy=false;idleRuneDungeonActiveKind=null;renderIdleRuneDungeon(idleState);}
 }

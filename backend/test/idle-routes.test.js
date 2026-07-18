@@ -2068,3 +2068,64 @@ test('fiche publique : le DPS affiché aux autres joueurs exclut le buff d’orb
   assert.ok(without.json.player.totalRate > 0);
   assert.equal(withBuff.json.player.totalRate, without.json.player.totalRate);
 });
+
+test('Donjon des Objets : descente de 10 étages — comptée/payée à l’étage 1, équipement uniquement au 10e', async () => {
+  const user = dbUser({ essence: 100000, idleBestStage: 12, idleStage: 12, idleEnemyHp: enemyMaxHp(12) });
+  // Compteurs persistants simulés : étage courant (période 'current') et
+  // tentatives du jour (période 'day').
+  const counters = new Map();
+  let nextCounterId = 1;
+  prisma.user.findUnique = async () => user;
+  prisma.user.updateMany = async () => ({ count: 1 });
+  prisma.idleProgressCounter.findUnique = async ({ where: { userId_key_period: { key, period } } }) => {
+    const row = counters.get(`${key}:${period}`);
+    return row ? { id: row.id, key, period, value: row.value } : null;
+  };
+  prisma.idleProgressCounter.findMany = async () => [...counters.entries()].map(([mapKey, row]) => {
+    const [key, period] = mapKey.split(/:(.+)/);
+    return { key, period, value: row.value };
+  });
+  prisma.idleProgressCounter.create = async ({ data }) => {
+    const row = { id: nextCounterId++, value: data.value };
+    counters.set(`${data.key}:${data.period}`, row);
+    return row;
+  };
+  prisma.idleProgressCounter.updateMany = async ({ where, data }) => {
+    for (const row of counters.values()) {
+      if (row.id !== where.id) continue;
+      if (where.value !== undefined && row.value !== where.value) return { count: 0 };
+      row.value = data.value?.increment != null ? row.value + data.value.increment : data.value;
+      return { count: 1 };
+    }
+    return { count: 0 };
+  };
+  let itemsCreated = 0;
+  prisma.idleItem.count = async () => 0;
+  prisma.idleItem.findMany = async () => [];
+  prisma.idleItem.create = async ({ data }) => { itemsCreated++; return { id: 'loot-1', ...data }; };
+
+  for (let step = 1; step <= 9; step++) {
+    const res = await app.request('/api/idle/rune-dungeon/attempt', { method: 'POST', cookie: app.authCookie('u1'), body: { kind: 'rune1' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.cleared, false);
+    assert.equal(res.json.floor, step);
+    assert.equal(res.json.loot, undefined); // les 9 premiers étages ne donnent RIEN
+    assert.equal(res.json.state.runeDungeon.floor, step);
+    assert.equal(res.json.state.runeDungeon.nextCost, 0); // descente entamée : le prochain clic est gratuit
+  }
+  assert.equal(itemsCreated, 0);
+  assert.equal(counters.get('rune_dungeon_run:current').value, 9);
+
+  const final = await app.request('/api/idle/rune-dungeon/attempt', { method: 'POST', cookie: app.authCookie('u1'), body: { kind: 'rune1' } });
+  assert.equal(final.status, 200);
+  assert.equal(final.json.cleared, true);
+  assert.equal(final.json.floor, 10);
+  assert.ok(final.json.loot);
+  assert.equal(final.json.loot.kind, 'rune1');
+  assert.equal(itemsCreated, 1);
+  // Le donjon est prêt pour une nouvelle descente, et les 10 clics n'ont
+  // compté qu'UNE tentative gratuite du jour.
+  assert.equal(final.json.state.runeDungeon.floor, 0);
+  assert.equal(counters.get('rune_dungeon_run:current').value, 0);
+  assert.equal(counters.get(`rune_dungeon:${new Date().toISOString().slice(0, 10)}`).value, 1);
+});
