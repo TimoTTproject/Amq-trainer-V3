@@ -96,6 +96,26 @@ test('synergie : les saisons et parties d’un anime comptent comme une seule li
   assert.equal(mergedInsteadOfTwoDuos.bonus,.25);
 });
 
+test('synergie : les cours de Bleach Thousand-Year Blood War comptent avec Bleach',()=>{
+  const slot=(id,series)=>({characterId:id,character:{series}});
+  const bleachAlliance=synergyForSlots([
+    slot(1,'Bleach'),
+    slot(2,'Bleach: Sennen Kessen-hen'),
+    slot(3,'Bleach: Sennen Kessen-hen - Ketsubetsu-tan'),
+  ]);
+  assert.equal(bleachAlliance.key,'license');
+  assert.equal(bleachAlliance.bonus,.25);
+  assert.equal(bleachAlliance.bestSeries,'Bleach');
+  assert.deepEqual(bleachAlliance.series,[{name:'Bleach',count:3,tier:'alliance',bonus:.25}]);
+
+  // Une entrée de film ne doit pas être absorbée sur le seul préfixe.
+  const movie=synergyForSlots([
+    slot(1,'Bleach'),
+    slot(2,'Bleach: Memories of Nobody'),
+  ]);
+  assert.equal(movie.key,'none');
+});
+
 test('activités : le défi de licence reconnaît une alliance entre saisons',()=>{
   const counters=new Map([['kill:2026-07-17',150]]);
   const slots=['Jujutsu Kaisen','Jujutsu Kaisen Season 2','Jujutsu Kaisen Part 2'].map((series,index)=>({characterId:index+1,character:{series}}));

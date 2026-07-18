@@ -1142,6 +1142,14 @@ async function applyActiveDamage(tx, user, damage) {
 // pas fusionner arbitrairement les spin-offs et suites portant un autre nom.
 function synergyLicenseName(series) {
   const original=String(series||'').replace(/\s+/g,' ').trim();if(!original)return'';
+  // AniList classe les personnages de Thousand-Year Blood War sous les
+  // différentes entrées de cette suite, alors qu'ils appartiennent tous à
+  // la licence Bleach pour la composition d'équipe. Ce sous-titre n'est pas
+  // un simple marqueur "Season 2", il doit donc être normalisé explicitement.
+  // On limite volontairement la règle à la série TV et à ses cours : les
+  // films "Memories of Nobody", "The DiamondDust Rebellion", etc. ne sont
+  // pas fusionnés accidentellement par un simple préfixe "Bleach:".
+  if (/^bleach\s*:\s*(?:sennen\s+kessen-?hen|thousand[\s-]+year\s+blood\s+war)(?:\b|\s*[-:–—])/i.test(original)) return 'Bleach';
   const withoutSeason=original
     .replace(/\s*[:\-\u2013\u2014]?\s*(?:(?:the\s+)?final\s+season|the\s+final|kanketsu-?hen)\s*$/i,'')
     .replace(/\s*[:\-\u2013\u2014]?\s*(?:(?:\d+(?:st|nd|rd|th)\s+)?(?:season|saison|cour|part|partie)\s*\d*|(?:season|saison|cour|part|partie)\s*\d+|s\d+)\s*$/i,'')
