@@ -1547,8 +1547,6 @@ async function chooseIdleStage(stage){
   // souvenir avoir activé quoi que ce soit).
   const bestStage=idleState?.battle?.runBestStage||idleState?.battle?.bestStage||stage;
   if(stage<bestStage){
-    const farmMode=idleState?.battle?.farmMode;
-    if(farmMode&&!farmMode.unlocked){idleNotify(`Mode Farm débloqué au Rang ${farmMode.level} — reviens plus tard pour rejouer un niveau passé.`,'info');return;}
     if(!window.confirm(`Revenir au niveau ${stage} active le mode Farm : ta progression restera bloquée sur cette vague jusqu'à ce que tu repasses en Progression. Continuer ?`))return;
   }
   try{const state=await api('/api/idle/stage',{method:'POST',body:JSON.stringify({stage})});renderIdleState(state);idleNotify(stage<state.battle.runBestStage?`Niveau ${stage} sélectionné · mode Farm actif.`:`Retour au niveau maximum ${stage} · progression active.`,'success');}catch(e){idleNotify(e.message,'error');}

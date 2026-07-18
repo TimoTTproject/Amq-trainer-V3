@@ -2636,11 +2636,9 @@ router.post('/boss/engage', requireAuth, requireIdleBeta, rateLimit({ max: 20, n
 });
 router.post('/formation',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-formation'}),async(req,res)=>{const formation=String(req.body?.formation||'');if(!FORMATIONS[formation])return res.status(400).json({error:'Formation invalide'});await withSettle(req.user.id,async(tx,u)=>tx.user.update({where:{id:u.id},data:{idleFormation:formation}}));void recordIdleEvent(req.user.id,'formation_change');res.json(await buildState(req.user.id));});
 router.post('/stage',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-stage-select'}),async(req,res)=>{const target=Number(req.body?.stage);if(!Number.isInteger(target)||target<1)return res.status(400).json({error:'Niveau de combat invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const best=Math.max(1,user.idleRunBestStage||1,user.idleStage||1);if(target>best)throw new IdleError(400,`Le niveau ${target} n’est pas encore débloqué`);
-  // Revisiter un niveau sous le record active le mode Farm (cf. plus bas) : même
-  // verrou de Rang que le bouton dédié "Répéter la vague", sinon la navigation
-  // de niveau devient une porte dérobée pour y entrer avant d'avoir compris ce
-  // que ce mode implique.
-  if(target<best&&(user.idleRankLevel||1)<FARM_MODE_UNLOCK_LEVEL)throw new IdleError(403,`Mode Farm débloqué au Rang ${FARM_MODE_UNLOCK_LEVEL}`);
+  // Changer de monde (voyage rapide) doit rester accessible dès le niveau 1 :
+  // seul le bouton dédié "Répéter la vague" (/battle-mode) reste verrouillé au
+  // Rang FARM_MODE_UNLOCK_LEVEL.
   await tx.user.update({where:{id:user.id},data:{idleStage:target,idleWaveKills:0,idleEnemyHp:enemyUnitMaxHp(target,0),idleBossProgress:0,idleBossStartedAt:null,idleBossEngaged:false,idleBattleMode:target<best?'farm':'progress'}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}void recordIdleEvent(req.user.id,'stage_select',{stage:target});res.json(await buildState(req.user.id));});
 router.post('/team-leader',requireAuth,requireIdleBeta,rateLimit({max:30,name:'idle-team-leader'}),async(req,res)=>{const characterId=Number(req.body?.characterId);if(!Number.isInteger(characterId))return res.status(400).json({error:'Personnage invalide'});try{await withSettle(req.user.id,async(tx,user)=>{const active=await tx.idleSlot.findFirst({where:{userId:user.id,characterId},select:{id:true}});if(!active)throw new IdleError(400,'Ce personnage doit être dans ton équipe');await tx.user.update({where:{id:user.id},data:{idleLeaderCharacterId:characterId}});});}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}res.json(await buildState(req.user.id));});
 
