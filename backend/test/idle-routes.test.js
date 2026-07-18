@@ -220,8 +220,8 @@ test('classements Idle : progression, vitesse, Faille et collection exposent une
   let capturedArgs=null;
   prisma.user.findMany=async(args)=>{capturedArgs=args;return[rival,{...me,_count:{dojoRecruits:6}}];};
   prisma.idleRunHistory.findMany=async()=>[
-    {userId:'u2',durationSeconds:900,bestStage:100,completedAt:new Date(),user:rival},
-    {userId:'u2',durationSeconds:1200,bestStage:110,completedAt:new Date(),user:rival},
+    {userId:'u2',durationSeconds:900,bestStage:100,teamDps:5000,wisdomGained:10,completedAt:new Date(),user:rival},
+    {userId:'u2',durationSeconds:1200,bestStage:110,teamDps:4400,wisdomGained:18,completedAt:new Date(),user:rival},
   ];
   prisma.idleProgressCounter.findMany=async(args)=>args.where?.key==='rift_floor'?[{userId:'u2',value:17,user:rival}]:[];
   const stage=await app.request('/api/idle/leaderboard?type=stage',{cookie:app.authCookie('u1')});
@@ -232,10 +232,14 @@ test('classements Idle : progression, vitesse, Faille et collection exposent une
   const speed=await app.request('/api/idle/leaderboard?type=speed',{cookie:app.authCookie('u1')});
   const rift=await app.request('/api/idle/leaderboard?type=rift',{cookie:app.authCookie('u1')});
   const collection=await app.request('/api/idle/leaderboard?type=collection',{cookie:app.authCookie('u1')});
+  const dps=await app.request('/api/idle/leaderboard?type=dps',{cookie:app.authCookie('u1')});
+  const efficiency=await app.request('/api/idle/leaderboard?type=efficiency',{cookie:app.authCookie('u1')});
   assert.equal(stage.status,200);assert.equal(stage.json.players[0].metric,120);
   assert.equal(speed.json.players.length,1);assert.equal(speed.json.players[0].metric,900);
   assert.equal(rift.json.players[0].metric,17);assert.ok(rift.json.period);
   assert.equal(collection.json.players[0].metric,14);
+  assert.equal(dps.json.players[0].metric,5000);
+  assert.equal(efficiency.json.players[0].metric,54);
 });
 
 test('classement Idle "level" : classement de Rang de compte séparé de la progression de combat',async()=>{

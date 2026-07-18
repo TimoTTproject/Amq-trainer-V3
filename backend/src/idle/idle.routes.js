@@ -2094,7 +2094,7 @@ router.post('/onboarding', requireAuth, requireIdleBeta, rateLimit({ max: 10, na
   } catch(e) { if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e; }
 });
 
-const IDLE_LEADERBOARD_TYPES = new Set(['stage','level','speed','rift','collection']);
+const IDLE_LEADERBOARD_TYPES = new Set(['stage','level','speed','rift','collection','dps','efficiency']);
 const idlePublicUserSelect = {id:true,displayName:true,avatarUrl:true,idleBestStage:true,idleRankLevel:true,prestigeLevel:true,idleHeroClass:true};
 
 function idleLeaderboardPlayer(user, metric, metricLabel, me) {
@@ -2108,7 +2108,11 @@ function idleLeaderboardPlayer(user, metric, metricLabel, me) {
 router.get('/leaderboard', requireAuth, requireIdleBeta, async(req,res)=>{
   const type=IDLE_LEADERBOARD_TYPES.has(String(req.query.type||''))?String(req.query.type):'stage';
   let players=[];
-  if(type==='speed'){
+  if(type==='dps'||type==='efficiency'){
+    const runs=await prisma.idleRunHistory.findMany({where:{durationSeconds:{gt:0}},include:{user:{select:idlePublicUserSelect}},orderBy:{completedAt:'desc'},take:1000});
+    const bestByUser=new Map();for(const run of runs){if(!run.user)continue;const metric=type==='dps'?Number(run.teamDps||0):Number(run.wisdomGained||0)/(run.durationSeconds/3600);const previous=bestByUser.get(run.userId);if(!previous||metric>previous.metric)bestByUser.set(run.userId,{run,metric});}
+    players=[...bestByUser.values()].sort((a,b)=>b.metric-a.metric||a.run.completedAt-b.run.completedAt).slice(0,50).map(({run,metric})=>idleLeaderboardPlayer(run.user,metric,type==='dps'?'DPS de fin de run':'Sagesse par heure',req.user.id));
+  }else if(type==='speed'){
     const runs=await prisma.idleRunHistory.findMany({
       where:{durationSeconds:{gt:0},bestStage:{gte:PRESTIGE_MIN_STAGE}},
       include:{user:{select:idlePublicUserSelect}},orderBy:[{durationSeconds:'asc'},{bestStage:'desc'},{completedAt:'asc'}],take:300,
@@ -2179,12 +2183,13 @@ router.get('/strategy-lab',requireAuth,requireIdleBeta,rateLimit({max:30,name:'i
     loadSlots(prisma,user.id),loadAncientLevels(prisma,user.id),
     prisma.dojoRecruit.findMany({where:{userId:user.id},include:{character:{select:{id:true,name:true,imageUrl:true,rarity:true,series:true}}}}),
     prisma.idleTeamPreset.findMany({where:{userId:user.id},orderBy:{updatedAt:'desc'}}),
-    prisma.idleItem.findMany({where:{userId:user.id,equippedCharacterId:{not:null}}}),
+    prisma.idleItem.findMany({where:{userId:user.id}}),
   ]);
   const recruitCount=recruits.length;
   const recruitByCharacter=new Map(recruits.map((recruit)=>[recruit.characterId,recruit]));
   const itemsByCharacter=new Map();
   for(const item of items){const list=itemsByCharacter.get(item.equippedCharacterId)||[];list.push(item);itemsByCharacter.set(item.equippedCharacterId,list);}
+  const itemById=new Map(items.map((item)=>[item.id,item]));
   const unlocked=Math.max(1,Math.min(MAX_SLOTS,user.idleSlotsUnlocked||1));
   const leaderFor=(slots,preferred)=>slots.some((slot)=>slot.characterId===preferred)?preferred:(slots.find((slot)=>slot.character)?.characterId||null);
   const project=(slots,formation,preferredLeader)=>{
@@ -2206,7 +2211,8 @@ router.get('/strategy-lab',requireAuth,requireIdleBeta,rateLimit({max:30,name:'i
       const slotIndex=Number(saved.slotIndex);const characterId=Number(saved.characterId);const recruit=recruitByCharacter.get(characterId);
       if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=unlocked||!recruit?.character||seen.has(characterId))return null;
       seen.add(characterId);
-      return {slotIndex,characterId,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened,awakenStars:recruit.awakenStars||0,character:recruit.character,items:itemsByCharacter.get(characterId)||[],leader:!!saved.leader};
+      const savedItems=Array.isArray(saved.equipmentIds)?saved.equipmentIds.map((id)=>itemById.get(String(id))).filter(Boolean):(itemsByCharacter.get(characterId)||[]);
+      return {slotIndex,characterId,level:recruit.trainingLevel||1,ascension:recruit.idleAscension||0,awakened:!!recruit.awakened,awakenStars:recruit.awakenStars||0,character:recruit.character,items:savedItems,leader:!!saved.leader};
     }).filter(Boolean).sort((a,b)=>a.slotIndex-b.slotIndex);
     const formation=FORMATIONS[preset.formation]?preset.formation:'balanced';
     const preferredLeader=slots.find((slot)=>slot.leader)?.characterId||slots[0]?.characterId||null;
@@ -2727,14 +2733,16 @@ router.post('/run-blessing/reroll',requireAuth,requireIdleBeta,rateLimit({max:30
 });
 router.post('/team-preset/save',requireAuth,requireIdleBeta,rateLimit({max:15,name:'idle-preset'}),idleUserLockMiddleware,async(req,res)=>{
   const name=String(req.body?.name||'').trim().slice(0,24);if(!name)return res.status(400).json({error:'Nom de squad requis'});
-  const [slots,user,presets]=await Promise.all([loadSlots(prisma,req.user.id),prisma.user.findUnique({where:{id:req.user.id},select:{idleFormation:true,idleLeaderCharacterId:true,prestigeLevel:true,idleRankLevel:true,idleBestStage:true,idleRunBestStage:true,idleStage:true}}),prisma.idleTeamPreset.findMany({where:{userId:req.user.id},select:{name:true,formation:true,slots:true}})]);
+  const [slots,user,presets,items]=await Promise.all([loadSlots(prisma,req.user.id),prisma.user.findUnique({where:{id:req.user.id},select:{idleFormation:true,idleLeaderCharacterId:true,idleBattleMode:true,idleBattleSpeed:true,idleAutoSkills:true,prestigeLevel:true,idleRankLevel:true,idleBestStage:true,idleRunBestStage:true,idleStage:true}}),prisma.idleTeamPreset.findMany({where:{userId:req.user.id},select:{name:true,formation:true,slots:true}}),prisma.idleItem.findMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},select:{id:true,equippedCharacterId:true}})]);
   const squadSlots=squadPresetSlots(user,presets);const target=squadSlots.find((slot)=>slot.name===name)||squadSlots.find((slot)=>slot.index===Number(req.body?.slotIndex));
   if(!target)return res.status(400).json({error:'Slot de squad invalide'});
   if(!target.unlocked)return res.status(403).json({error:`${target.name} se débloque avec ${target.unlock.label}`});
   const savedName=target.name;const existing=await prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name:savedName}}});
   const count=await prisma.idleTeamPreset.count({where:{userId:req.user.id}});
   if(count>=SQUAD_PRESET_LIMIT&&!existing)return res.status(400).json({error:`Maximum de ${SQUAD_PRESET_LIMIT} squads`});
-  const squadSlotsData=slots.filter((s)=>s.characterId).map((s)=>({slotIndex:s.slotIndex,characterId:s.characterId,leader:s.characterId===user.idleLeaderCharacterId}));
+  const itemsByCharacter=new Map();for(const item of items){const list=itemsByCharacter.get(item.equippedCharacterId)||[];list.push(item.id);itemsByCharacter.set(item.equippedCharacterId,list);}
+  const profile={battleMode:user.idleBattleMode||'progress',battleSpeed:user.idleBattleSpeed||1,autoSkills:!!user.idleAutoSkills};
+  const squadSlotsData=slots.filter((s)=>s.characterId).map((s,index)=>({slotIndex:s.slotIndex,characterId:s.characterId,leader:s.characterId===user.idleLeaderCharacterId,equipmentIds:itemsByCharacter.get(s.characterId)||[],...(index===0?{profile}:{})}));
   if(new Set(squadSlotsData.map((s)=>s.characterId)).size!==squadSlotsData.length)return res.status(400).json({error:'Un personnage ne peut pas être dupliqué dans la même squad'});
   await prisma.idleTeamPreset.upsert({where:{userId_name:{userId:req.user.id,name:savedName}},update:{slots:squadSlotsData,formation:user.idleFormation},create:{userId:req.user.id,name:savedName,slots:squadSlotsData,formation:user.idleFormation}});
   res.json(await buildState(req.user.id));
@@ -2743,7 +2751,7 @@ router.post('/team-preset/load',requireAuth,requireIdleBeta,rateLimit({max:15,na
   const name=String(req.body?.name||'');const [preset,user,presets]=await Promise.all([prisma.idleTeamPreset.findUnique({where:{userId_name:{userId:req.user.id,name}}}),prisma.user.findUnique({where:{id:req.user.id},select:{prestigeLevel:true,idleRankLevel:true,idleBestStage:true,idleRunBestStage:true,idleStage:true}}),prisma.idleTeamPreset.findMany({where:{userId:req.user.id},select:{name:true,formation:true,slots:true}})]);
   if(!preset)return res.status(404).json({error:'Squad introuvable'});
   const target=squadPresetSlots(user,presets).find((slot)=>slot.name===preset.name);if(target&&!target.unlocked)return res.status(403).json({error:`${target.name} se débloque avec ${target.unlock.label}`});
-  await withSettle(req.user.id,async(tx,user)=>{await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null,level:1,ascension:0}});const used=new Set();let leaderCharacterId=null;for(const item of Array.isArray(preset.slots)?preset.slots:[]){const slotIndex=Number(item.slotIndex);const characterId=Number(item.characterId);if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=user.idleSlotsUnlocked||!Number.isInteger(characterId)||used.has(characterId))continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId}}});if(owned){used.add(characterId);if(item.leader)leaderCharacterId=characterId;await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0},create:{userId:user.id,slotIndex,characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0}});}}await tx.user.update({where:{id:user.id},data:{idleFormation:FORMATIONS[preset.formation]?preset.formation:'balanced',idleLeaderCharacterId:leaderCharacterId||[...used][0]||null}});});
+  await withSettle(req.user.id,async(tx,user)=>{const savedSlots=Array.isArray(preset.slots)?preset.slots:[];const profile=savedSlots.find((item)=>item?.profile)?.profile||null;const restoreEquipment=savedSlots.some((item)=>Array.isArray(item?.equipmentIds));await tx.idleSlot.updateMany({where:{userId:user.id},data:{characterId:null,assignedAt:null,level:1,ascension:0}});if(restoreEquipment)await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:{not:null}},data:{equippedCharacterId:null}});const used=new Set();let leaderCharacterId=null;for(const item of savedSlots){const slotIndex=Number(item.slotIndex);const characterId=Number(item.characterId);if(!Number.isInteger(slotIndex)||slotIndex<0||slotIndex>=user.idleSlotsUnlocked||!Number.isInteger(characterId)||used.has(characterId))continue;const owned=await tx.dojoRecruit.findUnique({where:{userId_characterId:{userId:user.id,characterId}}});if(owned){used.add(characterId);if(item.leader)leaderCharacterId=characterId;await tx.idleSlot.upsert({where:{userId_slotIndex:{userId:user.id,slotIndex}},update:{characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0},create:{userId:user.id,slotIndex,characterId,assignedAt:new Date(),level:owned.trainingLevel||1,ascension:owned.idleAscension||0}});if(restoreEquipment&&Array.isArray(item.equipmentIds)){const savedItems=await tx.idleItem.findMany({where:{userId:user.id,id:{in:item.equipmentIds.map(String)}},select:{id:true,kind:true}});const kinds=new Set();for(const saved of savedItems){if(kinds.has(saved.kind))continue;kinds.add(saved.kind);await tx.idleItem.update({where:{id:saved.id},data:{equippedCharacterId:characterId}});}}}}const speed=Number(profile?.battleSpeed||1);const data={idleFormation:FORMATIONS[preset.formation]?preset.formation:'balanced',idleLeaderCharacterId:leaderCharacterId||[...used][0]||null};if(profile){data.idleBattleMode=['progress','farm'].includes(profile.battleMode)?profile.battleMode:'progress';data.idleBattleSpeed=BATTLE_SPEED_UNLOCKS[speed]!=null&&(user.idleRankLevel||1)>=BATTLE_SPEED_UNLOCKS[speed]?speed:1;data.idleAutoSkills=!!profile.autoSkills&&(user.idleRankLevel||1)>=AUTO_SKILLS_UNLOCK_LEVEL;}await tx.user.update({where:{id:user.id},data});});
   void recordIdleEvent(req.user.id,'preset_load');res.json(await buildState(req.user.id));
 });
 router.post('/auto-skills', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-auto-skills' }), async(req,res)=>{const enabled=!!req.body?.enabled;const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleRankLevel:true}});if((user.idleRankLevel||1)<AUTO_SKILLS_UNLOCK_LEVEL)return res.status(403).json({error:`Compétences automatiques débloquées au Rang ${AUTO_SKILLS_UNLOCK_LEVEL}`});await withSettle(req.user.id,async(tx,u)=>{await tx.user.update({where:{id:u.id},data:{idleAutoSkills:enabled}});});res.json(await buildState(req.user.id));});
