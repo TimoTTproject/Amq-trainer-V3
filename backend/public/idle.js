@@ -3,6 +3,7 @@
 // Réutilise les globals de main.js (api, showView, currentUser, escapeHtml) et
 // cardHTML() de gacha.js pour le sélecteur de personnage (modale) — le roster
 // assigné a sa propre ligne de héros compacte, voir idleSlotHTML.
+const IDLE_BOSS_MECHANIC_ICONS = { shield:'fa-shield-halved', rage:'fa-fire', regen:'fa-heart-pulse', counter:'fa-people-arrows', ward:'fa-link-slash', focus:'fa-crosshairs' };
 let idleState = null; // dernier état reçu du serveur
 let idleTicker = null;
 let idleSyncTicker = null; // resynchronisation périodique légère (cf. openIdle) — sans ça, un joueur qui ne clique jamais ne verrait aucun kill se produire réellement côté serveur
@@ -1359,7 +1360,22 @@ function renderIdleBattle(battle, dojo, prevBattle) {
   const enemiesRemaining = Math.max(1, battle?.enemiesRemaining || enemiesRequired);
   const enemyNumber = Math.max(1, Math.min(enemiesRequired, battle?.enemyNumber || 1));
   const mechanicEl = document.getElementById('idle-boss-mechanic');
-  if (mechanicEl) { const mechanic=battle?.mechanic;mechanicEl.classList.toggle('hidden', !boss); mechanicEl.innerHTML = boss&&mechanic ? `<i class="fas fa-shield-halved"></i> <b>${escapeHtml(mechanic.name)}</b> · ${escapeHtml(mechanic.description)}${mechanic.required?` <strong>${Math.min(mechanic.progress,mechanic.required)}/${mechanic.required}</strong>`:''}` : ''; }
+  if (mechanicEl) {
+    const mechanic=battle?.mechanic;
+    mechanicEl.classList.toggle('hidden', !boss||!mechanic);
+    mechanicEl.classList.toggle('idle-boss-mechanic-warning',mechanic?.key==='rage'||mechanic?.key==='counter');
+    mechanicEl.innerHTML = boss&&mechanic ? `<i class="fas ${IDLE_BOSS_MECHANIC_ICONS[mechanic.key]||'fa-shield-halved'}"></i><span><b>${escapeHtml(mechanic.name)}</b><small>${escapeHtml(mechanic.description)}</small></span>${mechanic.required?`<strong>${Math.min(mechanic.progress,mechanic.required)}/${mechanic.required}</strong>`:''}` : '';
+    // Le joueur doit voir tout de suite QUEL bouton presser pour cette mécanique
+    // (retour joueur : la phase de Boss n'indiquait pas clairement l'action à
+    // faire) : on fait briller le bouton concerné plutôt que de compter sur la
+    // seule description texte.
+    const wantsAttack=boss&&mechanic&&['shield','focus'].includes(mechanic.key)&&mechanic.progress<(mechanic.required||1);
+    const wantsUltimate=boss&&mechanic&&(mechanic.key==='regen'||(mechanic.key==='focus'&&mechanic.progress>=(mechanic.required||1)));
+    const wantsCombo=boss&&mechanic&&mechanic.key==='ward'&&mechanic.progress<1;
+    document.getElementById('idle-click-btn')?.classList.toggle('idle-mechanic-target',!!wantsAttack);
+    document.getElementById('idle-skill-burst')?.classList.toggle('idle-mechanic-target',!!wantsUltimate);
+    document.getElementById('idle-skill-team')?.classList.toggle('idle-mechanic-target',!!wantsCombo);
+  }
   const remaining = Math.max(0, battle?.hp ?? ((battle?.xpForNextStage || 0) - (battle?.xpIntoStage || 0)));
   const total = Math.max(1, battle?.maxHp || battle?.xpForNextStage || 1);
   const guardianName = battle?.world?.enemyName || (boss ? `Boss de la zone ${zone}` : 'Gardien ennemi');
