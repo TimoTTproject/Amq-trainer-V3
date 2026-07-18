@@ -6650,6 +6650,7 @@ body.idle-fullscreen #app { padding-top: 0; }
 /* Arsenal et fiches de héros : les décisions restent explicites sans devoir
    assigner un personnage ni risquer un recyclage accidentel. */
 .idle-inventory-bulk{display:flex;align-items:center;gap:8px;margin:8px 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg-2)}.idle-inventory-bulk>span{flex:1;color:var(--text-2);font-size:13px;text-align:center}.idle-inventory-bulk button{justify-content:center;font-size:12px}.idle-inventory-bulk .danger:not(:disabled){color:#fb7185}
+.idle-inventory-bulk-rules{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--bg-2)}.idle-inventory-bulk-rules button{font-size:12px}
 .idle-item-card.selected{outline:2px solid var(--accent-2);background:color-mix(in srgb,var(--accent-2) 5%,var(--bg-2))}.idle-item-card-actions{display:flex;align-items:center}.idle-item-card-actions button{min-height:30px!important;width:28px!important;border:0;background:transparent;color:var(--text-2)}.idle-item-card-actions button:not(:disabled):hover{color:var(--accent-2)}.idle-item-stats em{margin-top:2px;color:var(--text-2);font-size:11px;font-style:normal;line-height:1.25}.idle-item-card>footer{grid-template-columns:repeat(auto-fit,minmax(94px,1fr))}
 .idle-item-enhance-group{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}.idle-item-enhance-group button{flex:1;min-width:76px}
 /* Affixes secondaires (épique+) : lignes pleine largeur sous la paire base/affixe
