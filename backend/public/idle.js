@@ -1075,7 +1075,11 @@ function renderIdleTeamStrategy(state) {
   const presets=document.getElementById('idle-presets');if(presets){const squads=state.strategy?.squads?.slots||[];presets.innerHTML=squads.length?`<p class="idle-formation-help"><i class="fas fa-circle-info"></i><span><b>Ces compositions sont des sauvegardes d’équipe.</b> Charger une composition remplace l’équipe active ; ce ne sont pas encore des équipes parallèles qui farm en même temps.</span></p>${squads.map((squad)=>`<article class="idle-squad-slot ${squad.unlocked?'unlocked':'locked'} ${squad.saved?'saved':''}"><header><i class="fas ${escapeHtml(squad.icon||'fa-users')}"></i><span><small>${squad.unlocked?'COMPOSITION DISPONIBLE':`BLOQUÉ · ${escapeHtml(squad.unlock?.label||'objectif requis')}`}</small><b>${escapeHtml(squad.name)}</b><em>${escapeHtml(squad.purpose||'Composition sauvegardée')}</em></span></header><p>${escapeHtml(squad.bonus||'')}</p><footer><button class="btn-secondary" data-preset-save-slot="${squad.index}" ${squad.unlocked?'':'disabled'}><i class="fas fa-floppy-disk"></i> Sauver ici</button><button class="btn-primary" data-preset-load="${escapeHtml(squad.name)}" ${squad.saved&&squad.unlocked?'':'disabled'} title="Remplace l’équipe active par cette composition sauvegardée"><i class="fas fa-play"></i> Charger${squad.saved?` · ${squad.size}/10`:''}</button></footer></article>`).join('')}`:`<p class="hint">Aucune composition disponible.</p>`;}
 }
 
-const IDLE_ITEM_META=Object.fromEntries(Array.from({length:6},(_,index)=>[`rune${index+1}`,{label:`Objet ${index+1}`,icon:'fa-diamond'}]));
+// Une icône distincte par nature d'objet (au lieu du même losange pour les
+// six) — cohérente avec sa stat principale : rune5/fa-crosshairs reprend
+// volontairement l'icône de la mécanique de Boss "Faille ciblée".
+const IDLE_ITEM_ICONS=['fa-fire','fa-bullseye','fa-wave-square','fa-bolt','fa-crosshairs','fa-sun'];
+const IDLE_ITEM_META=Object.fromEntries(Array.from({length:6},(_,index)=>[`rune${index+1}`,{label:`Objet ${index+1}`,icon:IDLE_ITEM_ICONS[index]}]));
 const IDLE_RUNE_KINDS=Object.keys(IDLE_ITEM_META);
 const IDLE_STAT_LABELS={dps:'DPS',click:'Clic',burst:'Ultime',team:'Combo',boss:'Boss',salvage:'Recyclage'};
 const IDLE_SET_MODE_META={dps:{label:'Production',icon:'fa-chart-line'},click:{label:'Clic',icon:'fa-hand-fist'},burst:{label:'Ultime',icon:'fa-bolt'},team:{label:'Combo',icon:'fa-users-rays'},boss:{label:'Boss',icon:'fa-skull'},salvage:{label:'Recyclage',icon:'fa-recycle'}};

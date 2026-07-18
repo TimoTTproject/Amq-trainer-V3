@@ -425,12 +425,12 @@ function bossChestRewards(tier) {
 
 const IDLE_ITEM_CAPACITY=120;
 const ITEM_KINDS={
-  rune1:{label:'Objet 1',icon:'fa-diamond',effectKey:'assault',effectLabel:'Stat principale'},
-  rune2:{label:'Objet 2',icon:'fa-diamond',effectKey:'precision',effectLabel:'Stat principale'},
-  rune3:{label:'Objet 3',icon:'fa-diamond',effectKey:'resonance',effectLabel:'Stat principale'},
-  rune4:{label:'Objet 4',icon:'fa-diamond',effectKey:'overdrive',effectLabel:'Stat principale'},
-  rune5:{label:'Objet 5',icon:'fa-diamond',effectKey:'focus',effectLabel:'Stat principale'},
-  rune6:{label:'Objet 6',icon:'fa-diamond',effectKey:'aura',effectLabel:'Stat principale'},
+  rune1:{label:'Objet 1',icon:'fa-fire',effectKey:'assault',effectLabel:'Stat principale'},
+  rune2:{label:'Objet 2',icon:'fa-bullseye',effectKey:'precision',effectLabel:'Stat principale'},
+  rune3:{label:'Objet 3',icon:'fa-wave-square',effectKey:'resonance',effectLabel:'Stat principale'},
+  rune4:{label:'Objet 4',icon:'fa-bolt',effectKey:'overdrive',effectLabel:'Stat principale'},
+  rune5:{label:'Objet 5',icon:'fa-crosshairs',effectKey:'focus',effectLabel:'Stat principale'},
+  rune6:{label:'Objet 6',icon:'fa-sun',effectKey:'aura',effectLabel:'Stat principale'},
 };
 const RUNE_KINDS=Object.keys(ITEM_KINDS);
 const ITEM_EFFECTS={
