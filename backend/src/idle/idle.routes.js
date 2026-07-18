@@ -2844,7 +2844,10 @@ router.post('/equipment/transfer',requireAuth,requireIdleBeta,rateLimit({max:20,
       // Libère d'abord les emplacements de destination de même nature (comme
       // /equipment/equip pour un objet seul), puis transfère tout d'un coup.
       await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:toSlot.characterId,kind:{in:kinds}},data:{equippedCharacterId:null}});
-      await tx.idleItem.updateMany({where:{id:{in:items.map((item)=>item.id)}},data:{equippedCharacterId:toSlot.characterId}});
+      // Protège automatiquement le set qu'on vient sciemment de déplacer : un
+      // recyclage groupé juste après un transfert perdrait sinon la build
+      // qu'on venait de construire — cohérent avec la Protection intelligente.
+      await tx.idleItem.updateMany({where:{id:{in:items.map((item)=>item.id)}},data:{equippedCharacterId:toSlot.characterId,locked:true}});
     });
     res.json(await buildState(req.user.id));
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
