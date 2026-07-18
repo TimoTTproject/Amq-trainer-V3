@@ -3468,7 +3468,12 @@ router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ m
       // Fait avancer la famille a chaque tentative, meme a stage constant.
       const tier = Math.max(1, Math.floor(bestStage / 10)) + attemptsToday;
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
-      const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, 'Donjon des Objets');
+      // Le monde source doit varier avec le tier (comme le coffre de Boss),
+      // sinon le nom de base de l'objet (`${label} de ${world}`) reste
+      // toujours identique et seuls le set/la rareté changent — deux tirages
+      // consécutifs sur le même emplacement ont vite l'air d'être « le même
+      // objet » (retour joueur : le Donjon donne toujours les mêmes objets).
+      const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, campaignForStage(tier*10).name);
       result = { cost, loot };
     });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
