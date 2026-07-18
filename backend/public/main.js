@@ -377,7 +377,7 @@ async function api(path, opts = {}) {
       signal: controller.signal,
     });
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('Le serveur ne répond pas, réessaie dans un instant.');
+    if (e.name === 'AbortError') throw new Error('Le serveur ne répond pas, réessaie dans un instant.', { cause: e });
     throw e;
   } finally {
     clearTimeout(timeout);

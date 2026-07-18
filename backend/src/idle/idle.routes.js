@@ -1520,6 +1520,12 @@ async function buildState(userId) {
   // la chance affichée soit celle réellement tirée.
   const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+(combatWorld.modifier?.critBonus||0)+critUpgradeBonus(user.idleCritLevel)+blessingEffects.crit+characterPassiveTeamBonus(slots,'crit')));
   const uniqueActiveRoles=new Set(activeRoles).size;
+  // Aperçus « APRÈS ACHAT » à un niveau arbitraire — mêmes formules que les
+  // valeurs actuelles ci-dessus, pour les achats groupés (×5/×10/×100/MAX).
+  const upgradeBudget=Math.max(0,Number(user.essence)||0);
+  const clickDamageAt=(lvl)=>Math.max(clickDamage+1,Math.round((clickYield(lvl,clickAncientBonus)+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*buffClick*mechanicMultiplier*clickItems*blessingEffects.click));
+  const critChanceAt=(lvl)=>Math.min(.95,critChance+critUpgradeBonus(lvl)-critUpgradeBonus(user.idleCritLevel||0));
+  const cooldownSecondsAt=(lvl)=>({burst:Math.round(activeSkillCooldown(ULTIMATE_COOLDOWN_MS,activeSupportCount,lvl,blessingEffects.cooldown,passiveCooldownBonus)/1000),team:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,lvl,blessingEffects.cooldown,passiveCooldownBonus)/1000)});
   const burstPreview=Math.max(1,Math.round(ultimateBaseDamage(clickYield(user.idleClickLevel||0,clickAncientBonus),totalRate)*heroClass(user.idleHeroClass).burst*(heroSpec(user.idleHeroClass,user.idleHeroSpec).burst||1)*(combatWorld.modifier?.burst||1)*itemActionBonus(slots,'burst')*blessingEffects.burst));
   const teamPreview=activeRoles.length<2?0:Math.max(1,Math.floor(totalRate*(20+uniqueActiveRoles*5)*heroClass(user.idleHeroClass).team*(heroSpec(user.idleHeroClass,user.idleHeroSpec).team||1)*(combatWorld.modifier?.team||1)*itemActionBonus(slots,'team')*blessingEffects.team));
   const combatArt=await decorArtForTheme(combatWorld.theme);
@@ -1808,16 +1814,16 @@ async function buildState(userId) {
       multiplier: prodMultiplier(user.idleProdLevel, prodAncientBonus),
       nextMultiplier: user.idleProdLevel < PROD_LEVEL_MAX ? prodMultiplier(user.idleProdLevel+1,prodAncientBonus) : null,
       nextCost: user.idleProdLevel < PROD_LEVEL_MAX ? prodUpgradeCost(user.idleProdLevel) : null,
-      bulkCosts: bulkUpgradeCosts(user.idleProdLevel, PROD_LEVEL_MAX, prodUpgradeCost),
+      bulkCosts: bulkUpgradeCosts(user.idleProdLevel, PROD_LEVEL_MAX, prodUpgradeCost, (lvl)=>prodMultiplier(lvl,prodAncientBonus), upgradeBudget),
       maxed: user.idleProdLevel >= PROD_LEVEL_MAX,
     },
     click: {
       level: user.idleClickLevel,
       yield: clickBase,
       damage: clickDamage,
-      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? Math.max(clickDamage+1,Math.round((clickYield(user.idleClickLevel+1,clickAncientBonus)+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*worldClick*buffClick*mechanicMultiplier*blessingEffects.click)) : null,
+      nextDamage: user.idleClickLevel < CLICK_LEVEL_MAX ? clickDamageAt(user.idleClickLevel+1) : null,
       nextCost: user.idleClickLevel < CLICK_LEVEL_MAX ? clickUpgradeCost(user.idleClickLevel) : null,
-      bulkCosts: bulkUpgradeCosts(user.idleClickLevel, CLICK_LEVEL_MAX, clickUpgradeCost),
+      bulkCosts: bulkUpgradeCosts(user.idleClickLevel, CLICK_LEVEL_MAX, clickUpgradeCost, clickDamageAt, upgradeBudget),
       maxed: user.idleClickLevel >= CLICK_LEVEL_MAX,
     },
     crit: {
@@ -1825,7 +1831,7 @@ async function buildState(userId) {
       chance:critChance,
       nextChance:user.idleCritLevel<CRIT_LEVEL_MAX?Math.min(.95,critChance+critUpgradeBonus(1)):null,
       nextCost:user.idleCritLevel<CRIT_LEVEL_MAX?critUpgradeCost(user.idleCritLevel):null,
-      bulkCosts: bulkUpgradeCosts(user.idleCritLevel||0, CRIT_LEVEL_MAX, critUpgradeCost),
+      bulkCosts: bulkUpgradeCosts(user.idleCritLevel||0, CRIT_LEVEL_MAX, critUpgradeCost, critChanceAt, upgradeBudget),
       maxed:user.idleCritLevel>=CRIT_LEVEL_MAX,
     },
     cooldown: {
@@ -1837,7 +1843,7 @@ async function buildState(userId) {
       teamSeconds:Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel,blessingEffects.cooldown,passiveCooldownBonus)/1000),
       nextTeamSeconds:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?Math.round(activeSkillCooldown(TEAM_COMBO_COOLDOWN_MS,activeSupportCount,user.idleCooldownLevel+1,blessingEffects.cooldown,passiveCooldownBonus)/1000):null,
       nextCost:user.idleCooldownLevel<COOLDOWN_LEVEL_MAX?cooldownUpgradeCost(user.idleCooldownLevel):null,
-      bulkCosts: bulkUpgradeCosts(user.idleCooldownLevel||0, COOLDOWN_LEVEL_MAX, cooldownUpgradeCost),
+      bulkCosts: bulkUpgradeCosts(user.idleCooldownLevel||0, COOLDOWN_LEVEL_MAX, cooldownUpgradeCost, cooldownSecondsAt, upgradeBudget),
       maxed:user.idleCooldownLevel>=COOLDOWN_LEVEL_MAX,
     },
     multiStrike: {
@@ -1845,7 +1851,7 @@ async function buildState(userId) {
       bonus:multiStrikeBonus(user.idleMultiStrikeLevel||0),
       nextBonus:user.idleMultiStrikeLevel<MULTI_STRIKE_MAX?multiStrikeBonus((user.idleMultiStrikeLevel||0)+1):null,
       nextCost:user.idleMultiStrikeLevel<MULTI_STRIKE_MAX?multiStrikeUpgradeCost(user.idleMultiStrikeLevel||0):null,
-      bulkCosts: bulkUpgradeCosts(user.idleMultiStrikeLevel||0, MULTI_STRIKE_MAX, multiStrikeUpgradeCost),
+      bulkCosts: bulkUpgradeCosts(user.idleMultiStrikeLevel||0, MULTI_STRIKE_MAX, multiStrikeUpgradeCost, (lvl)=>multiStrikeBonus(lvl), upgradeBudget),
       maxed:user.idleMultiStrikeLevel>=MULTI_STRIKE_MAX,
     },
     ancients: {
@@ -2208,7 +2214,11 @@ router.get('/players/:userId', requireAuth, requireIdleBeta, async(req,res)=>{
     loadSlots(prisma,user.id),loadAncientLevels(prisma,user.id),prisma.dojoRecruit.count({where:{userId:user.id}}),
     prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:'rift_floor',period:idlePeriods().week}}}),
   ]);
-  const totalRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(ancients,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,ancients));
+  // Fiche PUBLIQUE : le DPS affiché aux autres joueurs exclut le buff d'orbe
+  // temporaire (« Frénésie » ×2 pendant quelques secondes) — sinon le
+  // classement comparait des instantanés gonflés selon l'instant de visite
+  // (retour joueur). Le buff reste bien compté dans la production réelle.
+  const totalRate=computeTotalRate(slots,user.idleProdLevel||0,user.idleRankLevel||1,ancientBonus(ancients,'prodMult'),user.idleHeroClass,user.idleHeroSpec,user.idleBattleSpeed,user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,{...rateExtrasFor(user,slots,recruitCount,ancients),buffProd:1});
   const active=slots.filter((slot)=>slot.character).sort((a,b)=>a.slotIndex-b.slotIndex);
   const synergy=synergyForSlots(active);
   res.json({player:{
@@ -2402,7 +2412,12 @@ router.post('/unassign', requireAuth, requireIdleBeta, rateLimit({ max: 120, nam
 // amélioration plafonnée — même esprit que `levelCosts` sur les héros
 // (charLevelBulkCost), pour que le client affiche le prix exact avant achat.
 // `count` peut être < n si le plafond de niveau est atteint avant le lot entier.
-function bulkUpgradeCosts(level, maxLevel, costFn) {
+// `afterFn(niveau)` fournit l'aperçu de la stat une fois le lot acheté : la
+// carte d'amélioration affichait « APRÈS ACHAT » du seul niveau suivant quel
+// que soit le multiplicateur ×5/×10/×100/MAX sélectionné (retour joueur).
+// `budget` (essence actuelle) permet le même aperçu pour MAX : nombre de
+// niveaux réellement abordables au moment du rendu.
+function bulkUpgradeCosts(level, maxLevel, costFn, afterFn = null, budget = null) {
   const current = level || 0;
   const remaining = Math.max(0, maxLevel - current);
   const out = {};
@@ -2411,7 +2426,16 @@ function bulkUpgradeCosts(level, maxLevel, costFn) {
     if (!count) { out[n] = null; continue; }
     let total = 0;
     for (let i = 0; i < count; i++) total += costFn(current + i);
-    out[n] = { count, cost: total };
+    out[n] = { count, cost: total, ...(afterFn ? { after: afterFn(current + count) } : {}) };
+  }
+  if (budget != null) {
+    let count = 0, total = 0;
+    while (count < remaining) {
+      const next = costFn(current + count);
+      if (total + next > budget) break;
+      total += next; count++;
+    }
+    out.max = count ? { count, cost: total, ...(afterFn ? { after: afterFn(current + count) } : {}) } : null;
   }
   return out;
 }

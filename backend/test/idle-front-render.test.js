@@ -230,3 +230,31 @@ test('équipement Idle : tout retirer et amélioration groupée couvrent aussi l
   for(const id of ['idle-unequip-all','idle-enhance-all-one','idle-enhance-all-five','idle-equipment-bulk-summary'])assert.match(html,new RegExp(`id="${id}"`));
   assert.match(source,/function unequipAllIdleEquipment\(\)/);assert.match(source,/\/api\/idle\/equipment\/unequip-all/);assert.match(source,/function enhanceAllIdleEquipment\(levels\)/);assert.match(source,/\/api\/idle\/equipment\/enhance-all/);assert.match(styles,/idle-equipment-bulk-tools/);
 });
+
+test('retours joueurs : bénédictions rendues à chaque synchro, confirmations intégrées, tri de collection', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  // L'aventure roguelike (choix/reroll/liste de bénédictions) doit être rendue
+  // à chaque renderIdleState, pas seulement depuis l'onglet Équipe — sinon les
+  // propositions n'apparaissaient qu'après un F5 (retour joueurs).
+  assert.match(source, /\n {2}renderIdleRunJourney\(state\);/);
+
+  // window.confirm est silencieusement ignoré par certaines WebViews mobiles :
+  // toutes les confirmations du Dojo passent par la modale intégrée.
+  assert.match(source, /function idleConfirm\(/);
+  assert.doesNotMatch(source, /!confirm\(/);
+  assert.doesNotMatch(source, /window\.confirm\(['"`]/);
+  assert.match(source, /await idleConfirm\(`Revenir au niveau /);
+
+  // Aperçu « APRÈS ACHAT » adapté au lot sélectionné (×5/×10/×100/MAX).
+  assert.match(source, /after: item\.bulkCosts\.max\?\.after/);
+  assert.match(source, /plan\.after!=null&&it\.formatAfter\?it\.formatAfter\(plan\.after\):it\.after/);
+
+  // Tri de la collection par licence (complétion / recrutés / A–Z), persisté.
+  assert.match(html, /id="idle-collection-sort"/);
+  assert.match(source, /data-collection-sort/);
+  assert.match(source, /localStorage\.setItem\('idle-collection-sort'/);
+  assert.match(styles, /\.idle-collection-sort-bar/);
+});

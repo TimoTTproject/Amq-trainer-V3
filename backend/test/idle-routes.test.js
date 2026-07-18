@@ -1326,17 +1326,19 @@ test('navigation : revient sur un niveau débloqué en mode Farm puis reprend au
   assert.equal(maximum.json.battle.stage,12);
 });
 
-test('mode Farm : verrouillé sous le Rang requis, autant via /stage que via /battle-mode', async () => {
-  // Retour joueur : un compte tout juste arrivé pouvait se retrouver piégé en
-  // Farm sans comprendre pourquoi sa progression ne bougeait plus. Le mode ne
-  // doit être accessible qu'à partir d'un Rang minimum.
-  const user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12),idleRankLevel:9});
+test('mode Farm : /battle-mode verrouillé sous le Rang requis, mais le voyage rapide /stage reste libre', async () => {
+  // Retour joueur : « je peux pas changer de monde ». Le voyage rapide vers un
+  // niveau déjà atteint doit rester possible dès le début (il active le Farm
+  // implicitement, avec confirmation côté client) ; seul le bouton dédié
+  // « Répéter la vague » (/battle-mode) reste derrière le Rang minimum.
+  let user=dbUser({idleStage:12,idleRunBestStage:12,idleBestStage:12,idleBattleMode:'progress',idleEnemyHp:enemyMaxHp(12),idleRankLevel:9});
   prisma.user.findUnique=async()=>user;
-  prisma.user.update=async()=>user;
+  prisma.user.update=async({data})=>{user={...user,...data};return user;};
 
   const viaStage=await app.request('/api/idle/stage',{method:'POST',cookie:app.authCookie('u1'),body:{stage:5}});
-  assert.equal(viaStage.status,403);
-  assert.match(viaStage.json.error,/Rang/);
+  assert.equal(viaStage.status,200);
+  assert.equal(user.idleStage,5);
+  assert.equal(user.idleBattleMode,'farm');
 
   const viaMode=await app.request('/api/idle/battle-mode',{method:'POST',cookie:app.authCookie('u1'),body:{mode:'farm',confirmed:true}});
   assert.equal(viaMode.status,403);
@@ -2020,4 +2022,49 @@ test('claim-all : ne crédite rien si une récompense concurrente a déjà cré�
   const res=await app.request('/api/idle/claim-all',{method:'POST',cookie:app.authCookie('u1'),body:{}});
   assert.equal(res.status,409);
   assert.equal(credited,false);
+});
+
+test('GET /state : chaque achat groupé expose la stat projetée après le lot (×5/×10/×100 et MAX au budget)', async () => {
+  // Retour joueur : « la stat après l'upgrade n'est pas adaptée selon x1, x5
+  // ou x10 » — la carte affichait l'aperçu du seul niveau suivant.
+  const user = dbUser({ essence: 1000 });
+  prisma.user.findUnique = async () => user;
+  const res = await app.request('/api/idle/state', { cookie: app.authCookie('u1') });
+  assert.equal(res.status, 200);
+  const bulk5 = res.json.prod.bulkCosts[5];
+  assert.equal(bulk5.count, 5);
+  assert.equal(bulk5.cost, [0,1,2,3,4].reduce((sum, lvl) => sum + prodUpgradeCost(lvl), 0));
+  assert.equal(bulk5.after, 1 + 5 * 0.08); // ×1.40 après 5 niveaux de Discipline
+  assert.equal(res.json.prod.bulkCosts[10].after, 1 + 10 * 0.08);
+  const max = res.json.prod.bulkCosts.max;
+  assert.ok(max.count >= 1);
+  assert.ok(max.cost <= 1000);
+  assert.equal(max.after, 1 + max.count * 0.08);
+  // Flux projette les deux recharges (Ultime et Combo) après le lot.
+  const cooldown5 = res.json.cooldown.bulkCosts[5];
+  assert.ok(cooldown5.after.burst < res.json.cooldown.burstSeconds);
+  assert.ok(cooldown5.after.team < res.json.cooldown.teamSeconds);
+  // Concentration : les dégâts projetés après ×10 dépassent l'aperçu du niveau suivant.
+  assert.ok(res.json.click.bulkCosts[10].after > res.json.click.nextDamage);
+});
+
+test('fiche publique : le DPS affiché aux autres joueurs exclut le buff d’orbe temporaire (Frénésie ×2)', async () => {
+  // Retour joueur : « le bonus prod x2 temporaire est pris en compte dans le
+  // ladder » — l'instantané public dépendait du moment de la visite.
+  const character = { id: 7, name: 'Rem', imageUrl: '/rem.png', rarity: 'epic', series: 'Re:Zero' };
+  prisma.idleSlot.findMany = async () => [{ userId: 'u2', slotIndex: 0, characterId: 7, level: 25, ascension: 0, character }];
+  prisma.dojoRecruit.count = async () => 5;
+  prisma.ancientLevel.findMany = async () => [];
+  prisma.idleItem.findMany = async () => [];
+  prisma.idleProgressCounter.findUnique = async () => null;
+  const viewer = dbUser();
+  const target = dbUser({ id: 'u2' });
+  prisma.user.findUnique = async (args) => (args.where.id === 'u2' ? target : viewer);
+  const without = await app.request('/api/idle/players/u2', { cookie: app.authCookie('u1') });
+  Object.assign(target, { idleBuffKey: 'frenzy', idleBuffUntil: new Date(Date.now() + 60_000) });
+  const withBuff = await app.request('/api/idle/players/u2', { cookie: app.authCookie('u1') });
+  assert.equal(without.status, 200);
+  assert.equal(withBuff.status, 200);
+  assert.ok(without.json.player.totalRate > 0);
+  assert.equal(withBuff.json.player.totalRate, without.json.player.totalRate);
 });
