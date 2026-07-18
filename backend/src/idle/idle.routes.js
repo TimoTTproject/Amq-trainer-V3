@@ -38,6 +38,7 @@ const {
   enemyReward,
   investmentCostIndex,
   RUNE_DUNGEON_FREE_ATTEMPTS,
+  RUNE_DUNGEON_FLOORS,
   runeDungeonExtraCost,
   runeDungeonRarity,
   enemiesRequiredForStage,
@@ -1619,14 +1620,24 @@ async function buildState(userId) {
   let riftRun=null;try{riftRun=await prisma.idleRiftRun.findUnique({where:{userId_period:{userId,period:periods.week}}});}catch(e){if(e?.code)throw e;}
   const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods,riftRun?.relics||[]);
   rift.pendingChoice=riftRelicDetails(riftRun?.pendingChoice||[]);
-  // Donjon des Objets : farm répétable, cf. runeDungeonExtraCost/runeDungeonRarity.
+  // Donjon des Objets : descente de RUNE_DUNGEON_FLOORS étages — seule la fin
+  // donne un objet, cf. /rune-dungeon/attempt. Le compteur d'étage vit hors
+  // des périodes jour/semaine/mois (période fixe 'current'), une descente en
+  // cours survit donc à minuit — d'où la lecture dédiée.
   const runeDungeonAttemptsToday=missionCounters.get(`rune_dungeon:${periods.day}`)||0;
   const runeDungeonFreeRemaining=Math.max(0,RUNE_DUNGEON_FREE_ATTEMPTS-runeDungeonAttemptsToday);
+  let runeDungeonFloorRow=null;
+  try{runeDungeonFloorRow=await prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:'rune_dungeon_run',period:'current'}}});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
+  const runeDungeonFloor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,runeDungeonFloorRow?.value||0));
   const runeDungeon={
     attemptsToday:runeDungeonAttemptsToday,
     freeAttempts:RUNE_DUNGEON_FREE_ATTEMPTS,
     freeRemaining:runeDungeonFreeRemaining,
-    nextCost:runeDungeonFreeRemaining>0?0:runeDungeonExtraCost(runeDungeonAttemptsToday-RUNE_DUNGEON_FREE_ATTEMPTS,progressionStage),
+    floor:runeDungeonFloor,
+    floors:RUNE_DUNGEON_FLOORS,
+    // Coût du PROCHAIN clic : une descente déjà entamée ne repaie jamais —
+    // la tentative est comptée et facturée à l'étage 1 uniquement.
+    nextCost:runeDungeonFloor>0?0:runeDungeonFreeRemaining>0?0:runeDungeonExtraCost(runeDungeonAttemptsToday-RUNE_DUNGEON_FREE_ATTEMPTS,progressionStage),
     kinds:RUNE_KINDS.map((kind)=>({kind,label:ITEM_KINDS[kind].label,icon:ITEM_KINDS[kind].icon})),
   };
   const guide=[
@@ -3480,9 +3491,13 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
 
 // ── Donjon des Objets : farm répétable et CIBLÉ (le joueur choisit le kind,
 // donc l'emplacement qu'il veut garnir) — façon donjon Caiross de Summoners
-// War. Quelques tentatives gratuites par jour (RUNE_DUNGEON_FREE_ATTEMPTS),
-// puis un coût croissant en Essence, remis à zéro chaque jour avec le
-// compteur (période 'day' de idlePeriods).
+// War. Le donjon se descend désormais étage par étage (RUNE_DUNGEON_FLOORS
+// clics) : les étages intermédiaires ne donnent RIEN, seul le dernier étage
+// lâche l'équipement (demande utilisateur : un vrai donjon de 10 niveaux au
+// lieu d'un objet par clic). Une DESCENTE complète = une tentative : les
+// gratuites du jour (RUNE_DUNGEON_FREE_ATTEMPTS) puis le coût croissant en
+// Essence se comptent et se paient à l'étage 1 — l'économie par objet est
+// identique à l'ancien donjon en un clic.
 router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-rune-dungeon' }), async (req, res) => {
   const kind = String(req.body?.kind || '');
   if (!RUNE_KINDS.includes(kind)) return res.status(400).json({ error: 'Emplacement invalide' });
@@ -3492,33 +3507,61 @@ router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ m
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
       const periods = idlePeriods();
       const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
-      const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
-      const attemptsToday = counterRow?.value || 0;
-      // Garde optimiste sur la valeur lue AVANT tout débit d'Essence : sans
-      // elle, deux requêtes concurrentes lisaient le même attemptsToday et
-      // payaient toutes les deux le même prix (trop bas), au lieu d'une
-      // escalade correcte — même faille que celle déjà corrigée sur le débit
-      // de Sceaux du recrutement (cf. /recruit ci-dessus).
-      if (counterRow) {
-        const bump = await tx.idleProgressCounter.updateMany({ where: { id: counterRow.id, value: attemptsToday }, data: { value: { increment: 1 } } });
-        if (!bump.count) throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+      // Étage courant : période fixe 'current' (hors jour/semaine/mois), une
+      // descente entamée survit à minuit. Garde optimiste sur la valeur lue,
+      // comme le compteur de tentatives ci-dessous.
+      const floorRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon_run', period: 'current' } } });
+      const floor = Math.min(RUNE_DUNGEON_FLOORS - 1, Math.max(0, floorRow?.value || 0));
+      const nextFloor = floor + 1;
+      const cleared = nextFloor >= RUNE_DUNGEON_FLOORS;
+      if (floorRow) {
+        const advance = await tx.idleProgressCounter.updateMany({ where: { id: floorRow.id, value: floorRow.value }, data: { value: cleared ? 0 : nextFloor } });
+        if (!advance.count) throw new IdleError(409, 'Un autre étage vient d’être franchi, réessaie');
       } else {
         try {
-          await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 } });
+          await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon_run', period: 'current', value: cleared ? 0 : nextFloor } });
         } catch (e) {
-          if (e?.code === 'P2002') throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+          if (e?.code === 'P2002') throw new IdleError(409, 'Un autre étage vient d’être franchi, réessaie');
           throw e;
         }
       }
       let cost = 0;
-      if (attemptsToday >= RUNE_DUNGEON_FREE_ATTEMPTS) {
-        cost = runeDungeonExtraCost(attemptsToday - RUNE_DUNGEON_FREE_ATTEMPTS, bestStage);
-        const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost } } });
-        if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
+      let attemptsToday = 0;
+      const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
+      attemptsToday = counterRow?.value || 0;
+      if (floor === 0) {
+        // Nouvelle descente : c'est le SEUL clic qui compte une tentative et
+        // peut coûter de l'Essence.
+        // Garde optimiste sur la valeur lue AVANT tout débit d'Essence : sans
+        // elle, deux requêtes concurrentes lisaient le même attemptsToday et
+        // payaient toutes les deux le même prix (trop bas), au lieu d'une
+        // escalade correcte — même faille que celle déjà corrigée sur le débit
+        // de Sceaux du recrutement (cf. /recruit ci-dessus).
+        if (counterRow) {
+          const bump = await tx.idleProgressCounter.updateMany({ where: { id: counterRow.id, value: attemptsToday }, data: { value: { increment: 1 } } });
+          if (!bump.count) throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+        } else {
+          try {
+            await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 } });
+          } catch (e) {
+            if (e?.code === 'P2002') throw new IdleError(409, 'Une autre tentative vient d’être comptée, réessaie');
+            throw e;
+          }
+        }
+        if (attemptsToday >= RUNE_DUNGEON_FREE_ATTEMPTS) {
+          cost = runeDungeonExtraCost(attemptsToday - RUNE_DUNGEON_FREE_ATTEMPTS, bestStage);
+          const debit = await tx.user.updateMany({ where: { id: user.id, essence: { gte: cost } }, data: { essence: { decrement: cost } } });
+          if (!debit.count) throw new IdleError(400, 'Essence insuffisante');
+        }
+      }
+      if (!cleared) {
+        // Étages 1 à N-1 : aucune récompense, seulement la progression.
+        result = { cost, floor: nextFloor, floors: RUNE_DUNGEON_FLOORS, cleared: false };
+        return;
       }
       const rarity = runeDungeonRarity(bestStage);
       const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
-      // Fait avancer la famille a chaque tentative, meme a stage constant.
+      // Fait avancer la famille a chaque descente, meme a stage constant.
       const tier = Math.max(1, Math.floor(bestStage / 10)) + attemptsToday;
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
       // Le monde source doit varier avec le tier (comme le coffre de Boss),
@@ -3527,10 +3570,10 @@ router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ m
       // consécutifs sur le même emplacement ont vite l'air d'être « le même
       // objet » (retour joueur : le Donjon donne toujours les mêmes objets).
       const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, campaignForStage(tier*10).name);
-      result = { cost, loot };
+      result = { cost, floor: RUNE_DUNGEON_FLOORS, floors: RUNE_DUNGEON_FLOORS, cleared: true, loot };
     });
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
-  void recordIdleEvent(req.user.id, 'rune_dungeon', { value: 1 });
+  void recordIdleEvent(req.user.id, 'rune_dungeon', { value: result.floor });
   res.json({ ok: true, ...result, state: await buildState(req.user.id) });
 });
 

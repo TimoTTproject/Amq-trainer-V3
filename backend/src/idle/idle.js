@@ -455,6 +455,11 @@ function investmentCostIndex(stage) {
 const RUNE_DUNGEON_FREE_ATTEMPTS = 5;
 const RUNE_DUNGEON_EXTRA_BASE = 20;
 const RUNE_DUNGEON_EXTRA_GROWTH = 1.6;
+// Le Donjon se descend étage par étage : seul le dernier étage donne un
+// équipement, les précédents ne donnent rien — une descente (10 clics) = une
+// tentative gratuite/payante, comptée et facturée à l'étage 1 (l'économie par
+// objet reste donc identique à l'ancien donjon en un clic).
+const RUNE_DUNGEON_FLOORS = 10;
 function runeDungeonExtraCost(extraIndex, bestStage = 1) {
   const i = Math.max(0, Math.floor(extraIndex || 0));
   return Math.round(finiteIdleNumber(investmentCostIndex(Math.max(1, bestStage)) * RUNE_DUNGEON_EXTRA_BASE * Math.pow(RUNE_DUNGEON_EXTRA_GROWTH, i), 1));
@@ -1135,6 +1140,7 @@ module.exports = {
   RUNE_DUNGEON_FREE_ATTEMPTS,
   RUNE_DUNGEON_EXTRA_BASE,
   RUNE_DUNGEON_EXTRA_GROWTH,
+  RUNE_DUNGEON_FLOORS,
   runeDungeonExtraCost,
   runeDungeonRarity,
   ENEMY_ARCHETYPES,
