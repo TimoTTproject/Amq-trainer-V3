@@ -2824,6 +2824,32 @@ router.post('/equipment/equip',requireAuth,requireIdleBeta,rateLimit({max:40,nam
   try{await withSettle(req.user.id,async(tx,user)=>{const [item,slot]=await Promise.all([tx.idleItem.findFirst({where:{id:itemId,userId:user.id}}),tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex}}})]);if(!item)throw new IdleError(404,'Objet introuvable');if(!slot?.characterId)throw new IdleError(400,'Ce héros n’est pas assigné');await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:slot.characterId,kind:item.kind,id:{not:item.id}},data:{equippedCharacterId:null}});await tx.idleItem.update({where:{id:item.id},data:{equippedCharacterId:slot.characterId}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
+// Transfère en un clic TOUT l'équipement porté par un héros vers un autre —
+// sans ça il fallait retirer chaque objet un par un puis les rééquiper à la
+// main sur le héros de destination (retour joueur : trop de manipulations
+// pour changer de héros porteur d'un set complet).
+router.post('/equipment/transfer',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-equipment-transfer'}),async(req,res)=>{
+  const fromSlotIndex=Number(req.body?.fromSlotIndex);const toSlotIndex=Number(req.body?.toSlotIndex);
+  if(!Number.isInteger(fromSlotIndex)||!Number.isInteger(toSlotIndex)||fromSlotIndex===toSlotIndex)return res.status(400).json({error:'Transfert invalide'});
+  try{
+    await withSettle(req.user.id,async(tx,user)=>{
+      const [fromSlot,toSlot]=await Promise.all([
+        tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex:fromSlotIndex}}}),
+        tx.idleSlot.findUnique({where:{userId_slotIndex:{userId:user.id,slotIndex:toSlotIndex}}}),
+      ]);
+      if(!fromSlot?.characterId||!toSlot?.characterId)throw new IdleError(400,'Héros introuvable');
+      const items=await tx.idleItem.findMany({where:{userId:user.id,equippedCharacterId:fromSlot.characterId}});
+      if(!items.length)throw new IdleError(400,'Aucun objet équipé sur ce héros');
+      const kinds=items.map((item)=>item.kind);
+      // Libère d'abord les emplacements de destination de même nature (comme
+      // /equipment/equip pour un objet seul), puis transfère tout d'un coup.
+      await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:toSlot.characterId,kind:{in:kinds}},data:{equippedCharacterId:null}});
+      await tx.idleItem.updateMany({where:{id:{in:items.map((item)=>item.id)}},data:{equippedCharacterId:toSlot.characterId}});
+    });
+    res.json(await buildState(req.user.id));
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+});
+
 router.post('/equipment/unequip',requireAuth,requireIdleBeta,rateLimit({max:40,name:'idle-equipment-unequip'}),async(req,res)=>{
   const itemId=String(req.body?.itemId||'');
   try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');await tx.idleItem.update({where:{id:item.id},data:{equippedCharacterId:null}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}

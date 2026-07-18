@@ -7921,7 +7921,9 @@ body.idle-fullscreen .feedback-fab { display: none; }
 
 #view-idle .idle-loadout.selected{outline:2px solid var(--accent-2);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-2) 10%,transparent)}
 #view-idle .idle-loadout>header{grid-template-columns:46px minmax(0,1fr) auto auto}
+#view-idle .idle-loadout-actions{display:flex;flex-direction:column;align-items:stretch;gap:5px}
 #view-idle .idle-loadout-select{min-height:32px!important;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-3);color:var(--text-2);font-size:11px;font-weight:800;cursor:pointer}
+#view-idle .idle-loadout-transfer{min-height:32px!important;padding:6px 8px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:6px;background:color-mix(in srgb,var(--accent) 10%,var(--bg-3));color:var(--accent);font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
 #view-idle .idle-loadout.selected .idle-loadout-select{border-color:var(--accent-2);background:color-mix(in srgb,var(--accent-2) 12%,var(--bg-3));color:var(--accent-2)}
 
 @media(max-width:760px){
@@ -7932,7 +7934,7 @@ body.idle-fullscreen .feedback-fab { display: none; }
   #view-idle .idle-rune-workbench select{width:100%;min-width:0}
   #view-idle .idle-inventory-grid{grid-template-columns:1fr}
   #view-idle .idle-loadout>header{grid-template-columns:46px minmax(0,1fr) auto}
-  #view-idle .idle-loadout-select{grid-column:1/-1}
+  #view-idle .idle-loadout-actions{grid-column:1/-1;flex-direction:row}
 }
 @media(max-width:440px){
   #view-idle .idle-item-card>header{grid-template-columns:42px minmax(0,1fr) auto}
