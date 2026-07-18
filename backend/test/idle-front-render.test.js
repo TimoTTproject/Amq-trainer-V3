@@ -272,3 +272,37 @@ test('Donjon des Objets : la descente en 10 étages est visible et seul le derni
   assert.match(source, /IDLE_RUNE_DUNGEON_FLOOR_MS/);
   assert.match(source, /ÉTAGE \$\{result\.floor\}\/\$\{result\.floors\}/);
 });
+
+test('QoL Idle : reprend le dernier onglet, mémorise l’inventaire et expose les raccourcis',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'..','public','idle.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');
+  const styles=fs.readFileSync(path.join(__dirname,'..','public','styles.css'),'utf8');
+  assert.match(source,/localStorage\.setItem\('idle-last-panel',name\)/);
+  assert.match(source,/const rememberedPanel=localStorage\.getItem\('idle-last-panel'\)/);
+  assert.match(source,/idlePanelScrolls\.set\(idleActivePanel,window\.scrollY\)/);
+  assert.match(source,/localStorage\.setItem\('idle-inventory-prefs'/);
+  assert.match(source,/\^Digit\[1-7\]\$/);
+  assert.match(source,/class="idle-shortcuts"/);
+  assert.match(source,/<kbd>Espace<\/kbd> Frapper/);
+  assert.match(styles,/\.idle-shortcuts kbd/);
+  assert.match(html,/id="idle-item-search"/);
+  assert.match(html,/id="idle-item-recommended-only"/);
+  assert.match(html,/id="idle-inventory-results"/);
+  assert.match(source,/function idleRecommendedItems\(slotIndex\)/);
+  assert.match(source,/idleItemSearchHaystack\(x\)\.includes\(normalizedSearch\)/);
+  assert.match(source,/recommendedOnly:idleItemRecommendedOnly/);
+  assert.match(styles,/\.idle-inventory-commandbar/);
+  assert.match(styles,/\.idle-item-card\.recommended/);
+  assert.match(styles,/position:sticky;top:62px/);
+  assert.match(html,/class="idle-visual-details"/);
+  assert.match(html,/Comprendre les compétences/);
+  assert.match(styles,/#idle-panel-equipment\{--idle-panel-accent:#60a5fa\}/);
+  assert.match(styles,/\.idle-tabs::before\{content:"NAVIGATION"/);
+  assert.match(styles,/\.idle-tab\.active span\{display:block/);
+  assert.match(html,/id="idle-set-codex"/);
+  assert.match(html,/Catalyseur/);
+  assert.match(source,/data-codex-set/);
+  assert.match(source,/rune6:\{label:'Halo'/);
+  assert.match(styles,/\.kind-rune1,\[data-item-kind="rune1"\]/);
+  assert.match(styles,/#idle-set-codex>button\.active/);
+});

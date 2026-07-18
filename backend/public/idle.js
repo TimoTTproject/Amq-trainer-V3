@@ -10,7 +10,9 @@ let idleSyncTicker = null; // resynchronisation périodique légère (cf. openId
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
 let idleParticleTheme = null; // dernier thème pour lequel les particules ambiantes ont été générées
 let idleWelcomeChecked = false; // l'écran « pendant ton absence » ne se déclenche qu'une fois par ouverture
+const IDLE_PANEL_NAMES = ['home', 'team', 'upgrades', 'progression', 'equipment', 'farm', 'activities'];
 let idleActivePanel = 'home'; // page courante de l'Idle
+const idlePanelScrolls = new Map(); // conserve la position de lecture entre deux onglets
 let idleTickCount = 0; // compteur du ticker — cadence les gains flottants passifs de la scène
 let idleLastRecruit = null; // personnage affiché dans la révélation de recrutement
 let idleLastRecruitCurrency = 'seals';
@@ -26,12 +28,15 @@ let idleOnboardingClass = 'warrior';
 let idleOnboardingCharacterId = null;
 let idleOnboardingSubmitting = false;
 let idleCombatEntries = [];
-let idleItemFilter = 'all';
-let idleItemSort = 'recent';
-let idleItemRarity = 'all';
-let idleItemSet = 'all';
-let idleItemStatus = 'all';
-let idleEquipmentTargetSlot = null;
+const idleInventoryPrefs = (()=>{try{return JSON.parse(localStorage.getItem('idle-inventory-prefs')||'{}')}catch{return {}}})();
+let idleItemFilter = ['all','rune1','rune2','rune3','rune4','rune5','rune6'].includes(idleInventoryPrefs.filter)?idleInventoryPrefs.filter:'all';
+let idleItemSort = ['recent','power','rarity'].includes(idleInventoryPrefs.sort)?idleInventoryPrefs.sort:'recent';
+let idleItemRarity = ['all','rare','epic','legendary','mythic'].includes(idleInventoryPrefs.rarity)?idleInventoryPrefs.rarity:'all';
+let idleItemSet = typeof idleInventoryPrefs.set==='string'?idleInventoryPrefs.set:'all';
+let idleItemStatus = ['all','free','equipped','resting','locked'].includes(idleInventoryPrefs.status)?idleInventoryPrefs.status:'all';
+let idleItemSearch = typeof idleInventoryPrefs.search==='string'?idleInventoryPrefs.search:'';
+let idleItemRecommendedOnly = idleInventoryPrefs.recommendedOnly===true;
+let idleEquipmentTargetSlot = idleInventoryPrefs.targetSlot!=null&&Number.isInteger(Number(idleInventoryPrefs.targetSlot))?Number(idleInventoryPrefs.targetSlot):null;
 let idleEquipmentPickerSlot = null;
 let idleEquipmentPickerKind = null;
 let idleSelectedItems = new Set();
@@ -130,6 +135,8 @@ function idleConfirm(message,{title='Confirmer ?',confirmLabel='Continuer',cance
   });
 }
 function idleStoredSetting(key){return localStorage.getItem(`idle-${key}`)==='1';}
+function persistIdleInventoryPrefs(){localStorage.setItem('idle-inventory-prefs',JSON.stringify({filter:idleItemFilter,sort:idleItemSort,rarity:idleItemRarity,set:idleItemSet,status:idleItemStatus,search:idleItemSearch,recommendedOnly:idleItemRecommendedOnly,targetSlot:idleEquipmentTargetSlot}));}
+function mountIdleShortcutHelp(){const card=document.querySelector('#idle-settings-modal .idle-settings-card');if(!card||card.querySelector('.idle-shortcuts'))return;card.insertAdjacentHTML('beforeend','<section class="idle-shortcuts" aria-label="Raccourcis clavier"><span><b>Raccourcis clavier</b><small>Disponibles hors des champs de saisie</small></span><div><kbd>1</kbd> Combat <kbd>2</kbd> Équipe <kbd>3</kbd> Améliorer <kbd>4</kbd> Niveaux <kbd>5</kbd> Objets <kbd>6</kbd> Farm <kbd>7</kbd> Activités <kbd>Espace</kbd> Frapper</div></section>');}
 function applyIdleComfortSettings(){const view=document.getElementById('view-idle');const reduced=typeof sfx!=='undefined'&&sfx.isIdleEffectsReduced?.();view?.classList.toggle('idle-effects-reduced',!!reduced);view?.classList.toggle('idle-effects-full',!reduced);view?.classList.toggle('idle-large-text',idleStoredSetting('large-text'));view?.classList.toggle('idle-high-contrast',idleStoredSetting('high-contrast'));view?.classList.toggle('idle-data-saver',idleStoredSetting('data-saver'));const range=document.getElementById('idle-volume');if(range&&typeof sfx!=='undefined')range.value=String(sfx.getIdleVolume?.()??.65);const toggles={"idle-effects-reduced":!reduced,"idle-large-text":idleStoredSetting('large-text'),"idle-high-contrast":idleStoredSetting('high-contrast'),"idle-data-saver":idleStoredSetting('data-saver')};Object.entries(toggles).forEach(([id,checked])=>{const input=document.getElementById(id);if(input)input.checked=checked;});}
 function idleSetConnectionState(mode,message){
   const box=document.getElementById('idle-connection-status');const label=document.getElementById('idle-connection-label');if(!box||!label)return;
@@ -227,10 +234,11 @@ function renderIdleSessionReport(state){
 }
 
 async function openIdle() {
+  const rememberedPanel=localStorage.getItem('idle-last-panel')||'home';
   showView('idle');
   document.body.classList.add('idle-fullscreen'); // espace dédié : le chrome du site (header/nav) s'efface
   applyIdleComfortSettings();
-  idleShowPanel('home');
+  idlePanelScrolls.clear();idleActivePanel='home';idleShowPanel('home',{remember:false,restoreScroll:false});window.scrollTo({top:0,behavior:'auto'});
   idleStopTicker();
   idleWelcomeChecked = false;
   resetIdleSessionStats(false);
@@ -253,6 +261,7 @@ async function openIdle() {
   // de héros/améliorations entières sur les résolutions courantes (≥1050px).
   if(window.innerWidth>=1050&&localStorage.getItem('idle-chat-open')==='1')idleSetChatOpen(true);
   await refreshIdleState();
+  if(IDLE_PANEL_NAMES.includes(rememberedPanel)&&rememberedPanel!=='home'&&!idleTabLockReason(rememberedPanel,idleState))idleShowPanel(rememberedPanel,{remember:false});
   maybeShowIdleWelcome();
 }
 
@@ -371,11 +380,15 @@ function idleTabLockReason(name, state) {
 }
 
 // Navigation latérale sur ordinateur et barre compacte sur mobile.
-function idleShowPanel(name) {
+function idleShowPanel(name,{remember=true,restoreScroll=true}={}) {
+  if(!IDLE_PANEL_NAMES.includes(name))name='home';
   const lockReason = idleTabLockReason(name, idleState);
-  if (lockReason) { idleNotify(lockReason, 'info'); return; }
+  if (lockReason) { idleNotify(lockReason, 'info'); return false; }
+  const changed=idleActivePanel!==name;
+  if(changed)idlePanelScrolls.set(idleActivePanel,window.scrollY);
   idleActivePanel = name;
-  for (const p of ['home', 'progression', 'team', 'equipment', 'farm', 'upgrades', 'activities']) {
+  if(remember)localStorage.setItem('idle-last-panel',name);
+  for (const p of IDLE_PANEL_NAMES) {
     const panel=document.getElementById('idle-panel-' + p);panel?.classList.toggle('hidden', p !== name);panel?.setAttribute('aria-hidden',p===name?'false':'true');
   }
   document.querySelectorAll('#idle-tabs .idle-tab').forEach((t) => {
@@ -394,6 +407,8 @@ function idleShowPanel(name) {
   // Ouvrir l'onglet Niveaux (aventure roguelike) synchronise tout de suite —
   // sinon le choix de pouvoir en attente peut sembler figé jusqu'à 15-30s.
   if(name==='progression')idleBackgroundSync();
+  if(changed&&restoreScroll)requestAnimationFrame(()=>window.scrollTo({top:idlePanelScrolls.get(name)||0,behavior:'auto'}));
+  return true;
 }
 
 // Nombre flottant dans la scène (+essence, façon dégâts/gains d'un jeu mobile).
@@ -1107,8 +1122,10 @@ function renderIdleTeamStrategy(state) {
 // Une icône distincte par nature d'objet (au lieu du même losange pour les
 // six) — cohérente avec sa stat principale : rune5/fa-crosshairs reprend
 // volontairement l'icône de la mécanique de Boss "Faille ciblée".
-const IDLE_ITEM_ICONS=['fa-fire','fa-bullseye','fa-wave-square','fa-bolt','fa-crosshairs','fa-sun'];
-const IDLE_ITEM_META=Object.fromEntries(Array.from({length:6},(_,index)=>[`rune${index+1}`,{label:`Objet ${index+1}`,icon:IDLE_ITEM_ICONS[index]}]));
+const IDLE_ITEM_META={
+  rune1:{label:'Catalyseur',icon:'fa-fire'},rune2:{label:'Insigne',icon:'fa-bullseye'},rune3:{label:'Noyau',icon:'fa-wave-square'},
+  rune4:{label:'Relique',icon:'fa-bolt'},rune5:{label:'Viseur',icon:'fa-crosshairs'},rune6:{label:'Halo',icon:'fa-sun'}
+};
 const IDLE_RUNE_KINDS=Object.keys(IDLE_ITEM_META);
 const IDLE_STAT_LABELS={dps:'DPS',click:'Clic',burst:'Ultime',team:'Combo',boss:'Boss',salvage:'Recyclage'};
 const IDLE_SET_MODE_META={dps:{label:'Production',icon:'fa-chart-line'},click:{label:'Clic',icon:'fa-hand-fist'},burst:{label:'Ultime',icon:'fa-bolt'},team:{label:'Combo',icon:'fa-users-rays'},boss:{label:'Boss',icon:'fa-skull'},salvage:{label:'Recyclage',icon:'fa-recycle'}};
@@ -1146,7 +1163,7 @@ function idleRuneSubStats(item){const entries=Object.entries(item.subStats||{});
 function idleItemSetStatuses(items){const sets=idleState?.inventory?.sets||[];return sets.map((set)=>{const count=items.filter((item)=>(item.setKey||'energy')===set.key).length;const stacks=Math.floor(count/set.required);const remainder=count%set.required;return {...set,count,stacks,missing:remainder?set.required-remainder:set.required};});}
 function idleItemSetProjection(item,slotIndex){if(slotIndex===null||slotIndex===undefined)return null;const equipped=(idleState?.inventory?.items||[]).filter((entry)=>entry.equippedSlotIndex===slotIndex);const replaced=equipped.find((entry)=>entry.kind===item.kind&&entry.id!==item.id);const after=[...equipped.filter((entry)=>entry.id!==replaced?.id&&entry.id!==item.id),item];const required=item.setRequired||2;const count=after.filter((entry)=>(entry.setKey||'energy')===(item.setKey||'energy')).length;const stacks=Math.floor(count/required);const remainder=count%required;return {count,required,stacks,missing:remainder?required-remainder:required};}
 function idleEquippedFor(slotIndex,kind){return idleState?.inventory?.items?.find((x)=>x.equippedSlotIndex===slotIndex&&x.kind===kind)||null;}
-function idleItemComparison(item,slotIndex){const current=idleEquippedFor(slotIndex,item.kind);const before=current?.effectiveBonus||0;const after=item.effectiveBonus||item.bonus||0;const diff=after-before;return `<span class="idle-item-comparison ${diff>=0?'better':'worse'}"><small>${current?`À la place de ${escapeHtml(current.name)}`:'Emplacement actuellement vide'}</small><b><span>${Math.round(before*100)}%</span><i class="fas fa-arrow-right"></i><span>${Math.round(after*100)}%</span></b><em>${diff>=0?'+':''}${Math.round(diff*100)}% de puissance d’objet</em></span>`;}
+function idleItemComparison(item,slotIndex){const current=idleEquippedFor(slotIndex,item.kind);const before=current?.effectiveBonus||0;const after=item.effectiveBonus||item.bonus||0;const diff=after-before;const impact=idlePickerSetImpact(item,slotIndex);return `<span class="idle-item-comparison ${diff>=0?'better':'worse'}"><small>${current?`À la place de ${escapeHtml(current.name)}`:'Emplacement actuellement vide'}</small><b><span>${Math.round(before*100)}%</span><i class="fas fa-arrow-right"></i><span>${Math.round(after*100)}%</span></b><em>${diff>=0?'+':''}${Math.round(diff*100)}% de puissance d’objet</em>${impact.completes?'<strong><i class="fas fa-layer-group"></i> Active un bonus de set</strong>':''}</span>`;}
 function idlePickerSetImpact(item,slotIndex){
   const equipped=(idleState?.inventory?.items||[]).filter((entry)=>entry.equippedSlotIndex===slotIndex);
   const required=item.setRequired||2;const key=item.setKey||'energy';const current=equipped.find((entry)=>entry.kind===item.kind);
@@ -1155,9 +1172,22 @@ function idlePickerSetImpact(item,slotIndex){
   const beforeStacks=Math.floor(originalCount/required);const afterStacks=Math.floor(afterCount/required);
   return {beforeCount:originalCount,afterCount,required,completes:afterStacks>beforeStacks,stacks:afterStacks,missing:afterCount%required?required-afterCount%required:0};
 }
+function idleRecommendedItems(slotIndex){
+  const recommendations=new Map();if(slotIndex===null||slotIndex===undefined)return recommendations;
+  for(const kind of IDLE_RUNE_KINDS){
+    const current=idleEquippedFor(slotIndex,kind);const before=current?.effectiveBonus||current?.bonus||0;
+    const candidates=(idleState?.inventory?.items||[]).filter((item)=>item.kind===kind&&!item.equipped).map((item)=>({item,impact:idlePickerSetImpact(item,slotIndex)})).sort((a,b)=>Number(b.impact.completes)-Number(a.impact.completes)||(b.item.effectiveBonus||b.item.bonus||0)-(a.item.effectiveBonus||a.item.bonus||0));
+    const best=candidates[0];if(!best)continue;const after=best.item.effectiveBonus||best.item.bonus||0;const diff=after-before;
+    if(!current||best.impact.completes||diff>0)recommendations.set(best.item.id,{diff,completes:best.impact.completes,reason:best.impact.completes?'Complète un set':!current?'Emplacement vide':`${diff>=0?'+':''}${Math.round(diff*100)}% de puissance`});
+  }
+  return recommendations;
+}
+function idleNormalizeSearch(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function idleItemSearchHaystack(item){return idleNormalizeSearch([item.name,item.kind,item.setName,item.setDescription,item.mainStat,IDLE_STAT_LABELS[item.mainStat],idleItemEffect(item),...(item.affixesDetailed||[]).map((affix)=>affix.label),...Object.keys(item.subStats||{}).map((key)=>IDLE_STAT_LABELS[key]||key)].join(' '));}
 function renderIdleEquipmentPicker(){
   const modal=document.getElementById('idle-equipment-picker');const body=document.getElementById('idle-equipment-picker-body');if(!modal||!body||!idleState?.inventory)return;
   const slot=(idleState.slots||[]).find((entry)=>entry.index===idleEquipmentPickerSlot&&entry.character);const kind=idleEquipmentPickerKind;const meta=IDLE_ITEM_META[kind]||IDLE_ITEM_META.rune1;
+  modal.dataset.itemKind=kind||'';
   if(!slot||!kind){modal.classList.add('hidden');return;}
   const equipped=idleState.inventory.items.filter((item)=>item.equippedSlotIndex===slot.index);const current=equipped.find((item)=>item.kind===kind)||null;
   const activeSets=idleItemSetStatuses(equipped);const setOverview=activeSets.length?activeSets.map((set)=>{const mode=IDLE_SET_MODE_META[set.mode]||IDLE_SET_MODE_META.dps;return `<span class="${set.stacks?'active':'progress'} mode-${escapeHtml(set.mode||'dps')}"><i class="fas ${mode.icon}"></i><b>${escapeHtml(set.name)}</b><small>${set.count}/${set.required} · ${set.stacks?`${set.stacks} bonus actif${set.stacks>1?'s':''}`:`encore ${set.missing}`}</small></span>`;}).join(''):'<span class="empty"><i class="fas fa-layer-group"></i><b>Aucun set commencé</b><small>Choisis deux objets du même set pour activer le premier bonus.</small></span>';
@@ -1166,7 +1196,7 @@ function renderIdleEquipmentPicker(){
   const cards=candidates.map(({item,impact})=>{const isCurrent=item.id===current?.id;const setMode=IDLE_SET_MODE_META[item.setMode]||IDLE_SET_MODE_META.dps;const recommended=item.id===recommendedId;const setLabel=impact.completes?'ACTIVE UN BONUS DE SET':impact.stacks?`${impact.stacks} BONUS ACTIF${impact.stacks>1?'S':''}`:`MANQUE ${impact.missing||impact.required}`;return `<article class="idle-picker-item r-${escapeHtml(item.rarity)} ${impact.completes?'set-complete':''} ${recommended?'recommended':''}">${recommended?'<strong class="idle-picker-recommended"><i class="fas fa-star"></i> CONSEILLÉ</strong>':''}<header>${idleItemArt(item)}<span><small>${escapeHtml(idleRarityLabel(item.rarity))} · ${escapeHtml(meta.label)}</small><b>${escapeHtml(item.name)}</b><em>${escapeHtml(idleItemEffect(item))} · +${item.enhancementLevel||0}/15</em></span></header><div class="idle-picker-set mode-${escapeHtml(item.setMode||'dps')}"><i class="fas ${setMode.icon}"></i><span><small>SET ${escapeHtml(item.setName||'Énergie').toUpperCase()}</small><b>${escapeHtml(item.setDescription||'Bonus de set')}</b><strong class="${impact.completes?'complete':''}">${setLabel}</strong></span></div>${idleItemComparison(item,slot.index)}<button type="button" class="${impact.completes?'btn-primary':'btn-secondary'}" data-picker-equip="${escapeHtml(item.id)}" ${isCurrent?'disabled':''}><i class="fas ${isCurrent?'fa-circle-check':'fa-shield-halved'}"></i> ${isCurrent?'Actuellement équipé':impact.completes?'Équiper et activer le set':'Équiper cet objet'}</button></article>`;}).join('');
   body.innerHTML=`<header class="idle-picker-head"><span class="idle-picker-portrait" ${slot.character.imageUrl?`style="background-image:url('${escapeHtml(slot.character.imageUrl)}')"`:''}></span><div><small>ÉQUIPEMENT RAPIDE · ${escapeHtml(meta.label).toUpperCase()}</small><h2 id="idle-equipment-picker-title">${escapeHtml(slot.character.name)}</h2><p>Les objets qui complètent un set passent en premier. Le remplacement est appliqué en un clic.</p></div></header><section class="idle-picker-sets"><header><small>SETS · ${escapeHtml(slot.character.name).toUpperCase()}</small><button type="button" data-picker-full><i class="fas fa-boxes-stacked"></i> Inventaire complet</button></header><div>${setOverview}</div></section><div class="idle-picker-grid">${cards||`<div class="idle-picker-empty"><i class="fas ${meta.icon}"></i><b>Aucun ${escapeHtml(meta.label).toLowerCase()} disponible</b><span>Ouvre des coffres de gardiens pour obtenir un objet de cet emplacement.</span><button type="button" class="btn-secondary" data-picker-full>Voir tout l’inventaire</button></div>`}</div>`;
 }
-function openIdleEquipmentPicker(slotIndex,kind){idleEquipmentPickerSlot=Number(slotIndex);idleEquipmentPickerKind=kind;idleEquipmentTargetSlot=Number(slotIndex);idleItemFilter=kind;document.getElementById('idle-character-sheet')?.classList.add('hidden');renderIdleEquipmentPicker();document.getElementById('idle-equipment-picker')?.classList.remove('hidden');}
+function openIdleEquipmentPicker(slotIndex,kind){idleEquipmentPickerSlot=Number(slotIndex);idleEquipmentPickerKind=kind;idleEquipmentTargetSlot=Number(slotIndex);idleItemFilter=kind;persistIdleInventoryPrefs();document.getElementById('idle-character-sheet')?.classList.add('hidden');renderIdleEquipmentPicker();document.getElementById('idle-equipment-picker')?.classList.remove('hidden');}
 function idleRuneDetailChips(item){
   const affixes=(item.affixesDetailed||[]).slice(1).map((affix)=>`<span><small>${escapeHtml(affix.label)}</small><b>+${Math.round(affix.value*100)}%</b></span>`);
   const subStats=Object.entries(item.subStats||{}).map(([key,value])=>`<span><small>${escapeHtml(IDLE_STAT_LABELS[key]||key)}</small><b>+${Math.round(Number(value)*100)}%</b></span>`);
@@ -1223,18 +1253,24 @@ async function runIdleRuneDungeon(kind){
 }
 function renderIdleInventory(state){
   const inventory=state.inventory;const grid=document.getElementById('idle-inventory-grid');if(!inventory||!grid)return;
+  document.querySelectorAll('#idle-item-filters [data-item-filter]').forEach((button)=>{button.classList.toggle('active',button.dataset.itemFilter===idleItemFilter);button.dataset.count=button.dataset.itemFilter==='all'?inventory.items.length:inventory.items.filter((item)=>item.kind===button.dataset.itemFilter).length;});
+  for(const [id,value] of [['idle-item-sort',idleItemSort],['idle-item-rarity',idleItemRarity],['idle-item-status',idleItemStatus]]){const select=document.getElementById(id);if(select)select.value=value;}
+  const searchInput=document.getElementById('idle-item-search');if(searchInput&&searchInput.value!==idleItemSearch)searchInput.value=idleItemSearch;
+  const recommendedToggle=document.getElementById('idle-item-recommended-only');
   const capacity=document.getElementById('idle-inventory-capacity');if(capacity)capacity.textContent=`${inventory.count} / ${inventory.capacity}`;
   const bulk=inventory.bulkEnhance||{};const equippedCount=inventory.summary?.equipped||0;const bulkSummary=document.getElementById('idle-equipment-bulk-summary');if(bulkSummary)bulkSummary.textContent=equippedCount?`${equippedCount} objet${equippedCount>1?'s':''} porté${equippedCount>1?'s':''} · Tous +1 : ${idleFormatNumber(bulk.one||0)} Essence · Tous +5 : ${idleFormatNumber(bulk.five||0)} Essence`:'Aucun objet porté, y compris sur les héros au repos.';
   const unequipAll=document.getElementById('idle-unequip-all');if(unequipAll)unequipAll.disabled=!equippedCount;const enhanceOne=document.getElementById('idle-enhance-all-one');if(enhanceOne)enhanceOne.disabled=!bulk.eligible||state.essence<=0;const enhanceFive=document.getElementById('idle-enhance-all-five');if(enhanceFive)enhanceFive.disabled=!bulk.eligible||state.essence<=0;
   const summary=document.getElementById('idle-item-collection-stats');if(summary){const s=inventory.summary||{};summary.innerHTML=`<span><i class="fas fa-layer-group"></i><b>${s.worlds||0}</b><small>Sets découverts</small></span><span><i class="fas fa-wand-sparkles"></i><b>${s.effects||0}</b><small>Stats différentes</small></span><span><i class="fas fa-circle-check"></i><b>${s.completeFamilies||0}</b><small>Sets assemblables</small></span><span><i class="fas fa-user-shield"></i><b>${s.equipped||0}</b><small>Objets équipés</small></span>`;}
+  const setCodex=document.getElementById('idle-set-codex');if(setCodex)setCodex.innerHTML=(inventory.sets||[]).map((set)=>{const count=inventory.items.filter((item)=>item.setKey===set.key).length;const ready=Math.floor(count/(set.required||2));const mode=IDLE_SET_MODE_META[set.mode]||IDLE_SET_MODE_META.dps;return `<button type="button" class="mode-${escapeHtml(set.mode||'dps')} ${idleItemSet===set.key?'active':''} ${ready?'ready':''}" data-codex-set="${escapeHtml(set.key)}" aria-pressed="${idleItemSet===set.key}"><i class="fas ${mode.icon}"></i><span><small>${escapeHtml(mode.label).toUpperCase()} · ${set.required||2} OBJETS</small><b>${escapeHtml(set.name)}</b><em>${escapeHtml(set.description||'Bonus de panoplie')}</em></span><strong>${count}<small>pièce${count>1?'s':''}</small>${ready?`<i class="fas fa-circle-check" title="${ready} bonus assemblable${ready>1?'s':''}"></i>`:''}</strong></button>`;}).join('');
   const setSelect=document.getElementById('idle-item-set');if(setSelect){const current=idleItemSet;setSelect.innerHTML='<option value="all">Tous les sets</option>'+(inventory.sets||[]).map((set)=>`<option value="${escapeHtml(set.key)}">${escapeHtml(set.name)}</option>`).join('');setSelect.value=(inventory.sets||[]).some((set)=>set.key===current)?current:'all';idleItemSet=setSelect.value;}
   const active=(state.slots||[]).filter((s)=>s.character);
-  if(!active.some((slot)=>slot.index===idleEquipmentTargetSlot))idleEquipmentTargetSlot=active[0]?.index??null;
+  if(!active.some((slot)=>slot.index===idleEquipmentTargetSlot)){idleEquipmentTargetSlot=active[0]?.index??null;persistIdleInventoryPrefs();}
   const target=active.find((slot)=>slot.index===idleEquipmentTargetSlot)||null;
   const targetSelect=document.getElementById('idle-equipment-target');if(targetSelect)targetSelect.innerHTML=active.length?active.map((slot)=>`<option value="${slot.index}" ${slot.index===idleEquipmentTargetSlot?'selected':''}>${escapeHtml(slot.character.name)} · ${escapeHtml(idleRoleFor(slot.character).name)}</option>`).join(''):'<option>Aucun héros actif</option>';
   if(targetSelect)targetSelect.disabled=!active.length;
   const targetName=document.getElementById('idle-equipment-target-name');if(targetName)targetName.textContent=target?.character?.name||'Aucun héros actif';
   const targetHint=document.getElementById('idle-equipment-target-hint');if(targetHint)targetHint.textContent=target?`${idleRoleFor(target.character).name} · les comparaisons ci-dessous concernent ce héros.`:'Ajoute d’abord un personnage dans l’équipe.';
+  const recommendedItems=idleRecommendedItems(idleEquipmentTargetSlot);if(!active.length&&idleItemRecommendedOnly){idleItemRecommendedOnly=false;persistIdleInventoryPrefs();}if(recommendedToggle){recommendedToggle.disabled=!active.length;recommendedToggle.classList.toggle('active',idleItemRecommendedOnly);recommendedToggle.setAttribute('aria-pressed',String(idleItemRecommendedOnly));}
   const loadouts=document.getElementById('idle-loadouts');
   if(loadouts)loadouts.innerHTML=active.length?active.map((slot)=>{
     const equipped=inventory.items.filter((x)=>x.equippedSlotIndex===slot.index);
@@ -1244,14 +1280,19 @@ function renderIdleInventory(state){
     const setDetails=setStatuses.length?setStatuses.map((set)=>{const mode=IDLE_SET_MODE_META[set.mode]||IDLE_SET_MODE_META.dps;return `<span class="${set.stacks?'active':'incomplete'} mode-${escapeHtml(set.mode||'dps')}"><i class="fas ${mode.icon}"></i><span><small>SET ${escapeHtml(set.name).toUpperCase()} · EFFET ${mode.label.toUpperCase()} · ${set.count} OBJET${set.count>1?'S':''}</small><b>${escapeHtml(set.description)}</b><em>${set.stacks?`${set.stacks} bonus actif${set.stacks>1?'s':''}${set.count%set.required?` · encore ${set.missing} pour le suivant`:''}`:`Encore ${set.missing} objet${set.missing>1?'s':''} requis`}</em></span></span>`;}).join(''):'<span class="empty"><i class="fas fa-circle-info"></i><span><small>AUCUN SET COMMENCÉ</small><b>Équipe plusieurs objets du même set pour obtenir un bonus.</b></span></span>';
     return `<article class="idle-loadout ${activeSets.length?'complete':''} ${selected?'selected':''}"><header><span class="idle-loadout-portrait" role="img" aria-label="Portrait de ${escapeHtml(slot.character.name)}" ${slot.character.imageUrl?`style="background-image:url('${escapeHtml(slot.character.imageUrl)}')"`:''}></span><span><small>${escapeHtml(idleRoleFor(slot.character).name)} · ${equipped.length}/6 objets</small><b>${escapeHtml(slot.character.name)}</b><em><i class="fas fa-layer-group"></i> ${activeSets.length?`${activeSets.length} bonus de set actif${activeSets.length>1?'s':''}`:'Aucun bonus de set actif'}</em></span><strong title="Puissance cumulée des objets">+${Math.round(total*100)}%</strong><span class="idle-loadout-actions"><button type="button" class="idle-loadout-select" data-loadout-target="${slot.index}"><i class="fas ${selected?'fa-circle-check':'fa-crosshairs'}"></i> ${selected?'Héros sélectionné':'Équiper ce héros'}</button>${(!selected&&target&&equipped.length)?`<button type="button" class="idle-loadout-transfer" data-loadout-transfer="${slot.index}" title="Retire les ${equipped.length} objets équipés ici et les équipe directement sur ${escapeHtml(target.character.name)}"><i class="fas fa-right-left"></i> Transférer vers ${escapeHtml(target.character.name)}</button>`:''}</span></header><div class="idle-loadout-set-status">${setDetails}</div><div class="idle-loadout-items">${IDLE_RUNE_KINDS.map((kind)=>{const meta=IDLE_ITEM_META[kind];const item=equipped.find((x)=>x.kind===kind);return item?`<button type="button" data-loadout-empty="${kind}" data-loadout-slot="${slot.index}" class="r-${item.rarity}" title="Remplacer ${escapeHtml(item.name)}">${idleItemArt(item,'mini')}<span><small>${meta.label} · Set ${escapeHtml(item.setName||'Énergie')}</small><b>+${item.enhancementLevel||0} · ${escapeHtml(item.name)}</b><em>${escapeHtml(idleItemEffect(item))} · cliquer pour remplacer</em></span><strong>${Math.round((item.effectiveBonus||item.bonus||0)*100)}%</strong><i class="fas fa-repeat"></i></button>`:`<button type="button" class="idle-loadout-empty" data-loadout-empty="${kind}" data-loadout-slot="${slot.index}" title="Choisir un objet pour ${escapeHtml(slot.character.name)}"><i class="fas ${meta.icon}"></i><span><small>${meta.label}</small><b><i class="fas fa-plus"></i> Équiper rapidement</b></span><i class="fas fa-chevron-right"></i></button>`;}).join('')}</div></article>`;
   }).join(''):'<p class="hint">Assigne un personnage à ton équipe pour pouvoir l’équiper.</p>';
+  const normalizedSearch=idleNormalizeSearch(idleItemSearch);
   let items=inventory.items.filter((x)=>(idleItemFilter==='all'||x.kind===idleItemFilter)
     &&(idleItemRarity==='all'||x.rarity===idleItemRarity)
     &&(idleItemSet==='all'||x.setKey===idleItemSet)
-    &&(idleItemStatus==='all'||(idleItemStatus==='free'&&!x.equipped&&!x.locked)||(idleItemStatus==='equipped'&&x.equipped)||(idleItemStatus==='resting'&&x.equippedResting)||(idleItemStatus==='locked'&&x.locked)));
+    &&(idleItemStatus==='all'||(idleItemStatus==='free'&&!x.equipped&&!x.locked)||(idleItemStatus==='equipped'&&x.equipped)||(idleItemStatus==='resting'&&x.equippedResting)||(idleItemStatus==='locked'&&x.locked))
+    &&(!normalizedSearch||idleItemSearchHaystack(x).includes(normalizedSearch))
+    &&(!idleItemRecommendedOnly||recommendedItems.has(x.id)));
   items=[...items].sort((a,b)=>idleItemSort==='recent'?new Date(b.obtainedAt)-new Date(a.obtainedAt):idleItemSort==='rarity'?(IDLE_RARITY_ORDER[b.rarity]-IDLE_RARITY_ORDER[a.rarity]):((b.effectiveBonus||b.bonus)-(a.effectiveBonus||a.bonus)));
+  const results=document.getElementById('idle-inventory-results');if(results){const filters=[idleItemFilter!=='all'?'emplacement':null,idleItemRarity!=='all'?'rareté':null,idleItemSet!=='all'?'set':null,idleItemStatus!=='all'?'état':null,normalizedSearch?'recherche':null,idleItemRecommendedOnly?'conseillés':null].filter(Boolean);results.innerHTML=`<span><i class="fas fa-boxes-stacked"></i><b>${items.length}</b> objet${items.length>1?'s':''} affiché${items.length>1?'s':''} sur ${inventory.items.length}</span>${target?`<span><i class="fas fa-wand-magic-sparkles"></i><b>${recommendedItems.size}</b> choix conseillé${recommendedItems.size>1?'s':''} pour ${escapeHtml(target.character.name)}</span>`:''}${filters.length?`<em>${filters.length} filtre${filters.length>1?'s':''} actif${filters.length>1?'s':''}</em>`:''}`;}
   const salvageableIds=new Set(inventory.items.filter((item)=>!item.locked&&!item.equipped).map((item)=>item.id));idleSelectedItems=new Set([...idleSelectedItems].filter((id)=>salvageableIds.has(id)));
   grid.innerHTML=items.length?items.map((item)=>{
     const meta=IDLE_ITEM_META[item.kind]||IDLE_ITEM_META.rune1;const equipped=item.equipped;const selectable=!item.locked&&!equipped;const selected=idleSelectedItems.has(item.id);const defaultSlot=equipped&&item.equippedSlotIndex!==null?item.equippedSlotIndex:idleEquipmentTargetSlot;const maxed=(item.enhancementLevel||0)>=15;const setProjection=idleItemSetProjection(item,defaultSlot);
+    const recommendation=recommendedItems.get(item.id);
     const expanded=idleExpandedItems.has(item.id);
     const [primaryAffix]=item.affixesDetailed||[];
     // Un objet équipé sur un héros laissé au repos (pas dans l'équipe active)
@@ -1261,8 +1302,9 @@ function renderIdleInventory(state){
     const setMode=IDLE_SET_MODE_META[item.setMode]||IDLE_SET_MODE_META.dps;
     const body=`<div class="idle-item-set ${setProjection?.stacks?'active':'incomplete'} mode-${escapeHtml(item.setMode||'dps')}"><i class="fas ${setMode.icon}"></i><span><small>SET ${escapeHtml(item.setName||'Énergie').toUpperCase()} · EFFET ${setMode.label.toUpperCase()}</small><b>${escapeHtml(item.setDescription||'Bonus de set')}</b>${setState}</span></div><div class="idle-item-substats"><small>${primaryAffix?`EFFET UNIQUE : ${escapeHtml(primaryAffix.label)} +${Math.round(primaryAffix.value*100)}%`:'SOUS-STATS'}</small><div>${idleRuneDetailChips(item)}</div></div>${equipped?`<p class="idle-item-equipped"><i class="fas fa-user-shield"></i><span>Équipé sur <b>${escapeHtml(item.equippedCharacter||'un héros')}</b>${item.equippedResting?'<em>Hors de l’équipe active : ses bonus ne produisent pas actuellement.</em>':''}</span></p>${(target&&item.equippedSlotIndex!==idleEquipmentTargetSlot)?`<div class="idle-item-target-summary"><small>COMPARÉ AU HÉROS SÉLECTIONNÉ</small><b>${escapeHtml(target.character.name)}</b></div><div data-item-comparison>${idleItemComparison(item,idleEquipmentTargetSlot)}</div>`:''}`:active.length?`<div class="idle-item-target-summary"><small>COMPARAISON POUR</small><b>${escapeHtml(target?.character?.name||'le héros sélectionné')}</b></div><div data-item-comparison>${idleItemComparison(item,defaultSlot)}</div>`:'<p class="idle-item-equipped">Aucun héros actif</p>'}<footer>${equipped?`<button class="btn-secondary" data-item-enhance="${item.id}" data-item-enhance-amount="1" ${maxed||idleState.essence<item.enhanceCost?'disabled':''}><i class="fas fa-plus"></i> ${maxed?'Niveau maximum':`+1 · ${idleFormatNumber(item.enhanceCost)} Essence`}</button><button class="btn-primary" data-item-enhance="${item.id}" data-item-enhance-amount="max" ${maxed||idleState.essence<item.enhanceCost?'disabled':''}><i class="fas fa-angles-up"></i> Jusqu’à +15</button>${(active.length&&target&&item.equippedSlotIndex!==idleEquipmentTargetSlot)?`<button class="btn-secondary" data-item-equip="${item.id}" title="Retire l’objet du héros actuel et l’équipe directement sur ${escapeHtml(target.character.name)}"><i class="fas fa-right-left"></i> Transférer vers ${escapeHtml(target.character.name)}</button>`:''}<button class="btn-secondary" data-item-unequip="${item.id}"><i class="fas fa-arrow-right-from-bracket"></i> Retirer</button>`:active.length?`<button class="btn-primary" data-item-equip="${item.id}"><i class="fas fa-shield-halved"></i> Équiper sur ${escapeHtml(target?.character?.name||'ce héros')}</button>`:''}<button class="btn-secondary" data-item-reroll="${item.id}" ${idleState.essence<(item.rerollCost||0)?'disabled':''} title="Meulage : re-tire la puissance de l’effet unique et des affixes aux valeurs de ton stage actuel. Le résultat peut être meilleur ou moins bon."><i class="fas fa-dice"></i> Meuler · ${idleFormatNumber(item.rerollCost||0)}</button>${equipped?'':`<button class="btn-secondary danger" data-item-salvage="${item.id}" ${selectable?'':'disabled'}><i class="fas fa-recycle"></i> Recycler · ${idleFormatNumber(item.salvageValue)}</button>`}</footer>`;
     const safeBody=body.replace('Le résultat peut être meilleur ou moins bon.','Le meilleur jet est conservé automatiquement.').replace('> Meuler ·','> Meuler sans risque ·');
-    return `<article class="idle-item-card r-${item.rarity} ${equipped?'equipped':''} ${selected?'selected':''} ${expanded?'expanded':''}" data-item-id="${item.id}"><div class="idle-item-row" data-item-expand="${item.id}">${idleItemArt(item,'mini')}<span class="idle-item-row-info"><b>${escapeHtml(item.name)}</b><small>${meta.label} · ${escapeHtml(idleRarityLabel(item.rarity))} · Set ${escapeHtml(item.setName||'Énergie')}</small></span><span class="idle-item-row-stat"><b>${escapeHtml(idleItemEffect(item))}</b><em>+${item.enhancementLevel||0}/15</em></span><strong class="idle-item-status ${equipped?'equipped':'available'}">${equipped?'<i class="fas fa-user-shield"></i>':'<i class="fas fa-circle"></i>'}</strong><span class="idle-item-card-actions"><button type="button" data-item-select="${item.id}" title="${selectable?(selected?'Retirer de la sélection':'Sélectionner pour recycler'):'Verrouillé ou équipé'}" ${selectable?'':'disabled'}><i class="fas ${selected?'fa-square-check':'fa-square'}"></i></button><button type="button" data-item-lock="${item.id}" title="${item.locked?'Déverrouiller':'Protéger cet objet'}"><i class="fas ${item.locked?'fa-lock':'fa-lock-open'}"></i></button><button type="button" class="idle-item-expand-btn" data-item-expand="${item.id}" aria-expanded="${expanded}" title="${expanded?'Réduire':'Voir le détail'}"><i class="fas fa-chevron-down"></i></button></span></div>${expanded?`<div class="idle-item-body">${safeBody}</div>`:''}</article>`;
+    return `<article class="idle-item-card r-${item.rarity} ${equipped?'equipped':''} ${selected?'selected':''} ${expanded?'expanded':''} ${recommendation?'recommended':''}" data-item-id="${item.id}">${recommendation?`<span class="idle-item-recommendation"><i class="fas ${recommendation.completes?'fa-layer-group':'fa-wand-magic-sparkles'}"></i> ${escapeHtml(recommendation.reason)}</span>`:''}<div class="idle-item-row" data-item-expand="${item.id}">${idleItemArt(item,'mini')}<span class="idle-item-row-info"><b>${escapeHtml(item.name)}</b><small>${meta.label} · ${escapeHtml(idleRarityLabel(item.rarity))} · Set ${escapeHtml(item.setName||'Énergie')}</small></span><span class="idle-item-row-stat"><b>${escapeHtml(idleItemEffect(item))}</b><em>+${item.enhancementLevel||0}/15</em></span><strong class="idle-item-status ${equipped?'equipped':'available'}">${equipped?'<i class="fas fa-user-shield"></i>':'<i class="fas fa-circle"></i>'}</strong><span class="idle-item-card-actions"><button type="button" data-item-select="${item.id}" title="${selectable?(selected?'Retirer de la sélection':'Sélectionner pour recycler'):'Verrouillé ou équipé'}" ${selectable?'':'disabled'}><i class="fas ${selected?'fa-square-check':'fa-square'}"></i></button><button type="button" data-item-lock="${item.id}" title="${item.locked?'Déverrouiller':'Protéger cet objet'}"><i class="fas ${item.locked?'fa-lock':'fa-lock-open'}"></i></button><button type="button" class="idle-item-expand-btn" data-item-expand="${item.id}" aria-expanded="${expanded}" title="${expanded?'Réduire':'Voir le détail'}"><i class="fas fa-chevron-down"></i></button></span></div>${expanded?`<div class="idle-item-body">${safeBody}</div>`:''}</article>`;
   }).join(''):'<div class="idle-inventory-empty"><i class="fas fa-box-open"></i><b>Aucun objet dans cette catégorie</b><span>Un filtre peut masquer tes objets équipés ou précieux.</span><button type="button" class="btn-secondary" data-item-reset-filters><i class="fas fa-filter-circle-xmark"></i> Afficher tous les objets</button></div>';
+  grid.querySelectorAll('[data-item-id]').forEach((card)=>{const item=inventory.items.find((entry)=>String(entry.id)===card.dataset.itemId);if(item)card.classList.add(`kind-${item.kind}`);});
   renderIdleBulkSelection();
 }
 async function equipIdleItem(itemId,slotIndex){try{renderIdleState(await api('/api/idle/equipment/equip',{method:'POST',body:JSON.stringify({itemId,slotIndex})}));idleSpawnFloat('ÉQUIPEMENT MODIFIÉ','xp');return true;}catch(e){idleNotify(e.message,'error');return false;}}
@@ -1273,9 +1315,11 @@ async function transferIdleEquipment(fromSlotIndex,toSlotIndex){
 }
 async function autoEquipIdleItems(){const button=document.getElementById('idle-auto-equip');if(button){button.disabled=true;button.innerHTML='<i class="fas fa-spinner fa-spin"></i> Remplissage…';}try{const result=await api('/api/idle/equipment/auto-equip',{method:'POST',body:JSON.stringify({})});renderIdleState(result.state);const o=result.optimization||{};if(o.equipped){idleSpawnFloat(`${o.equipped} EMPLACEMENT${o.equipped>1?'S':''} COMBLÉ${o.equipped>1?'S':''}`,'crit');idleNotify(`${o.equipped} pièce${o.equipped>1?'s':''} libre${o.equipped>1?'s':''} équipée${o.equipped>1?'s':''} sur les emplacements vides. Les panoplies restent à construire à la main.`,'success');}else idleNotify('Aucun emplacement de rune vide à combler (ou aucun objet libre du bon type).','success');}catch(e){idleNotify(e.message,'error');}finally{if(button){button.disabled=false;button.innerHTML='<i class="fas fa-shield-halved"></i> Combler les emplacements';}}}
 function resetIdleInventoryFilters(){
-  idleItemFilter='all';idleItemRarity='all';idleItemSet='all';idleItemStatus='all';
+  idleItemFilter='all';idleItemRarity='all';idleItemSet='all';idleItemStatus='all';idleItemSearch='';idleItemRecommendedOnly=false;
+  persistIdleInventoryPrefs();
   document.querySelectorAll('#idle-item-filters [data-item-filter]').forEach((button)=>button.classList.toggle('active',button.dataset.itemFilter==='all'));
   for(const id of ['idle-item-rarity','idle-item-set','idle-item-status']){const select=document.getElementById(id);if(select)select.value='all';}
+  const search=document.getElementById('idle-item-search');if(search)search.value='';
 }
 function focusIdleInventoryItem(itemId){resetIdleInventoryFilters();idleExpandedItems.add(String(itemId));renderIdleInventory(idleState);requestAnimationFrame(()=>{const card=Array.from(document.querySelectorAll('#idle-inventory-grid [data-item-id]')).find((item)=>item.dataset.itemId===String(itemId));card?.scrollIntoView({behavior:'smooth',block:'center'});card?.classList.add('idle-item-focus');setTimeout(()=>card?.classList.remove('idle-item-focus'),1400);});}
 async function lockIdleItem(itemId,locked){try{await api('/api/idle/equipment/lock',{method:'POST',body:JSON.stringify({itemId,locked})});const item=idleState.inventory.items.find((x)=>x.id===itemId);if(item)item.locked=locked;renderIdleInventory(idleState);}catch(e){idleNotify(e.message,'error');}}
@@ -2652,7 +2696,7 @@ async function ascendIdleSlot(slotIndex) {
 }
 async function optimizeIdleTeam(){const btn=document.getElementById('idle-optimize-team');if(btn)btn.disabled=true;try{const state=await api('/api/idle/optimize-team',{method:'POST',body:JSON.stringify({})});const o=state.optimization||{};idleSpawnFloat(`${o.placed||0} HÉROS PLACÉ${(o.placed||0)>1?'S':''}`,'crit');idleAddCombatLog(o.placed?`Remplissage : ${o.selected.join(', ')}`:'Aucun emplacement à combler','fa-user-plus');idleNotify(o.placed?`${o.placed} recrue${o.placed>1?'s':''} placée${o.placed>1?'s':''} dans les emplacements vides. À toi d’ajuster synergies et formation.`:'Aucun emplacement vide à combler.','success');if(typeof sfx!=='undefined'&&sfx.idleUpgrade)sfx.idleUpgrade();renderIdleState(state);}catch(e){idleNotify(e.message,'error');}finally{if(btn)btn.disabled=false;}}
 async function enhanceIdleEquipment(itemId,amount=1){try{const state=await api('/api/idle/equipment/enhance',{method:'POST',body:JSON.stringify({itemId,amount})});idleSpawnFloat('OBJET AMÉLIORÉ','xp');renderIdleState(state);requestAnimationFrame(()=>{const card=Array.from(document.querySelectorAll('#idle-inventory-grid [data-item-id]')).find((node)=>node.dataset.itemId===String(itemId));card?.scrollIntoView({block:'center'});card?.classList.add('idle-item-focus');setTimeout(()=>card?.classList.remove('idle-item-focus'),1000);});}catch(e){idleNotify(e.message,'error');}}
-function openIdleEquipmentForSlot(slotIndex,kind='all'){idleEquipmentTargetSlot=Number(slotIndex);idleItemFilter=kind||'all';document.querySelectorAll('#idle-item-filters [data-item-filter]').forEach((button)=>button.classList.toggle('active',button.dataset.itemFilter===idleItemFilter));idleShowPanel('equipment');requestAnimationFrame(()=>renderIdleInventory(idleState));}
+function openIdleEquipmentForSlot(slotIndex,kind='all'){idleEquipmentTargetSlot=Number(slotIndex);idleItemFilter=kind||'all';persistIdleInventoryPrefs();document.querySelectorAll('#idle-item-filters [data-item-filter]').forEach((button)=>button.classList.toggle('active',button.dataset.itemFilter===idleItemFilter));idleShowPanel('equipment');requestAnimationFrame(()=>renderIdleInventory(idleState));}
 
 async function buyIdleUpgrade(type, cardEl, amount = 1) {
   let result;
@@ -2733,7 +2777,6 @@ function idleRosterProjection(c){
   return {synergyBonus,formationBonus,sameSeries,exactDelta:Number.isFinite(exactDelta)?exactDelta:null,exactPercent:Number.isFinite(exactPercent)?exactPercent:null,score:Number.isFinite(exactDelta)?exactDelta:synergyBonus*1000+formationBonus*800+(IDLE_RARITY_ORDER[c.rarity]||0)*3+Math.log10(1+(c.rate||c.baseRate||0))*5};
 }
 // Insensible à la casse et aux accents (« Éveillé » doit matcher « eveille »).
-function idleNormalizeSearch(text){return String(text||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
 function renderIdleRosterList(){
   const list=document.getElementById('idle-picker-list');const hint=document.getElementById('idle-picker-hint');if(!list||!hint)return;
   const searchNeedle=idleNormalizeSearch(idleRosterSearch);
@@ -2994,7 +3037,7 @@ function initIdleUI() {
   document.getElementById('idle-guide-btn')?.addEventListener('click',openIdleGuide);document.getElementById('idle-guide-close')?.addEventListener('click',()=>document.getElementById('idle-guide-modal')?.classList.add('hidden'));document.getElementById('idle-guide-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-guide-modal')e.currentTarget.classList.add('hidden');const b=e.target.closest('[data-guide-tab]');if(b){e.currentTarget.classList.add('hidden');idleShowPanel(b.dataset.guideTab);}});
   document.getElementById('idle-ranking-btn')?.addEventListener('click',()=>openIdleRanking());document.getElementById('idle-ranking-close')?.addEventListener('click',()=>document.getElementById('idle-ranking-modal')?.classList.add('hidden'));document.getElementById('idle-ranking-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-ranking-modal')e.currentTarget.classList.add('hidden');const tab=e.target.closest('[data-idle-ranking]');if(tab)return openIdleRanking(tab.dataset.idleRanking);const player=e.target.closest('[data-idle-player]');if(player)return openIdlePlayer(player.dataset.idlePlayer);});
   document.getElementById('idle-player-close')?.addEventListener('click',()=>document.getElementById('idle-player-modal')?.classList.add('hidden'));document.getElementById('idle-player-modal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-player-modal')e.currentTarget.classList.add('hidden');if(e.target.closest('#idle-player-share'))shareIdlePlayer();});
-  const settingsModal=document.getElementById('idle-settings-modal');document.getElementById('idle-settings-btn')?.addEventListener('click',()=>{applyIdleComfortSettings();settingsModal?.classList.remove('hidden');});document.getElementById('idle-settings-close')?.addEventListener('click',()=>settingsModal?.classList.add('hidden'));settingsModal?.addEventListener('click',(e)=>{if(e.target===settingsModal)settingsModal.classList.add('hidden');});document.getElementById('idle-volume')?.addEventListener('input',(e)=>sfx?.setIdleVolume?.(e.target.value));document.getElementById('idle-effects-reduced')?.addEventListener('change',(e)=>{sfx?.setIdleEffectsReduced?.(!e.target.checked);applyIdleComfortSettings();});
+  const settingsModal=document.getElementById('idle-settings-modal');document.getElementById('idle-settings-btn')?.addEventListener('click',()=>{applyIdleComfortSettings();mountIdleShortcutHelp();settingsModal?.classList.remove('hidden');});document.getElementById('idle-settings-close')?.addEventListener('click',()=>settingsModal?.classList.add('hidden'));settingsModal?.addEventListener('click',(e)=>{if(e.target===settingsModal)settingsModal.classList.add('hidden');});document.getElementById('idle-volume')?.addEventListener('input',(e)=>sfx?.setIdleVolume?.(e.target.value));document.getElementById('idle-effects-reduced')?.addEventListener('change',(e)=>{sfx?.setIdleEffectsReduced?.(!e.target.checked);applyIdleComfortSettings();});
   ['large-text','high-contrast','data-saver'].forEach((key)=>document.getElementById(`idle-${key}`)?.addEventListener('change',(e)=>{localStorage.setItem(`idle-${key}`,e.target.checked?'1':'0');applyIdleComfortSettings();if(key==='data-saver'&&idleSyncTicker)idleStartSyncTicker();}));
   document.getElementById('idle-connection-retry')?.addEventListener('click',()=>refreshIdleState());
   window.addEventListener('offline',()=>{idleSetConnectionState('offline');idleAnnounce('Connexion perdue. La dernière progression reste affichée.');});
@@ -3010,11 +3053,15 @@ function initIdleUI() {
   document.getElementById('idle-boss-reveal-continue')?.addEventListener('click',closeBossReward);
   document.getElementById('idle-boss-reveal')?.addEventListener('click',(e)=>{if(e.target.id==='idle-boss-reveal')closeBossReward();});
   document.getElementById('idle-boss-reveal')?.addEventListener('click',(e)=>{if(e.target.closest('[data-open-equipment]')){closeBossReward();idleShowPanel('equipment');}});
-  document.getElementById('idle-item-filters')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-item-filter]');if(!b)return;idleItemFilter=b.dataset.itemFilter;document.querySelectorAll('[data-item-filter]').forEach((x)=>x.classList.toggle('active',x===b));renderIdleInventory(idleState);});
-  document.getElementById('idle-item-sort')?.addEventListener('change',(e)=>{idleItemSort=e.target.value;renderIdleInventory(idleState);});
-  document.getElementById('idle-item-rarity')?.addEventListener('change',(e)=>{idleItemRarity=e.target.value;renderIdleInventory(idleState);});
-  document.getElementById('idle-item-set')?.addEventListener('change',(e)=>{idleItemSet=e.target.value;renderIdleInventory(idleState);});
-  document.getElementById('idle-item-status')?.addEventListener('change',(e)=>{idleItemStatus=e.target.value;renderIdleInventory(idleState);});
+  document.getElementById('idle-item-filters')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-item-filter]');if(!b)return;idleItemFilter=b.dataset.itemFilter;persistIdleInventoryPrefs();document.querySelectorAll('[data-item-filter]').forEach((x)=>x.classList.toggle('active',x===b));renderIdleInventory(idleState);});
+  document.getElementById('idle-set-codex')?.addEventListener('click',(e)=>{const button=e.target.closest('[data-codex-set]');if(!button)return;idleItemSet=idleItemSet===button.dataset.codexSet?'all':button.dataset.codexSet;persistIdleInventoryPrefs();renderIdleInventory(idleState);document.querySelector('.idle-inventory-commandbar')?.scrollIntoView({behavior:'smooth',block:'start'});});
+  document.getElementById('idle-item-sort')?.addEventListener('change',(e)=>{idleItemSort=e.target.value;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-rarity')?.addEventListener('change',(e)=>{idleItemRarity=e.target.value;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-set')?.addEventListener('change',(e)=>{idleItemSet=e.target.value;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-status')?.addEventListener('change',(e)=>{idleItemStatus=e.target.value;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-search')?.addEventListener('input',(e)=>{idleItemSearch=e.target.value;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-recommended-only')?.addEventListener('click',()=>{idleItemRecommendedOnly=!idleItemRecommendedOnly;persistIdleInventoryPrefs();renderIdleInventory(idleState);});
+  document.getElementById('idle-item-reset')?.addEventListener('click',()=>{resetIdleInventoryFilters();renderIdleInventory(idleState);document.getElementById('idle-item-search')?.focus();});
   const salvageRarity=document.getElementById('idle-salvage-rarity');const salvageEnhancement=document.getElementById('idle-salvage-enhancement');const salvageKeepSets=document.getElementById('idle-salvage-keep-sets');
   if(salvageRarity)salvageRarity.value=idleSalvageRules.rarity;if(salvageEnhancement)salvageEnhancement.value=String(idleSalvageRules.enhancement);if(salvageKeepSets)salvageKeepSets.checked=!!idleSalvageRules.keepSets;
   const saveSalvageRules=()=>{idleSalvageRules={rarity:salvageRarity?.value||'rare',enhancement:Number(salvageEnhancement?.value||0),keepSets:!!salvageKeepSets?.checked};localStorage.setItem('idle-salvage-rules',JSON.stringify(idleSalvageRules));};
@@ -3022,11 +3069,12 @@ function initIdleUI() {
   document.getElementById('idle-select-recyclable')?.addEventListener('click',selectIdleItemsBySalvageRules);
   document.getElementById('idle-auto-equip')?.addEventListener('click',autoEquipIdleItems);
   document.getElementById('idle-rune-dungeon-grid')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-rune-dungeon]');if(b&&!b.disabled)runIdleRuneDungeon(b.dataset.runeDungeon);});
-  document.getElementById('idle-equipment-target')?.addEventListener('change',(e)=>{idleEquipmentTargetSlot=Number(e.target.value);renderIdleInventory(idleState);});
+  document.getElementById('idle-equipment-target')?.addEventListener('change',(e)=>{idleEquipmentTargetSlot=Number(e.target.value);persistIdleInventoryPrefs();renderIdleInventory(idleState);});
   document.getElementById('idle-equipment-target-next')?.addEventListener('click',()=>{
     const active=(idleState?.slots||[]).filter((slot)=>slot.character);if(!active.length)return;
     const currentIndex=active.findIndex((slot)=>slot.index===idleEquipmentTargetSlot);
     idleEquipmentTargetSlot=active[(currentIndex+1)%active.length].index;
+    persistIdleInventoryPrefs();
     renderIdleInventory(idleState);
   });
   document.getElementById('idle-equipment-auto-lock')?.addEventListener('click',autoLockIdleEquipment);
@@ -3034,7 +3082,7 @@ function initIdleUI() {
   document.getElementById('idle-enhance-all-one')?.addEventListener('click',()=>enhanceAllIdleEquipment(1));
   document.getElementById('idle-enhance-all-five')?.addEventListener('click',()=>enhanceAllIdleEquipment(5));
   document.getElementById('idle-expeditions')?.addEventListener('click',(e)=>{const start=e.target.closest('[data-expedition-start]');if(start&&!start.disabled)return startIdleExpedition(start.dataset.expeditionStart);const claim=e.target.closest('[data-expedition-claim]');if(claim&&!claim.disabled)claimIdleExpedition();});
-  document.getElementById('idle-loadouts')?.addEventListener('click',(e)=>{const quick=e.target.closest('[data-loadout-empty]');if(quick)return openIdleEquipmentPicker(Number(quick.dataset.loadoutSlot),quick.dataset.loadoutEmpty);const target=e.target.closest('[data-loadout-target]');if(target){idleEquipmentTargetSlot=Number(target.dataset.loadoutTarget);renderIdleInventory(idleState);return;}const transfer=e.target.closest('[data-loadout-transfer]');if(transfer)return transferIdleEquipment(Number(transfer.dataset.loadoutTransfer),idleEquipmentTargetSlot);const item=e.target.closest('[data-loadout-item]');if(item)focusIdleInventoryItem(item.dataset.loadoutItem);});
+  document.getElementById('idle-loadouts')?.addEventListener('click',(e)=>{const quick=e.target.closest('[data-loadout-empty]');if(quick)return openIdleEquipmentPicker(Number(quick.dataset.loadoutSlot),quick.dataset.loadoutEmpty);const target=e.target.closest('[data-loadout-target]');if(target){idleEquipmentTargetSlot=Number(target.dataset.loadoutTarget);persistIdleInventoryPrefs();renderIdleInventory(idleState);return;}const transfer=e.target.closest('[data-loadout-transfer]');if(transfer)return transferIdleEquipment(Number(transfer.dataset.loadoutTransfer),idleEquipmentTargetSlot);const item=e.target.closest('[data-loadout-item]');if(item)focusIdleInventoryItem(item.dataset.loadoutItem);});
   const equipmentPicker=document.getElementById('idle-equipment-picker');document.getElementById('idle-equipment-picker-close')?.addEventListener('click',()=>equipmentPicker?.classList.add('hidden'));equipmentPicker?.addEventListener('click',async(e)=>{if(e.target===equipmentPicker)return equipmentPicker.classList.add('hidden');if(e.target.closest('[data-picker-full]')){equipmentPicker.classList.add('hidden');openIdleEquipmentForSlot(idleEquipmentPickerSlot,idleEquipmentPickerKind);return;}const equip=e.target.closest('[data-picker-equip]');if(equip&&!equip.disabled){equip.disabled=true;const success=await equipIdleItem(equip.dataset.pickerEquip,idleEquipmentPickerSlot);if(success)equipmentPicker.classList.add('hidden');else equip.disabled=false;}});
   document.getElementById('idle-run-shortcut')?.addEventListener('click',()=>{idleShowPanel('progression');requestAnimationFrame(()=>document.getElementById('idle-run-journey')?.scrollIntoView({behavior:'smooth',block:'start'}));});
   document.getElementById('idle-salvage-selected')?.addEventListener('click',()=>salvageIdleItems([...idleSelectedItems]));
@@ -3058,8 +3106,11 @@ function initIdleUI() {
     const openModals=[...document.querySelectorAll('.modal-overlay[id^="idle-"]:not(.hidden)')];
     if(e.key==='Escape'&&openModals.length){e.preventDefault();openModals.at(-1).classList.add('hidden');return;}
     if(e.key==='Tab'&&openModals.length){idleTrapModalFocus(e,openModals.at(-1));return;}
-    const editable=e.target.closest?.('input,textarea,select,button,[contenteditable="true"]');
-    if(e.code==='Space'&&!editable&&!openModals.length&&idleActivePanel==='home'){e.preventDefault();clickIdle();}
+    const typing=e.target.closest?.('input,textarea,select,[contenteditable="true"]');
+    const interactive=typing||e.target.closest?.('button,a[href]');
+    if(e.code==='Space'&&!interactive&&!openModals.length&&idleActivePanel==='home'){e.preventDefault();clickIdle();}
+    const shortcutIndex=/^Digit[1-7]$/.test(e.code)?Number(e.code.slice(-1))-1:-1;
+    if(shortcutIndex>=0&&!typing&&!openModals.length){e.preventDefault();const panel=IDLE_PANEL_NAMES[shortcutIndex];if(idleShowPanel(panel)!==false)document.getElementById(`idle-tab-${panel}`)?.focus();}
   });
   document.getElementById('idle-picker-close')?.addEventListener('click', closeIdlePicker);
   document.getElementById('idle-picker')?.addEventListener('click', (e) => { if (e.target.id === 'idle-picker') closeIdlePicker(); });
