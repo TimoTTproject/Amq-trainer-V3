@@ -452,18 +452,12 @@ function investmentCostIndex(stage) {
 // l'emplacement qu'il veut garnir) : quelques tentatives gratuites par jour,
 // puis un coût croissant en Essence pour continuer au-delà, remis à zéro
 // chaque jour avec les tentatives gratuites.
-const RUNE_DUNGEON_FREE_ATTEMPTS = 5;
-const RUNE_DUNGEON_EXTRA_BASE = 20;
-const RUNE_DUNGEON_EXTRA_GROWTH = 1.6;
 // Le Donjon se descend étage par étage : seul le dernier étage donne un
-// équipement, les précédents ne donnent rien — une descente (10 clics) = une
-// tentative gratuite/payante, comptée et facturée à l'étage 1 (l'économie par
-// objet reste donc identique à l'ancien donjon en un clic).
+// équipement, les précédents ne donnent rien. Entièrement GRATUIT (demande
+// utilisateur) — l'ancien coût croissant en Essence a été retiré, le temps de
+// descente (10 combats calés sur la progression du joueur) est la seule
+// monnaie.
 const RUNE_DUNGEON_FLOORS = 10;
-function runeDungeonExtraCost(extraIndex, bestStage = 1) {
-  const i = Math.max(0, Math.floor(extraIndex || 0));
-  return Math.round(finiteIdleNumber(investmentCostIndex(Math.max(1, bestStage)) * RUNE_DUNGEON_EXTRA_BASE * Math.pow(RUNE_DUNGEON_EXTRA_GROWTH, i), 1));
-}
 // Tirage pondéré (pas un plancher déterministe) : la moyenne progresse avec
 // les mêmes jalons de monde que le décor (DOJO_DECOR), mais chaque tentative
 // reste un vrai tirage — un coup de chance peut sortir une rareté au-dessus
@@ -1137,11 +1131,7 @@ module.exports = {
   enemyMaxHp,
   enemyReward,
   investmentCostIndex,
-  RUNE_DUNGEON_FREE_ATTEMPTS,
-  RUNE_DUNGEON_EXTRA_BASE,
-  RUNE_DUNGEON_EXTRA_GROWTH,
   RUNE_DUNGEON_FLOORS,
-  runeDungeonExtraCost,
   runeDungeonRarity,
   ENEMY_ARCHETYPES,
   enemyArchetype,

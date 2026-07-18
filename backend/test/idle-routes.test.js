@@ -2069,7 +2069,7 @@ test('fiche publique : le DPS affiché aux autres joueurs exclut le buff d’orb
   assert.equal(withBuff.json.player.totalRate, without.json.player.totalRate);
 });
 
-test('Donjon des Objets : descente de 10 étages — comptée/payée à l’étage 1, équipement uniquement au 10e', async () => {
+test('Donjon des Objets : descente gratuite de 10 étages — combat adapté au joueur, équipement uniquement au 10e', async () => {
   const user = dbUser({ essence: 100000, idleBestStage: 12, idleStage: 12, idleEnemyHp: enemyMaxHp(12) });
   // Compteurs persistants simulés : étage courant (période 'current') et
   // tentatives du jour (période 'day').
@@ -2104,14 +2104,21 @@ test('Donjon des Objets : descente de 10 étages — comptée/payée à l’éta
   prisma.idleItem.findMany = async () => [];
   prisma.idleItem.create = async ({ data }) => { itemsCreated++; return { id: 'loot-1', ...data }; };
 
+  let previousHp = 0;
   for (let step = 1; step <= 9; step++) {
     const res = await app.request('/api/idle/rune-dungeon/attempt', { method: 'POST', cookie: app.authCookie('u1'), body: { kind: 'rune1' } });
     assert.equal(res.status, 200);
     assert.equal(res.json.cleared, false);
     assert.equal(res.json.floor, step);
     assert.equal(res.json.loot, undefined); // les 9 premiers étages ne donnent RIEN
+    assert.equal(res.json.cost, undefined); // gratuit : plus aucun débit d'Essence
+    // Difficulté adaptée : PV calés sur la progression du joueur, croissants
+    // d'étage en étage, et durée de combat bornée côté serveur.
+    assert.ok(res.json.encounter.hp > previousHp);
+    previousHp = res.json.encounter.hp;
+    assert.ok(res.json.encounter.fightMs >= 600 && res.json.encounter.fightMs <= 5000);
     assert.equal(res.json.state.runeDungeon.floor, step);
-    assert.equal(res.json.state.runeDungeon.nextCost, 0); // descente entamée : le prochain clic est gratuit
+    assert.equal(res.json.state.runeDungeon.free, true);
   }
   assert.equal(itemsCreated, 0);
   assert.equal(counters.get('rune_dungeon_run:current').value, 9);
