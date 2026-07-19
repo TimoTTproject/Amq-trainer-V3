@@ -1601,9 +1601,12 @@ async function buildState(userId) {
   const claimed = new Set(claims.map((c) => `${c.missionKey}:${c.period}`));
   const missions = missionDefs.map((m) => ({ ...m, completed: m.progress >= m.target, claimed: claimed.has(`${m.key}:${m.period}`) }));
   const masteryMap = new Map();
-  for (const r of recruits) if (r.character?.series) {const key=synergyLicenseKey(r.character.series);const x=masteryMap.get(key)||{series:synergyLicenseName(r.character.series),recruits:0,levels:0};x.recruits++;masteryMap.set(key,x);}
-  for (const s of slots) if (s.character?.series) {const key=synergyLicenseKey(s.character.series);const x=masteryMap.get(key)||{series:synergyLicenseName(s.character.series),recruits:0,levels:0};x.levels+=s.level||1;masteryMap.set(key,x);}
-  const masteries = [...masteryMap.values()].map((m) => { const tiers=[25,100,250,500];const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = tiers.find((n) => n > m.levels) || null; return { ...m, bonus, next,tier:tiers.filter((n)=>m.levels>=n).length,maxTier:tiers.length }; }).sort((a,b) => b.levels-a.levels);
+  for (const r of recruits) if (r.character?.series) {const key=synergyLicenseKey(r.character.series);const x=masteryMap.get(key)||{series:synergyLicenseName(r.character.series),recruits:0,activeHeroes:0,levels:0};x.recruits++;masteryMap.set(key,x);}
+  // Une maîtrise de licence est un bonus de COMPOSITION : seuls les niveaux
+  // des héros présents dans les emplacements actifs comptent. Les réserves
+  // restent collectionnées, mais ne gonflent jamais ce pourcentage.
+  for (const s of slots) if (s.character?.series) {const key=synergyLicenseKey(s.character.series);const x=masteryMap.get(key)||{series:synergyLicenseName(s.character.series),recruits:0,activeHeroes:0,levels:0};x.activeHeroes++;x.levels+=s.level||1;masteryMap.set(key,x);}
+  const masteries = [...masteryMap.values()].map((m) => { const tiers=[25,100,250,500];const bonus = m.levels >= 500 ? .25 : m.levels >= 250 ? .15 : m.levels >= 100 ? .10 : m.levels >= 25 ? .05 : 0; const next = tiers.find((n) => n > m.levels) || null; return { ...m, active:m.activeHeroes>0, bonus, next,tier:tiers.filter((n)=>m.levels>=n).length,maxTier:tiers.length }; }).sort((a,b) => b.levels-a.levels);
   const periods = idlePeriods(); const weeklyLevels = slots.reduce((n, s) => n + (s.character ? (s.level || 1) : 0), 0);
   let weeklyClaimed = false; try { weeklyClaimed = !!(await prisma.idleMissionClaim.findUnique({ where: { userId_missionKey_period: { userId, missionKey: 'weekly_convergence', period: periods.week } } })); } catch (e) { if (e?.code) throw e; }
   const worldsDiscovered=Math.min(DOJO_DECOR.length,Math.floor((Math.max(user.idleBestStage||1,stage)-1)/10)+1);

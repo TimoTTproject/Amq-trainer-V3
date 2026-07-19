@@ -34,8 +34,13 @@ async function buildIdleStateFixture() {
   prisma.user.updateMany = async () => ({ count: 1 });
   const character = { id: 7, name: 'Rem', imageUrl: null, rarity: 'epic', series: 'Re:Zero' };
   prisma.idleSlot.findMany = async () => [{ id: 1, userId: 'u1', slotIndex: 0, characterId: 7, level: 12, ascension: 0, awakened: false, awakenStars: 0, assignedAt: new Date(), character, items: [] }];
-  prisma.dojoRecruit.count = async () => 1;
-  prisma.dojoRecruit.findMany = async () => [];
+  // Un second héros Re:Zero niveau 100 reste en réserve : sa présence vérifie
+  // que la maîtrise n'additionne que les 12 niveaux du héros actif.
+  prisma.dojoRecruit.count = async () => 2;
+  prisma.dojoRecruit.findMany = async () => [
+    { characterId:7, trainingLevel:12, character },
+    { characterId:8, trainingLevel:100, character:{id:8,name:'Emilia',imageUrl:null,rarity:'epic',series:'Re:Zero'} },
+  ];
   prisma.ancientLevel.findMany = async () => [];
   prisma.idleItem.findMany = async () => [];
   prisma.idleItem.count = async () => 0;
@@ -155,6 +160,11 @@ test('la navigation entre onglets rend chaque panneau avec le dernier état conn
   await expect(page.locator('#idle-upgrades')).toContainText('APRÈS ACHAT');
   await page.evaluate(() => idleShowPanel('team'));
   await expect(page.locator('#idle-slots')).toContainText('Rem');
+  await page.evaluate(()=>document.querySelector('.idle-collapsible:has(#idle-masteries) [data-idle-collapse]')?.click());
+  await expect(page.locator('.idle-mastery-rule')).toContainText('Seuls les héros dans l’équipe comptent');
+  await expect(page.locator('#idle-masteries .idle-mastery')).toContainText('2 recrutés, saisons réunies · 1 héros actif dans l’équipe');
+  await expect(page.locator('#idle-masteries .idle-mastery')).toContainText('12 niveaux actifs cumulés');
+  await expect(page.locator('#idle-masteries .idle-mastery')).not.toContainText('112 niveaux');
   await page.evaluate(() => idleShowPanel('home'));
   await expect(page.locator('#idle-stage-location')).toContainText('Vague');
 });

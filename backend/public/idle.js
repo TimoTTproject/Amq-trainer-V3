@@ -1430,7 +1430,11 @@ function renderIdleChallenges(items){const box=document.getElementById('idle-cha
 
 function renderIdleMasteries(codex) {
   const masteries = document.getElementById('idle-masteries');
-  if (masteries) masteries.innerHTML = (codex?.masteries || []).length ? codex.masteries.map((m) => `<div class="idle-mastery"><i class="fas fa-star"></i><div><b>${escapeHtml(m.series)}</b><span>${m.recruits} recrue(s), saisons réunies · ${idleFormatNumber(m.levels)} niveaux cumulés</span><em style="--progress:${m.next ? Math.min(100,m.levels/m.next*100) : 100}%"></em></div><strong>Palier ${m.tier}/${m.maxTier} · +${Math.round(m.bonus*100)}%</strong><small>${m.next ? `Prochain bonus niv. ${m.next}` : 'MAÎTRISE MAX'}</small></div>`).join('') : '<p class="hint">Recrute puis entraîne des héros pour découvrir leurs licences.</p>';
+  if (masteries) masteries.innerHTML = (codex?.masteries || []).length ? codex.masteries.map((m) => {
+    const active=!!m.activeHeroes;
+    const activeLabel=`${m.activeHeroes||0} héros actif${m.activeHeroes>1?'s':''} dans l’équipe`;
+    return `<div class="idle-mastery ${active?'active':'inactive'}"><i class="fas ${active?'fa-star':'fa-star-half-stroke'}"></i><div><b>${escapeHtml(m.series)}</b><span>${m.recruits} recruté${m.recruits>1?'s':''}, saisons réunies · <b class="idle-mastery-active-count">${activeLabel}</b></span><em style="--progress:${m.next ? Math.min(100,m.levels/m.next*100) : 100}%"></em></div><strong>${active?`+${Math.round(m.bonus*100)}% production`:'BONUS INACTIF'}</strong><small><b><i class="fas ${active?'fa-circle-check':'fa-circle-pause'}"></i> ${active?'APPLIQUÉ À CETTE LICENCE':'AUCUN HÉROS ACTIF'}</b>${active?`${idleFormatNumber(m.levels)} niveaux actifs cumulés · ${m.next ? `prochain palier à ${m.next}` : 'maîtrise maximale'}`:'Place un héros de cette licence dans l’équipe pour commencer.'}</small></div>`;
+  }).join('') : '<p class="hint">Recrute puis place un héros dans l’équipe pour activer une maîtrise de licence.</p>';
 }
 
 // Frise des paliers de décor (Progression) — équivalent simplifié d'une

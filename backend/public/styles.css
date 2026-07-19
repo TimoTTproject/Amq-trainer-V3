@@ -6380,14 +6380,18 @@ body.idle-fullscreen #app { padding-top: 0; }
 /* Maîtrises : lecture confortable à distance normale, sans lignes géantes
    presque vides sur desktop. */
 #view-idle .idle-masteries{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#view-idle .idle-mastery-rule{display:flex;align-items:flex-start;gap:10px;margin:0 0 11px;padding:10px 12px;border-left:3px solid #38bdf8;background:#38bdf80c;color:var(--text)}
+#view-idle .idle-mastery-rule>i{margin-top:2px;color:#38bdf8;font-size:17px}#view-idle .idle-mastery-rule>span{display:flex;flex-direction:column;gap:2px}#view-idle .idle-mastery-rule b{font-size:12px}#view-idle .idle-mastery-rule small{color:var(--text-2);font-size:10px;line-height:1.4}
 #view-idle .idle-mastery{grid-template-columns:42px minmax(0,1fr) auto;gap:7px 12px;min-height:92px;padding:14px 16px;border-radius:12px}
 #view-idle .idle-mastery>i{display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:color-mix(in srgb,#fbbf24 13%,transparent);font-size:20px}
 #view-idle .idle-mastery b{font-size:14px;line-height:1.25}
+#view-idle .idle-mastery .idle-mastery-active-count{color:var(--text);font-size:11px}
 #view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:11px;line-height:1.35}
 #view-idle .idle-mastery strong{font-size:16px}
 #view-idle .idle-mastery em{height:6px;margin-top:7px;border-radius:6px}
 #view-idle .idle-mastery>small{grid-column:2/-1;color:var(--text-2)}
-@media(max-width:760px){#view-idle .idle-masteries{grid-template-columns:1fr}#view-idle .idle-mastery{min-height:86px;padding:13px}#view-idle .idle-mastery b{font-size:13px}#view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:10px}}
+#view-idle .idle-mastery>small{display:flex;align-items:center;justify-content:space-between;gap:10px}#view-idle .idle-mastery>small>b{display:inline-flex;align-items:center;gap:5px;color:#86efac;font-size:9px;letter-spacing:.06em;white-space:nowrap}#view-idle .idle-mastery.inactive{opacity:.72}#view-idle .idle-mastery.inactive>i,#view-idle .idle-mastery.inactive>strong,#view-idle .idle-mastery.inactive>small>b{color:#94a3b8}#view-idle .idle-mastery.inactive em{--progress:0%!important}
+@media(max-width:760px){#view-idle .idle-masteries{grid-template-columns:1fr}#view-idle .idle-mastery{min-height:86px;padding:13px}#view-idle .idle-mastery b{font-size:13px}#view-idle .idle-mastery span,#view-idle .idle-mastery small{font-size:10px}#view-idle .idle-mastery>small{align-items:flex-start;flex-direction:column;gap:3px}}
 
 /* Équipe : deux colonnes lisibles sur grand écran. Les cartes actives ont
    assez de largeur pour leurs statistiques ; les places vides restent
