@@ -348,3 +348,18 @@ test('joueur expert : les huit outils compétitifs sont actionnables et les load
   assert.match(styles,/\.idle-competitive-center/);
   assert.match(styles,/\.idle-simulator-result/);
 });
+
+test('le Guide du Dojo ne recouvre plus la navigation, et le Farm sur boss est expliqué', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  // 701-900px (téléphone en paysage) : la barre d'onglets est en bas — le
+  // Guide flottant se posait pile sur l'onglet Combat (retour joueur : « la
+  // fenêtre pour les axes d'amélioration gêne pour cliquer sur combat »).
+  assert.match(styles, /@media\(max-width:900px\)\{\.idle-coach\{left:12px;bottom:78px\}\}/);
+  assert.match(styles, /@media\(min-width:901px\)\{\.idle-coach\{left:200px\}\}/);
+
+  // Farm sur une vague de boss : l'objectif explique que le boss réapparaît
+  // après chaque victoire et que les kills comptent.
+  assert.match(source, /le boss réapparaît après chaque victoire/);
+});
