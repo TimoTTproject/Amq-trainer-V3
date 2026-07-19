@@ -304,6 +304,8 @@ test('Donjon des Objets : 10 vrais combats clicker avant la récompense finale',
   assert.match(source, /rune-dungeon\/start/);
   assert.match(source, /rune-dungeon\/hit/);
   assert.match(source, /idleRuneDungeonPendingHits/);
+  assert.match(source, /clearInterval\(idleRuneDungeonTimer\)/);
+  assert.match(source, /idleSpawnRuneDungeonFloat/);
   assert.match(source, /ÉTAGE \$\{result\.floor\} NETTOYÉ/);
   // Gratuit : plus de compteur de tentatives ni de coût en Essence.
   assert.doesNotMatch(source, /Descentes gratuites épuisées/);

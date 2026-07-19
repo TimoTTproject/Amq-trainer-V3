@@ -436,7 +436,11 @@ const RUNE_DUNGEON_HP_SCALE=1_000_000;
 const RUNE_DUNGEON_RUN_KEY='rune_dungeon_run';
 const RUNE_DUNGEON_KIND_KEY='rune_dungeon_kind';
 const RUNE_DUNGEON_HP_KEY='rune_dungeon_hp';
+const RUNE_DUNGEON_STAGE_KEY='rune_dungeon_stage';
 const RUNE_DUNGEON_PERIOD='current';
+const RUNE_DUNGEON_PASSIVE_CATCHUP_SECONDS=60;
+
+const RUNE_DUNGEON_STATE_KEYS=[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY,RUNE_DUNGEON_STAGE_KEY];
 
 function runeDungeonFloorHp(bestStage,floor){
   const guardian=floor>=RUNE_DUNGEON_FLOORS;
@@ -1666,24 +1670,30 @@ async function buildState(userId) {
   const rift=weeklyRift(missionCounters,totalRate,Math.max(user.idleBestStage||1,stage),dojoLevel,periods,riftRun?.relics||[]);
   rift.pendingChoice=riftRelicDetails(riftRun?.pendingChoice||[]);
   // Donjon des Objets : descente de RUNE_DUNGEON_FLOORS étages — seule la fin
-  // donne un objet, cf. /rune-dungeon/attempt. Le compteur d'étage vit hors
+  // donne un objet, cf. /rune-dungeon/hit. Le compteur d'étage vit hors
   // des périodes jour/semaine/mois (période fixe 'current'), une descente en
   // cours survit donc à minuit — d'où la lecture dédiée.
   const runeDungeonAttemptsToday=missionCounters.get(`rune_dungeon:${periods.day}`)||0;
-  let runeDungeonFloorRow=null,runeDungeonKindRow=null,runeDungeonHpRow=null;
-  try{[runeDungeonFloorRow,runeDungeonKindRow,runeDungeonHpRow]=await Promise.all([
+  let runeDungeonFloorRow=null,runeDungeonKindRow=null,runeDungeonHpRow=null,runeDungeonStageRow=null;
+  try{[runeDungeonFloorRow,runeDungeonKindRow,runeDungeonHpRow,runeDungeonStageRow]=await Promise.all([
     prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD}}}),
     prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}}),
     prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+    prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD}}}),
   ]);}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
   const runeDungeonFloor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,runeDungeonFloorRow?.value||0));
   const runeDungeonKind=RUNE_KINDS[Math.max(0,(runeDungeonKindRow?.value||1)-1)]||null;
   const runeDungeonActive=!!runeDungeonKindRow&&!!runeDungeonHpRow;
+  // La difficulté est figée au lancement sur la vague COURANTE. Utiliser le
+  // record permanent faisait bondir les PV après un Prestige et recalculer le
+  // max en pleine descente donnait l'impression que les monstres régénéraient.
+  const runeDungeonStage=Math.max(1,runeDungeonStageRow?.value||stage||1);
   const runeDungeonNextFloor=runeDungeonFloor+1;
-  const runeDungeonMaxHp=runeDungeonFloorHp(progressionStage,runeDungeonNextFloor);
+  const runeDungeonMaxHp=runeDungeonFloorHp(runeDungeonStage,runeDungeonNextFloor);
   const runeDungeonStoredHp=Math.max(0,Math.min(RUNE_DUNGEON_HP_SCALE,runeDungeonHpRow?.value??RUNE_DUNGEON_HP_SCALE));
-  const runeDungeonElapsed=runeDungeonActive&&runeDungeonHpRow?.updatedAt?Math.min(1,Math.max(0,(Date.now()-new Date(runeDungeonHpRow.updatedAt).getTime())/1000)):0;
+  const runeDungeonElapsed=runeDungeonActive&&runeDungeonHpRow?.updatedAt?Math.min(RUNE_DUNGEON_PASSIVE_CATCHUP_SECONDS,Math.max(0,(Date.now()-new Date(runeDungeonHpRow.updatedAt).getTime())/1000)):0;
   const runeDungeonHp=Math.max(0,Math.round(runeDungeonMaxHp*runeDungeonStoredHp/RUNE_DUNGEON_HP_SCALE-totalRate*runeDungeonElapsed));
+  const runeDungeonClickDamage=Math.max(1,Math.round((clickBase+totalRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*buffClick*itemActionBonus(slots,'click')*blessingEffects.click*(1+characterPassiveTeamBonus(slots,'click'))));
   const runeDungeon={
     attemptsToday:runeDungeonAttemptsToday,
     floor:runeDungeonFloor,
@@ -1691,7 +1701,7 @@ async function buildState(userId) {
     // Gratuit et sans limite (demande utilisateur) : le temps de descente est
     // la seule monnaie. La difficulté affichée suit la progression du joueur.
     free:true,
-    difficulty:{stage:progressionStage},
+    difficulty:{stage:runeDungeonStage},
     active:runeDungeonActive,
     selectedKind:runeDungeonActive?runeDungeonKind:null,
     encounter:runeDungeonActive?{
@@ -1700,7 +1710,7 @@ async function buildState(userId) {
       hp:runeDungeonHp,
       maxHp:runeDungeonMaxHp,
       dps:Math.max(0,Math.round(totalRate)),
-      clickDamage,
+      clickDamage:runeDungeonClickDamage,
       enemyName:runeDungeonNextFloor===RUNE_DUNGEON_FLOORS?'Gardien du coffre':`Sentinelle de l’étage ${runeDungeonNextFloor}`,
       backgroundUrl:combatWorld.backgroundUrl||null,
       enemyImageUrl:combatWorld.boss?.generatedImageUrl||combatWorld.boss?.imageUrl||null,
@@ -3600,10 +3610,11 @@ router.post('/rune-dungeon/start', requireAuth, requireIdleBeta, rateLimit({ max
       const periods = idlePeriods();
       const active=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}});
       if(active)throw new IdleError(409,'Une descente est déjà en cours');
-      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}});
+      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:RUNE_DUNGEON_STATE_KEYS},period:RUNE_DUNGEON_PERIOD}});
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD,value:0}});
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_KINDS.indexOf(kind)+1}});
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_DUNGEON_HP_SCALE}});
+      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD,value:Math.max(1,user.idleStage||1)}});
       const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
       if(counterRow)await tx.idleProgressCounter.updateMany({where:{id:counterRow.id},data:{value:{increment:1}}});
       else await tx.idleProgressCounter.create({data:{userId:user.id,key:'rune_dungeon',period:periods.day,value:1}});
@@ -3626,39 +3637,47 @@ router.post('/rune-dungeon/hit', requireAuth, requireIdleBeta, rateLimit({window
   try{
     await withIdleUserLock(req.user.id,()=>prisma.$transaction(async(tx)=>{
       const user=await tx.user.findUnique({where:{id:req.user.id}});
-      const [floorRow,kindRow,hpRow]=await Promise.all([
+      const [floorRow,kindRow,hpRow,stageRow]=await Promise.all([
         tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD}}}),
         tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}}),
         tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+        tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD}}}),
       ]);
       if(!floorRow||!kindRow||!hpRow)throw new IdleError(404,'Aucune descente en cours');
       const floor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,floorRow.value||0));
-      const nextFloor=floor+1;const guardian=nextFloor===RUNE_DUNGEON_FLOORS;
+      const nextFloor=floor+1;
       const bestStage=Math.max(user.idleBestStage||1,user.idleStage||1);
+      const dungeonStage=Math.max(1,stageRow?.value||user.idleStage||1);
+      // Migration paresseuse des descentes lancées par la version précédente :
+      // dès leur première frappe, leur difficulté devient elle aussi stable.
+      if(!stageRow)await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD,value:dungeonStage}});
       const [slots, recruitCount, ancientLevelsByKey] = await Promise.all([
         loadSlots(tx, user.id),
         tx.dojoRecruit.count({ where: { userId: user.id } }),
         loadAncientLevels(tx, user.id),
       ]);
       const teamRate = computeTotalRate(slots, user.idleProdLevel || 0, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
-      const maxHp=runeDungeonFloorHp(bestStage,nextFloor);
-      const elapsed=Math.min(1,Math.max(0,(Date.now()-new Date(hpRow.updatedAt||Date.now()).getTime())/1000));
+      let currentFloor=nextFloor;
+      let maxHp=runeDungeonFloorHp(dungeonStage,currentFloor);
+      const elapsed=Math.min(RUNE_DUNGEON_PASSIVE_CATCHUP_SECONDS,Math.max(0,(Date.now()-new Date(hpRow.updatedAt||Date.now()).getTime())/1000));
       const passiveDamage=Math.max(0,Math.round(teamRate*elapsed));
       const blessings=runBlessingEffects(user.idleRunBlessings);const clickBuff=activeOrbBuff(user)?.click||1;
       const clickBase=(clickYield(user.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))+teamRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*clickBuff*itemActionBonus(slots,'click')*blessings.click*(1+characterPassiveTeamBonus(slots,'click'));
       const effectiveCount=Math.max(count,Math.round(count*(1+multiStrikeBonus(user.idleMultiStrikeLevel||0))));
       const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+critUpgradeBonus(user.idleCritLevel)+blessings.crit+characterPassiveTeamBonus(slots,'crit')));
       let manualDamage=0,criticals=0;for(let i=0;i<effectiveCount;i++){const critical=Math.random()<critChance;if(critical)criticals++;manualDamage+=Math.max(1,Math.round(clickBase*(critical?2:1)));}
-      const currentHp=Math.max(0,Math.round(maxHp*Math.max(0,Math.min(RUNE_DUNGEON_HP_SCALE,hpRow.value))/RUNE_DUNGEON_HP_SCALE));
-      const damage=Math.min(currentHp,passiveDamage+manualDamage);const remaining=Math.max(0,currentHp-damage);
-      if(remaining>0){
-        await tx.idleProgressCounter.updateMany({where:{id:hpRow.id},data:{value:Math.max(1,Math.ceil(remaining/maxHp*RUNE_DUNGEON_HP_SCALE))}});
-        result={floor:nextFloor,floors:RUNE_DUNGEON_FLOORS,cleared:false,floorCleared:false,damage,passiveDamage,manualDamage,criticals,count};return;
-      }
-      if(!guardian){
-        await tx.idleProgressCounter.updateMany({where:{id:floorRow.id},data:{value:nextFloor}});
-        await tx.idleProgressCounter.updateMany({where:{id:hpRow.id},data:{value:RUNE_DUNGEON_HP_SCALE}});
-        result={floor:nextFloor,floors:RUNE_DUNGEON_FLOORS,cleared:false,floorCleared:true,damage,passiveDamage,manualDamage,criticals,count};return;
+      let currentHp=Math.max(1,Math.round(maxHp*Math.max(1,Math.min(RUNE_DUNGEON_HP_SCALE,hpRow.value))/RUNE_DUNGEON_HP_SCALE));
+      let damagePool=passiveDamage+manualDamage;let damage=0;let floorsCleared=0;let cleared=false;
+      // Un navigateur peut ralentir les timers d'un onglet masqué. Le budget
+      // de dégâts rattrapé traverse donc plusieurs monstres au lieu de perdre
+      // tout l'overkill au premier K.O. (maximum 10 étages, boucle bornée).
+      while(damagePool>=currentHp){damage+=currentHp;damagePool-=currentHp;floorsCleared++;if(currentFloor>=RUNE_DUNGEON_FLOORS){cleared=true;break;}currentFloor++;maxHp=runeDungeonFloorHp(dungeonStage,currentFloor);currentHp=maxHp;}
+      if(!cleared){
+        const applied=Math.min(currentHp,damagePool);damage+=applied;currentHp=Math.max(1,currentHp-applied);
+        const completedFloor=currentFloor-1;
+        if(completedFloor!==floorRow.value)await tx.idleProgressCounter.updateMany({where:{id:floorRow.id},data:{value:completedFloor}});
+        await tx.idleProgressCounter.updateMany({where:{id:hpRow.id},data:{value:Math.max(1,Math.ceil(currentHp/maxHp*RUNE_DUNGEON_HP_SCALE))}});
+        result={floor:floorsCleared?completedFloor:currentFloor,floors:RUNE_DUNGEON_FLOORS,cleared:false,floorCleared:floorsCleared>0,floorsCleared,damage,passiveDamage,manualDamage,criticals,count};return;
       }
       const rarity = runeDungeonRarity(bestStage);
       const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
@@ -3667,8 +3686,8 @@ router.post('/rune-dungeon/hit', requireAuth, requireIdleBeta, rateLimit({window
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
       const kind=RUNE_KINDS[Math.max(0,kindRow.value-1)]||RUNE_KINDS[0];
       const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, campaignForStage(tier*10).name);
-      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}});
-      result={floor:RUNE_DUNGEON_FLOORS,floors:RUNE_DUNGEON_FLOORS,cleared:true,floorCleared:true,damage,passiveDamage,manualDamage,criticals,count,loot};
+      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:RUNE_DUNGEON_STATE_KEYS},period:RUNE_DUNGEON_PERIOD}});
+      result={floor:RUNE_DUNGEON_FLOORS,floors:RUNE_DUNGEON_FLOORS,cleared:true,floorCleared:true,floorsCleared,damage,passiveDamage,manualDamage,criticals,count,loot};
     }));
   }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
   if(count)await incrementIdleCounter(req.user.id,'click',count);
@@ -3677,7 +3696,7 @@ router.post('/rune-dungeon/hit', requireAuth, requireIdleBeta, rateLimit({window
 });
 
 router.post('/rune-dungeon/abandon',requireAuth,requireIdleBeta,rateLimit({max:8,name:'idle-rune-dungeon-abandon'}),async(req,res)=>{
-  await withIdleUserLock(req.user.id,()=>prisma.idleProgressCounter.deleteMany({where:{userId:req.user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}}));
+  await withIdleUserLock(req.user.id,()=>prisma.idleProgressCounter.deleteMany({where:{userId:req.user.id,key:{in:RUNE_DUNGEON_STATE_KEYS},period:RUNE_DUNGEON_PERIOD}}));
   res.json({ok:true,state:await buildState(req.user.id)});
 });
 

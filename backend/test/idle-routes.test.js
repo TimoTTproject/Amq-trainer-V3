@@ -13,7 +13,7 @@ const {
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
   ANCIENTS, ancientCost, recruitCost, recruitEssenceCost, START_SLOTS, MAX_SLOTS, DOJO_DECOR, HERO_ASCENSION_LEVEL, enemiesDefeatedBeforeStage,
   RARITY_PASSIVE_POOL, characterPassiveEntry, characterPassiveMagnitude, characterPassiveBonus, characterPassiveDescription,
-  heroAscensionRequiredLevel, prestigeStartingLevels, RUN_BLESSINGS,
+  heroAscensionRequiredLevel, prestigeStartingLevels, RUN_BLESSINGS, enemyUnitMaxHp,
 } = require('../src/idle/idle');
 
 // Les routes /api/idle sont réservées aux admins pendant la phase de test
@@ -2121,7 +2121,9 @@ test('fiche publique : le DPS affiché aux autres joueurs exclut le buff d’orb
 });
 
 test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’équipement', async () => {
-  const user = dbUser({ essence: 100000, idleBestStage: 12, idleStage: 12, idleEnemyHp: enemyMaxHp(12) });
+  // Record historique volontairement très supérieur à la vague de la run :
+  // le donjon doit se caler sur la puissance courante, surtout après Prestige.
+  const user = dbUser({ essence: 100000, idleBestStage: 150, idleStage: 12, idleEnemyHp: enemyMaxHp(12) });
   const counters = new Map();
   let nextCounterId = 1;
   prisma.user.findUnique = async () => user;
@@ -2169,6 +2171,8 @@ test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’éq
   assert.equal(start.status,200);
   assert.equal(start.json.state.runeDungeon.active,true);
   assert.equal(start.json.state.runeDungeon.selectedKind,'rune1');
+  assert.equal(start.json.state.runeDungeon.difficulty.stage,12);
+  assert.equal(start.json.state.runeDungeon.encounter.maxHp,Math.round(enemyUnitMaxHp(12,0)));
   assert.ok(start.json.state.runeDungeon.encounter.hp>0);
 
   // Une frappe ordinaire ne valide pas gratuitement un étage plein.
@@ -2177,7 +2181,7 @@ test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’éq
   assert.equal(firstHit.json.floorCleared,false);
   assert.equal(firstHit.json.state.runeDungeon.floor,0);
 
-  for (let step = 1; step <= 9; step++) {
+  for (let step = 1; step <= 7; step++) {
     // Simule l'ennemi presque vaincu : la route doit constater le K.O., puis
     // seulement faire apparaître l'étage suivant avec des PV pleins.
     counters.get('rune_dungeon_hp:current').value=1;
@@ -2193,14 +2197,18 @@ test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’éq
     assert.equal(res.json.state.runeDungeon.free, true);
   }
   assert.equal(itemsCreated, 0);
-  assert.equal(counters.get('rune_dungeon_run:current').value, 9);
+  assert.equal(counters.get('rune_dungeon_run:current').value, 7);
 
+  // Un gros impact/rattrapage doit conserver l'overkill entre les étages :
+  // auparavant tout le surplus disparaissait à chaque transition.
+  user.idleClickLevel=100;
   counters.get('rune_dungeon_hp:current').value=1;
   counters.get('rune_dungeon_hp:current').updatedAt=new Date();
-  const final = await app.request('/api/idle/rune-dungeon/hit', { method: 'POST', cookie: app.authCookie('u1'), body: { count: 1, requestId:'rune-final-guardian-hit' } });
+  const final = await app.request('/api/idle/rune-dungeon/hit', { method: 'POST', cookie: app.authCookie('u1'), body: { count: 10, requestId:'rune-final-guardian-hit' } });
   assert.equal(final.status, 200);
   assert.equal(final.json.cleared, true);
   assert.equal(final.json.floor, 10);
+  assert.equal(final.json.floorsCleared,3);
   assert.ok(final.json.loot);
   assert.equal(final.json.loot.kind, 'rune1');
   assert.equal(itemsCreated, 1);
