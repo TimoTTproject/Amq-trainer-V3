@@ -564,9 +564,11 @@ test('équipement : le plan groupé améliore équitablement les objets portés 
 });
 
 test('équipement : tout retirer cible aussi les héros au repos sans toucher aux objets libres',async()=>{
-  prisma.user.findUnique=async()=>dbUser();let where=null;prisma.idleItem.updateMany=async(args)=>{where=args.where;return{count:7};};
+  const user=dbUser({idleLastCollectAt:new Date(Date.now()-60_000)});const events=[];
+  prisma.user.findUnique=async()=>user;prisma.user.update=async()=>{events.push('settle');return user;};let where=null;prisma.idleItem.updateMany=async(args)=>{events.push('unequip');where=args.where;return{count:7};};
   const res=await app.request('/api/idle/equipment/unequip-all',{method:'POST',cookie:app.authCookie('u1'),body:{}});
   assert.equal(res.status,200);assert.equal(res.json.removed,7);assert.equal(where.userId,'u1');assert.deepEqual(where.equippedCharacterId,{not:null});
+  assert.deepEqual(events.slice(0,2),['settle','unequip']);
 });
 
 test('équipement : améliorer tout répartit un niveau sur chaque objet porté',async()=>{
@@ -574,6 +576,14 @@ test('équipement : améliorer tout répartit un niveau sur chaque objet porté'
   prisma.user.findUnique=async()=>user;let spent=0;prisma.user.update=async({data})=>{if(data.essence?.decrement)spent=data.essence.decrement;return user;};prisma.idleItem.findMany=async({where})=>where?.equippedCharacterId?.not===null?items:items;const updates=[];prisma.idleItem.update=async(args)=>{updates.push(args);return{};};
   const res=await app.request('/api/idle/equipment/enhance-all',{method:'POST',cookie:app.authCookie('u1'),body:{levels:1}});
   assert.equal(res.status,200);assert.equal(res.json.bought,2);assert.equal(res.json.items,2);assert.equal(updates.length,2);assert.ok(spent>0);assert.deepEqual(updates.map((entry)=>entry.data.enhancementLevel).sort((a,b)=>a-b),[1,3]);
+});
+
+test('build : changer de spécialisation solde les gains avec l’ancien multiplicateur',async()=>{
+  const user=dbUser({idleRankLevel:25,idleHeroClass:'warrior',idleHeroSpec:'none',idleLastCollectAt:new Date(Date.now()-60_000)});const events=[];
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async({data})=>{events.push(data.idleHeroSpec?'specialization':'settle');return{...user,...data};};
+  const res=await app.request('/api/idle/hero-specialization',{method:'POST',cookie:app.authCookie('u1'),body:{key:'guardian'}});
+  assert.equal(res.status,200);assert.deepEqual(events.slice(0,2),['settle','specialization']);
 });
 
 test('expéditions : démarre avec les réserves puis réclame atomiquement la récompense terminée',async()=>{
@@ -1951,6 +1961,16 @@ test('ancient : le coût du niveau suivant suit ancientCost(niveau actuel), pas 
   });
   assert.equal(res.status, 200);
   assert.equal(userDecrement, ancientCost(4));
+});
+
+test('ancient : solde la production avant d’activer un nouveau bonus permanent',async()=>{
+  const key=ANCIENTS[0].key;const user=dbUser({wisdomPoints:ancientCost(0),idleLastCollectAt:new Date(Date.now()-60_000)});const events=[];
+  prisma.user.findUnique=async()=>user;
+  prisma.user.update=async()=>{events.push('settle');return user;};
+  prisma.user.updateMany=async()=>{events.push('ancient');return{count:1};};
+  prisma.ancientLevel.findUnique=async()=>null;prisma.ancientLevel.create=async()=>({});
+  const res=await app.request('/api/idle/ancient',{method:'POST',cookie:app.authCookie('u1'),body:{key}});
+  assert.equal(res.status,200);assert.deepEqual(events.slice(0,2),['settle','ancient']);
 });
 
 test('ancient : un palier verrouillé refuse l’achat tant que le prérequis de branche n’est pas acheté',async()=>{

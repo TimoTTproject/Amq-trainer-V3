@@ -100,6 +100,12 @@ test('Prestige Idle : garantit clairement que les objets et les quêtes de Rang 
   assert.match(styles, /\.idle-prestige-safety/);
 });
 
+test('sécurité Idle : les protections d’objet partagent le verrou du recyclage', () => {
+  const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'idle', 'idle.routes.js'), 'utf8');
+  assert.match(server, /equipment\/lock'[\s\S]{0,180}idleUserLockMiddleware/);
+  assert.match(server, /equipment\/auto-lock'[\s\S]{0,180}idleUserLockMiddleware/);
+});
+
 test('social Idle : les classements spécialisés ouvrent les compositions publiques', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');

@@ -2832,8 +2832,15 @@ router.post('/equipment/enhance-all',requireAuth,requireIdleBeta,rateLimit({max:
 });
 
 router.post('/equipment/unequip-all',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-equipment-unequip-all'}),async(req,res)=>{
-  const result=await prisma.idleItem.updateMany({where:{userId:req.user.id,equippedCharacterId:{not:null}},data:{equippedCharacterId:null}});
-  void recordIdleEvent(req.user.id,'equipment_unequip_all',{value:result.count});res.json({ok:true,removed:result.count,state:await buildState(req.user.id)});
+  let removed=0;
+  try{
+    // Retirer tout l'équipement diminue immédiatement le DPS. Solde d'abord
+    // la période déjà jouée avec l'ancien build : sinon les gains en attente
+    // étaient recalculés rétroactivement avec une équipe nue et pouvaient
+    // chuter au moment exact où le joueur préparait une nouvelle composition.
+    await withSettle(req.user.id,async(tx,user)=>{const result=await tx.idleItem.updateMany({where:{userId:user.id,equippedCharacterId:{not:null}},data:{equippedCharacterId:null}});removed=result.count;});
+    void recordIdleEvent(req.user.id,'equipment_unequip_all',{value:removed});res.json({ok:true,removed,state:await buildState(req.user.id)});
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 // Meulage : re-tire la magnitude de l'affixe primaire et des affixes
@@ -2939,11 +2946,11 @@ router.post('/equipment/unequip',requireAuth,requireIdleBeta,rateLimit({max:40,n
   try{await withSettle(req.user.id,async(tx,user)=>{const item=await tx.idleItem.findFirst({where:{id:itemId,userId:user.id}});if(!item)throw new IdleError(404,'Objet introuvable');await tx.idleItem.update({where:{id:item.id},data:{equippedCharacterId:null}});});res.json(await buildState(req.user.id));}catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
-router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name:'idle-equipment-lock'}),async(req,res)=>{
+router.post('/equipment/lock',requireAuth,requireIdleBeta,rateLimit({max:60,name:'idle-equipment-lock'}),idleUserLockMiddleware,async(req,res)=>{
   const itemId=String(req.body?.itemId||'');const locked=!!req.body?.locked;const item=await prisma.idleItem.findFirst({where:{id:itemId,userId:req.user.id}});if(!item)return res.status(404).json({error:'Objet introuvable'});await prisma.idleItem.update({where:{id:item.id},data:{locked}});res.json({ok:true,locked});
 });
 
-router.post('/equipment/auto-lock',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-equipment-auto-lock'}),async(req,res)=>{
+router.post('/equipment/auto-lock',requireAuth,requireIdleBeta,rateLimit({max:10,name:'idle-equipment-auto-lock'}),idleUserLockMiddleware,async(req,res)=>{
   const items=await prisma.idleItem.findMany({where:{userId:req.user.id}});const protectedIds=new Set(items.filter((item)=>item.equippedCharacterId).map((item)=>item.id));
   for(const kind of RUNE_KINDS)items.filter((item)=>item.kind===kind).sort((a,b)=>itemQualityScore(b)-itemQualityScore(a)).slice(0,3).forEach((item)=>protectedIds.add(item.id));
   if(protectedIds.size)await prisma.idleItem.updateMany({where:{userId:req.user.id,id:{in:[...protectedIds]}},data:{locked:true}});
@@ -3227,10 +3234,18 @@ router.post('/hero-style', requireAuth, requireIdleBeta, rateLimit({ max: 30, na
 });
 
 router.post('/hero-specialization', requireAuth, requireIdleBeta, rateLimit({ max: 20, name: 'idle-hero-spec' }), async (req, res) => {
-  const key=String(req.body?.key||''); const user=await prisma.user.findUnique({where:{id:req.user.id},select:{idleHeroClass:true,idleRankLevel:true}});
-  if((user.idleRankLevel||1)<25)return res.status(403).json({error:'Spécialisation débloquée au niveau 25'});
-  if(!HERO_SPECS[user.idleHeroClass]?.some((s)=>s.key===key))return res.status(400).json({error:'Spécialisation incompatible'});
-  await prisma.user.update({where:{id:req.user.id},data:{idleHeroSpec:key}}); res.json(await buildState(req.user.id));
+  const key=String(req.body?.key||'');
+  try{
+    // Une spécialisation modifie production/clic/Ultime. Solde le temps déjà
+    // écoulé avec l'ancienne spécialisation pour éviter tout gain ou toute
+    // perte rétroactive lors du changement de build.
+    await withSettle(req.user.id,async(tx,user)=>{
+      if((user.idleRankLevel||1)<25)throw new IdleError(403,'Spécialisation débloquée au niveau 25');
+      if(!HERO_SPECS[user.idleHeroClass]?.some((s)=>s.key===key))throw new IdleError(400,'Spécialisation incompatible');
+      await tx.user.update({where:{id:user.id},data:{idleHeroSpec:key}});
+    });
+    res.json(await buildState(req.user.id));
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
 });
 
 async function loadCommunityBoss(userId){
@@ -3709,13 +3724,16 @@ router.get('/collection', requireAuth, requireIdleBeta, rateLimit({ max: 60, nam
 
 // Achète (ou monte) un Ancient : débite ancientCost(level) en Sagesse
 // (wisdomPoints — PAS l'essence, monnaie séparée), incrémente son niveau.
-// Indépendant de withSettle : les Ancients ne dépendent ni de la production
-// ni de l'essence, pas besoin de solder quoi que ce soit avant.
+// Certains Ancients modifient la production, le clic ou la durée hors-ligne :
+// la période déjà écoulée doit donc être soldée AVANT l'achat, avec les bonus
+// précédents. Le middleware détient déjà le verrou joueur ; on appelle ici la
+// variante sans verrou imbriqué, puis l'achat atomique.
 router.post('/ancient', requireAuth, requireIdleBeta, rateLimit({ max: 120, name: 'idle-mutate' }), idleUserLockMiddleware, async (req, res) => {
   const key = String(req.body?.key || '');
   const ancient = ancientByKey(key);
   if (!ancient) return res.status(400).json({ error: 'Ancient invalide' });
   try {
+    await settleUnlocked(req.user.id);
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id }, select: { wisdomPoints: true } });
       if (!user) throw new IdleError(404, 'Compte introuvable');
