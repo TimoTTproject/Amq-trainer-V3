@@ -6853,6 +6853,15 @@ body.idle-fullscreen .feedback-fab { display: none; }
    (retour testeur : elle se superposait au lanceur de chat, tous deux fixes
    en bas à droite à quasi les mêmes coordonnées). Le chat garde la droite. */
 .idle-coach{position:fixed;left:22px;right:auto;bottom:22px;z-index:750;display:grid;grid-template-columns:42px minmax(0,260px);gap:11px;width:min(340px,calc(100vw - 24px));padding:13px 15px;border:1px solid #f43f5e66;border-radius:12px;background:#11151df5;box-shadow:0 16px 45px #000b;color:var(--text)}
+/* Le Guide ne doit jamais recouvrir la navigation (retour joueur : « la
+   fenêtre pour les axes d'amélioration gêne pour cliquer sur Combat ») :
+   - ≤900px : la barre d'onglets est en BAS — le Guide remonte au-dessus
+     d'elle (la règle n'existait qu'en ≤700px, les paysages téléphone/petites
+     tablettes 701-900px posaient le Guide pile sur l'onglet Combat) ;
+   - ≥901px : la barre est un panneau latéral GAUCHE (164px) — le Guide se
+     décale à sa droite pour les fenêtres peu hautes où les deux se croisent. */
+@media(max-width:900px){.idle-coach{left:12px;bottom:78px}}
+@media(min-width:901px){.idle-coach{left:200px}}
 .idle-coach.hidden{display:none}.idle-coach>button{position:absolute;right:6px;top:6px;border:0;background:transparent;color:var(--text-2);cursor:pointer}.idle-coach-avatar{display:grid;width:42px;height:42px;place-items:center;border-radius:50%;background:#e11d4820;color:#fb7185;font-size:18px}.idle-coach>div{display:flex;flex-direction:column;gap:3px}.idle-coach small{color:#8f99a8;font-size:12px;font-weight:900;letter-spacing:.1em}.idle-coach b{padding-right:18px;font-size:12px}.idle-coach p{margin:0;color:#b6bfcc;font-size:10px;line-height:1.4}.idle-coach>div>button{align-self:flex-start;margin-top:5px;padding:5px 0;border:0;background:transparent;color:#fb7185;font-size:13px;font-weight:900;cursor:pointer}
 @keyframes idleSummonSpin{to{transform:rotate(360deg)}}@keyframes idleSummonSweep{0%,30%{transform:translateX(-100%)}70%,100%{transform:translateX(100%)}}
 @media(max-width:700px){#view-idle .idle-spend-dock{grid-template-columns:1fr 1fr}#view-idle .idle-spend-title{grid-column:1/-1;padding:8px 10px}#view-idle .idle-spend-dock>button{padding:8px}#view-idle .idle-spend-dock>button>em{display:none}.idle-summon-orb{width:58px;height:58px}.idle-summon-pity-track{grid-template-columns:110px 1fr}.idle-summon-odds{grid-template-columns:1fr 1fr}.idle-summon-odds>span:nth-child(3){border-left:0}.idle-summon-odds>span:nth-child(n+3){border-top:1px solid #ffffff12}.idle-coach{left:12px;right:auto;bottom:78px}}

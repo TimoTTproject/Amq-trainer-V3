@@ -2160,3 +2160,36 @@ test('Donjon des Objets : descente gratuite de 10 étages — combat adapté au 
   assert.equal(counters.get('rune_dungeon_run:current').value, 0);
   assert.equal(counters.get(`rune_dungeon:${new Date().toISOString().slice(0, 10)}`).value, 1);
 });
+
+test('boss en mode Farm : la victoire au clic compte et le boss réapparaît déjà engagé', async () => {
+  // Retour joueur : « je ne peux pas tuer ce boss, il finit toujours par
+  // regen » — en Farm sur une vague de boss, chaque victoire ramenait un boss
+  // plein PV désengagé (à ré-affronter au bouton dédié) et ne comptait nulle
+  // part.
+  let written = null;
+  const user = dbUser({ id: 'u-farm-boss', idleStage: 10, idleWaveKills: 0, idleBattleMode: 'farm', idleBossEngaged: true, idleBossStartedAt: new Date(Date.now() - 5000), idleEnemyHp: 1, idleRunBestStage: 12, idleBestStage: 140, idleClickLevel: 2 });
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async ({ data }) => { if (data.idleBossEngaged !== undefined) written = data; return user; };
+  const res = await app.request('/api/idle/click', { method: 'POST', cookie: app.authCookie('u1'), body: { count: 1, requestId: 'click-farm-boss-0001' } });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.kills, 1);
+  assert.equal(res.json.bosses, 1); // le boss farmé compte pour les missions/défis
+  assert.equal(written.idleStage, 10); // la progression reste figée (contrat du Farm)
+  assert.equal(written.idleBossEngaged, true); // pas de ré-engagement à refaire
+  assert.ok(written.idleBossStartedAt instanceof Date); // chrono d'enrage relancé
+});
+
+test('boss en mode Farm : l’Ultime aussi garde le boss engagé et compte la victoire', async () => {
+  const user = dbUser({ id: 'u-farm-burst', idleStage: 10, idleWaveKills: 0, idleBattleMode: 'farm', idleBossEngaged: true, idleBossStartedAt: new Date(Date.now() - 3000), idleEnemyHp: 1, idleRunBestStage: 12, idleBestStage: 140 });
+  const writes = [];
+  prisma.user.findUnique = async () => user;
+  prisma.user.update = async ({ data }) => { writes.push(data); return user; };
+  const res = await app.request('/api/idle/skill/burst', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.killed, true);
+  assert.equal(res.json.bossKilled, true); // comptera dans les missions « boss »
+  const finalWrite = writes.find((data) => data.idleBossEngaged !== undefined && data.idleStage !== undefined);
+  assert.equal(finalWrite.idleStage, 10);
+  assert.equal(finalWrite.idleBossEngaged, true);
+  assert.ok(finalWrite.idleBossStartedAt instanceof Date);
+});

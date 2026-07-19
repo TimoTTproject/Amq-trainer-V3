@@ -1113,6 +1113,12 @@ async function applyActiveDamage(tx, user, damage) {
   const nextStage = waveComplete && user.idleBattleMode !== 'farm' ? stage + 1 : stage;
   const nextWaveKills = waveComplete ? 0 : waveKills + 1;
   const bossMs = bossStartedAt ? Math.max(1, now.getTime() - bossStartedAt.getTime()) : null;
+  // Boss farmé (mode Farm sur une vague de boss) : la vague redémarre sur le
+  // MÊME boss — il reste engagé, avec un chrono d'enrage tout neuf. Sans ça,
+  // chaque victoire ramenait un boss plein PV à ré-engager au bouton dédié,
+  // vécu comme « impossible à tuer, il finit toujours par regen » (retour
+  // joueur) alors que le kill avait bien eu lieu.
+  const farmBossRepeat = user.idleBattleMode === 'farm' && isBossStage(stage) && waveComplete;
   const updated = await tx.user.update({
     where: { id: user.id },
     data: {
@@ -1125,12 +1131,14 @@ async function applyActiveDamage(tx, user, damage) {
       idleBestStage: Math.max(user.idleBestStage || 1, nextStage),
       idleEnemyHp: enemyUnitMaxHp(nextStage,nextWaveKills),
       idleBossProgress: 0,
-      idleBossStartedAt: null,
-      idleBossEngaged: false,
+      idleBossStartedAt: farmBossRepeat ? now : null,
+      idleBossEngaged: farmBossRepeat,
       ...(bossMs ? { idleBestBossMs: user.idleBestBossMs ? Math.min(user.idleBestBossMs, bossMs) : bossMs } : {}),
     },
   });
-  return { updated, killed:true, bossKilled:isBossStage(stage) && waveComplete && user.idleBattleMode !== 'farm' };
+  // Un boss vaincu en Farm reste un boss vaincu : les missions/défis « boss »
+  // doivent compter, seule la progression de vague reste volontairement figée.
+  return { updated, killed:true, bossKilled:isBossStage(stage) && waveComplete };
 }
 
 // Les personnages AniList peuvent pointer vers des saisons différentes d'une
@@ -1338,8 +1346,10 @@ async function settleUnlocked(userId, mutate) {
           idleBossProgress:stage!==(user.idleStage||1)?0:user.idleBossProgress,
           // Le chrono d'enrage ne démarre qu'une fois le Boss engagé (clic
           // explicite, cf. /boss/engage) — jamais dès l'arrivée sur sa vague.
+          // En Farm, chaque boss vaincu par le DPS passif fait réapparaître le
+          // même boss : le chrono repart alors de zéro pour le nouveau venu.
           idleBossEngaged: isBossStage(stage) ? !!user.idleBossEngaged : false,
-          idleBossStartedAt: isBossStage(stage) && user.idleBossEngaged ? (user.idleBossStartedAt || new Date()) : null,
+          idleBossStartedAt: isBossStage(stage) && user.idleBossEngaged ? (user.idleBattleMode==='farm'&&combat.kills>0?new Date():(user.idleBossStartedAt || new Date())) : null,
           idleLastCollectAt: nextCollectAt,
         },
       });
@@ -1351,7 +1361,11 @@ async function settleUnlocked(userId, mutate) {
     // ont besoin d'autres bonus d'Ancients (chance, remise) que celui déjà
     // appliqué ci-dessus à la production.
     if(combat.kills>0)await incrementIdleCounter(userId,'kill',combat.kills);
-    const bosses=progressionBossesCrossed(user.idleStage||1,stage,user.idleBattleMode);
+    // En Farm sur une vague de boss, chaque kill passif EST un boss vaincu —
+    // même règle que la frappe manuelle (cf. applyActiveDamage) : les
+    // missions/défis « boss » comptent, la progression reste figée.
+    const farmBossKills=user.idleBattleMode==='farm'&&isBossStage(stage)?combat.kills:0;
+    const bosses=progressionBossesCrossed(user.idleStage||1,stage,user.idleBattleMode)+farmBossKills;
     if(bosses>0)await incrementIdleCounter(userId,'boss_kill',bosses);
     // `totalRate` transmis au mutateur : la frappe manuelle ajoute une part de
     // la production d'équipe (CLICK_RATE_SHARE) et le taux vient d'être
@@ -3109,7 +3123,10 @@ router.post('/click', requireAuth, requireIdleBeta, rateLimit({ windowMs: 1000, 
       if(isBossStage(stage))multiplier*=itemActionBonus(slots,'boss');
       const critical=Math.random()<Math.max(0,Math.min(.95,(heroClass(liveUser.idleHeroClass).crit||.12)+(world.modifier?.critBonus||0)+critUpgradeBonus(liveUser.idleCritLevel)+blessingEffects.crit+passiveCritBonus));if(critical)criticals++;
       const damage=Math.max(1,Math.round(base*multiplier*(critical?2:1)));damageTotal+=damage;
-      if(damage>=hp){const defeatedStage=stage;rewardTotal+=enemyUnitReward(stage,waveKills);kills++;waveKills++;const waveComplete=waveKills>=enemiesRequiredForStage(stage);if(isBossStage(stage)&&waveComplete&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;if(liveUser.idleBattleMode!=='farm')bosses++;}if(waveComplete){waveKills=0;if(liveUser.idleBattleMode!=='farm')stage++;}hp=enemyUnitMaxHp(stage,waveKills);progress=stage!==defeatedStage?0:progress;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
+      // Un boss vaincu compte TOUJOURS (missions/défis « boss ») — y compris
+      // en mode Farm, où seule la progression de vague reste figée (même
+      // règle que applyActiveDamage côté Ultime/Combo).
+      if(damage>=hp){const defeatedStage=stage;rewardTotal+=enemyUnitReward(stage,waveKills);kills++;waveKills++;const waveComplete=waveKills>=enemiesRequiredForStage(stage);if(isBossStage(stage)&&waveComplete&&bossStartedAt){const ms=Math.max(1,Date.now()-bossStartedAt.getTime());bestBossMs=!bestBossMs||ms<bestBossMs?ms:bestBossMs;bosses++;}if(waveComplete){waveKills=0;if(liveUser.idleBattleMode!=='farm')stage++;}hp=enemyUnitMaxHp(stage,waveKills);progress=stage!==defeatedStage?0:progress;bossStartedAt=isBossStage(stage)?new Date():null;}else hp-=damage;
     }
     const updated=await tx.user.update({where:{id:liveUser.id},data:{idleEnemyHp:hp,idleWaveKills:waveKills,idleBossProgress:progress,idleBossStartedAt:bossStartedAt,idleBossEngaged:isBossStage(stage)?bossEngaged:false,idleBestBossMs:bestBossMs,idleStage:stage,idleRunBestStage:Math.max(liveUser.idleRunBestStage||1,stage),idleBestStage:Math.max(liveUser.idleBestStage||1,stage),essence:{increment:rewardTotal},essenceEarnedTotal:{increment:rewardTotal},idleRunEssenceEarned:{increment:rewardTotal}}});
     result={essence:updated.essence,gained:damageTotal,damage:damageTotal,killed:kills>0,kills,passiveKills:settlement?.passiveKills||0,bosses,critical:criticals>0,criticals,count,mechanic:lastMechanic,mechanicProgress:progress};
