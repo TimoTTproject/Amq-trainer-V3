@@ -161,7 +161,8 @@ test('la navigation entre onglets rend chaque panneau avec le dernier état conn
   await page.evaluate(() => idleShowPanel('team'));
   await expect(page.locator('#idle-slots')).toContainText('Rem');
   await page.evaluate(()=>document.querySelector('.idle-collapsible:has(#idle-masteries) [data-idle-collapse]')?.click());
-  await expect(page.locator('.idle-mastery-rule')).toContainText('Seuls les héros dans l’équipe comptent');
+  await expect(page.locator('.idle-mastery-rule')).toContainText('Seuls les héros dans l’équipe font progresser ces maîtrises');
+  await expect(page.locator('.idle-mastery-rule')).toContainText('bonus Réserve séparé : +1% par recrue hors équipe, plafonné à +20%');
   await expect(page.locator('#idle-masteries .idle-mastery')).toContainText('2 recrutés, saisons réunies · 1 héros actif dans l’équipe');
   await expect(page.locator('#idle-masteries .idle-mastery')).toContainText('12 niveaux actifs cumulés');
   await expect(page.locator('#idle-masteries .idle-mastery')).not.toContainText('112 niveaux');

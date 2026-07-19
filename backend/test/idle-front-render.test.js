@@ -328,8 +328,8 @@ test('objectif principal : reste dans la colonne de contenu et hors du rail de n
 test('maîtrises de licences : leur portée est explicitement limitée à l’équipe active',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','public','idle.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');
-  assert.match(html,/Seuls les héros dans l’équipe comptent/);
-  assert.match(html,/Les niveaux des héros en réserve ne donnent aucun bonus/);
+  assert.match(html,/Seuls les héros dans l’équipe font progresser ces maîtrises/);
+  assert.match(html,/bonus Réserve séparé : \+1% par recrue hors équipe, plafonné à \+20%/);
   assert.match(source,/niveaux actifs cumulés/);
   assert.match(source,/APPLIQUÉ À CETTE LICENCE/);
   assert.match(source,/AUCUN HÉROS ACTIF/);
