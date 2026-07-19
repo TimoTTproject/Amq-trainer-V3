@@ -314,6 +314,14 @@ test('Donjon des Objets : 10 vrais combats clicker avant la récompense finale',
   assert.match(source, /DPS ÉQUIPE/);
 });
 
+test('objectif principal : reste dans la colonne de contenu et hors du rail de navigation',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');
+  const contentStart=html.indexOf('<div class="idle-content">');
+  const objective=html.indexOf('id="idle-focus-objective"');
+  const firstPanel=html.indexOf('id="idle-panel-home"');
+  assert.ok(contentStart>=0&&objective>contentStart&&objective<firstPanel);
+});
+
 test('QoL Idle : reprend le dernier onglet, mémorise l’inventaire et expose les raccourcis',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','public','idle.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','public','index.html'),'utf8');

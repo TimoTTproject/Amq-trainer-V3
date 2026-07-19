@@ -1648,11 +1648,14 @@
         <button class="idle-guide-btn" id="idle-settings-btn" title="Réglages de confort" aria-label="Réglages de confort"><i class="fas fa-sliders"></i><span>Réglages</span></button>
       </header>
       <div class="idle-connection-status hidden" id="idle-connection-status" role="status" aria-live="polite"><i class="fas fa-wifi"></i><span id="idle-connection-label">Connexion stable</span><button type="button" id="idle-connection-retry">Réessayer</button></div>
-      <aside class="idle-focus-objective hidden" id="idle-focus-objective" aria-live="polite"></aside>
 
       <button type="button" class="idle-chat-launcher" id="idle-chat-toggle" aria-controls="idle-community-chat" aria-expanded="false"><i class="fas fa-comments"></i><span><small>CHAT MONDE</small><b>Communauté</b><em id="idle-chat-launcher-status">Connexion…</em></span><strong class="hidden" id="idle-chat-unread">0</strong></button>
 
       <div class="idle-content">
+        <!-- L'objectif partage exactement la largeur et le décalage du contenu.
+             Placé hors de .idle-content, il passait sous le rail de navigation
+             desktop et son intitulé devenait illisible. -->
+        <aside class="idle-focus-objective hidden" id="idle-focus-objective" aria-live="polite"></aside>
         <!-- Onglet DOJO : la scène (décor + gardien + gains flottants) -->
         <section id="idle-panel-home" class="idle-panel" role="tabpanel" aria-labelledby="idle-tab-home" tabindex="0">
           <!-- HUD économique plat : l'Essence disponible est déjà dans

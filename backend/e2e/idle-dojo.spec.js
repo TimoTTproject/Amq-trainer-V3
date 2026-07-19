@@ -89,6 +89,25 @@ test('le Dojo rend la scène de combat depuis l’état serveur', async ({ page 
   // « bloqué stage 1 », « le boss regen », « je peux pas changer de monde »).
   await expect(page.locator('#idle-next-objective')).toContainText('MODE FARM');
   await expect(page.locator('#idle-next-objective [data-idle-farm-exit]')).toBeVisible();
+  // Le conseil permanent appartient à la colonne principale : sur desktop il
+  // ne doit plus commencer derrière le rail de navigation.
+  await expect(page.locator('#idle-focus-objective')).toBeVisible();
+  const placement=await page.evaluate(()=>{
+    const objective=document.querySelector('#idle-focus-objective')?.getBoundingClientRect();
+    const navigation=document.querySelector('#view-idle .idle-tabs')?.getBoundingClientRect();
+    return {
+      desktop:innerWidth>=901,
+      parent:document.querySelector('#idle-focus-objective')?.parentElement?.classList.contains('idle-content'),
+      objectiveLeft:objective?.left||0,
+      objectiveRight:objective?.right||0,
+      navigationRight:navigation?.right||0,
+      viewportWidth:innerWidth,
+    };
+  });
+  expect(placement.parent).toBe(true);
+  expect(placement.objectiveLeft).toBeGreaterThanOrEqual(0);
+  expect(placement.objectiveRight).toBeLessThanOrEqual(placement.viewportWidth);
+  if(placement.desktop) expect(placement.objectiveLeft).toBeGreaterThan(placement.navigationRight);
 });
 
 test('les bénédictions en attente apparaissent sur l’onglet Niveaux sans F5', async ({ page }) => {
