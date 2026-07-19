@@ -5,6 +5,7 @@
 // assigné a sa propre ligne de héros compacte, voir idleSlotHTML.
 const IDLE_BOSS_MECHANIC_ICONS = { shield:'fa-shield-halved', rage:'fa-fire', regen:'fa-heart-pulse', counter:'fa-people-arrows', ward:'fa-link-slash', focus:'fa-crosshairs' };
 let idleState = null; // dernier état reçu du serveur
+let idleLatestStateRevision = 0; // garde monotone contre les réponses réseau arrivées en retard
 let idleTicker = null;
 let idleSyncTicker = null; // resynchronisation périodique légère (cf. openIdle) — sans ça, un joueur qui ne clique jamais ne verrait aucun kill se produire réellement côté serveur
 let idlePickerSlot = null; // emplacement en cours de sélection dans la modale
@@ -703,6 +704,9 @@ function renderIdleBuffBanner(buff) {
 }
 
 function renderIdleState(state) {
+  const incomingRevision=Number(state?.stateRevision||0);
+  if(incomingRevision&&incomingRevision<idleLatestStateRevision)return false;
+  if(incomingRevision)idleLatestStateRevision=Math.max(idleLatestStateRevision,incomingRevision);
   const prev = idleState;
   idleState = state;
   document.getElementById('view-idle')?.classList.toggle('idle-beginner',Number(state.dojo?.level||1)<10);
@@ -799,6 +803,7 @@ function renderIdleState(state) {
     renderIdleCompetitiveCenter(state);
   }
   renderIdleRecruit(state.recruit);
+  return true;
 }
 
 function idleCompetitiveActions(state){
@@ -2764,8 +2769,9 @@ function idleCombatMotion(source) {
 }
 
 async function levelUpIdleSlot(slotIndex, slotEl, amount = 1) {
+  let state;
   try {
-    await api('/api/idle/slot-level', { method: 'POST', body: JSON.stringify({ slotIndex, amount }) });
+    state=await api('/api/idle/slot-level', { method: 'POST', body: JSON.stringify({ slotIndex, amount }) });
   } catch (e) {
     idleNotify(e.message,'error');
     return;
@@ -2774,7 +2780,7 @@ async function levelUpIdleSlot(slotIndex, slotEl, amount = 1) {
   // achat passait totalement inaperçu — seul le chiffre changeait en silence.
   if (typeof sfx !== 'undefined' && sfx.idleUpgrade) sfx.idleUpgrade();
   if (slotEl) idleCardBump(slotEl);
-  refreshIdleState();
+  renderIdleState(state);
 }
 async function awakenIdleHero(characterId){
   try{

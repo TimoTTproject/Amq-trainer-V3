@@ -41,6 +41,14 @@ test('combat Idle : les paliers d\'un héros actif se rendent sans interrompre t
   assert.match(context.result, /×2 \+ Ascension/);
 });
 
+test('synchronisation Idle : une réponse ancienne ne peut plus annuler visuellement un upgrade', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
+  assert.match(source, /incomingRevision&&incomingRevision<idleLatestStateRevision/);
+  assert.match(source, /idleLatestStateRevision=Math\.max/);
+  assert.match(source, /state=await api\('\/api\/idle\/slot-level'/);
+  assert.doesNotMatch(source, /async function levelUpIdleSlot[\s\S]{0,900}refreshIdleState\(\)/);
+});
+
 test('conseiller Idle : une recommandation contextualisée dirige vers un onglet ou une action', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');

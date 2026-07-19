@@ -1399,6 +1399,7 @@ async function buildState(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
+      updatedAt: true,
       essence: true, idleLastCollectAt: true, idleSlotsUnlocked: true, idleProdLevel: true, idleClickLevel: true, idleCritLevel:true, idleCooldownLevel:true,idleMultiStrikeLevel:true,idleRunBlessings:true,idleRunBlessingRerolls:true,idleRunStartedAt:true,
       essenceEarnedTotal: true, idleRunEssenceEarned: true, idleStage: true, idleRunBestStage: true, idleBestStage: true, idleEnemyHp: true, idleWaveKills:true,
       idleMilestoneClaimed: true, prestigeLevel: true, wisdomPoints: true,
@@ -1767,6 +1768,10 @@ async function buildState(userId) {
     tactic:bossTactic,
   };
   return {
+    // Permet au client d'ignorer une synchronisation partie avant un achat
+    // mais arrivée après sa réponse : l'ancien DPS ne doit jamais remplacer
+    // visuellement les niveaux qui viennent d'être achetés.
+    stateRevision:Number(new Date(user.updatedAt||0).getTime())||0,
     essence: user.essence,
     pendingEssence: pending,
     totalRate,
