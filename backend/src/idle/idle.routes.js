@@ -432,6 +432,16 @@ const ITEM_KINDS={
   rune6:{label:'Objet 6',icon:'fa-sun',effectKey:'aura',effectLabel:'Stat principale'},
 };
 const RUNE_KINDS=Object.keys(ITEM_KINDS);
+const RUNE_DUNGEON_HP_SCALE=1_000_000;
+const RUNE_DUNGEON_RUN_KEY='rune_dungeon_run';
+const RUNE_DUNGEON_KIND_KEY='rune_dungeon_kind';
+const RUNE_DUNGEON_HP_KEY='rune_dungeon_hp';
+const RUNE_DUNGEON_PERIOD='current';
+
+function runeDungeonFloorHp(bestStage,floor){
+  const guardian=floor>=RUNE_DUNGEON_FLOORS;
+  return Math.max(1,Math.round(enemyUnitMaxHp(bestStage,0)*(1+(floor-1)*.18)*(guardian?2.5:1)));
+}
 const ITEM_EFFECTS={
   assault:{label:'Assaut',mode:'dps',description:'Dégâts constants'},
   precision:{label:'Précision',mode:'click',description:'Augmente les frappes manuelles'},
@@ -1660,9 +1670,20 @@ async function buildState(userId) {
   // des périodes jour/semaine/mois (période fixe 'current'), une descente en
   // cours survit donc à minuit — d'où la lecture dédiée.
   const runeDungeonAttemptsToday=missionCounters.get(`rune_dungeon:${periods.day}`)||0;
-  let runeDungeonFloorRow=null;
-  try{runeDungeonFloorRow=await prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:'rune_dungeon_run',period:'current'}}});}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
+  let runeDungeonFloorRow=null,runeDungeonKindRow=null,runeDungeonHpRow=null;
+  try{[runeDungeonFloorRow,runeDungeonKindRow,runeDungeonHpRow]=await Promise.all([
+    prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+    prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+    prisma.idleProgressCounter.findUnique({where:{userId_key_period:{userId,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+  ]);}catch(e){if(e?.code&&e.code!=='P2021')throw e;}
   const runeDungeonFloor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,runeDungeonFloorRow?.value||0));
+  const runeDungeonKind=RUNE_KINDS[Math.max(0,(runeDungeonKindRow?.value||1)-1)]||null;
+  const runeDungeonActive=!!runeDungeonKindRow&&!!runeDungeonHpRow;
+  const runeDungeonNextFloor=runeDungeonFloor+1;
+  const runeDungeonMaxHp=runeDungeonFloorHp(progressionStage,runeDungeonNextFloor);
+  const runeDungeonStoredHp=Math.max(0,Math.min(RUNE_DUNGEON_HP_SCALE,runeDungeonHpRow?.value??RUNE_DUNGEON_HP_SCALE));
+  const runeDungeonElapsed=runeDungeonActive&&runeDungeonHpRow?.updatedAt?Math.min(1,Math.max(0,(Date.now()-new Date(runeDungeonHpRow.updatedAt).getTime())/1000)):0;
+  const runeDungeonHp=Math.max(0,Math.round(runeDungeonMaxHp*runeDungeonStoredHp/RUNE_DUNGEON_HP_SCALE-totalRate*runeDungeonElapsed));
   const runeDungeon={
     attemptsToday:runeDungeonAttemptsToday,
     floor:runeDungeonFloor,
@@ -1671,6 +1692,19 @@ async function buildState(userId) {
     // la seule monnaie. La difficulté affichée suit la progression du joueur.
     free:true,
     difficulty:{stage:progressionStage},
+    active:runeDungeonActive,
+    selectedKind:runeDungeonActive?runeDungeonKind:null,
+    encounter:runeDungeonActive?{
+      floor:runeDungeonNextFloor,
+      guardian:runeDungeonNextFloor===RUNE_DUNGEON_FLOORS,
+      hp:runeDungeonHp,
+      maxHp:runeDungeonMaxHp,
+      dps:Math.max(0,Math.round(totalRate)),
+      clickDamage,
+      enemyName:runeDungeonNextFloor===RUNE_DUNGEON_FLOORS?'Gardien du coffre':`Sentinelle de l’étage ${runeDungeonNextFloor}`,
+      backgroundUrl:combatWorld.backgroundUrl||null,
+      enemyImageUrl:combatWorld.boss?.generatedImageUrl||combatWorld.boss?.imageUrl||null,
+    }:null,
     kinds:RUNE_KINDS.map((kind)=>({kind,label:ITEM_KINDS[kind].label,icon:ITEM_KINDS[kind].icon})),
   };
   const guide=[
@@ -3553,94 +3587,98 @@ router.post('/boss-chest', requireAuth, requireIdleBeta, rateLimit({ max: 20, na
   } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
 });
 
-// ── Donjon des Objets : farm répétable et CIBLÉ (le joueur choisit le kind,
-// donc l'emplacement qu'il veut garnir) — façon donjon Caiross de Summoners
-// War. Le donjon se descend étage par étage (RUNE_DUNGEON_FLOORS clics) : les
-// étages intermédiaires ne donnent RIEN, seul le dernier étage lâche
-// l'équipement (demande utilisateur : un vrai donjon de 10 niveaux au lieu
-// d'un objet par clic). ENTIÈREMENT GRATUIT (demande utilisateur : « il faut
-// que ce soit gratuit pas payant ») — plus aucune limite quotidienne ni coût
-// en Essence : le temps de descente (10 combats) est la seule monnaie. La
-// difficulté s'adapte au joueur : chaque étage oppose un ennemi dont les PV
-// suivent SA meilleure vague (donc toujours battable, puisqu'il l'a déjà
-// battue en campagne) et grimpent d'étage en étage ; son équipe combat en
-// temps réel côté client (durée = PV / DPS, cf. fightMs).
-router.post('/rune-dungeon/attempt', requireAuth, requireIdleBeta, rateLimit({ max: 30, name: 'idle-rune-dungeon' }), async (req, res) => {
+// ── Donjon des Objets : vrai mini-clicker persistant. Choisir une cible lance
+// une descente ; l'équipe inflige son DPS au fil du temps et les clics manuels
+// l'accélèrent. Aucun étage n'est validé par un simple appel HTTP : les PV sont
+// conservés côté serveur, et seul le gardien vaincu crée l'objet.
+router.post('/rune-dungeon/start', requireAuth, requireIdleBeta, rateLimit({ max: 12, name: 'idle-rune-dungeon-start' }), async (req, res) => {
   const kind = String(req.body?.kind || '');
   if (!RUNE_KINDS.includes(kind)) return res.status(400).json({ error: 'Emplacement invalide' });
-  let result;
   try {
-    await prisma.$transaction(async (tx) => {
+    await withIdleUserLock(req.user.id,()=>prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: req.user.id } });
       const periods = idlePeriods();
-      const bestStage = Math.max(user.idleBestStage || 1, user.idleStage || 1);
-      // Étage courant : période fixe 'current' (hors jour/semaine/mois), une
-      // descente entamée survit à minuit. Garde optimiste sur la valeur lue,
-      // comme le compteur de descentes ci-dessous.
-      const floorRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon_run', period: 'current' } } });
-      const floor = Math.min(RUNE_DUNGEON_FLOORS - 1, Math.max(0, floorRow?.value || 0));
-      const nextFloor = floor + 1;
-      const cleared = nextFloor >= RUNE_DUNGEON_FLOORS;
-      if (floorRow) {
-        const advance = await tx.idleProgressCounter.updateMany({ where: { id: floorRow.id, value: floorRow.value }, data: { value: cleared ? 0 : nextFloor } });
-        if (!advance.count) throw new IdleError(409, 'Un autre étage vient d’être franchi, réessaie');
-      } else {
-        try {
-          await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon_run', period: 'current', value: cleared ? 0 : nextFloor } });
-        } catch (e) {
-          if (e?.code === 'P2002') throw new IdleError(409, 'Un autre étage vient d’être franchi, réessaie');
-          throw e;
-        }
-      }
-      // Descentes du jour : plus aucun coût, le compteur ne sert qu'à faire
-      // varier la famille d'objets (tier) et à la télémétrie.
+      const active=await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}});
+      if(active)throw new IdleError(409,'Une descente est déjà en cours');
+      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}});
+      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD,value:0}});
+      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_KINDS.indexOf(kind)+1}});
+      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_DUNGEON_HP_SCALE}});
       const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
-      const attemptsToday = counterRow?.value || 0;
-      if (floor === 0) {
-        if (counterRow) {
-          await tx.idleProgressCounter.updateMany({ where: { id: counterRow.id }, data: { value: { increment: 1 } } });
-        } else {
-          try {
-            await tx.idleProgressCounter.create({ data: { userId: user.id, key: 'rune_dungeon', period: periods.day, value: 1 } });
-          } catch (e) {
-            if (e?.code !== 'P2002') throw e; // compté par une requête concurrente : sans enjeu, il n'y a plus de prix
-          }
-        }
-      }
-      // Combat de l'étage : PV calés sur la meilleure vague du joueur (bornés
-      // par sa progression réelle, donc jamais infranchissables), +18% par
-      // étage, gardien final ×2.5. La durée renvoyée anime le combat côté
-      // client à la vitesse de l'équipe RÉELLE (DPS serveur).
+      if(counterRow)await tx.idleProgressCounter.updateMany({where:{id:counterRow.id},data:{value:{increment:1}}});
+      else await tx.idleProgressCounter.create({data:{userId:user.id,key:'rune_dungeon',period:periods.day,value:1}});
+    }));
+    void recordIdleEvent(req.user.id,'rune_dungeon_start');
+    res.json({ok:true,state:await buildState(req.user.id)});
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+});
+
+router.post('/rune-dungeon/hit', requireAuth, requireIdleBeta, rateLimit({windowMs:1000,max:12,name:'idle-rune-dungeon-hit'}), async(req,res)=>{
+  const requestId=String(req.body?.requestId||'');
+  if(!/^[a-zA-Z0-9_-]{12,80}$/.test(requestId))return res.status(400).json({error:'Identifiant de frappe invalide'});
+  let count=Math.min(10,Math.max(0,Number.isInteger(Number(req.body?.count))?Number(req.body.count):0));
+  const fresh=await store.setIfAbsent(`idle:rune-hit:${req.user.id}:${requestId}`,30);
+  if(!fresh)return res.json({duplicate:true,count:0,damage:0});
+  // Même budget que le combat principal : le regroupement des clics rend le
+  // tactile fluide, mais un script ne peut pas injecter plus de 30 frappes/s.
+  if(count){const used=await store.incrBy(`idle:rune-click:budget:${req.user.id}:${Math.floor(Date.now()/1000)}`,count,2);count=Math.min(count,Math.max(0,30-(used-count)));}
+  let result;
+  try{
+    await withIdleUserLock(req.user.id,()=>prisma.$transaction(async(tx)=>{
+      const user=await tx.user.findUnique({where:{id:req.user.id}});
+      const [floorRow,kindRow,hpRow]=await Promise.all([
+        tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+        tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+        tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD}}}),
+      ]);
+      if(!floorRow||!kindRow||!hpRow)throw new IdleError(404,'Aucune descente en cours');
+      const floor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,floorRow.value||0));
+      const nextFloor=floor+1;const guardian=nextFloor===RUNE_DUNGEON_FLOORS;
+      const bestStage=Math.max(user.idleBestStage||1,user.idleStage||1);
       const [slots, recruitCount, ancientLevelsByKey] = await Promise.all([
         loadSlots(tx, user.id),
         tx.dojoRecruit.count({ where: { userId: user.id } }),
         loadAncientLevels(tx, user.id),
       ]);
       const teamRate = computeTotalRate(slots, user.idleProdLevel || 0, user.idleRankLevel || 1, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills, recruitCount, user.idleFormation, user.idleLeaderCharacterId, rateExtrasFor(user, slots, recruitCount, ancientLevelsByKey));
-      const floorHp = Math.round(enemyUnitMaxHp(bestStage, 0) * (1 + (nextFloor - 1) * .18) * (cleared ? 2.5 : 1));
-      const fightMs = teamRate > 0 ? Math.round(Math.min(5000, Math.max(600, (floorHp / teamRate) * 1000))) : 5000;
-      const encounter = { hp: floorHp, fightMs, guardian: cleared };
-      if (!cleared) {
-        // Étages 1 à N-1 : aucune récompense, seulement la progression.
-        result = { floor: nextFloor, floors: RUNE_DUNGEON_FLOORS, cleared: false, encounter };
-        return;
+      const maxHp=runeDungeonFloorHp(bestStage,nextFloor);
+      const elapsed=Math.min(1,Math.max(0,(Date.now()-new Date(hpRow.updatedAt||Date.now()).getTime())/1000));
+      const passiveDamage=Math.max(0,Math.round(teamRate*elapsed));
+      const blessings=runBlessingEffects(user.idleRunBlessings);const clickBuff=activeOrbBuff(user)?.click||1;
+      const clickBase=(clickYield(user.idleClickLevel||0,ancientBonus(ancientLevelsByKey,'clickMult'))+teamRate*CLICK_RATE_SHARE)*heroClass(user.idleHeroClass).click*(heroSpec(user.idleHeroClass,user.idleHeroSpec).click||1)*currentIdleEvent().click*clickBuff*itemActionBonus(slots,'click')*blessings.click*(1+characterPassiveTeamBonus(slots,'click'));
+      const effectiveCount=Math.max(count,Math.round(count*(1+multiStrikeBonus(user.idleMultiStrikeLevel||0))));
+      const critChance=Math.max(0,Math.min(.95,(heroClass(user.idleHeroClass).crit||.12)+critUpgradeBonus(user.idleCritLevel)+blessings.crit+characterPassiveTeamBonus(slots,'crit')));
+      let manualDamage=0,criticals=0;for(let i=0;i<effectiveCount;i++){const critical=Math.random()<critChance;if(critical)criticals++;manualDamage+=Math.max(1,Math.round(clickBase*(critical?2:1)));}
+      const currentHp=Math.max(0,Math.round(maxHp*Math.max(0,Math.min(RUNE_DUNGEON_HP_SCALE,hpRow.value))/RUNE_DUNGEON_HP_SCALE));
+      const damage=Math.min(currentHp,passiveDamage+manualDamage);const remaining=Math.max(0,currentHp-damage);
+      if(remaining>0){
+        await tx.idleProgressCounter.updateMany({where:{id:hpRow.id},data:{value:Math.max(1,Math.ceil(remaining/maxHp*RUNE_DUNGEON_HP_SCALE))}});
+        result={floor:nextFloor,floors:RUNE_DUNGEON_FLOORS,cleared:false,floorCleared:false,damage,passiveDamage,manualDamage,criticals,count};return;
+      }
+      if(!guardian){
+        await tx.idleProgressCounter.updateMany({where:{id:floorRow.id},data:{value:nextFloor}});
+        await tx.idleProgressCounter.updateMany({where:{id:hpRow.id},data:{value:RUNE_DUNGEON_HP_SCALE}});
+        result={floor:nextFloor,floors:RUNE_DUNGEON_FLOORS,cleared:false,floorCleared:true,damage,passiveDamage,manualDamage,criticals,count};return;
       }
       const rarity = runeDungeonRarity(bestStage);
       const base = { rare: .03, epic: .06, legendary: .10, mythic: .16 }[rarity];
-      // Fait avancer la famille a chaque descente, meme a stage constant.
+      const attemptsToday=(await tx.idleProgressCounter.findUnique({where:{userId_key_period:{userId:user.id,key:'rune_dungeon',period:idlePeriods().day}}}))?.value||1;
       const tier = Math.max(1, Math.floor(bestStage / 10)) + attemptsToday;
       const bonus = Number((base + Math.min(.25, tier * .002)).toFixed(3));
-      // Le monde source doit varier avec le tier (comme le coffre de Boss),
-      // sinon le nom de base de l'objet (`${label} de ${world}`) reste
-      // toujours identique et seuls le set/la rareté changent — deux tirages
-      // consécutifs sur le même emplacement ont vite l'air d'être « le même
-      // objet » (retour joueur : le Donjon donne toujours les mêmes objets).
+      const kind=RUNE_KINDS[Math.max(0,kindRow.value-1)]||RUNE_KINDS[0];
       const loot = await resolveIdleItemDrop(tx, user.id, bestStage, tier, kind, rarity, bonus, campaignForStage(tier*10).name);
-      result = { floor: RUNE_DUNGEON_FLOORS, floors: RUNE_DUNGEON_FLOORS, cleared: true, encounter, loot };
-    });
-  } catch (e) { if (e instanceof IdleError) return res.status(e.status).json({ error: e.message }); throw e; }
+      await tx.idleProgressCounter.deleteMany({where:{userId:user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}});
+      result={floor:RUNE_DUNGEON_FLOORS,floors:RUNE_DUNGEON_FLOORS,cleared:true,floorCleared:true,damage,passiveDamage,manualDamage,criticals,count,loot};
+    }));
+  }catch(e){if(e instanceof IdleError)return res.status(e.status).json({error:e.message});throw e;}
+  if(count)await incrementIdleCounter(req.user.id,'click',count);
   void recordIdleEvent(req.user.id, 'rune_dungeon', { value: result.floor });
   res.json({ ok: true, ...result, state: await buildState(req.user.id) });
+});
+
+router.post('/rune-dungeon/abandon',requireAuth,requireIdleBeta,rateLimit({max:8,name:'idle-rune-dungeon-abandon'}),async(req,res)=>{
+  await withIdleUserLock(req.user.id,()=>prisma.idleProgressCounter.deleteMany({where:{userId:req.user.id,key:{in:[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY]},period:RUNE_DUNGEON_PERIOD}}));
+  res.json({ok:true,state:await buildState(req.user.id)});
 });
 
 // ── Orbe bonus (équivalent « golden cookie ») : le client fait traverser un

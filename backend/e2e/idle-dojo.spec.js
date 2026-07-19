@@ -100,13 +100,22 @@ test('les bénédictions en attente apparaissent sur l’onglet Niveaux sans F5'
   await expect(page.locator('#idle-run-choices button[data-run-blessing]')).toHaveCount(3);
 });
 
-test('le Donjon des Objets affiche la descente de 10 étages et son mode auto', async ({ page }) => {
+test('le Donjon des Objets passe du choix de cible à une vraie scène de combat', async ({ page }) => {
   await openDojo(page);
   await page.evaluate(() => idleShowPanel('farm'));
   await expect(page.locator('#idle-rune-dungeon-progress span')).toHaveCount(10);
   await expect(page.locator('#idle-rune-dungeon-status')).toContainText('Gratuit');
   await expect(page.locator('#idle-rune-dungeon-auto')).toBeVisible();
   await expect(page.locator('#idle-rune-dungeon-grid [data-rune-dungeon]')).toHaveCount(6);
+  await page.evaluate(() => {
+    idleState.runeDungeon={...idleState.runeDungeon,active:true,selectedKind:'rune1',floor:3,encounter:{floor:4,guardian:false,hp:7200,maxHp:10000,dps:850,clickDamage:420,enemyName:'Sentinelle de l’étage 4',backgroundUrl:null,enemyImageUrl:null}};
+    renderIdleRuneDungeon(idleState);
+  });
+  await expect(page.locator('#idle-rune-dungeon-grid')).toBeHidden();
+  await expect(page.locator('#idle-rune-dungeon-scene')).toBeVisible();
+  await expect(page.locator('.idle-rune-dungeon-hp')).toContainText('7.2K / 10K PV');
+  await expect(page.locator('[data-rune-hit]')).toContainText('FRAPPER');
+  await expect(page.locator('.idle-rune-dungeon-combat-stats')).toContainText('DPS ÉQUIPE');
 });
 
 test('la navigation entre onglets rend chaque panneau avec le dernier état connu', async ({ page }) => {

@@ -1268,64 +1268,50 @@ function idleRuneDetailChips(item){
   const subStats=Object.entries(item.subStats||{}).map(([key,value])=>`<span><small>${escapeHtml(IDLE_STAT_LABELS[key]||key)}</small><b>+${Math.round(Number(value)*100)}%</b></span>`);
   return [...affixes,...subStats].join('')||'<em>Aucune sous-statistique débloquée</em>';
 }
-// Donjon des Objets : un bouton par emplacement (rune1..6), l'objet obtenu va
-// toujours dans le slot choisi — façon donjon Caiross de Summoners War.
+// Donjon des Objets : mini-clicker autoritaire. Les PV vivent côté serveur,
+// l'équipe applique son DPS au fil du temps et les frappes manuelles sont
+// regroupées sans jamais pouvoir valider gratuitement un étage.
 let idleRuneDungeonBusy=false;
-let idleRuneDungeonActiveKind=null;
-// Durées de repli si le serveur n'a pas renvoyé de combat (encounter.fightMs
-// fait autorité : PV de l'étage ÷ DPS réel de l'équipe).
-const IDLE_RUNE_DUNGEON_EXPLORE_MS=2600;
-const IDLE_RUNE_DUNGEON_FLOOR_MS=800; // étages sans récompense : fouille brève
-// Descente auto : un clic enchaîne les étages restants (avec les vraies
-// durées de combat) — la descente garde sa sensation sans devenir 10 clics
-// de corvée. Préférence persistée, désactivée par défaut.
+let idleRuneDungeonPendingHits=0;
+let idleRuneDungeonTimer=null;
 let idleRuneDungeonAuto=localStorage.getItem('idle-rune-dungeon-auto')==='1';
 function renderIdleRuneDungeon(state){
-  const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');const progress=document.getElementById('idle-rune-dungeon-progress');
+  const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const scene=document.getElementById('idle-rune-dungeon-scene');const status=document.getElementById('idle-rune-dungeon-status');const progress=document.getElementById('idle-rune-dungeon-progress');
   if(!dungeon||!grid)return;
-  const floors=dungeon.floors||10;const floor=dungeon.floor||0;const inRun=floor>0;
-  // Gratuit et sans limite : le statut n'affiche plus de compteur ni de coût,
-  // seulement la progression et la difficulté calée sur le joueur.
-  if(status)status.innerHTML=idleRuneDungeonBusy
-    ?`<i class="fas fa-spinner fa-spin"></i> Combat en cours…`
-    :inRun
-    ?`<i class="fas fa-stairs"></i> Étage ${floor}/${floors} · l’équipement attend à l’étage ${floors}`
+  const floors=dungeon.floors||10;const floor=dungeon.floor||0;const inRun=!!dungeon.active;const encounter=dungeon.encounter||{};
+  if(status)status.innerHTML=inRun
+    ?`<i class="fas fa-skull-crossbones"></i> Étage ${encounter.floor||floor+1}/${floors} · combat actif`
     :`<i class="fas fa-scale-balanced"></i> Gratuit · départ étage 1/${floors} · ennemis calés sur ta vague ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
-  // Frise des étages : seul le dernier porte le coffre, les autres ne donnent
-  // rien — la frise rend cette règle lisible d'un coup d'œil.
   if(progress)progress.innerHTML=Array.from({length:floors},(_,i)=>{const step=i+1;const done=step<=floor;const last=step===floors;return `<span class="${done?'done':''} ${last?'chest':''}" title="Étage ${step}${last?' · équipement':''}">${last?'<i class="fas fa-gift"></i>':done?'<i class="fas fa-check"></i>':step}</span>`;}).join('');
   const autoToggle=document.getElementById('idle-rune-dungeon-auto');
-  if(autoToggle){autoToggle.classList.toggle('active',idleRuneDungeonAuto);autoToggle.setAttribute('aria-pressed',String(idleRuneDungeonAuto));autoToggle.disabled=idleRuneDungeonBusy;const stateEl=autoToggle.querySelector('em');if(stateEl)stateEl.textContent=idleRuneDungeonAuto?'ON':'OFF';}
-  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Combat…':inRun?escapeHtml(k.label):`Commencer · ${escapeHtml(k.label)}`}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:`Départ étage 1/${floors}`}</small></button>`;}).join('');
+  if(autoToggle){autoToggle.classList.toggle('active',idleRuneDungeonAuto);autoToggle.setAttribute('aria-pressed',String(idleRuneDungeonAuto));const stateEl=autoToggle.querySelector('em');if(stateEl)stateEl.textContent=idleRuneDungeonAuto?'ON':'OFF';}
+  grid.classList.toggle('hidden',inRun);grid.innerHTML=inRun?'':(dungeon.kinds||[]).map((k)=>`<button type="button" class="idle-rune-dungeon-btn" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy?'disabled':''}><i class="fas ${escapeHtml(k.icon)}"></i><b>Traquer · ${escapeHtml(k.label)}</b><small>10 étages · 1 objet garanti</small></button>`).join('');
+  if(scene){
+    scene.classList.toggle('hidden',!inRun);
+    if(inRun){
+      const meta=(dungeon.kinds||[]).find((kind)=>kind.kind===dungeon.selectedKind)||{};const hp=Math.max(0,encounter.hp||0);const maxHp=Math.max(1,encounter.maxHp||1);const ratio=Math.max(0,Math.min(100,hp/maxHp*100));const bg=encounter.backgroundUrl?`style="--dungeon-bg:url('${escapeHtml(encounter.backgroundUrl)}')"`:'';const enemy=encounter.enemyImageUrl?`<img src="${escapeHtml(encounter.enemyImageUrl)}" alt="" draggable="false">`:'<i class="fas fa-dragon"></i>';
+      scene.innerHTML=`<div class="idle-rune-dungeon-arena ${encounter.guardian?'guardian':''}" ${bg}><header><span><small>${encounter.guardian?'GARDIEN FINAL':`ÉTAGE ${encounter.floor}/${floors}`}</small><b>${escapeHtml(encounter.enemyName||'Sentinelle du donjon')}</b></span><strong><i class="fas ${escapeHtml(meta.icon||'fa-gem')}"></i> ${escapeHtml(meta.label||'Objet ciblé')}</strong></header><button type="button" class="idle-rune-dungeon-enemy" id="idle-rune-dungeon-hit" aria-label="Frapper ${escapeHtml(encounter.enemyName||'le monstre')}">${enemy}<span class="idle-rune-impact"><i class="fas fa-burst"></i></span></button><div class="idle-rune-dungeon-hp"><span style="width:${ratio}%"></span><b>${idleFormatNumber(hp)} / ${idleFormatNumber(maxHp)} PV</b></div><div class="idle-rune-dungeon-combat-stats"><span><small>DPS ÉQUIPE</small><b>${idleFormatNumber(encounter.dps||0)}/s</b></span><span><small>PAR CLIC</small><b>${idleFormatNumber(encounter.clickDamage||0)}</b></span><span><small>RÉCOMPENSE</small><b>${encounter.guardian?'Objet au K.O.':`Coffre à l’étage ${floors}`}</b></span></div><footer><button type="button" class="idle-rune-dungeon-strike" data-rune-hit><i class="fas fa-hand-fist"></i><span><b>FRAPPER</b><small>Clique aussi directement sur le monstre</small></span></button><button type="button" class="idle-rune-dungeon-abandon" data-rune-abandon title="Abandonner la descente et changer l’objet ciblé"><i class="fas fa-flag"></i> Changer de cible</button></footer></div>`;
+    }
+  }
+  if(inRun&&!idleRuneDungeonTimer)idleRuneDungeonTimer=setInterval(()=>void flushIdleRuneDungeonHits(),500);
+  if(!inRun&&idleRuneDungeonTimer){clearInterval(idleRuneDungeonTimer);idleRuneDungeonTimer=null;}
 }
 async function runIdleRuneDungeon(kind){
-  if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;idleRuneDungeonActiveKind=kind;renderIdleRuneDungeon(idleState);
+  if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;renderIdleRuneDungeon(idleState);
   try{
-    // Le donjon répond instantanément côté serveur : le combat de l'étage est
-    // joué côté client pendant `encounter.fightMs` — durée calculée par le
-    // serveur à partir des PV de l'ennemi (calés sur la progression du
-    // joueur) et du DPS réel de son équipe : la difficulté se ressent dans la
-    // longueur du combat, jamais dans un blocage. En Descente auto, les
-    // étages restants s'enchaînent d'eux-mêmes (bornés par `floors` côté
-    // serveur : la boucle s'arrête toujours sur l'étage du coffre).
-    for(;;){
-      const started=Date.now();
-      const result=await api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})});
-      const fightMs=Math.min(6000,Math.max(400,result.encounter?.fightMs||(result.cleared?IDLE_RUNE_DUNGEON_EXPLORE_MS:IDLE_RUNE_DUNGEON_FLOOR_MS)));
-      await new Promise((resolve)=>setTimeout(resolve,Math.max(0,fightMs-(Date.now()-started))));
-      idleState=result.state;renderIdleState(result.state);
-      if(result.cleared){
-        showIdleRuneDungeonReward(result);
-        if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();
-        break;
-      }
-      idleSpawnFloat(`ÉTAGE ${result.floor}/${result.floors}`,'xp');
-      if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(false);
-      if(!idleRuneDungeonAuto)break;
-      renderIdleRuneDungeon(idleState);
-    }
+    const result=await api('/api/idle/rune-dungeon/start',{method:'POST',body:JSON.stringify({kind})});idleState=result.state;renderIdleState(result.state);idleSpawnFloat('DESCENTE LANCÉE','xp');
   }catch(e){idleNotify(e.message,'error');}
-  finally{idleRuneDungeonBusy=false;idleRuneDungeonActiveKind=null;renderIdleRuneDungeon(idleState);}
+  finally{idleRuneDungeonBusy=false;renderIdleRuneDungeon(idleState);}
+}
+function queueIdleRuneDungeonHit(){
+  if(!idleState?.runeDungeon?.active)return;idleRuneDungeonPendingHits=Math.min(10,idleRuneDungeonPendingHits+1);const arena=document.querySelector('.idle-rune-dungeon-arena');arena?.classList.remove('struck');void arena?.offsetWidth;arena?.classList.add('struck');if(typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(false);void flushIdleRuneDungeonHits();
+}
+async function flushIdleRuneDungeonHits(){
+  if(idleRuneDungeonBusy||!idleState?.runeDungeon?.active)return;const count=Math.min(10,idleRuneDungeonPendingHits+(idleRuneDungeonAuto?1:0));idleRuneDungeonPendingHits=0;idleRuneDungeonBusy=true;
+  try{const before=idleState.runeDungeon.floor||0;const result=await api('/api/idle/rune-dungeon/hit',{method:'POST',body:JSON.stringify({count,requestId:`rune-${Date.now()}-${Math.random().toString(36).slice(2,10)}`})});if(result.duplicate)return;idleState=result.state;renderIdleState(result.state);if(result.damage)idleSpawnFloat(`-${idleFormatNumber(result.damage)}`,result.criticals?'crit':'damage');if(result.floorCleared&&!result.cleared){idleSpawnFloat(`ÉTAGE ${result.floor} NETTOYÉ`,'xp');document.querySelector('.idle-rune-dungeon-arena')?.classList.add('floor-cleared');}if(result.cleared){showIdleRuneDungeonReward(result);if(typeof sfx!=='undefined'&&sfx.idleChest)sfx.idleChest();}else if((result.state?.runeDungeon?.floor||0)>before&&typeof sfx!=='undefined'&&sfx.idleHit)sfx.idleHit(true);}catch(e){idleNotify(e.message,'error');}finally{idleRuneDungeonBusy=false;renderIdleRuneDungeon(idleState);}
+}
+async function abandonIdleRuneDungeon(){
+  if(idleRuneDungeonBusy)return;if(!await idleConfirm('La progression de cette descente sera perdue. Aucun objet déjà possédé ne sera supprimé.',{title:'Changer de cible ?',confirmLabel:'Abandonner la descente'}))return;idleRuneDungeonBusy=true;try{const result=await api('/api/idle/rune-dungeon/abandon',{method:'POST',body:'{}'});idleState=result.state;renderIdleState(result.state);}catch(e){idleNotify(e.message,'error');}finally{idleRuneDungeonBusy=false;renderIdleRuneDungeon(idleState);}
 }
 function renderIdleInventory(state){
   const inventory=state.inventory;const grid=document.getElementById('idle-inventory-grid');if(!inventory||!grid)return;
@@ -3175,6 +3161,7 @@ function initIdleUI() {
   document.getElementById('idle-auto-equip')?.addEventListener('click',autoEquipIdleItems);
   document.getElementById('idle-rune-dungeon-grid')?.addEventListener('click',(e)=>{const b=e.target.closest('[data-rune-dungeon]');if(b&&!b.disabled)runIdleRuneDungeon(b.dataset.runeDungeon);});
   document.getElementById('idle-rune-dungeon-auto')?.addEventListener('click',()=>{idleRuneDungeonAuto=!idleRuneDungeonAuto;localStorage.setItem('idle-rune-dungeon-auto',idleRuneDungeonAuto?'1':'0');if(idleState)renderIdleRuneDungeon(idleState);});
+  document.getElementById('idle-rune-dungeon-scene')?.addEventListener('click',(e)=>{if(e.target.closest('[data-rune-abandon]'))return void abandonIdleRuneDungeon();if(e.target.closest('[data-rune-hit],#idle-rune-dungeon-hit'))queueIdleRuneDungeonHit();});
   document.getElementById('idle-equipment-target')?.addEventListener('change',(e)=>{idleEquipmentTargetSlot=Number(e.target.value);persistIdleInventoryPrefs();renderIdleInventory(idleState);});
   document.getElementById('idle-equipment-target-next')?.addEventListener('click',()=>{
     const active=(idleState?.slots||[]).filter((slot)=>slot.character);if(!active.length)return;

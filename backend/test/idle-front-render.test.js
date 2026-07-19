@@ -289,25 +289,27 @@ test('retours joueurs : bénédictions rendues à chaque synchro, confirmations 
   assert.match(styles, /\.idle-collection-sort-bar/);
 });
 
-test('Donjon des Objets : la descente en 10 étages est visible et seul le dernier récompense', () => {
+test('Donjon des Objets : 10 vrais combats clicker avant la récompense finale', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
 
   assert.match(html, /id="idle-rune-dungeon-progress"/);
   assert.match(styles, /\.idle-rune-dungeon-progress/);
-  // La récompense (et son jingle de coffre) n'apparaît qu'à l'étage final ;
-  // les étages intermédiaires gardent un combat bref sans loot.
+  assert.match(html, /id="idle-rune-dungeon-scene"/);
+  assert.match(styles, /\.idle-rune-dungeon-enemy/);
+  assert.match(styles, /\.idle-rune-dungeon-hp/);
+  // La récompense n'apparaît qu'après la réponse autoritaire de victoire.
   assert.match(source, /if\(result\.cleared\)\{/);
-  assert.match(source, /IDLE_RUNE_DUNGEON_FLOOR_MS/);
-  assert.match(source, /ÉTAGE \$\{result\.floor\}\/\$\{result\.floors\}/);
-  // Gratuit : plus de compteur de tentatives ni de coût en Essence, et la
-  // durée du combat vient du serveur (PV de l'étage ÷ DPS de l'équipe).
-  assert.match(source, /result\.encounter\?\.fightMs/);
+  assert.match(source, /rune-dungeon\/start/);
+  assert.match(source, /rune-dungeon\/hit/);
+  assert.match(source, /idleRuneDungeonPendingHits/);
+  assert.match(source, /ÉTAGE \$\{result\.floor\} NETTOYÉ/);
+  // Gratuit : plus de compteur de tentatives ni de coût en Essence.
   assert.doesNotMatch(source, /Descentes gratuites épuisées/);
   assert.doesNotMatch(source, /runeDungeon\?\.freeRemaining/);
   assert.match(source, /départ étage 1\/\$\{floors\}/);
-  assert.match(source, /Départ étage 1\/\$\{floors\}/);
+  assert.match(source, /DPS ÉQUIPE/);
 });
 
 test('QoL Idle : reprend le dernier onglet, mémorise l’inventaire et expose les raccourcis',()=>{
