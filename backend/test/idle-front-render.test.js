@@ -62,7 +62,10 @@ test('inventaire Idle : les filtres avancés et les règles de recyclage restent
   assert.match(source, /function selectIdleItemsBySalvageRules\(\)/);
   assert.match(source, /function resetIdleInventoryFilters\(\)/);
   assert.match(source, /data-item-reset-filters/);
-  assert.match(source, /confirmHighRarity:preciousConfirmation\?'RECYCLER'/);
+  assert.match(source, /confirmHighRarity:precious\?'RECYCLER'/);
+  assert.match(source, /requireText:precious\?'RECYCLER'/);
+  assert.doesNotMatch(source, /[^.\w]prompt\(/);
+  assert.doesNotMatch(source, /[^.\w]alert\(/);
   assert.match(source, /!item\.locked&&!item\.equipped/);
 });
 
@@ -356,8 +359,15 @@ test('le Guide du Dojo ne recouvre plus la navigation, et le Farm sur boss est e
   // 701-900px (téléphone en paysage) : la barre d'onglets est en bas — le
   // Guide flottant se posait pile sur l'onglet Combat (retour joueur : « la
   // fenêtre pour les axes d'amélioration gêne pour cliquer sur combat »).
-  assert.match(styles, /@media\(max-width:900px\)\{\.idle-coach\{left:12px;bottom:78px\}\}/);
+  // bottom:138 : au-dessus de la barre d'onglets (0-60px) ET du lanceur de
+  // chat (bottom:78) — les trois se partagent le bord bas de l'écran.
+  assert.match(styles, /@media\(max-width:900px\)\{\.idle-coach\{left:12px;bottom:138px\}\}/);
   assert.match(styles, /@media\(min-width:901px\)\{\.idle-coach\{left:200px\}\}/);
+  // Le bouton feedback générique s'efface dans le Dojo : il se retrouvait
+  // exactement sous le lanceur de chat (z-index inférieur), inatteignable.
+  assert.match(styles, /body\.view-idle-active \.feedback-fab \{ display: none; \}|body\.view-idle-active \.feedback-fab\{display:none\}|body\.idle-fullscreen \.feedback-fab, body\.view-idle-active \.feedback-fab \{ display: none; \}/);
+  const main = fs.readFileSync(path.join(__dirname, '..', 'public', 'main.js'), 'utf8');
+  assert.match(main, /classList\.toggle\('view-idle-active', name === 'idle'\)/);
 
   // Farm sur une vague de boss : l'objectif explique que le boss réapparaît
   // après chaque victoire et que les kills comptent.

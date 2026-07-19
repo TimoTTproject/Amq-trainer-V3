@@ -871,6 +871,10 @@ function showView(name, options = {}) {
   document.getElementById('view-craft').classList.toggle('hidden', name !== 'craft');
   document.getElementById('view-admin').classList.toggle('hidden', name !== 'admin');
   document.getElementById('view-idle').classList.toggle('hidden', name !== 'idle');
+  // Marqueur pour les éléments flottants globaux (ex. .feedback-fab) qui
+  // doivent s'effacer dans le Dojo, où les emplacements en bord d'écran sont
+  // déjà occupés (chat, Guide, barre d'onglets).
+  document.body.classList.toggle('view-idle-active', name === 'idle');
   document.getElementById('view-profile').classList.toggle('hidden', name !== 'profile');
   document.getElementById('view-mp').classList.toggle('hidden', name !== 'mp');
   document.getElementById('view-playlist').classList.toggle('hidden', name !== 'playlist');
