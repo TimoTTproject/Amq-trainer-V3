@@ -298,6 +298,8 @@ test('Donjon des Objets : 10 vrais combats clicker avant la récompense finale',
   assert.match(styles, /\.idle-rune-dungeon-progress/);
   assert.match(html, /id="idle-rune-dungeon-scene"/);
   assert.match(styles, /\.idle-rune-dungeon-enemy/);
+  assert.match(styles, /\.idle-rune-dungeon-enemy\{[^}]*overflow:hidden[^}]*contain:paint/);
+  assert.match(styles, /\.idle-rune-dungeon-enemy>img\{[^}]*height:100%!important/);
   assert.match(styles, /\.idle-rune-dungeon-hp/);
   // La récompense n'apparaît qu'après la réponse autoritaire de victoire.
   assert.match(source, /if\(result\.cleared\)\{/);
@@ -311,6 +313,7 @@ test('Donjon des Objets : 10 vrais combats clicker avant la récompense finale',
   assert.doesNotMatch(source, /Descentes gratuites épuisées/);
   assert.doesNotMatch(source, /runeDungeon\?\.freeRemaining/);
   assert.match(source, /départ étage 1\/\$\{floors\}/);
+  assert.match(source, /difficulté calée sur ton record de run/);
   assert.match(source, /DPS ÉQUIPE/);
 });
 

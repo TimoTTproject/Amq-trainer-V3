@@ -436,11 +436,14 @@ const RUNE_DUNGEON_HP_SCALE=1_000_000;
 const RUNE_DUNGEON_RUN_KEY='rune_dungeon_run';
 const RUNE_DUNGEON_KIND_KEY='rune_dungeon_kind';
 const RUNE_DUNGEON_HP_KEY='rune_dungeon_hp';
-const RUNE_DUNGEON_STAGE_KEY='rune_dungeon_stage';
+// V2 ne reprend plus le monde actuellement affiché : revenir au monde 1 avant
+// une descente permettait de supprimer toute sa difficulté.
+const RUNE_DUNGEON_STAGE_KEY='rune_dungeon_difficulty_v2';
+const RUNE_DUNGEON_LEGACY_STAGE_KEY='rune_dungeon_stage';
 const RUNE_DUNGEON_PERIOD='current';
 const RUNE_DUNGEON_PASSIVE_CATCHUP_SECONDS=60;
 
-const RUNE_DUNGEON_STATE_KEYS=[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY,RUNE_DUNGEON_STAGE_KEY];
+const RUNE_DUNGEON_STATE_KEYS=[RUNE_DUNGEON_RUN_KEY,RUNE_DUNGEON_KIND_KEY,RUNE_DUNGEON_HP_KEY,RUNE_DUNGEON_STAGE_KEY,RUNE_DUNGEON_LEGACY_STAGE_KEY];
 
 function runeDungeonFloorHp(bestStage,floor){
   const guardian=floor>=RUNE_DUNGEON_FLOORS;
@@ -1684,10 +1687,10 @@ async function buildState(userId) {
   const runeDungeonFloor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,runeDungeonFloorRow?.value||0));
   const runeDungeonKind=RUNE_KINDS[Math.max(0,(runeDungeonKindRow?.value||1)-1)]||null;
   const runeDungeonActive=!!runeDungeonKindRow&&!!runeDungeonHpRow;
-  // La difficulté est figée au lancement sur la vague COURANTE. Utiliser le
-  // record permanent faisait bondir les PV après un Prestige et recalculer le
-  // max en pleine descente donnait l'impression que les monstres régénéraient.
-  const runeDungeonStage=Math.max(1,runeDungeonStageRow?.value||stage||1);
+  // La difficulté est figée au lancement sur le record de la RUN. Le record
+  // permanent reste exclu après Prestige, mais voyager vers un ancien monde ne
+  // permet plus d'affaiblir artificiellement le donjon.
+  const runeDungeonStage=Math.max(1,runeDungeonStageRow?.value||user.idleRunBestStage||stage||1);
   const runeDungeonNextFloor=runeDungeonFloor+1;
   const runeDungeonMaxHp=runeDungeonFloorHp(runeDungeonStage,runeDungeonNextFloor);
   const runeDungeonStoredHp=Math.max(0,Math.min(RUNE_DUNGEON_HP_SCALE,runeDungeonHpRow?.value??RUNE_DUNGEON_HP_SCALE));
@@ -3614,7 +3617,7 @@ router.post('/rune-dungeon/start', requireAuth, requireIdleBeta, rateLimit({ max
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_RUN_KEY,period:RUNE_DUNGEON_PERIOD,value:0}});
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_KIND_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_KINDS.indexOf(kind)+1}});
       await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_HP_KEY,period:RUNE_DUNGEON_PERIOD,value:RUNE_DUNGEON_HP_SCALE}});
-      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD,value:Math.max(1,user.idleStage||1)}});
+      await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD,value:Math.max(1,user.idleRunBestStage||user.idleStage||1)}});
       const counterRow = await tx.idleProgressCounter.findUnique({ where: { userId_key_period: { userId: user.id, key: 'rune_dungeon', period: periods.day } } });
       if(counterRow)await tx.idleProgressCounter.updateMany({where:{id:counterRow.id},data:{value:{increment:1}}});
       else await tx.idleProgressCounter.create({data:{userId:user.id,key:'rune_dungeon',period:periods.day,value:1}});
@@ -3647,9 +3650,9 @@ router.post('/rune-dungeon/hit', requireAuth, requireIdleBeta, rateLimit({window
       const floor=Math.min(RUNE_DUNGEON_FLOORS-1,Math.max(0,floorRow.value||0));
       const nextFloor=floor+1;
       const bestStage=Math.max(user.idleBestStage||1,user.idleStage||1);
-      const dungeonStage=Math.max(1,stageRow?.value||user.idleStage||1);
-      // Migration paresseuse des descentes lancées par la version précédente :
-      // dès leur première frappe, leur difficulté devient elle aussi stable.
+      const dungeonStage=Math.max(1,stageRow?.value||user.idleRunBestStage||user.idleStage||1);
+      // Migration paresseuse des descentes V1 : leur ancien monde sélectionné
+      // est ignoré au profit du record de run, ensuite figé jusqu'au coffre.
       if(!stageRow)await tx.idleProgressCounter.create({data:{userId:user.id,key:RUNE_DUNGEON_STAGE_KEY,period:RUNE_DUNGEON_PERIOD,value:dungeonStage}});
       const [slots, recruitCount, ancientLevelsByKey] = await Promise.all([
         loadSlots(tx, user.id),

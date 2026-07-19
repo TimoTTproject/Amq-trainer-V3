@@ -127,14 +127,25 @@ test('le Donjon des Objets passe du choix de cible à une vraie scène de combat
   await expect(page.locator('#idle-rune-dungeon-auto')).toBeVisible();
   await expect(page.locator('#idle-rune-dungeon-grid [data-rune-dungeon]')).toHaveCount(6);
   await page.evaluate(() => {
-    idleState.runeDungeon={...idleState.runeDungeon,active:true,selectedKind:'rune1',floor:3,encounter:{floor:4,guardian:false,hp:7200,maxHp:10000,dps:850,clickDamage:420,enemyName:'Sentinelle de l’étage 4',backgroundUrl:null,enemyImageUrl:null}};
+    idleState.runeDungeon={...idleState.runeDungeon,active:true,selectedKind:'rune1',floor:3,difficulty:{stage:42},encounter:{floor:4,guardian:false,hp:7200,maxHp:10000,dps:850,clickDamage:420,enemyName:'Sentinelle de l’étage 4',backgroundUrl:null,enemyImageUrl:'/assets/brand/logo-horizontal.png'}};
     renderIdleRuneDungeon(idleState);
   });
   await expect(page.locator('#idle-rune-dungeon-grid')).toBeHidden();
   await expect(page.locator('#idle-rune-dungeon-scene')).toBeVisible();
   await expect(page.locator('.idle-rune-dungeon-hp')).toContainText('7.2K / 10K PV');
+  await expect(page.locator('#idle-rune-dungeon-status')).toContainText('difficulté run 42');
   await expect(page.locator('[data-rune-hit]')).toContainText('FRAPPER');
   await expect(page.locator('.idle-rune-dungeon-combat-stats')).toContainText('DPS ÉQUIPE');
+  await expect(page.locator('.idle-rune-dungeon-enemy img')).toBeVisible();
+  const portraitPlacement=await page.evaluate(()=>{
+    const frame=document.querySelector('.idle-rune-dungeon-enemy')?.getBoundingClientRect();
+    const portrait=document.querySelector('.idle-rune-dungeon-enemy img')?.getBoundingClientRect();
+    const hp=document.querySelector('.idle-rune-dungeon-hp')?.getBoundingClientRect();
+    return {frameTop:frame?.top||0,frameBottom:frame?.bottom||0,portraitTop:portrait?.top||0,portraitBottom:portrait?.bottom||0,hpTop:hp?.top||0};
+  });
+  expect(portraitPlacement.portraitTop).toBeGreaterThanOrEqual(portraitPlacement.frameTop);
+  expect(portraitPlacement.portraitBottom).toBeLessThanOrEqual(portraitPlacement.frameBottom);
+  expect(portraitPlacement.hpTop).toBeGreaterThanOrEqual(portraitPlacement.frameBottom);
 });
 
 test('la navigation entre onglets rend chaque panneau avec le dernier état connu', async ({ page }) => {

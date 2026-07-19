@@ -1283,8 +1283,8 @@ function renderIdleRuneDungeon(state){
   if(!dungeon||!grid)return;
   const floors=dungeon.floors||10;const floor=dungeon.floor||0;const inRun=!!dungeon.active;const encounter=dungeon.encounter||{};
   if(status)status.innerHTML=inRun
-    ?`<i class="fas fa-skull-crossbones"></i> Étage ${encounter.floor||floor+1}/${floors} · combat actif`
-    :`<i class="fas fa-scale-balanced"></i> Gratuit · départ étage 1/${floors} · ennemis calés sur ta vague ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
+    ?`<i class="fas fa-skull-crossbones"></i> Étage ${encounter.floor||floor+1}/${floors} · difficulté run ${idleFormatNumber(dungeon.difficulty?.stage||1)} · combat actif`
+    :`<i class="fas fa-scale-balanced"></i> Gratuit · départ étage 1/${floors} · difficulté calée sur ton record de run ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
   if(progress)progress.innerHTML=Array.from({length:floors},(_,i)=>{const step=i+1;const done=step<=floor;const last=step===floors;return `<span class="${done?'done':''} ${last?'chest':''}" title="Étage ${step}${last?' · équipement':''}">${last?'<i class="fas fa-gift"></i>':done?'<i class="fas fa-check"></i>':step}</span>`;}).join('');
   const autoToggle=document.getElementById('idle-rune-dungeon-auto');
   if(autoToggle){autoToggle.classList.toggle('active',idleRuneDungeonAuto);autoToggle.setAttribute('aria-pressed',String(idleRuneDungeonAuto));const stateEl=autoToggle.querySelector('em');if(stateEl)stateEl.textContent=idleRuneDungeonAuto?'ON':'OFF';}

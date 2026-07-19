@@ -2121,9 +2121,10 @@ test('fiche publique : le DPS affiché aux autres joueurs exclut le buff d’orb
 });
 
 test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’équipement', async () => {
-  // Record historique volontairement très supérieur à la vague de la run :
-  // le donjon doit se caler sur la puissance courante, surtout après Prestige.
-  const user = dbUser({ essence: 100000, idleBestStage: 150, idleStage: 12, idleEnemyHp: enemyMaxHp(12) });
+  // Le joueur est revenu au monde 1 après avoir atteint la vague 12 dans sa
+  // run. Le donjon suit ce record de run, jamais le monde actuellement choisi
+  // ni le record permanent d'avant Prestige.
+  const user = dbUser({ essence: 100000, idleBestStage: 150, idleRunBestStage: 12, idleStage: 1, idleEnemyHp: enemyMaxHp(1) });
   const counters = new Map();
   let nextCounterId = 1;
   prisma.user.findUnique = async () => user;
@@ -2174,6 +2175,7 @@ test('Donjon des Objets : les PV serveur imposent 10 vrais combats avant l’éq
   assert.equal(start.json.state.runeDungeon.difficulty.stage,12);
   assert.equal(start.json.state.runeDungeon.encounter.maxHp,Math.round(enemyUnitMaxHp(12,0)));
   assert.ok(start.json.state.runeDungeon.encounter.hp>0);
+  assert.equal(counters.get('rune_dungeon_difficulty_v2:current').value,12);
 
   // Une frappe ordinaire ne valide pas gratuitement un étage plein.
   const firstHit=await app.request('/api/idle/rune-dungeon/hit',{method:'POST',cookie:app.authCookie('u1'),body:{count:1,requestId:'rune-test-first-hit'}});
