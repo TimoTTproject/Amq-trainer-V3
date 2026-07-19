@@ -267,10 +267,15 @@ test('Donjon des Objets : la descente en 10 étages est visible et seul le derni
   assert.match(html, /id="idle-rune-dungeon-progress"/);
   assert.match(styles, /\.idle-rune-dungeon-progress/);
   // La récompense (et son jingle de coffre) n'apparaît qu'à l'étage final ;
-  // les étages intermédiaires gardent une fouille brève sans loot.
+  // les étages intermédiaires gardent un combat bref sans loot.
   assert.match(source, /if\(result\.cleared\)\{/);
   assert.match(source, /IDLE_RUNE_DUNGEON_FLOOR_MS/);
   assert.match(source, /ÉTAGE \$\{result\.floor\}\/\$\{result\.floors\}/);
+  // Gratuit : plus de compteur de tentatives ni de coût en Essence, et la
+  // durée du combat vient du serveur (PV de l'étage ÷ DPS de l'équipe).
+  assert.match(source, /result\.encounter\?\.fightMs/);
+  assert.doesNotMatch(source, /Descentes gratuites épuisées/);
+  assert.doesNotMatch(source, /runeDungeon\?\.freeRemaining/);
 });
 
 test('QoL Idle : reprend le dernier onglet, mémorise l’inventaire et expose les raccourcis',()=>{

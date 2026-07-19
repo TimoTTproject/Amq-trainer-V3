@@ -919,9 +919,11 @@ function idleTabBadgeCounts(state) {
   const progression = state.rank?.ready ? 1 : 0;
   // Coffres en attente (boss + jalon) : signalés sur l'onglet Combat, où ils s'ouvrent.
   const home = (state.battle?.bossChest?.available ? 1 : 0) + (state.dojo?.milestone?.available ? 1 : 0);
-  // Farm : record de Faille battable ou tentative gratuite du Donjon des Objets disponible.
+  // Farm : record de Faille battable ou descente du Donjon des Objets restée
+  // en cours (le donjon est gratuit et illimité : seule une descente entamée
+  // mérite un rappel).
   const farm = ((state.rift?.unlocked && state.rift?.projectedFloor > state.rift?.bestFloor) ? 1 : 0)
-    + ((state.runeDungeon?.freeRemaining > 0) ? 1 : 0);
+    + ((state.runeDungeon?.floor > 0) ? 1 : 0);
   return { team, upgrades, activities, progression, home, farm, equipment: 0 };
 }
 function renderIdleTabBadges(state) {
@@ -1256,40 +1258,38 @@ function idleRuneDetailChips(item){
 // toujours dans le slot choisi — façon donjon Caiross de Summoners War.
 let idleRuneDungeonBusy=false;
 let idleRuneDungeonActiveKind=null;
+// Durées de repli si le serveur n'a pas renvoyé de combat (encounter.fightMs
+// fait autorité : PV de l'étage ÷ DPS réel de l'équipe).
 const IDLE_RUNE_DUNGEON_EXPLORE_MS=2600;
 const IDLE_RUNE_DUNGEON_FLOOR_MS=800; // étages sans récompense : fouille brève
 function renderIdleRuneDungeon(state){
   const dungeon=state.runeDungeon;const grid=document.getElementById('idle-rune-dungeon-grid');const status=document.getElementById('idle-rune-dungeon-status');const progress=document.getElementById('idle-rune-dungeon-progress');
   if(!dungeon||!grid)return;
   const floors=dungeon.floors||10;const floor=dungeon.floor||0;const inRun=floor>0;
+  // Gratuit et sans limite : le statut n'affiche plus de compteur ni de coût,
+  // seulement la progression et la difficulté calée sur le joueur.
   if(status)status.innerHTML=idleRuneDungeonBusy
-    ?`<i class="fas fa-spinner fa-spin"></i> Exploration en cours…`
+    ?`<i class="fas fa-spinner fa-spin"></i> Combat en cours…`
     :inRun
     ?`<i class="fas fa-stairs"></i> Étage ${floor}/${floors} · l’équipement attend à l’étage ${floors}`
-    :dungeon.freeRemaining>0
-    ?`<i class="fas fa-bolt"></i> ${dungeon.freeRemaining}/${dungeon.freeAttempts} descente${dungeon.freeRemaining>1?'s':''} gratuite${dungeon.freeRemaining>1?'s':''} aujourd’hui`
-    :`<i class="fas fa-coins"></i> Descentes gratuites épuisées · prochaine : ${idleFormatNumber(dungeon.nextCost)} Essence`;
+    :`<i class="fas fa-scale-balanced"></i> Gratuit · ennemis calés sur ta vague ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
   // Frise des étages : seul le dernier porte le coffre, les autres ne donnent
   // rien — la frise rend cette règle lisible d'un coup d'œil.
   if(progress)progress.innerHTML=Array.from({length:floors},(_,i)=>{const step=i+1;const done=step<=floor;const last=step===floors;return `<span class="${done?'done':''} ${last?'chest':''}" title="Étage ${step}${last?' · équipement':''}">${last?'<i class="fas fa-gift"></i>':done?'<i class="fas fa-check"></i>':step}</span>`;}).join('');
-  // Le coût ne s'applique qu'au premier étage : une descente entamée ne
-  // repaie jamais, on ne grise donc les boutons que hors descente.
-  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy||(!inRun&&dungeon.freeRemaining<=0&&idleState&&idleState.essence<dungeon.nextCost)?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Exploration…':escapeHtml(k.label)}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:'Étage 1'}</small></button>`;}).join('');
+  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Combat…':escapeHtml(k.label)}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:'Étage 1'}</small></button>`;}).join('');
 }
 async function runIdleRuneDungeon(kind){
   if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;idleRuneDungeonActiveKind=kind;renderIdleRuneDungeon(idleState);
   try{
-    // Le donjon répond instantanément côté serveur : on impose un délai
-    // d'exploration côté client pour que la fouille se ressente dans le jeu.
-    // Les étages intermédiaires (sans récompense) restent courts pour que la
-    // descente complète ne devienne pas une corvée ; seul l'étage du coffre
-    // garde la fouille longue.
-    const expectedFloor=(idleState?.runeDungeon?.floor||0)+1;
-    const finalFloor=expectedFloor>=(idleState?.runeDungeon?.floors||10);
-    const [result]=await Promise.all([
-      api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})}),
-      new Promise((resolve)=>setTimeout(resolve,finalFloor?IDLE_RUNE_DUNGEON_EXPLORE_MS:IDLE_RUNE_DUNGEON_FLOOR_MS))
-    ]);
+    // Le donjon répond instantanément côté serveur : le combat de l'étage est
+    // joué côté client pendant `encounter.fightMs` — durée calculée par le
+    // serveur à partir des PV de l'ennemi (calés sur la progression du
+    // joueur) et du DPS réel de son équipe : la difficulté se ressent dans la
+    // longueur du combat, jamais dans un blocage.
+    const started=Date.now();
+    const result=await api('/api/idle/rune-dungeon/attempt',{method:'POST',body:JSON.stringify({kind})});
+    const fightMs=Math.min(6000,Math.max(400,result.encounter?.fightMs||(result.cleared?IDLE_RUNE_DUNGEON_EXPLORE_MS:IDLE_RUNE_DUNGEON_FLOOR_MS)));
+    await new Promise((resolve)=>setTimeout(resolve,Math.max(0,fightMs-(Date.now()-started))));
     idleState=result.state;renderIdleState(result.state);
     if(result.cleared){
       showIdleRuneDungeonReward(result);

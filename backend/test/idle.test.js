@@ -320,13 +320,12 @@ test('étoiles d’Éveil : coût croissant en Essence (pas en Sceaux), bonus pl
   assert.equal(awakenStarMultiplier(99),awakenStarMultiplier(10)); // jamais au-delà du cap
 });
 
-test('Donjon des Objets : gratuit puis coût croissant en Essence, rareté tirée au sort selon le monde',()=>{
-  const {RUNE_DUNGEON_FREE_ATTEMPTS,runeDungeonExtraCost,runeDungeonRarity}=require('../src/idle/idle');
-  assert.equal(RUNE_DUNGEON_FREE_ATTEMPTS,5);
-  // Première tentative payante (index 0) > deuxième tentative gratuite pure (coût 0 côté route),
-  // et chaque tentative payante suivante coûte plus cher que la précédente.
-  assert.ok(runeDungeonExtraCost(1,50)>runeDungeonExtraCost(0,50));
-  assert.ok(runeDungeonExtraCost(0,200)>runeDungeonExtraCost(0,50)); // suit la progression
+test('Donjon des Objets : descente gratuite de 10 étages, rareté tirée au sort selon le monde',()=>{
+  const {RUNE_DUNGEON_FLOORS,runeDungeonRarity}=require('../src/idle/idle');
+  // Gratuit et sans limite (demande utilisateur) : le temps de descente est
+  // la seule monnaie — plus aucune fonction de coût exportée.
+  assert.equal(RUNE_DUNGEON_FLOORS,10);
+  assert.equal(require('../src/idle/idle').runeDungeonExtraCost,undefined);
   // Vrai tirage pondéré (pas un plancher déterministe) : sur assez d'essais,
   // seules les raretés du bon palier de monde doivent sortir, et une rareté
   // plus haute doit devenir davantage probable à mesure que le stage monte.
