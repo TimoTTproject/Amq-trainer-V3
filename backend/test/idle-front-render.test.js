@@ -279,6 +279,8 @@ test('Donjon des Objets : la descente en 10 étages est visible et seul le derni
   assert.match(source, /result\.encounter\?\.fightMs/);
   assert.doesNotMatch(source, /Descentes gratuites épuisées/);
   assert.doesNotMatch(source, /runeDungeon\?\.freeRemaining/);
+  assert.match(source, /départ étage 1\/\$\{floors\}/);
+  assert.match(source, /Départ étage 1\/\$\{floors\}/);
 });
 
 test('QoL Idle : reprend le dernier onglet, mémorise l’inventaire et expose les raccourcis',()=>{
@@ -327,6 +329,8 @@ test('direction Idle : combat, objectif, comparaison, favoris et onboarding part
   assert.match(source,/function applyIdleRewardRarity\(/);
   assert.match(source,/data-team-compare-slot/);
   assert.match(styles,/\.idle-focus-objective/);
+  assert.match(styles,/\.idle-focus-objective\{position:relative;z-index:2/);
+  assert.doesNotMatch(styles,/\.idle-focus-objective\{position:sticky/);
   assert.match(styles,/\.idle-team-compare/);
   assert.match(styles,/\.idle-item-card\.favorite/);
   assert.match(styles,/\.idle-beginner \.idle-advanced-system/);

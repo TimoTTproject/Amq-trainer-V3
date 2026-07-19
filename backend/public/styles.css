@@ -8255,7 +8255,7 @@ body.idle-fullscreen .feedback-fab, body.view-idle-active .feedback-fab { displa
 /* Direction visuelle 2026 : une action principale, une lecture d'équipe et
    un langage de récompense commun, sans ajouter de bruit autour du combat. */
 #view-idle #idle-advisor{display:none!important}
-#view-idle .idle-focus-objective{position:sticky;top:54px;z-index:24;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;margin:7px 0 10px;padding:9px 11px;border:1px solid #38bdf866;border-radius:11px;background:linear-gradient(105deg,#0b1825f5,#10151df5);box-shadow:0 8px 24px #0007,0 0 18px #38bdf812;backdrop-filter:blur(12px)}
+#view-idle .idle-focus-objective{position:relative;z-index:2;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px;margin:7px 0 10px;padding:7px 9px;border:1px solid #38bdf866;border-radius:10px;background:linear-gradient(105deg,#0b1825,#10151d);box-shadow:inset 0 1px #ffffff0b,0 4px 12px #0004}
 #view-idle .idle-focus-objective.hidden{display:none}
 #view-idle .idle-focus-objective>i{display:grid;width:36px;height:36px;place-items:center;border-radius:9px;background:#38bdf819;color:#7dd3fc;font-size:16px}
 #view-idle .idle-focus-objective>span{display:grid;min-width:0;grid-template-columns:auto 1fr;gap:0 8px;align-items:baseline}
@@ -8315,7 +8315,7 @@ body.idle-fullscreen .feedback-fab, body.view-idle-active .feedback-fab { displa
 @keyframes idleWaveBanner{0%{opacity:0;transform:translate(-50%,-50%) scaleX(.55)}30%,70%{opacity:1;transform:translate(-50%,-50%) scaleX(1)}100%{opacity:0;transform:translate(-50%,-50%) translateY(-12px)}}
 
 @media(max-width:700px){
-  #view-idle .idle-focus-objective{top:48px;grid-template-columns:30px minmax(0,1fr) auto;margin:4px 0 7px;padding:6px 7px;gap:7px;border-radius:9px}
+  #view-idle .idle-focus-objective{grid-template-columns:30px minmax(0,1fr) auto;margin:4px 0 7px;padding:6px 7px;gap:7px;border-radius:9px}
   #view-idle .idle-focus-objective>i{width:29px;height:29px;font-size:13px}#view-idle .idle-focus-objective em{display:none}#view-idle .idle-focus-objective b{font-size:10px}#view-idle .idle-focus-objective>button{padding:6px 7px;font-size:9px}#view-idle .idle-focus-objective>button>i{display:none}
   #view-idle .idle-team-compare{padding:8px;margin-bottom:7px}#view-idle .idle-team-compare>header{align-items:flex-start;flex-direction:column;gap:5px}#view-idle .idle-team-compare>div{display:flex;margin-inline:-2px;padding-bottom:3px;overflow-x:auto;scroll-snap-type:x proximity}#view-idle .idle-team-compare>div>button{min-width:230px;scroll-snap-align:start}
   #view-idle .idle-scene-boss{left:72%;width:47%;transform:translate(-50%,-45%) scale(1.02)}#view-idle .idle-scene-boss.is-boss{transform:translate(-50%,-45%) scale(1.08)}#view-idle .idle-combat-impact{left:64%;font-size:2.35rem}

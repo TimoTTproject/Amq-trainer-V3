@@ -1285,13 +1285,13 @@ function renderIdleRuneDungeon(state){
     ?`<i class="fas fa-spinner fa-spin"></i> Combat en cours…`
     :inRun
     ?`<i class="fas fa-stairs"></i> Étage ${floor}/${floors} · l’équipement attend à l’étage ${floors}`
-    :`<i class="fas fa-scale-balanced"></i> Gratuit · ennemis calés sur ta vague ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
+    :`<i class="fas fa-scale-balanced"></i> Gratuit · départ étage 1/${floors} · ennemis calés sur ta vague ${idleFormatNumber(dungeon.difficulty?.stage||1)}`;
   // Frise des étages : seul le dernier porte le coffre, les autres ne donnent
   // rien — la frise rend cette règle lisible d'un coup d'œil.
   if(progress)progress.innerHTML=Array.from({length:floors},(_,i)=>{const step=i+1;const done=step<=floor;const last=step===floors;return `<span class="${done?'done':''} ${last?'chest':''}" title="Étage ${step}${last?' · équipement':''}">${last?'<i class="fas fa-gift"></i>':done?'<i class="fas fa-check"></i>':step}</span>`;}).join('');
   const autoToggle=document.getElementById('idle-rune-dungeon-auto');
   if(autoToggle){autoToggle.classList.toggle('active',idleRuneDungeonAuto);autoToggle.setAttribute('aria-pressed',String(idleRuneDungeonAuto));autoToggle.disabled=idleRuneDungeonBusy;const stateEl=autoToggle.querySelector('em');if(stateEl)stateEl.textContent=idleRuneDungeonAuto?'ON':'OFF';}
-  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Combat…':escapeHtml(k.label)}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:'Étage 1'}</small></button>`;}).join('');
+  grid.innerHTML=(dungeon.kinds||[]).map((k)=>{const exploring=idleRuneDungeonBusy&&idleRuneDungeonActiveKind===k.kind;return `<button type="button" class="idle-rune-dungeon-btn${exploring?' exploring':''}" data-rune-dungeon="${escapeHtml(k.kind)}" ${idleRuneDungeonBusy?'disabled':''}><i class="fas ${exploring?'fa-spinner fa-spin':escapeHtml(k.icon)}"></i><b>${exploring?'Combat…':inRun?escapeHtml(k.label):`Commencer · ${escapeHtml(k.label)}`}</b><small>${exploring?'':inRun?`Étage ${Math.min(floors,floor+1)}`:`Départ étage 1/${floors}`}</small></button>`;}).join('');
 }
 async function runIdleRuneDungeon(kind){
   if(idleRuneDungeonBusy)return;idleRuneDungeonBusy=true;idleRuneDungeonActiveKind=kind;renderIdleRuneDungeon(idleState);
