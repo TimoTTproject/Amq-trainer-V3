@@ -1013,7 +1013,11 @@ function computeRateBreakdown(slots, prodLevel, dojoLevel, prodAncientBonus, cla
   // même chemin que les succès, pour que TOUTES les routes calculent le même
   // taux. L'ancienne Voie de Prestige (multiplicateur plat) a été supprimée :
   // redondante avec classes + bénédictions + Ancients.
-  const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*completedSeriesMultiplier(extras.completedSeries||0)*runBlessingEffects(extras.runBlessings).prod*(extras.buffProd||1)*(extras.weeklyProd||1)*(extras.bossTactical||1);
+  // `bossTactical` reste volontairement hors du DPS permanent : c'est un
+  // multiplicateur de rencontre appliqué par simulateCombat uniquement aux
+  // Gardiens. Sinon le compteur d'équipe perdait jusqu'à 26,5 % au passage
+  // boss -> vague normale, alors qu'aucun héros ni objet n'avait changé.
+  const teamMultiplier=roleMultiplier*reserveBonus*(autoSkills?1.15:1)*(1+talentTeamBonus)*teamPassive*heroClass(classKey).prod*(heroSpec(classKey,specKey).prod||1)*currentIdleEvent().prod*prodMultiplier(prodLevel,prodAncientBonus)*dojoLevelMultiplier(dojoLevel)*synergyForSlots(slots).multiplier*(FORMATIONS[formation]||FORMATIONS.balanced).bonus(roles)*leaderSkillForSlots(slots,leaderCharacterId).prod*achievementProdMultiplier(extras.achievementsCompleted||0)*completedSeriesMultiplier(extras.completedSeries||0)*runBlessingEffects(extras.runBlessings).prod*(extras.buffProd||1)*(extras.weeklyProd||1);
   const heroes=personalRates.map((entry)=>({...entry,teamMultiplier,rate:safeIdleNumber(entry.personalRate*teamMultiplier)}));
   const heroRate=heroes.reduce((sum,entry)=>safeIdleNumber(sum+entry.rate),0);
   const autoClickDps=Math.max(0,extras.autoClickDps||0);
@@ -1302,6 +1306,7 @@ async function settleUnlocked(userId, mutate) {
     const ancientLevelsByKey = await loadAncientLevels(prisma, userId);
     const dojoLevel = user.idleRankLevel || 1;
     const totalRate = computeTotalRate(slots, user.idleProdLevel, dojoLevel, ancientBonus(ancientLevelsByKey, 'prodMult'), user.idleHeroClass, user.idleHeroSpec, user.idleBattleSpeed, user.idleAutoSkills,recruitCount,user.idleFormation,user.idleLeaderCharacterId,rateExtrasFor(user,slots,recruitCount,ancientLevelsByKey));
+    const bossDpsMultiplier = bossTacticalProfile(user.idleStage || 1, slots)?.multiplier || 1;
     const offlineCapMs = OFFLINE_CAP_MS + ancientBonus(ancientLevelsByKey, 'offlineCapMs');
     const elapsedMs = Math.min(offlineCapMs, Math.max(0, Date.now() - new Date(user.idleLastCollectAt).getTime()));
     const combat = simulateCombat({
@@ -1309,6 +1314,7 @@ async function settleUnlocked(userId, mutate) {
       hp: user.idleEnemyHp,
       waveKills: user.idleWaveKills,
       dps: totalRate,
+      bossDpsMultiplier,
       elapsedSeconds: elapsedMs / 1000,
       mode: user.idleBattleMode,
       maxStageAdvance:MAX_STAGE_ADVANCE_PER_SYNC,
@@ -1439,6 +1445,7 @@ async function buildState(userId) {
     hp: user.idleEnemyHp,
     waveKills: user.idleWaveKills,
     dps: totalRate,
+    bossDpsMultiplier: rateExtras.bossTactical || 1,
     elapsedSeconds: previewElapsedMs / 1000,
     mode: user.idleBattleMode,
     maxStageAdvance:MAX_STAGE_ADVANCE_PER_SYNC,
@@ -1745,11 +1752,12 @@ async function buildState(userId) {
   const expeditionPower=reserveRecruits.slice(0,3).reduce((sum,recruit)=>sum+slotRate(recruit.character?.rarity,recruit.trainingLevel||1),0);
   const expeditions={active:expedition,reserveCount:reserveRecruits.length,missions:EXPEDITION_MISSIONS.map((mission)=>({...mission,available:reserveRecruits.length>=mission.minimumReserves,reward:expeditionReward(mission,expeditionPower,Math.max(user.idleBestStage||1,stage))}))};
   const bossRequiredDps=maxEnemyHp/Math.max(1,BOSS_TIMER_SECONDS);
+  const bossCombatRate=totalRate*(bossTactic?.multiplier||1);
   const combatAnalysis={
-    status:isBossStage(stage)?(totalRate>=bossRequiredDps?'ready':'blocked'):'progress',
-    title:isBossStage(stage)?(totalRate>=bossRequiredDps?'Puissance suffisante pour le Gardien':'Mur de Gardien détecté'):'Progression automatique stable',
+    status:isBossStage(stage)?(bossCombatRate>=bossRequiredDps?'ready':'blocked'):'progress',
+    title:isBossStage(stage)?(bossCombatRate>=bossRequiredDps?'Puissance suffisante pour le Gardien':'Mur de Gardien détecté'):'Progression automatique stable',
     requiredDps:isBossStage(stage)?Math.ceil(bossRequiredDps):null,
-    gap:isBossStage(stage)?Math.ceil(totalRate-bossRequiredDps):null,
+    gap:isBossStage(stage)?Math.ceil(bossCombatRate-bossRequiredDps):null,
     factors:[
       {label:'Synergie',value:strategy.name,multiplier:strategy.multiplier},
       {label:'Formation',value:(advisorFormations.find((item)=>item.active)?.conditionMet?'Active':'Inactive'),multiplier:advisorFormations.find((item)=>item.active)?.conditionMet?advisorFormations.find((item)=>item.active)?.multiplier||1:1},
@@ -1767,7 +1775,7 @@ async function buildState(userId) {
     // et le compte à rebours ; le serveur reste seul juge de l'expiration.
     buff:(()=>{const active=activeOrbBuff(user);return active?{key:active.key,label:active.label,description:active.description,prod:active.prod,click:active.click,until:active.until.toISOString(),remainingSeconds:Math.max(0,Math.round((active.until.getTime()-Date.now())/1000))}:null;})(),
     run:{stage,bestStage:runBestStage,essenceEarned:user.idleRunEssenceEarned||0,mode:user.idleBattleMode||'progress',act:combatWorld.act,weeklyEvent:weeklyRogue,build:{blessings:selectedBlessings,effects:blessingEffects,archetype:blessingEffects.archetype,combos:blessingEffects.combos,pending:blessingPending,choices:blessingChoices,rerollCost:blessingRerollCost,nextStage:blessingSlots>=12?null:(blessingSlots+1)*20+1,maxChoices:12}},
-    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:totalRate,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld,analysis:combatAnalysis},
+    combat:{stage,hp:enemyHp,maxHp:maxEnemyHp,dps:isBossStage(stage)?bossCombatRate:totalRate,baseDps:totalRate,bossDpsMultiplier:bossTactic?.multiplier||1,reward:enemyUnitReward(stage,waveKills),isBoss:isBossStage(stage),timerSeconds:isBossStage(stage)?BOSS_TIMER_SECONDS:null,bossFailed:combatPreview.bossFailed,world:combatWorld,analysis:combatAnalysis},
     permanentProgress:{dojoLevel,xpTotal:user.essenceEarnedTotal,bestStage:Math.max(user.idleBestStage||1,stage),prestige:user.prestigeLevel,wisdom:user.wisdomPoints},
     rank:{...rank,startedAt:user.idleRankStartedAt?.toISOString()||null},
     collection:{recruits:recruitCount,masteries,worldsDiscovered},

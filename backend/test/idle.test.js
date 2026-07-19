@@ -165,6 +165,17 @@ test('simulateCombat : un Boss non engagé n’encaisse aucun dégât, engagé i
   assert.ok(engaged.hp<enemyMaxHp(10));
 });
 
+test('le bonus tactique accélère uniquement les Gardiens sans gonfler les vagues normales', () => {
+  const bossHp=enemyMaxHp(10);
+  const boss=simulateCombat({stage:10,hp:bossHp,dps:bossHp/2,bossDpsMultiplier:2,elapsedSeconds:1,mode:'progress',bossEngaged:true});
+  assert.equal(boss.stage,11);
+  const normalHp=enemyMaxHp(1);
+  const normal=simulateCombat({stage:1,hp:normalHp,dps:normalHp/2,bossDpsMultiplier:2,elapsedSeconds:1,mode:'progress'});
+  assert.equal(normal.stage,1);
+  assert.equal(normal.waveKills,0);
+  assert.ok(normal.hp>0);
+});
+
 test('anti-overkill : un DPS extrême ne saute plus plusieurs mondes ni des milliers de cibles faibles',()=>{
   const result=simulateCombat({stage:1,hp:enemyMaxHp(1),dps:1_500_000,elapsedSeconds:60,mode:'progress',maxStageAdvance:MAX_STAGE_ADVANCE_PER_SYNC});
   assert.ok(result.stage<=1+MAX_STAGE_ADVANCE_PER_SYNC);assert.equal(result.progressionCapped,true);assert.ok(result.kills<=500);

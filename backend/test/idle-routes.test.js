@@ -373,6 +373,8 @@ test('DPS héros : la somme réelle inclut équipement et multiplicateurs d équ
   assert.ok(result.heroes.every((hero)=>hero.rate===hero.personalRate*hero.teamMultiplier));
   assert.equal(result.heroRate,result.heroes.reduce((sum,hero)=>sum+hero.rate,0));
   assert.equal(result.totalRate,result.heroRate+17);
+  const againstBoss=computeRateBreakdown(slots,5,12,.04,'warrior','none',1,true,5,'balanced',1,{...extras,bossTactical:1.265});
+  assert.equal(againstBoss.totalRate,result.totalRate,'le bonus anti-boss ne gonfle pas le DPS permanent affiché');
 });
 
 test('saison : huit paliers et aucune action unique ne termine le parcours', () => {

@@ -526,7 +526,7 @@ function enemiesDefeatedBeforeStage(stage) {
 const MIN_ENEMY_SECONDS = .12;
 const MIN_BOSS_SECONDS = .5;
 const MAX_STAGE_ADVANCE_PER_SYNC = 3;
-function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeconds = 0, mode = 'progress', maxKills = 10000, maxStageAdvance = Infinity, bossEngaged = false } = {}) {
+function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, bossDpsMultiplier = 1, elapsedSeconds = 0, mode = 'progress', maxKills = 10000, maxStageAdvance = Infinity, bossEngaged = false } = {}) {
   const normalized = normalizeWaveProgress(stage, waveKills, mode);
   const startingStage = normalized.stage;
   let currentStage = normalized.stage;
@@ -534,6 +534,10 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
   let currentHp = Number(hp);
   let seconds = Math.max(0, Number(elapsedSeconds) || 0);
   const damagePerSecond = Math.max(0, Number(dps) || 0);
+  // Les faiblesses tactiques sont un bonus CONTRE les Gardiens, pas une
+  // hausse permanente du DPS de l'équipe. Les appliquer ici empêche la
+  // valeur générale affichée de chuter brutalement juste après un boss.
+  const guardianMultiplier = Math.max(1, Number(bossDpsMultiplier) || 1);
   let essence = 0;
   let kills = 0;
   let bossFailed = false;
@@ -561,7 +565,8 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, elapsedSeco
     // 1,5 M DPS au stage 1 convertissait l'overkill en ~10 M Essence/minute.
     // Le DPS conserve toute sa valeur sur le contenu adapté, mais ne permet
     // plus de tuer des milliers d'ennemis faibles dans une seule frame.
-    const timeToKill = Math.max(currentHp / damagePerSecond, isBossStage(currentStage) ? MIN_BOSS_SECONDS : MIN_ENEMY_SECONDS);
+    const encounterDps = damagePerSecond * (isBossStage(currentStage) ? guardianMultiplier : 1);
+    const timeToKill = Math.max(currentHp / encounterDps, isBossStage(currentStage) ? MIN_BOSS_SECONDS : MIN_ENEMY_SECONDS);
     // Un boss trop long s'enrage, mais ne renvoie jamais silencieusement le
     // joueur à la vague précédente. L'ancien recul recréait la vague 9 à
     // chaque synchronisation et donnait l'impression que son dixième ennemi
