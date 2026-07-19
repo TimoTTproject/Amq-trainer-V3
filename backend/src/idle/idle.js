@@ -541,11 +541,17 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, bossDpsMult
   let essence = 0;
   let kills = 0;
   let bossFailed = false;
+  let bossBlocked = false;
   const farming = mode === 'farm';
   let progressionCapped = false;
   const maxHp = () => enemyUnitMaxHp(currentStage, currentWaveKills);
   if (!Number.isFinite(currentHp) || currentHp <= 0 || currentHp > maxHp()) currentHp = maxHp();
-  if (!damagePerSecond || !seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, elapsedSeconds: 0 };
+  if (!seconds) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, bossBlocked, elapsedSeconds: 0 };
+  // Une absence sans équipe active ne produit rien, mais son temps doit tout
+  // de même être consommé. Sinon le joueur peut accumuler plusieurs heures à
+  // 0 DPS, équiper ensuite une équipe puissante et rejouer rétroactivement
+  // toute cette absence avec le nouveau DPS.
+  if (!damagePerSecond) return { stage: currentStage, hp: currentHp, waveKills: currentWaveKills, essence, kills, bossFailed, bossBlocked, elapsedSeconds: seconds };
 
   while (seconds > 0 && kills < maxKills) {
     // Un Boss attend un clic explicite d'engagement — l'auto-DPS (en ligne
@@ -560,7 +566,7 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, bossDpsMult
     // comme si ça tournait en fond"). Attendre devant un Boss verrouillé ne
     // doit rien faire produire ET ne doit rien mettre de côté à débloquer
     // plus tard.
-    if (isBossStage(currentStage) && !bossEngaged) { seconds = 0; break; }
+    if (isBossStage(currentStage) && !bossEngaged) { bossBlocked = true; seconds = 0; break; }
     // Un ennemi doit rester perceptible à l'écran : sans cadence minimale,
     // 1,5 M DPS au stage 1 convertissait l'overkill en ~10 M Essence/minute.
     // Le DPS conserve toute sa valeur sur le contenu adapté, mais ne permet
@@ -605,6 +611,7 @@ function simulateCombat({ stage = 1, hp = 0, waveKills = 0, dps = 0, bossDpsMult
     essence,
     kills,
     bossFailed,
+    bossBlocked,
     progressionCapped,
     elapsedSeconds: Math.max(0, (Number(elapsedSeconds) || 0) - seconds),
   };

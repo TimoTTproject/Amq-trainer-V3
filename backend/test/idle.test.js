@@ -221,9 +221,20 @@ test("Boss verrouillé : le temps d'attente ne reste pas 'en banque' pour se dé
   const locked = simulateCombat({ stage: 10, hp: enemyMaxHp(10), dps: 1e9, elapsedSeconds: 600, mode: 'progress', bossEngaged: false });
   assert.equal(locked.stage, 10, 'aucune progression pendant que le Boss est verrouillé');
   assert.equal(locked.kills, 0);
+  assert.equal(locked.bossBlocked, true, 'le résumé hors ligne explique que le Boss a bloqué la progression');
   // Le temps est bien consommé (pas de "reliquat" à rejouer plus tard) même
   // si rien ne s'est passé pendant ce laps de temps.
   assert.equal(locked.elapsedSeconds, 600);
+});
+
+test("sans équipe : l'absence est consommée sans production ni gain rétroactif", () => {
+  const hp = enemyUnitMaxHp(4, 0);
+  const result = simulateCombat({ stage: 4, hp, dps: 0, elapsedSeconds: 3600, mode: 'progress' });
+  assert.equal(result.stage, 4);
+  assert.equal(result.hp, hp);
+  assert.equal(result.kills, 0);
+  assert.equal(result.essence, 0);
+  assert.equal(result.elapsedSeconds, 3600);
 });
 
 test('un ancien compteur enregistré à 10 est réparé vers la vague suivante',()=>{

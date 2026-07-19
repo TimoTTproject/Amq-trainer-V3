@@ -1601,6 +1601,26 @@ test('collect : crédite la production en attente et avance idleLastCollectAt', 
   assert.ok(increment > 0);
 });
 
+test("collect sans équipe : consomme l'absence et interdit le farm rétroactif après équipement", async () => {
+  const anHourAgo = new Date(Date.now() - 3600 * 1000);
+  let user = dbUser({ idleLastCollectAt: anHourAgo });
+  let settleWrite = null;
+  prisma.user.findUnique = async () => user;
+  prisma.idleSlot.findMany = async () => [];
+  prisma.user.update = async (args) => {
+    if (args.data.idleLastCollectAt) {
+      settleWrite = args.data;
+      user = { ...user, idleLastCollectAt: args.data.idleLastCollectAt };
+    }
+    return user;
+  };
+
+  const res = await app.request('/api/idle/collect', { method: 'POST', cookie: app.authCookie('u1'), body: {} });
+  assert.equal(res.status, 200);
+  assert.equal(settleWrite.essence.increment, 0);
+  assert.ok(settleWrite.idleLastCollectAt.getTime() >= anHourAgo.getTime() + 3599 * 1000);
+});
+
 test('collect : retente proprement si une autre requête a déjà encaissé la même période', async () => {
   const user = dbUser({ idleLastCollectAt: new Date(Date.now() - 1000) });
   prisma.user.findUnique = async () => user;
