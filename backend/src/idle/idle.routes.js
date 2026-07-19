@@ -1077,6 +1077,13 @@ function idleProgressAdvisor({ user, slotsOut, totalRate, stage, maxEnemyHp, pen
     const missing = (formation.requirements || []).filter((item) => !item.met).map((item) => `${item.label} ${item.current}/${item.required}`).join(' · ');
     return { key:'formation_inactive', priority:'medium', icon:'fa-people-group', title:`Formation ${formation.name} inactive`, description:`Le bonus sélectionné ne s’applique pas. Il manque : ${missing || 'une composition compatible'}.`, action:'Ajuster l’équipe', tab:'team' };
   }
+  // Farm derrière son propre record de run : légitime pour farmer un boss ou
+  // de l'Essence, mais la moitié des retours joueurs venaient d'un Farm
+  // activé sans le savoir (voyage rapide) — le conseiller propose la sortie.
+  const runBest = Math.max(user.idleRunBestStage || 1, stage);
+  if (user.idleBattleMode === 'farm' && stage < runBest) {
+    return { key:'farm_behind', priority:'medium', icon:'fa-person-digging', title:`Mode Farm actif · ta run a déjà atteint le stage ${runBest}`, description:'Cette vague se répète volontairement et la progression est figée. Si ce n’est pas voulu, reviens en Progression pour continuer ta run.', action:'Repasser en Progression', tab:'home', command:'battle-progress' };
+  }
   const bossDps = maxEnemyHp / Math.max(1, BOSS_TIMER_SECONDS);
   if (isBossStage(stage) && totalRate < bossDps) return { key:'boss_wall', priority:'medium', icon:'fa-skull', title:'DPS insuffisant pour ce Gardien', description:`Il faut environ ${Math.ceil(bossDps)} DPS pour le vaincre dans le temps imparti. Il manque près de ${Math.ceil(bossDps-totalRate)} DPS.`, action:'Comparer mes améliorations', tab:'upgrades' };
   const affordableHero = active.filter((slot) => essence >= (slot.character.levelUpCost || Infinity)).sort((a,b) => ((b.character.rate||0)*(b.character.scaling||0)/Math.max(1,b.character.levelUpCost||1))-((a.character.rate||0)*(a.character.scaling||0)/Math.max(1,a.character.levelUpCost||1)))[0];

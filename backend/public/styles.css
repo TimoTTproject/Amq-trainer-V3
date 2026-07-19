@@ -6516,6 +6516,12 @@ body.idle-fullscreen #app { padding-top: 0; }
 
 .idle-world-modifier{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:4px 8px;border:1px solid #ffffff30;border-radius:7px;background:#050910a8;color:#dbeafe;font-size:10px}.idle-world-modifier i{color:#fbbf24}.idle-world-modifier b{color:#fff}
 .idle-next-objective{display:flex;align-items:center;gap:10px;margin:10px 0 8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent-2) 32%,var(--border));border-radius:10px;background:linear-gradient(100deg,color-mix(in srgb,var(--accent-2) 10%,var(--bg-2)),var(--bg-2))}.idle-next-objective>i{color:var(--accent-2);font-size:18px}.idle-next-objective>span{display:flex;min-width:0;flex:1;flex-direction:column}.idle-next-objective b{font-size:11px}.idle-next-objective small{color:var(--text-2);font-size:13px}.idle-next-objective>strong{color:var(--text-2);font-size:10px}
+/* Mode Farm : bandeau ambré impossible à rater + sortie du mode à un clic
+   (la moitié des retours joueurs venaient d'un Farm activé sans le savoir). */
+.idle-next-objective.is-farming{border-color:#f59e0b77;background:linear-gradient(100deg,#f59e0b1c,var(--bg-2))}
+.idle-next-objective.is-farming>i,.idle-next-objective.is-farming b{color:#fbbf24}
+.idle-next-objective [data-idle-farm-exit]{display:flex;flex:none;align-items:center;gap:6px;padding:8px 11px;border:1px solid #f59e0b88;border-radius:8px;background:#f59e0b1f;color:#fde68a;font-size:11px;font-weight:900;cursor:pointer}
+.idle-next-objective [data-idle-farm-exit]:hover{background:#f59e0b33}
 .idle-combat-log{display:flex;gap:6px;margin:0 0 10px;overflow-x:auto}.idle-combat-log:empty{display:none}.idle-combat-log>span{display:flex;align-items:center;gap:5px;min-width:max-content;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--bg-2);color:var(--text-2);font-size:13px}.idle-combat-log i{color:var(--accent)}.idle-combat-log small{opacity:.65}
 .idle-recruit-economy{display:flex;align-items:center;gap:6px;margin:8px 0 0;padding:7px 9px;border:1px solid #fbbf2435;border-radius:8px;background:#fbbf240b;color:var(--text-2);font-size:13px}.idle-recruit-economy i,.idle-recruit-economy b{color:#fbbf24}
 .idle-boss-name{min-width:120px}.idle-boss-name b{display:block;max-width:170px;overflow:hidden;color:#fff;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
@@ -6650,6 +6656,15 @@ body.idle-fullscreen #app { padding-top: 0; }
 .idle-rune-dungeon-progress span.done{border-color:#f59e0b;background:#f59e0b22;color:#f59e0b}
 .idle-rune-dungeon-progress span.chest{border-color:#f59e0b88;color:#f59e0b}
 .idle-rune-dungeon-btn small{color:var(--text-2);font-size:10px;font-weight:700}
+.idle-rune-dungeon-auto{display:flex;width:100%;align-items:center;gap:9px;margin:0 0 10px;padding:8px 11px;border:1px solid #f59e0b33;border-radius:9px;background:var(--bg-2);color:var(--text);text-align:left;cursor:pointer}
+.idle-rune-dungeon-auto>i{color:#f59e0b}
+.idle-rune-dungeon-auto>span{display:flex;min-width:0;flex:1;flex-direction:column}
+.idle-rune-dungeon-auto b{font-size:11px}
+.idle-rune-dungeon-auto small{color:var(--text-2);font-size:10px}
+.idle-rune-dungeon-auto>em{padding:3px 8px;border:1px solid #f59e0b44;border-radius:999px;color:var(--text-2);font-size:10px;font-style:normal;font-weight:900}
+.idle-rune-dungeon-auto.active{border-color:#f59e0b88;background:#f59e0b14}
+.idle-rune-dungeon-auto.active>em{border-color:#f59e0b;background:#f59e0b22;color:#fbbf24}
+.idle-rune-dungeon-auto:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:620px){.idle-rune-dungeon>header{flex-wrap:wrap}.idle-rune-dungeon>header>span{flex-basis:100%;text-align:left}.idle-rune-dungeon-grid{grid-template-columns:repeat(3,1fr)}.idle-rune-dungeon-progress{flex-wrap:wrap}.idle-rune-dungeon-progress span{flex:1 0 calc(20% - 5px)}}
 .idle-auto-equipment{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px;padding:12px 14px;border:1px solid #60a5fa55;border-radius:11px;background:linear-gradient(110deg,#2563eb12,#8b5cf614)}.idle-auto-equipment>div{display:flex;align-items:center;gap:10px}.idle-auto-equipment>div>i{display:grid;width:36px;height:36px;flex:none;place-items:center;border-radius:9px;background:#60a5fa1a;color:#60a5fa;font-size:16px}.idle-auto-equipment span,.idle-auto-equipment b,.idle-auto-equipment small{display:block}.idle-auto-equipment b{font-size:11px}.idle-auto-equipment small{margin-top:2px;color:var(--text-2);font-size:12px}.idle-auto-equipment button{flex:none;justify-content:center}.idle-equipment-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:16px 1px 8px}.idle-equipment-section-head span,.idle-equipment-section-head small{display:block}.idle-equipment-section-head small{color:#60a5fa;font-size:11px;font-weight:900;letter-spacing:.12em}.idle-equipment-section-head h3{margin:1px 0 0;font-size:14px}.idle-equipment-section-head p{margin:0;color:var(--text-2);font-size:12px}.idle-loadouts{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:9px}.idle-loadout{display:block;padding:0;overflow:hidden}.idle-loadout>header{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:10px;padding:10px 11px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg-3) 55%,var(--bg-2))}.idle-loadout>header>.idle-loadout-portrait{width:46px;height:46px;border-radius:10px}.idle-loadout>header>span{display:flex;min-width:0;flex-direction:column}.idle-loadout>header small{color:#60a5fa;font-size:11px;font-weight:800;text-transform:uppercase}.idle-loadout>header b{overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.idle-loadout>header em{margin-top:2px;color:var(--text-2);font-size:11px;font-style:normal}.idle-loadout.complete>header em{color:#86efac}.idle-loadout>header>strong{padding:5px 7px;border-radius:6px;background:#22c55e12;color:#86efac;font-size:10px}.idle-loadout-items{display:grid;gap:1px;background:var(--border)}.idle-loadout-items>button,.idle-loadout-empty{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;align-items:center;gap:8px;min-height:50px;padding:7px 9px;border:0;background:var(--bg-2);color:var(--text);text-align:left}.idle-loadout-items>button{cursor:pointer}.idle-loadout-items>button:hover{background:color-mix(in srgb,#60a5fa 8%,var(--bg-2))}.idle-loadout-items>button>span,.idle-loadout-items>button small,.idle-loadout-items>button b,.idle-loadout-items>button em,.idle-loadout-empty>span{display:block;min-width:0}.idle-loadout-items>button small,.idle-loadout-empty small{color:var(--text-2);font-size:10px;text-transform:uppercase}.idle-loadout-items>button b,.idle-loadout-empty b{display:block;overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.idle-loadout-items>button em{overflow:hidden;color:#94a3b8;font-size:11px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}.idle-loadout-items>button>strong{color:#86efac;font-size:12px}.idle-loadout-items>button>i{color:#64748b;font-size:12px}.idle-loadout-empty{grid-template-columns:30px 1fr;opacity:.55}.idle-loadout-empty>i{display:grid;width:28px;height:28px;place-items:center;border:1px dashed var(--border);border-radius:7px}.idle-item-card.idle-item-focus{animation:idleItemFocus 1.4s ease;outline:2px solid #60a5fa}@keyframes idleItemFocus{0%,100%{box-shadow:none}35%{box-shadow:0 0 0 5px #60a5fa2e,0 0 28px #60a5fa44}}
 @media(max-width:620px){.idle-auto-equipment{align-items:stretch;flex-direction:column}.idle-auto-equipment button{width:100%}.idle-equipment-section-head{align-items:flex-start;flex-direction:column}.idle-loadouts{grid-template-columns:1fr}.idle-loadout-items>button{grid-template-columns:30px minmax(0,1fr) auto}.idle-loadout-items>button>i:last-child{display:none}}
@@ -6761,8 +6776,11 @@ body.idle-fullscreen #app { padding-top: 0; }
 @media (max-width: 760px) { .feedback-fab { right: 12px; bottom: 76px; } }
 /* L'Idle a son propre formulaire de retour (onglet Activités · Observatoire
    bêta) : le bouton flottant générique n'a plus qu'à se rajouter par-dessus
-   une scène de combat déjà dense sur mobile (chevauchait le bouton Attaquer). */
-body.idle-fullscreen .feedback-fab { display: none; }
+   une scène de combat déjà dense sur mobile (chevauchait le bouton Attaquer).
+   Masqué sur TOUTE la vue Dojo (pas seulement en plein écran) : sur mobile il
+   se retrouvait exactement sous le lanceur de chat (z-index inférieur), donc
+   inatteignable de toute façon. */
+body.idle-fullscreen .feedback-fab, body.view-idle-active .feedback-fab { display: none; }
 
 /* Lisibilité grand écran : la zone jouable utilise réellement la largeur
    disponible et les informations critiques ne descendent plus sous 10 px. */
@@ -6853,18 +6871,20 @@ body.idle-fullscreen .feedback-fab { display: none; }
    (retour testeur : elle se superposait au lanceur de chat, tous deux fixes
    en bas à droite à quasi les mêmes coordonnées). Le chat garde la droite. */
 .idle-coach{position:fixed;left:22px;right:auto;bottom:22px;z-index:750;display:grid;grid-template-columns:42px minmax(0,260px);gap:11px;width:min(340px,calc(100vw - 24px));padding:13px 15px;border:1px solid #f43f5e66;border-radius:12px;background:#11151df5;box-shadow:0 16px 45px #000b;color:var(--text)}
-/* Le Guide ne doit jamais recouvrir la navigation (retour joueur : « la
-   fenêtre pour les axes d'amélioration gêne pour cliquer sur Combat ») :
-   - ≤900px : la barre d'onglets est en BAS — le Guide remonte au-dessus
-     d'elle (la règle n'existait qu'en ≤700px, les paysages téléphone/petites
-     tablettes 701-900px posaient le Guide pile sur l'onglet Combat) ;
+/* Le Guide ne doit jamais recouvrir la navigation ni le lanceur de chat
+   (retour joueur : « la fenêtre pour les axes d'amélioration gêne pour
+   cliquer sur Combat ») :
+   - ≤900px : la barre d'onglets est en BAS (0-60px) et le lanceur de chat vit
+     à bottom:78 — le Guide monte au-dessus des deux (la règle n'existait
+     qu'en ≤700px, les paysages téléphone 701-900px posaient le Guide pile
+     sur l'onglet Combat) ;
    - ≥901px : la barre est un panneau latéral GAUCHE (164px) — le Guide se
      décale à sa droite pour les fenêtres peu hautes où les deux se croisent. */
-@media(max-width:900px){.idle-coach{left:12px;bottom:78px}}
+@media(max-width:900px){.idle-coach{left:12px;bottom:138px}}
 @media(min-width:901px){.idle-coach{left:200px}}
 .idle-coach.hidden{display:none}.idle-coach>button{position:absolute;right:6px;top:6px;border:0;background:transparent;color:var(--text-2);cursor:pointer}.idle-coach-avatar{display:grid;width:42px;height:42px;place-items:center;border-radius:50%;background:#e11d4820;color:#fb7185;font-size:18px}.idle-coach>div{display:flex;flex-direction:column;gap:3px}.idle-coach small{color:#8f99a8;font-size:12px;font-weight:900;letter-spacing:.1em}.idle-coach b{padding-right:18px;font-size:12px}.idle-coach p{margin:0;color:#b6bfcc;font-size:10px;line-height:1.4}.idle-coach>div>button{align-self:flex-start;margin-top:5px;padding:5px 0;border:0;background:transparent;color:#fb7185;font-size:13px;font-weight:900;cursor:pointer}
 @keyframes idleSummonSpin{to{transform:rotate(360deg)}}@keyframes idleSummonSweep{0%,30%{transform:translateX(-100%)}70%,100%{transform:translateX(100%)}}
-@media(max-width:700px){#view-idle .idle-spend-dock{grid-template-columns:1fr 1fr}#view-idle .idle-spend-title{grid-column:1/-1;padding:8px 10px}#view-idle .idle-spend-dock>button{padding:8px}#view-idle .idle-spend-dock>button>em{display:none}.idle-summon-orb{width:58px;height:58px}.idle-summon-pity-track{grid-template-columns:110px 1fr}.idle-summon-odds{grid-template-columns:1fr 1fr}.idle-summon-odds>span:nth-child(3){border-left:0}.idle-summon-odds>span:nth-child(n+3){border-top:1px solid #ffffff12}.idle-coach{left:12px;right:auto;bottom:78px}}
+@media(max-width:700px){#view-idle .idle-spend-dock{grid-template-columns:1fr 1fr}#view-idle .idle-spend-title{grid-column:1/-1;padding:8px 10px}#view-idle .idle-spend-dock>button{padding:8px}#view-idle .idle-spend-dock>button>em{display:none}.idle-summon-orb{width:58px;height:58px}.idle-summon-pity-track{grid-template-columns:110px 1fr}.idle-summon-odds{grid-template-columns:1fr 1fr}.idle-summon-odds>span:nth-child(3){border-left:0}.idle-summon-odds>span:nth-child(n+3){border-top:1px solid #ffffff12}}
 .idle-recruit-reveal-modal .idle-recruit-reveal-card{transform:scale(.88) translateY(18px);opacity:0;transition:transform .38s cubic-bezier(.2,.9,.2,1.15),opacity .25s ease}
 .idle-recruit-reveal-modal.is-revealed .idle-recruit-reveal-card{transform:none;opacity:1}
 .idle-recruit-reveal-modal.is-revealed .idle-recruit-reveal-art{animation:idleRecruitArrival .65s .12s both}
@@ -7301,6 +7321,10 @@ body.idle-fullscreen .feedback-fab { display: none; }
 .idle-confirm-card{max-width:420px}
 .idle-confirm-card p{margin:10px 0 0;color:#c7cdd8;font-size:13px;line-height:1.5}
 .idle-confirm-card .modal-actions{gap:8px}
+.idle-confirm-guard{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.idle-confirm-guard small{color:#fbbf24;font-size:11px;font-weight:800}
+.idle-confirm-guard input{padding:9px 11px;border:1px solid #f59e0b66;border-radius:8px;background:var(--bg-3);color:var(--text);font-size:13px;font-weight:800;letter-spacing:.06em}
+.idle-confirm-card .modal-actions button:disabled{opacity:.45;cursor:not-allowed}
 
 /* ── Bilan de Prestige : deux colonnes « repart à zéro / conservé » ── */
 .idle-prestige-modal-card{max-width:560px}
