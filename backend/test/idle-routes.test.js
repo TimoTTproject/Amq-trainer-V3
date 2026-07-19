@@ -1810,6 +1810,11 @@ test("prestige : solde la production en attente AVANT le reset — elle compte d
   const resetCall = updateCalls.find((data) => data.essence === 0);
   assert.ok(resetCall);
   assert.equal(resetCall.essenceEarnedTotal, undefined);
+  // Le Prestige ne touche ni au Rang ni à ses compteurs de quêtes : ces
+  // objectifs sont une progression de compte, indépendante de la run.
+  for (const key of ['idleRankLevel','idleRankKills','idleRankClicks','idleRankUpgrades','idleRankBosses','idleRankSkills','idleRankRecruits']) {
+    assert.equal(resetCall[key], undefined);
+  }
   // Bug rapporté : un joueur en mode Farm au moment du Prestige restait
   // bloqué en Farm sur la nouvelle run (DPS normal, Essence gagnée, mais la
   // vague ne progresse plus jamais) — le Prestige doit toujours repartir en

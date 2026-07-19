@@ -2012,6 +2012,9 @@
           <small class="idle-prestige-kicker">RETRAITE DU MAÎTRE</small>
           <h3 id="idle-prestige-modal-title"><i class="fas fa-brain"></i> Prestiger maintenant ?</h3>
           <p class="idle-prestige-gain-line">Cette run te rapporte <b>+<span id="idle-prestige-gain">0</span> Sagesse</b> à dépenser dans les Ancients (bonus permanents).</p>
+          <div class="idle-prestige-safety" role="status">
+            <i class="fas fa-shield-heart"></i><span><b>Aucun objet ne sera perdu.</b><small>Inventaire, rareté, renforcements +15, affixes, sets, favoris et équipement restent exactement en l’état.</small></span>
+          </div>
           <div class="idle-prestige-columns">
             <section class="idle-prestige-reset"><h4><i class="fas fa-rotate-left"></i> Repart à zéro</h4><ul>
               <li>L’Essence de la run</li>
@@ -2022,7 +2025,8 @@
             </ul></section>
             <section class="idle-prestige-kept"><h4><i class="fas fa-lock"></i> Conservé pour toujours</h4><ul>
               <li>Tous tes héros recrutés (Éveillés inclus)</li>
-              <li>Tes objets et leur équipement</li>
+              <li><b>Tous tes objets, sans exception</b></li>
+              <li>Ton Rang, tes quêtes de Rang et leur progression</li>
               <li>Tes Sceaux et la garantie Épique</li>
               <li>Ton niveau de compte, tes zones découvertes et les décors</li>
               <li>Tes Ancients et ta Sagesse</li>
@@ -2039,7 +2043,7 @@
           <small class="idle-prestige-kicker">RETRAITE ACCOMPLIE</small>
           <h3><i class="fas fa-brain"></i> Nouvelle run lancée !</h3>
           <div class="idle-prestige-result-grid" id="idle-prestige-result-grid"></div>
-          <p class="idle-prestige-note"><i class="fas fa-circle-check"></i> Héros, objets, Sceaux, niveau de compte et Ancients sont toujours là. Dépense ta Sagesse dans les Ancients pour repartir plus fort.</p>
+          <p class="idle-prestige-note"><i class="fas fa-circle-check"></i> Héros, objets, Rang, quêtes de Rang, Sceaux, niveau de compte et Ancients sont toujours là. Dépense ta Sagesse dans les Ancients pour repartir plus fort.</p>
           <div class="modal-actions">
             <button class="btn-secondary" id="idle-prestige-open-ancients"><i class="fas fa-landmark"></i> Voir les Ancients</button>
             <button class="btn-primary" id="idle-prestige-result-continue"><i class="fas fa-play"></i> Reprendre le combat</button>

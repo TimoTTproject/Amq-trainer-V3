@@ -1954,9 +1954,9 @@ async function buildState(userId) {
             {key:'blessings',label:'Bénédictions roguelike',before:`${runBlessingKeys.length} pouvoir${runBlessingKeys.length!==1?'s':''} de run`,after:'Toutes retirées'},
           ],
           kept:[
-            {key:'rank',label:'Rang et niveau du Dojo',value:`Rang ${user.idleRankLevel||1} · Dojo niv. ${dojoLevel}`},
+            {key:'rank',label:'Rang, quêtes de Rang et niveau du Dojo',value:`Rang ${user.idleRankLevel||1} · progression des quêtes conservée · Dojo niv. ${dojoLevel}`},
             {key:'roster',label:'Héros recrutés et étoiles d’Éveil',value:`${recruitCount} héros conservés`},
-            {key:'gear',label:'Inventaire et équipements',value:'Tout est conservé'},
+            {key:'gear',label:'Tous les objets, sans exception',value:'Inventaire, rareté, +15, affixes, sets, favoris et équipement conservés'},
             {key:'records',label:'Record permanent et coffres',value:`Stage ${Math.max(user.idleBestStage||1,stage)} · coffres conservés`},
             {key:'permanent',label:'Sagesse, Ancients et Sceaux',value:`${safeIdleNumber(user.wisdomPoints)} + ${currentWisdom} Sagesse`},
           ],

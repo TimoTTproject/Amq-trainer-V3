@@ -87,6 +87,19 @@ test('Prestige Idle : l’historique expose rendement, durée et build de chaque
   assert.match(source, /run\.heroCount/);
 });
 
+test('Prestige Idle : garantit clairement que les objets et les quêtes de Rang sont conservés', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'idle', 'idle.routes.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+
+  assert.match(html, /Aucun objet ne sera perdu/);
+  assert.match(html, /Inventaire, rareté, renforcements \+15, affixes, sets, favoris et équipement/);
+  assert.match(html, /Ton Rang, tes quêtes de Rang et leur progression/);
+  assert.match(server, /Rang, quêtes de Rang et niveau du Dojo/);
+  assert.match(server, /Tous les objets, sans exception/);
+  assert.match(styles, /\.idle-prestige-safety/);
+});
+
 test('social Idle : les classements spécialisés ouvrent les compositions publiques', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'public', 'idle.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
