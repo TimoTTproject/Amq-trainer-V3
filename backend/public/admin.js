@@ -347,9 +347,54 @@ async function runResetAll() {
   }
 }
 
+function requestTypedAdminConfirmation(title, message, phrase) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', title);
+    modal.innerHTML = `<div class="modal-card">
+      <button class="modal-close" type="button" aria-label="Fermer"><i class="fas fa-times"></i></button>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(message)}</p>
+      <label><span>Tape <b>${escapeHtml(phrase)}</b> pour confirmer</span>
+        <input type="text" autocomplete="off" spellcheck="false" aria-label="Phrase de confirmation">
+      </label>
+      <div class="modal-actions">
+        <button class="btn-secondary" type="button" data-cancel>Annuler</button>
+        <button class="btn-primary" type="button" data-confirm disabled>Confirmer</button>
+      </div>
+    </div>`;
+    const input = modal.querySelector('input');
+    const confirm = modal.querySelector('[data-confirm]');
+    const finish = (value) => {
+      document.removeEventListener('keydown', onKeydown);
+      modal.remove();
+      resolve(value);
+    };
+    const onKeydown = (event) => { if (event.key === 'Escape') finish(null); };
+    input.addEventListener('input', () => { confirm.disabled = input.value !== phrase; });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && input.value === phrase) finish(phrase);
+    });
+    confirm.addEventListener('click', () => finish(phrase));
+    modal.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+    modal.querySelector('.modal-close').addEventListener('click', () => finish(null));
+    modal.addEventListener('click', (event) => { if (event.target === modal) finish(null); });
+    document.addEventListener('keydown', onKeydown);
+    document.body.appendChild(modal);
+    input.focus();
+  });
+}
+
 async function runResetGacha() {
   const status = document.getElementById('admin-reset-gacha-status');
-  const ans = prompt("LANCEMENT GACHA ÉDITION 2 : toutes les cartes Édition 1, leurs exemplaires numérotés, les échanges et les albums sont conservés. Un nouveau pool Édition 2 séparé est créé. Seuls la pitié et les compteurs de tirage saisonniers repartent à zéro ; les tokens et les autres modes ne sont pas touchés.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  const ans = await requestTypedAdminConfirmation(
+    'Lancement Gacha Édition 2',
+    'Toutes les cartes Édition 1, leurs exemplaires numérotés, les échanges et les albums sont conservés. Un nouveau pool Édition 2 séparé est créé. Seuls la pitié et les compteurs de tirage saisonniers repartent à zéro.',
+    'RESET_GACHA',
+  );
   // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
   // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
   if (ans === null) { status.textContent = 'Annulé.'; return; }
@@ -369,7 +414,11 @@ async function runResetGacha() {
 
 async function runResetIdle() {
   const status = document.getElementById('admin-reset-idle-status');
-  const ans = prompt("⚠️ LANCEMENT ÉDITION 2 : reset du Dojo de TOUS les comptes (essence, roster, objets, améliorations, Ancients/Sagesse, Prestige et rang). Le quiz, le gacha, les tokens, le Château et le classé ne sont pas remis à zéro. Chaque joueur pourra ensuite réclamer le pack de lancement Édition 2.\n\nTape RESET_IDLE (exactement, en majuscules) pour confirmer :");
+  const ans = await requestTypedAdminConfirmation(
+    'Lancement Anime Ascension — Saison 2',
+    'La progression du Dojo de tous les comptes sera réinitialisée : Essence, roster, objets, améliorations, Ancients/Sagesse, Prestige et rang. Le quiz, le Gacha, les tokens, le Château et le classé sont conservés.',
+    'RESET_IDLE',
+  );
   if (ans === null) { status.textContent = 'Annulé.'; return; }
   if (ans !== 'RESET_IDLE') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RESET_IDLE") — rien n'a été fait, réessaie.`; return; }
   const btn = document.getElementById('admin-reset-idle-btn');
