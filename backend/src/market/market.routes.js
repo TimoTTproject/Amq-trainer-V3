@@ -34,7 +34,7 @@ router.get('/', requireAuth, async (req, res) => {
     skip: (page - 1) * perPage,
     take: perPage,
     include: {
-      character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } },
+      character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true, edition: true } },
       cardInstance: { select: { serial: true } },
       seller: { select: { id: true, displayName: true, avatarUrl: true } },
     },
@@ -62,7 +62,7 @@ router.get('/mine', requireAuth, async (req, res) => {
     where: { sellerId: uid, status: 'active' },
     orderBy: { createdAt: 'desc' },
     include: {
-      character: { select: { id: true, name: true, imageUrl: true, rarity: true } },
+      character: { select: { id: true, name: true, imageUrl: true, rarity: true, edition: true } },
       cardInstance: { select: { serial: true } },
     },
   });

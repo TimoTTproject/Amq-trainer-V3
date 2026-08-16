@@ -3774,6 +3774,129 @@ header { grid-area: header; padding-top: 22px; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 14px 30px rgba(0,0,0,.28), 0 0 22px var(--rarity-glow);
 }
 
+/* Edition 2 — cadre premium inspiré des concepts VERSION 2.0.
+   Le sélecteur est strictement limité aux cartes dont l'API renvoie edition >= 2. */
+.gcard.edition-2 {
+  --v2-gold: #f4c45f;
+  --v2-deep: #05070d;
+  border: 2px solid color-mix(in srgb, var(--rarity-c) 72%, var(--v2-gold));
+  border-radius: 5px;
+  padding: 5px;
+  background:
+    linear-gradient(135deg, var(--v2-gold) 0 3px, transparent 3px) top left/20px 20px no-repeat,
+    linear-gradient(225deg, var(--v2-gold) 0 3px, transparent 3px) top right/20px 20px no-repeat,
+    linear-gradient(45deg, var(--v2-gold) 0 3px, transparent 3px) bottom left/20px 20px no-repeat,
+    linear-gradient(315deg, var(--v2-gold) 0 3px, transparent 3px) bottom right/20px 20px no-repeat,
+    linear-gradient(155deg, color-mix(in srgb, var(--rarity-c) 28%, #111522), var(--v2-deep) 44% 72%, color-mix(in srgb, var(--rarity-c) 22%, #090b11));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.13),
+    inset 0 0 20px color-mix(in srgb, var(--rarity-c) 22%, transparent),
+    0 12px 28px rgba(0,0,0,.42),
+    0 0 22px var(--rarity-glow);
+}
+.gcard.edition-2::before {
+  inset: 4px;
+  opacity: .7;
+  border: 1px solid color-mix(in srgb, var(--rarity-c) 54%, var(--v2-gold));
+  background:
+    linear-gradient(115deg, transparent 25%, rgba(255,255,255,.28) 42%, transparent 58%),
+    conic-gradient(from 180deg at 50% 50%, transparent, color-mix(in srgb, var(--rarity-c) 26%, transparent), transparent 38%);
+  transform: none;
+  transition: opacity .25s ease, filter .25s ease;
+}
+.gcard.edition-2:hover::before { transform: none; opacity: .95; filter: brightness(1.18); }
+.gcard.edition-2::after {
+  inset: 8px;
+  border-radius: 2px;
+  border-color: color-mix(in srgb, var(--rarity-c) 42%, var(--v2-gold));
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.72);
+  opacity: .85;
+}
+.gcard.edition-2 .gcard-img {
+  margin-top: 21px;
+  border: 1px solid color-mix(in srgb, var(--rarity-c) 48%, var(--v2-gold));
+  border-radius: 2px 2px 0 0;
+  box-shadow: inset 0 -32px 30px -25px #03040a;
+}
+.gcard.edition-2 .gcard-img::after {
+  background:
+    linear-gradient(115deg, transparent 25%, color-mix(in srgb, var(--rarity-c) 22%, rgba(255,255,255,.45)) 45%, transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,.13), transparent 28%, rgba(2,3,8,.34));
+}
+.gcard.edition-2 .gcard-info {
+  margin-top: 4px;
+  padding: 8px 7px 7px;
+  border: 1px solid color-mix(in srgb, var(--rarity-c) 48%, var(--v2-gold));
+  border-radius: 0 0 2px 2px;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--rarity-c) 20%, transparent), transparent),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0 1px, transparent 1px 5px),
+    #070910;
+  text-align: center;
+}
+.gcard.edition-2 .gcard-name {
+  display: -webkit-box;
+  min-height: 2.1em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: #fff8e8;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: .02em;
+  text-shadow: 0 1px 8px #000;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+.gcard.edition-2 .gcard-rarity {
+  justify-content: center;
+  margin-top: 4px;
+  font-weight: 900;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+.gcard.edition-2 .gcard-edition { display: none; }
+.gcard-v2-ribbon {
+  position: absolute;
+  top: 5px;
+  left: 20%;
+  right: 20%;
+  z-index: 4;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--rarity-c) 48%, var(--v2-gold));
+  background: linear-gradient(90deg, #05070c, color-mix(in srgb, var(--rarity-c) 16%, #10131c), #05070c);
+  color: #ffe5a2;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: .54rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 20px;
+  text-align: center;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--rarity-c) 62%, transparent);
+  clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);
+}
+.gcard.edition-2.r-common { --v2-gold: #d8dde8; }
+.gcard.edition-2.r-rare { --v2-gold: #8dd7ff; }
+.gcard.edition-2.r-epic { --v2-gold: #d6a7ff; }
+.gcard.edition-2.r-legendary { --v2-gold: #ffd36f; }
+.gcard.edition-2.r-mythic {
+  --v2-gold: #ffd46e;
+  border-color: #ffca69;
+  background:
+    linear-gradient(135deg, #ffd46e 0 3px, transparent 3px) top left/20px 20px no-repeat,
+    linear-gradient(225deg, #56dcff 0 3px, transparent 3px) top right/20px 20px no-repeat,
+    linear-gradient(45deg, #ff4fb7 0 3px, transparent 3px) bottom left/20px 20px no-repeat,
+    linear-gradient(315deg, #56dcff 0 3px, transparent 3px) bottom right/20px 20px no-repeat,
+    linear-gradient(145deg, #35132d, #070912 42% 70%, #092b39);
+}
+.flip-card.edition-2.flipped.r-legendary .flip-front,
+.flip-card.edition-2.flipped.r-mythic .flip-front {
+  filter: saturate(1.12);
+}
+
 .pull-result.pull-showcase {
   position: relative;
   overflow: hidden;
@@ -3850,6 +3973,32 @@ header { grid-area: header; padding-top: 22px; }
 .char-hero.r-epic { --rarity-c: #b06cff; --rarity-glow: rgba(176,108,255,.28); }
 .char-hero.r-legendary { --rarity-c: #ffb648; --rarity-glow: rgba(255,182,72,.32); }
 .char-hero.r-mythic { --rarity-c: #ff5d8f; --rarity-glow: rgba(255,93,143,.36); }
+.char-hero.edition-2 {
+  padding: 7px;
+  border: 2px solid color-mix(in srgb, var(--rarity-c) 68%, #ffd36f);
+  border-radius: 5px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--rarity-c) 24%, #12151d), #05070c 54%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 20px 52px rgba(0,0,0,.48), 0 0 36px var(--rarity-glow);
+}
+.char-hero.edition-2 .char-img { margin-top: 26px; border: 1px solid color-mix(in srgb, var(--rarity-c) 48%, #ffd36f); border-radius: 2px; }
+.char-v2-ribbon {
+  position: absolute;
+  top: 7px;
+  left: 22%;
+  right: 22%;
+  z-index: 3;
+  height: 25px;
+  border: 1px solid color-mix(in srgb, var(--rarity-c) 52%, #ffd36f);
+  background: linear-gradient(90deg, #05070c, color-mix(in srgb, var(--rarity-c) 18%, #11141e), #05070c);
+  color: #ffe4a0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+  line-height: 23px;
+  text-align: center;
+  clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);
+}
 .char-hero::after {
   content: '';
   position: absolute;
@@ -8363,3 +8512,7 @@ body.idle-fullscreen .feedback-fab, body.view-idle-active .feedback-fab { displa
    Le cadre peint et rogne systématiquement l'image avant la jauge de PV. */
 #view-idle .idle-rune-dungeon-enemy{box-sizing:border-box;overflow:hidden;padding:0;contain:paint}
 #view-idle .idle-rune-dungeon-enemy>img{position:absolute;inset:0;display:block;width:100%!important;height:100%!important;max-width:100%;max-height:100%;object-fit:contain;object-position:center bottom}
+
+/* Relance Édition 2 : le cadeau doit être la première action évidente de la
+   page Activités, tout en restant compact une fois réclamé. */
+.idle-launch-reward{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:14px;margin-bottom:14px;padding:16px;border:1px solid #f59e0b99;border-radius:12px;background:radial-gradient(circle at 15% 0,#fbbf2433,transparent 45%),linear-gradient(135deg,#451a03,#1c1917);box-shadow:0 12px 30px #0005,0 0 28px #f59e0b16;color:#fff7ed}.idle-launch-reward>i{display:grid;width:48px;height:48px;place-items:center;border-radius:12px;background:#f59e0b22;color:#fbbf24;font-size:23px}.idle-launch-reward>span{display:flex;min-width:0;flex-direction:column;gap:3px}.idle-launch-reward small{color:#fbbf24;font-size:11px;font-weight:950;letter-spacing:.1em}.idle-launch-reward b{font-size:16px}.idle-launch-reward p{margin:0;color:#d6d3d1;font-size:11px}.idle-launch-reward em{color:#fde68a;font-size:11px;font-style:normal}.idle-launch-reward em strong{color:#fff}.idle-launch-reward.claimed{border-color:#22c55e55;background:linear-gradient(135deg,#052e16,#111827);box-shadow:none}.idle-launch-reward.claimed>i{background:#22c55e1f;color:#4ade80}.idle-launch-reward.claimed small,.idle-launch-reward.claimed em{color:#86efac}.idle-launch-reward.claimed button{opacity:.65}@media(max-width:700px){.idle-launch-reward{grid-template-columns:40px 1fr;padding:13px}.idle-launch-reward>i{width:40px;height:40px}.idle-launch-reward>button{grid-column:1/-1;width:100%}}

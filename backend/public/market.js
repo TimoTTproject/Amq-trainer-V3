@@ -38,8 +38,10 @@ function setMarketTab(tab) {
 
 function marketListingHTML(l) {
   const rar = l.character.rarity;
+  const edition = cardEdition(l.character);
   const img = l.character.imageUrl ? `style="background-image:url('${l.character.imageUrl}')"` : '';
-  return `<div class="gcard r-${rar} market-card">
+  return `<div class="gcard r-${rar}${edition.className} market-card">
+    ${edition.ribbon}
     <div class="gcard-img" ${img}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(l.character.name)}</div>
@@ -114,11 +116,13 @@ let marketSellCharacters = [];
 let marketSellSearch = '';
 
 function marketSellCardHTML(c, idx) {
+  const edition = cardEdition(c);
   const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
   const picker = c.serials.length > 1
     ? `<select class="market-sell-serial" aria-label="Choisir l'exemplaire">${c.serials.map((s) => `<option value="${s.id}">#${s.serial}</option>`).join('')}</select>`
     : `<input type="hidden" class="market-sell-serial" value="${c.serials[0].id}" />`;
-  return `<div class="gcard r-${c.rarity} market-card market-sell-card" data-sell-idx="${idx}">
+  return `<div class="gcard r-${c.rarity}${edition.className} market-card market-sell-card" data-sell-idx="${idx}">
+    ${edition.ribbon}
     <div class="gcard-img" ${img}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>

@@ -36,9 +36,9 @@ async function expandInstances(ids) {
   if (!ids || !ids.length) return [];
   const insts = await prisma.cardInstance.findMany({
     where: { id: { in: ids } },
-    select: { id: true, serial: true, character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
+    select: { id: true, serial: true, character: { select: { id: true, name: true, imageUrl: true, rarity: true, edition: true } } },
   });
-  return insts.map((i) => ({ id: i.id, serial: i.serial, characterId: i.character.id, name: i.character.name, imageUrl: i.character.imageUrl, rarity: i.character.rarity }));
+  return insts.map((i) => ({ id: i.id, serial: i.serial, characterId: i.character.id, name: i.character.name, imageUrl: i.character.imageUrl, rarity: i.character.rarity, edition: i.character.edition }));
 }
 
 // Exemplaires échangeables d'un joueur, groupés par personnage (pour le builder)
@@ -47,12 +47,12 @@ router.get('/instances/:userId', requireAuth, async (req, res) => {
   const insts = await prisma.cardInstance.findMany({
     where: { userId: req.params.userId, listed: false },
     orderBy: [{ characterId: 'asc' }, { serial: 'asc' }],
-    select: { id: true, serial: true, character: { select: { id: true, name: true, imageUrl: true, rarity: true } } },
+    select: { id: true, serial: true, character: { select: { id: true, name: true, imageUrl: true, rarity: true, edition: true } } },
   });
   const byChar = {};
   for (const i of insts) {
     const c = i.character;
-    (byChar[c.id] ||= { characterId: c.id, name: c.name, imageUrl: c.imageUrl, rarity: c.rarity, serials: [] })
+    (byChar[c.id] ||= { characterId: c.id, name: c.name, imageUrl: c.imageUrl, rarity: c.rarity, edition: c.edition, serials: [] })
       .serials.push({ id: i.id, serial: i.serial });
   }
   res.json({ characters: Object.values(byChar) });

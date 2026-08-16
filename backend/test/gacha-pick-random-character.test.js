@@ -21,7 +21,7 @@ test('pickRandomCharacter : renvoie null si la rareté ciblée est épuisée, sa
   // Une seule tentative de comptage, bornée à la rareté demandée — jamais de
   // second essai avec { soldOut:false } seul (l'ancien repli fautif).
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0], { rarity: 'mythic', soldOut: false });
+  assert.deepEqual(calls[0], { rarity: 'mythic', edition: 1, soldOut: false });
 });
 
 test('pickRandomCharacter : pioche bien DANS la rareté demandée quand elle a du stock', async () => {
@@ -35,6 +35,18 @@ test('pickRandomCharacter : pioche bien DANS la rareté demandée quand elle a d
   };
   const result = await pickRandomCharacter(prisma, 'mythic', {});
   assert.equal(result.id, 42);
-  assert.deepEqual(countWhere, { rarity: 'mythic', soldOut: false });
-  assert.deepEqual(pickWhere, { rarity: 'mythic', soldOut: false });
+  assert.deepEqual(countWhere, { rarity: 'mythic', edition: 1, soldOut: false });
+  assert.deepEqual(pickWhere, { rarity: 'mythic', edition: 1, soldOut: false });
+});
+
+test('pickRandomCharacter : après lancement, ne pioche que dans l’Edition 2', async () => {
+  let whereSeen = null;
+  prisma.character.count = async ({ where }) => { whereSeen = where; return 1; };
+  prisma.character.findFirst = async ({ where }) => {
+    if (where.featured) return null;
+    return { id: 84, name: 'Retour', rarity: 'epic', edition: 2 };
+  };
+  const result = await pickRandomCharacter(prisma, 'epic', {}, 2);
+  assert.equal(result.edition, 2);
+  assert.deepEqual(whereSeen, { rarity: 'epic', edition: 2, soldOut: false });
 });

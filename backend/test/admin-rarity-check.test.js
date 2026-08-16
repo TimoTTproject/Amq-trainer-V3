@@ -18,6 +18,7 @@ test.before(async () => {
 });
 test.after(() => app.close());
 test.beforeEach(() => {
+  prisma.appSetting.findUnique = async () => null; // avant lancement : pool Edition 1
   prisma.user.findUnique = async ({ where }) => {
     if (where.id === ADMIN.id) return ADMIN;
     if (where.id === PLAIN.id) return PLAIN;

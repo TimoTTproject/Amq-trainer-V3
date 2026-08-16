@@ -384,11 +384,13 @@ function renderTradePool(containerId, characters, selSet, search, rarity) {
   if (q) list = list.filter((c) => c.name.toLowerCase().includes(q));
   if (!list.length) { el.innerHTML = '<p class="muted">Aucun personnage ne correspond.</p>'; return; }
   el.innerHTML = list.map((c) => {
+    const edition = cardEdition(c);
     const sel = selSet.get(c.characterId);
     const selCount = sel ? sel.count : 0;
     const owned = c.serials.length;
     const badge = selCount > 0 ? `<span class="badge fuse-selected">✓ ×${selCount}</span>` : `<span class="badge copies">×${owned}</span>`;
-    return `<button type="button" class="gcard r-${c.rarity}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.characterId}">
+    return `<button type="button" class="gcard r-${c.rarity}${edition.className}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.characterId}">
+      ${edition.ribbon}
       <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
       <div class="gcard-info">
         <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -645,9 +647,11 @@ async function loadCharacters(page, search) {
     } else {
       grid.innerHTML = r.characters
         .map((c) => {
+          const edition = cardEdition(c);
           const owned = c.owned > 0;
           const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
-          return `<div class="gcard r-${c.rarity}${owned ? '' : ' locked'}" data-cid="${c.id}">
+          return `<div class="gcard r-${c.rarity}${edition.className}${owned ? '' : ' locked'}" data-cid="${c.id}">
+            ${edition.ribbon}
             <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
             <div class="gcard-info">
               <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -720,11 +724,13 @@ function updateFuseBar() {
 }
 
 function fuseCardHTML(c) {
+  const edition = cardEdition(c);
   const sub = c.series && c.series !== '—' ? `<div class="gcard-series">${escapeHtml(c.series)}</div>` : '';
   const sel = fuseSelection.get(c.id);
   const selCount = sel ? sel.count : 0;
   const badge = selCount > 0 ? `<span class="badge fuse-selected">✓ ×${selCount}</span>` : `<span class="badge copies">×${c.owned}</span>`;
-  return `<button type="button" class="gcard r-${c.rarity}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.id}" data-rarity="${c.rarity}" data-owned="${c.owned}" data-name="${escapeHtml(c.name)}">
+  return `<button type="button" class="gcard r-${c.rarity}${edition.className}${selCount > 0 ? ' fuse-picked' : ''}" data-cid="${c.id}" data-rarity="${c.rarity}" data-owned="${c.owned}" data-name="${escapeHtml(c.name)}">
+    ${edition.ribbon}
     <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
@@ -793,11 +799,13 @@ async function runFusion() {
   try {
     const r = await api('/api/gacha/fuse', { method: 'POST', body: JSON.stringify({ items }) });
     const c = r.card;
+    const edition = cardEdition(c);
     if (typeof sfx !== 'undefined' && sfx.reveal) sfx.reveal(c.rarity);
     if (['legendary', 'mythic'].includes(c.rarity) && typeof burstConfetti === 'function') burstConfetti(c.rarity === 'mythic' ? 40 : 26);
     // Résultat en MODALE : reste affiché jusqu'à fermeture par le joueur
     // (l'ancien encart sous la grille partait hors écran au rechargement).
-    document.getElementById('fuse-reveal-card').innerHTML = `<div class="gcard r-${c.rarity}">
+    document.getElementById('fuse-reveal-card').innerHTML = `<div class="gcard r-${c.rarity}${edition.className}">
+      ${edition.ribbon}
       <div class="gcard-img" ${c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : ''}></div>
       <div class="gcard-info">
         <div class="gcard-name">${escapeHtml(c.name)}</div>

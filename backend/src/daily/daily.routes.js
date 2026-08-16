@@ -12,6 +12,7 @@ const { preferMainContent } = require('../catalog/format');
 const { rateLimit } = require('../util/ratelimit');
 const { byId, publicCosmetic } = require('../shop/cosmetics');
 const { progressQuests } = require('../quests/quests');
+const { boostReturnReward, returnRewardEvent } = require('../rewards/return-event');
 const {
   DAILY_SONG_COUNT, DAILY_DURATION_MS, DAILY_GRACE_MS,
   todayStr, yesterdayStr, pickDailySongIds, scoreSong, maxScore, computeSoloMmrDelta, applyMmr,
@@ -80,6 +81,7 @@ router.get('/status', requireAuth, async (req, res) => {
     tier: me.soloGames > 0 ? tierFromMmr(me.soloMmr) : null,
     streak: streakAlive ? me.dailyStreak : 0,
     streakBest: me.dailyStreakBest,
+    rewardBoost: returnRewardEvent(),
   });
 });
 
@@ -169,7 +171,8 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
   const after = applyMmr(before, delta);
   const streak = computeStreak(user.dailyLastDay, user.dailyStreak);
   const streakBest = Math.max(user.dailyStreakBest, streak);
-  const reward = streakReward(streak);
+  const baseReward = streakReward(streak);
+  const reward = boostReturnReward(baseReward);
 
   await prisma.$transaction([
     prisma.dailyRun.update({
@@ -193,7 +196,7 @@ router.post('/guess', requireAuth, rateLimit({ max: 120, name: 'daily-guess' }),
     result: {
       score: newScore, correct: newCorrect, total: run.songIds.length,
       mmrBefore: before, mmrAfter: after, delta, tier: tierFromMmr(after),
-      streak, streakBest, reward,
+      streak, streakBest, reward, baseReward, rewardBoost: returnRewardEvent(),
     },
   });
 });

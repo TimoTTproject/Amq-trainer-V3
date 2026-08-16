@@ -349,17 +349,17 @@ async function runResetAll() {
 
 async function runResetGacha() {
   const status = document.getElementById('admin-reset-gacha-status');
-  const ans = prompt("⚠️ RESET GACHA de TOUS les comptes : collection, exemplaires numérotés, échanges et albums supprimés ; stock mondial remis à zéro. AUCUN remboursement — les tokens ne sont pas touchés. Les stats de quiz/Château/multijoueur/défi du jour/niveaux ne sont PAS touchées non plus.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
+  const ans = prompt("LANCEMENT GACHA ÉDITION 2 : toutes les cartes Édition 1, leurs exemplaires numérotés, les échanges et les albums sont conservés. Un nouveau pool Édition 2 séparé est créé. Seuls la pitié et les compteurs de tirage saisonniers repartent à zéro ; les tokens et les autres modes ne sont pas touchés.\n\nTape RESET_GACHA (exactement, en majuscules) pour confirmer :");
   // Sans ce message, un clic "Annuler" ou une confirmation mal tapée ne
   // laissait AUCUNE trace à l'écran — perçu comme "rien ne s'est passé".
   if (ans === null) { status.textContent = 'Annulé.'; return; }
   if (ans !== 'RESET_GACHA') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RESET_GACHA") — rien n'a été fait, réessaie.`; return; }
   const btn = document.getElementById('admin-reset-gacha-btn');
   btn.disabled = true;
-  status.textContent = 'Réinitialisation du gacha…';
+  status.textContent = 'Création du pool Édition 2…';
   try {
     const r = await api('/api/admin/reset-gacha', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_GACHA' }) });
-    status.textContent = `✅ ${r.users} comptes réinitialisés (aucun remboursement). Les joueurs verront une explication à leur prochaine connexion.`;
+    status.textContent = `✅ Édition 2 lancée : ${r.charactersCreated} nouvelles cartes de pool créées. Les collections Édition 1 des ${r.users} comptes sont conservées.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {
@@ -369,7 +369,7 @@ async function runResetGacha() {
 
 async function runResetIdle() {
   const status = document.getElementById('admin-reset-idle-status');
-  const ans = prompt("⚠️ RESET DOJO de TOUS les comptes bêta : essence, roster recruté, emplacements, objets, améliorations, Ancients/Sagesse, Prestige et rang remis à zéro. Le reste du jeu (quiz, gacha, tokens, Château, classé) N'EST PAS touché.\n\nTape RESET_IDLE (exactement, en majuscules) pour confirmer :");
+  const ans = prompt("⚠️ LANCEMENT ÉDITION 2 : reset du Dojo de TOUS les comptes (essence, roster, objets, améliorations, Ancients/Sagesse, Prestige et rang). Le quiz, le gacha, les tokens, le Château et le classé ne sont pas remis à zéro. Chaque joueur pourra ensuite réclamer le pack de lancement Édition 2.\n\nTape RESET_IDLE (exactement, en majuscules) pour confirmer :");
   if (ans === null) { status.textContent = 'Annulé.'; return; }
   if (ans !== 'RESET_IDLE') { status.textContent = `❌ Confirmation incorrecte ("${ans}" ≠ "RESET_IDLE") — rien n'a été fait, réessaie.`; return; }
   const btn = document.getElementById('admin-reset-idle-btn');
@@ -377,7 +377,7 @@ async function runResetIdle() {
   status.textContent = 'Réinitialisation du Dojo…';
   try {
     const r = await api('/api/admin/reset-idle', { method: 'POST', body: JSON.stringify({ confirm: 'RESET_IDLE' }) });
-    status.textContent = `✅ ${r.users} comptes réinitialisés. Les bêta-testeurs repartent avec 3 emplacements et l'essence de départ.`;
+    status.textContent = `✅ Version ${r.season || 2}.0 lancée : ${r.users} comptes réinitialisés. Pack Retour : ${r.launchReward?.essence || 100000} Essence, ${r.launchReward?.seals || 25} Sceaux et ${r.launchReward?.tokens || 1000} Tokens.`;
   } catch (e) {
     status.textContent = 'Erreur : ' + e.message;
   } finally {

@@ -3101,8 +3101,9 @@ function questItemHtml(q) {
     ? `<button class="btn-primary quest-claim" data-qid="${q.id}">Réclamer +${q.reward} 🪙</button>`
     : `<span class="quest-reward">+${q.reward} 🪙</span>`;
   const ico = QUEST_ICONS[q.type] || 'fa-bullseye';
+  const boost = q.rewardBoost?.active ? `<span class="return-boost-pill"><i class="fas fa-bolt"></i> ×${q.rewardBoost.multiplier} RETOUR 2.0</span>` : '';
   return `<div class="quest-item${q.done && !q.claimed ? ' ready' : ''}">
-    <div class="quest-top"><span class="quest-label"><i class="fas ${ico} quest-ico"></i> ${escapeHtml(q.label)}${carried}</span>${right}</div>
+    <div class="quest-top"><span class="quest-label"><i class="fas ${ico} quest-ico"></i> ${escapeHtml(q.label)}${carried}${boost}</span>${right}</div>
     <div class="quest-bar"><div class="quest-fill" style="width:${pct}%"></div></div>
     <div class="quest-prog">${Math.min(q.progress, q.target)}/${q.target}</div>
   </div>`;

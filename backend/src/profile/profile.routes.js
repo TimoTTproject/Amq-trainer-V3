@@ -256,7 +256,7 @@ router.get('/:userId', requireAuth, async (req, res) => {
   showcaseSerials.forEach((g) => (serialByCharacter[g.characterId] = g._min.serial));
   const showcase = showcaseCards.map((c) => ({
     id: c.character.id, name: c.character.name, imageUrl: c.character.imageUrl,
-    rarity: c.character.rarity, copies: c.copies, serial: serialByCharacter[c.characterId] ?? null,
+    rarity: c.character.rarity, edition: c.character.edition, copies: c.copies, serial: serialByCharacter[c.characterId] ?? null,
     favorite: c.favorite, stars: c.stars || 1,
   }));
 

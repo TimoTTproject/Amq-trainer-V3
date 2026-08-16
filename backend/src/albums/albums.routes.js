@@ -25,7 +25,7 @@ function creatorInfo(user) {
 function cardOut(row) {
   const c = row.character;
   return {
-    id: c.id, name: c.name, imageUrl: c.imageUrl, rarity: c.rarity,
+    id: c.id, name: c.name, imageUrl: c.imageUrl, rarity: c.rarity, edition: c.edition,
     series: c.series || null, position: row.position ?? 0,
   };
 }

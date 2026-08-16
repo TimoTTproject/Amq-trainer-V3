@@ -11,6 +11,8 @@ const PER_PAGE = 50;
 
 async function main() {
   const target = parseInt(process.argv[2]) || 5000;
+  const setting = await prisma.appSetting.findUnique({ where: { key: 'gachaEdition' } });
+  const edition = Number(setting?.value) || 1;
   console.log(`Récupération du top ${target} personnages AniList…\n`);
 
   // 1) Collecte
@@ -44,9 +46,9 @@ async function main() {
     counts[rarity] = (counts[rarity] || 0) + 1;
     const { series, seriesId } = seriesOfCharacter(c);
     await prisma.character.upsert({
-      where: { anilistId: c.id },
+      where: { anilistId_edition: { anilistId: c.id, edition } },
       update: { name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity, series, seriesId },
-      create: { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity, series, seriesId },
+      create: { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity, series, seriesId, edition },
     });
   }
 
