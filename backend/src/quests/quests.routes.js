@@ -3,6 +3,7 @@ const express = require('express');
 const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { ensureDailyQuests, todayStr } = require('./quests');
+const { boostReturnReward, returnRewardEvent } = require('../rewards/return-event');
 
 const router = express.Router();
 
@@ -11,14 +12,14 @@ function publicQuest(q) {
   const today = todayStr();
   return {
     id: q.id, type: q.type, label: q.label, target: q.target, progress,
-    reward: q.reward, claimed: q.claimed, done: q.progress >= q.target,
+    reward: boostReturnReward(q.reward), baseReward: q.reward, rewardBoost: returnRewardEvent(), claimed: q.claimed, done: q.progress >= q.target,
     day: q.day, carried: q.day !== today,
   };
 }
 
 router.get('/', requireAuth, async (req, res) => {
   const quests = await ensureDailyQuests(req.user.id);
-  res.json({ quests: quests.map(publicQuest) });
+  res.json({ quests: quests.map(publicQuest), rewardBoost: returnRewardEvent() });
 });
 
 router.post('/claim/:id', requireAuth, async (req, res) => {
@@ -28,13 +29,14 @@ router.post('/claim/:id', requireAuth, async (req, res) => {
   if (q.claimed) return res.status(400).json({ error: 'Déjà réclamée' });
   if (q.progress < q.target) return res.status(400).json({ error: 'Quête non terminée' });
 
+  const reward = boostReturnReward(q.reward);
   const user = await prisma.$transaction(async (tx) => {
     await tx.quest.update({ where: { id }, data: { claimed: true } });
-    const u = await tx.user.update({ where: { id: req.user.id }, data: { tokens: { increment: q.reward } } });
-    await tx.tokenTransaction.create({ data: { userId: req.user.id, amount: q.reward, reason: 'quest_reward' } });
+    const u = await tx.user.update({ where: { id: req.user.id }, data: { tokens: { increment: reward } } });
+    await tx.tokenTransaction.create({ data: { userId: req.user.id, amount: reward, reason: 'quest_reward_v2' } });
     return u;
   });
-  res.json({ granted: q.reward, tokens: user.tokens });
+  res.json({ granted: reward, baseReward: q.reward, rewardBoost: returnRewardEvent(), tokens: user.tokens });
 });
 
 module.exports = { router };

@@ -8,6 +8,13 @@ const { rateLimit } = require('../util/ratelimit');
 const { progressQuests } = require('../quests/quests');
 
 const router = express.Router();
+const GACHA_EDITION_SETTING = 'gachaEdition';
+
+async function activeGachaEdition(client = prisma) {
+  const setting = await client.appSetting.findUnique({ where: { key: GACHA_EDITION_SETTING } });
+  const edition = Number(setting?.value);
+  return Number.isInteger(edition) && edition > 0 ? edition : 1;
+}
 
 // Horodatage du dernier reset gacha global (voir POST /api/admin/reset-gacha) —
 // permet au front d'afficher une modale d'explication une seule fois par
@@ -134,21 +141,22 @@ async function featuredOverrideFor(week) {
 
 async function getWeeklyFeatured() {
   const wk = currentWeek();
-  if (weeklyCache.week === wk) return weeklyCache;
+  const edition = await activeGachaEdition();
+  if (weeklyCache.week === wk && weeklyCache.edition === edition) return weeklyCache;
   if ((await bannerSuppressedWeek()) === wk) {
-    weeklyCache = { week: wk, byRarity: {}, chars: [], resetAt: nextMondayResetAt() };
+    weeklyCache = { week: wk, edition, byRarity: {}, chars: [], resetAt: nextMondayResetAt() };
     return weeklyCache;
   }
   const chars = [];
   const byRarity = {};
   const salts = { mythic: 101, legendary: 211, epic: 307 };
   for (const r of ['mythic', 'legendary', 'epic']) {
-    const count = await prisma.character.count({ where: { rarity: r } });
+    const count = await prisma.character.count({ where: { rarity: r, edition } });
     if (!count) continue;
     const idx = seededIndex(wk, salts[r], count);
     const c = await prisma.character.findFirst({
-      where: { rarity: r }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }], skip: idx,
-      select: { id: true, name: true, imageUrl: true, rarity: true },
+      where: { rarity: r, edition }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }], skip: idx,
+      select: { id: true, name: true, imageUrl: true, rarity: true, edition: true },
     });
     if (c) { chars.push(c); byRarity[r] = c.id; }
   }
@@ -158,9 +166,8 @@ async function getWeeklyFeatured() {
     for (const r of ['mythic', 'legendary', 'epic']) {
       const winnerId = await drawWeightedWinner(wk - 1, r);
       if (!winnerId) continue;
-      const w = await prisma.character.findUnique({
-        where: { id: winnerId }, select: { id: true, name: true, imageUrl: true, rarity: true },
-      });
+      const voted = await prisma.character.findUnique({ where: { id: winnerId } });
+      const w = voted && voted.edition === edition ? voted : voted && await prisma.character.findFirst({ where: { anilistId: voted.anilistId, edition } });
       if (!w) continue;
       byRarity[w.rarity] = w.id;
       const i = chars.findIndex((c) => c.rarity === w.rarity);
@@ -177,9 +184,8 @@ async function getWeeklyFeatured() {
     if (override) {
       for (const [, id] of Object.entries(override)) {
         if (!id) continue;
-        const w = await prisma.character.findUnique({
-          where: { id }, select: { id: true, name: true, imageUrl: true, rarity: true },
-        });
+        const voted = await prisma.character.findUnique({ where: { id } });
+        const w = voted && voted.edition === edition ? voted : voted && await prisma.character.findFirst({ where: { anilistId: voted.anilistId, edition } });
         if (!w) continue;
         byRarity[w.rarity] = w.id;
         const i = chars.findIndex((c) => c.rarity === w.rarity);
@@ -189,7 +195,7 @@ async function getWeeklyFeatured() {
     }
   } catch (e) { console.warn('featured override unavailable:', e.message); }
 
-  weeklyCache = { week: wk, byRarity, chars, resetAt: nextMondayResetAt() };
+  weeklyCache = { week: wk, edition, byRarity, chars, resetAt: nextMondayResetAt() };
   return weeklyCache;
 }
 
@@ -293,11 +299,11 @@ let candidatesByUser = new Map(); // userId -> { ids, chars }
 // pour TOUS les joueurs, au lieu d'un findFirst par candidat et par joueur —
 // ça évite de saturer le pool de connexions DB quand beaucoup de joueurs
 // ouvrent le gacha en même temps).
-async function getRarityPool(rarity) {
+async function getRarityPool(rarity, edition) {
   if (!rarityPoolCache[rarity]) {
     rarityPoolCache[rarity] = await prisma.character.findMany({
-      where: { rarity }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }],
-      select: { id: true, name: true, imageUrl: true, rarity: true },
+      where: { rarity, edition }, orderBy: [{ favourites: 'desc' }, { id: 'asc' }],
+      select: { id: true, name: true, imageUrl: true, rarity: true, edition: true },
     });
   }
   return rarityPoolCache[rarity];
@@ -324,8 +330,9 @@ function seededIndexForUser(wk, userHash, salt, mod) {
 
 async function getWeeklyCandidatesFor(userId) {
   const wk = currentWeek();
-  if (candidatesWeek !== wk) {
-    candidatesWeek = wk;
+  const edition = await activeGachaEdition();
+  if (candidatesWeek !== `${wk}:${edition}`) {
+    candidatesWeek = `${wk}:${edition}`;
     rarityPoolCache = {};
     candidatesByUser = new Map();
   }
@@ -334,7 +341,7 @@ async function getWeeklyCandidatesFor(userId) {
   const chars = [];
   let saltBase = 400;
   for (const [rarity, n] of Object.entries(CANDIDATES_PER_RARITY)) {
-    const pool = await getRarityPool(rarity);
+    const pool = await getRarityPool(rarity, edition);
     const count = pool.length;
     if (!count) continue;
     const picked = new Set();
@@ -357,13 +364,14 @@ async function getWeeklyCandidatesFor(userId) {
 
 // Infos pour l'UI : prix, taille du pool, répartition par rareté
 router.get('/info', async (req, res) => {
-  const total = await prisma.character.count();
-  const groups = await prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } });
+  const edition = await activeGachaEdition();
+  const total = await prisma.character.count({ where: { edition } });
+  const groups = await prisma.character.groupBy({ by: ['rarity'], where: { edition }, _count: { _all: true } });
   const byRarity = {};
   groups.forEach((g) => (byRarity[g.rarity] = g._count._all));
   const featured = await prisma.character.findMany({
-    where: { featured: true },
-    select: { id: true, name: true, imageUrl: true, rarity: true },
+    where: { featured: true, edition },
+    select: { id: true, name: true, imageUrl: true, rarity: true, edition: true },
     take: 12,
   });
   const weekly = await getWeeklyFeatured();
@@ -383,7 +391,7 @@ router.get('/recent-pulls', requireAuth, async (req, res) => {
     select: {
       serial: true,
       obtainedAt: true,
-      character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true } },
+      character: { select: { id: true, name: true, imageUrl: true, rarity: true, series: true, edition: true } },
       user: { select: { id: true, displayName: true, avatarUrl: true } },
     },
   });
@@ -393,6 +401,7 @@ router.get('/recent-pulls', requireAuth, async (req, res) => {
       name: p.character.name,
       imageUrl: p.character.imageUrl,
       rarity: p.character.rarity,
+      edition: p.character.edition,
       rarityLabel: RARITY_LABELS[p.character.rarity],
       series: p.character.series,
       serial: p.serial,
@@ -461,21 +470,21 @@ router.get('/stats', requireAuth, async (req, res) => {
 
 // Choisit un personnage aléatoire d'une rareté donnée, NON épuisé (fallback : n'importe lequel non épuisé).
 // Si un personnage « vedette » non épuisé existe pour cette rareté, 50% de chance de l'obtenir.
-async function pickRandomCharacter(tx, rarity, boost) {
+async function pickRandomCharacter(tx, rarity, boost, edition = 1) {
   // Rate-up vedette de la semaine (prioritaire)
   const boostId = boost && boost[rarity];
   if (boostId) {
-    const bc = await tx.character.findUnique({ where: { id: boostId }, select: { id: true, name: true, imageUrl: true, rarity: true, featured: true, soldOut: true } });
+    const bc = await tx.character.findUnique({ where: { id: boostId }, select: { id: true, name: true, imageUrl: true, rarity: true, edition: true, featured: true, soldOut: true } });
     // Garde-fou : `boost` vient d'un cache hebdomadaire qui peut devenir
     // périmé si les raretés ont été recalculées entre-temps (cf.
     // invalidateWeeklyCaches). Sans cette vérification, un tirage d'une
     // rareté commune pourrait silencieusement livrer une carte devenue
     // Mythique entre-temps via ce rate-up.
-    if (bc && bc.rarity === rarity && !bc.soldOut && Math.random() < 0.6) return bc;
+    if (bc && bc.edition === edition && bc.rarity === rarity && !bc.soldOut && Math.random() < 0.6) return bc;
   }
-  const feat = await tx.character.findFirst({ where: { rarity, featured: true, soldOut: false } });
+  const feat = await tx.character.findFirst({ where: { rarity, edition, featured: true, soldOut: false } });
   if (feat && Math.random() < 0.5) return feat;
-  const where = { rarity, soldOut: false };
+  const where = { rarity, edition, soldOut: false };
   const count = await tx.character.count({ where });
   // Pas de repli vers une autre rareté si celle-ci est épuisée : ça fausserait
   // le taux annoncé (ex. un tirage Mythique livré comme Commun en silence).
@@ -545,8 +554,9 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
   const type = 'pack';
   const cfg = PRICES[type];
   const userId = req.user.id;
+  const edition = await activeGachaEdition();
 
-  const poolSize = await prisma.character.count();
+  const poolSize = await prisma.character.count({ where: { edition } });
   if (poolSize === 0) {
     return res.status(503).json({ error: "Le gacha n'est pas encore disponible (pool vide)" });
   }
@@ -585,7 +595,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
     const perSlotCost = cfg.cost / cfg.count;
     const pullCounts = { common: 0, rare: 0, epic: 0, legendary: 0, mythic: 0 };
     for (const rarity of rarities) {
-      const character = await pickRandomCharacter(tx, rarity, boostByRarity);
+      const character = await pickRandomCharacter(tx, rarity, boostByRarity, edition);
       if (!character) { unavailableCount++; continue; }
       const mint = await mintInstance(tx, userId, character.id);
       if (!mint) { unavailableCount++; continue; } // épuisé entre-temps (course)
@@ -598,7 +608,7 @@ router.post('/pull', requireAuth, rateLimit({ max: 60, name: 'pull' }), async (r
       }
       cards.push({
         id: character.id, name: character.name, imageUrl: character.imageUrl,
-        rarity: character.rarity, featured: character.featured, isNew, refund, serial: mint.serial,
+        rarity: character.rarity, edition: character.edition, featured: character.featured, isNew, refund, serial: mint.serial,
       });
     }
 
@@ -670,8 +680,9 @@ router.post('/fuse', requireAuth, async (req, res) => {
 
   let result;
   try {
+    const edition = await activeGachaEdition();
     result = await prisma.$transaction(async (tx) => {
-      const won = await pickRandomCharacter(tx, rarity, {});
+      const won = await pickRandomCharacter(tx, rarity, {}, edition);
       if (!won) throw new Error('NONE_AVAILABLE');
       for (const it of items) {
         await destroyInstances(tx, req.user.id, it.characterId, it.count); // rend les places au stock
@@ -690,7 +701,7 @@ router.post('/fuse', requireAuth, async (req, res) => {
       const mint = await mintInstance(tx, req.user.id, won.id, 'fuse');
       if (!mint) throw new Error('NONE_AVAILABLE'); // épuisé entre le tirage et la frappe (course rarissime)
       return {
-        id: won.id, name: won.name, imageUrl: won.imageUrl, rarity: won.rarity,
+        id: won.id, name: won.name, imageUrl: won.imageUrl, rarity: won.rarity, edition: won.edition,
         isNew: mint.isNew, serial: mint.serial,
       };
     });
@@ -770,7 +781,7 @@ router.get('/characters', requireAuth, async (req, res) => {
       orderBy,
       skip: (page - 1) * perPage,
       take: perPage,
-      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true, soldOut: true },
+      select: { id: true, name: true, imageUrl: true, rarity: true, series: true, favourites: true, soldOut: true, edition: true },
     }),
     prisma.character.groupBy({ by: ['rarity'], _count: { _all: true } }),
   ]);
@@ -835,7 +846,7 @@ router.get('/wishlist', requireAuth, async (req, res) => {
   const rows = await prisma.wishlist.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
-    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, soldOut: true } } },
+    include: { character: { select: { id: true, name: true, imageUrl: true, rarity: true, soldOut: true, edition: true } } },
   });
   // Que possède le joueur CONSULTÉ (pour griser les déjà-obtenus).
   const ownedIds = new Set(
@@ -960,6 +971,7 @@ router.get('/collection', requireAuth, async (req, res) => {
       name: c.character.name,
       imageUrl: c.character.imageUrl,
       rarity: c.character.rarity,
+      edition: c.character.edition,
       series: c.character.series || null,
       copies: c.copies,
       serial: serialByCharacter[c.characterId] ?? null,
@@ -1041,7 +1053,7 @@ router.get('/vote', requireAuth, async (req, res) => {
   });
   const globalIds = globalCounts.map((g) => g.characterId);
   const globalChars = globalIds.length
-    ? await prisma.character.findMany({ where: { id: { in: globalIds } }, select: { id: true, name: true, imageUrl: true, rarity: true } })
+    ? await prisma.character.findMany({ where: { id: { in: globalIds } }, select: { id: true, name: true, imageUrl: true, rarity: true, edition: true } })
     : [];
   const globalCharById = Object.fromEntries(globalChars.map((c) => [c.id, c]));
 

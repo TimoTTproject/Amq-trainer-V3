@@ -176,6 +176,16 @@ function renderGachaMeta(pityLimit = 60) {
     </span>`;
 }
 
+function cardEdition(c) {
+  const edition = Number(c && c.edition) || 1;
+  return {
+    number: edition,
+    className: edition >= 2 ? ' edition-2' : ' edition-1',
+    badge: edition >= 2 ? 'VERSION 2.0' : `E${edition}`,
+    ribbon: edition >= 2 ? '<div class="gcard-v2-ribbon">VERSION 2.0</div>' : '',
+  };
+}
+
 function cardHTML(c, opts = {}) {
   const img = c.imageUrl ? `style="background-image:url('${c.imageUrl}')"` : '';
   const badges = [];
@@ -184,20 +194,21 @@ function cardHTML(c, opts = {}) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.favorite) badges.push('<span class="badge fav">★</span>');
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
-  const edition = c.edition ? `<span class="gcard-edition">E${c.edition}</span>` : '<span class="gcard-edition">E1</span>';
+  const edition = cardEdition(c);
   const serial = c.serial ? ` <span class="gcard-serial">#${c.serial}</span>` : '';
   const bd = !opts.noBorder && currentUser.cosmetics && currentUser.cosmetics.cardBorder;
-  const cls = 'gcard r-' + c.rarity + (opts.reveal ? ' revealing' : '') + cosmClass(bd);
+  const cls = 'gcard r-' + c.rarity + edition.className + (opts.reveal ? ' revealing' : '') + cosmClass(bd);
   const delayCss = opts.index != null ? `animation-delay:${(opts.index * 0.45).toFixed(2)}s` : '';
   const style = [delayCss, cosmStyle(bd)].filter(Boolean).join(';');
   const styleAttr = style ? ` style="${style}"` : '';
   const cid = c.id != null ? ` data-cid="${c.id}"` : '';
   const stars = c.stars > 1 ? `<div class="gcard-stars">${'★'.repeat(Math.min(5, c.stars))}</div>` : '';
   return `<div class="${cls}"${styleAttr}${cid}>
+    ${edition.ribbon}
     <div class="gcard-img" ${img}>${stars}</div>
     <div class="gcard-info">
       <div class="gcard-name">${escapeHtml(c.name)}</div>
-      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${serial}${edition}</div>
+      <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${serial}<span class="gcard-edition">${edition.badge}</span></div>
     </div>
     ${badges.join('')}
   </div>`;
@@ -212,19 +223,20 @@ function flipCardHTML(c, i) {
   if (c.copies > 1) badges.push(`<span class="badge copies">×${c.copies}</span>`);
   if (c.featured) badges.push('<span class="badge feat-badge">VEDETTE</span>');
   const holo = ['epic', 'legendary', 'mythic'].includes(c.rarity) ? '<span class="holo"></span>' : '';
-  const edition = c.edition ? `<span class="gcard-edition">E${c.edition}</span>` : '<span class="gcard-edition">E1</span>';
+  const edition = cardEdition(c);
   const cb = currentUser.cosmetics && currentUser.cosmetics.cardBack;
   const bd = currentUser.cosmetics && currentUser.cosmetics.cardBorder;
   const backIcon = cb && cb.image ? '' : ((cb && cb.icon) || 'fa-music');
-  return `<div class="flip-card r-${c.rarity}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
+  return `<div class="flip-card r-${c.rarity}${edition.className}" data-cid="${c.id}" style="animation-delay:${(i * 0.08).toFixed(2)}s">
     <div class="flip-inner">
       <div class="flip-face flip-back${cosmClass(cb)}" style="${cosmStyle(cb)}"><div class="flip-back-inner">${backIcon ? `<i class="fas ${backIcon}"></i>` : ''}</div></div>
       <div class="flip-face flip-front">
-        <div class="gcard r-${c.rarity}${cosmClass(bd)}" style="${cosmStyle(bd)}">
+        <div class="gcard r-${c.rarity}${edition.className}${cosmClass(bd)}" style="${cosmStyle(bd)}">
+          ${edition.ribbon}
           <div class="gcard-img" ${img}>${holo}</div>
           <div class="gcard-info">
             <div class="gcard-name">${escapeHtml(c.name)}</div>
-            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${c.serial ? ` · <span class="gcard-serial">#${c.serial}</span>` : ''}${edition}</div>
+            <div class="gcard-rarity">${RARITY_LABELS[c.rarity] || c.rarity}${c.serial ? ` · <span class="gcard-serial">#${c.serial}</span>` : ''}<span class="gcard-edition">${edition.badge}</span></div>
           </div>
           ${badges.join('')}
         </div>
@@ -801,7 +813,7 @@ function renderGachaStats(d) {
     <p class="hint gs-foot">Le repère clair indique le taux de base. La garantie des packs et la pitié augmentent naturellement les résultats Rare et Légendaire+.</p>`;
 }
 
-// ── Modale « le gacha a été réinitialisé » (une fois par joueur) ──
+// ── Modale de lancement d'une nouvelle édition (une fois par joueur) ──
 // Compare l'horodatage serveur du dernier reset gacha à un horodatage gardé
 // en localStorage — évite un champ dédié sur User ou une notif individuelle.
 async function checkGachaResetNotice() {
@@ -814,8 +826,8 @@ async function checkGachaResetNotice() {
   const body = document.getElementById('gacha-reset-body');
   if (!modal || !body) return;
   body.innerHTML = `
-    <p>Le pool de personnages a été remis à plat, avec un stock resserré par personnage pour plus d'exclusivité.</p>
-    <p><b>Ta collection a été réinitialisée</b> (cartes, exemplaires numérotés, échanges en cours). Tes tokens et tes statistiques de quiz, Château, multijoueur, défi du jour et niveaux ne sont <b>pas</b> concernés.</p>`;
+    <p>Le nouveau pool de cartes <b>Édition 2</b> est maintenant disponible, avec ses cadres et ses numéros de série propres.</p>
+    <p><b>Toutes tes cartes Édition 1 sont conservées</b>, ainsi que leurs exemplaires numérotés, tes albums et tes échanges. Les futurs tirages donnent désormais des cartes Édition 2.</p>`;
   modal.classList.remove('hidden');
   localStorage.setItem('amq_gacha_reset_seen', String(d.resetAt));
 }
@@ -833,16 +845,17 @@ async function openCharacter(id) {
     const rate = d.pullRate != null ? `${d.pullRate.toFixed(d.pullRate < 1 ? 2 : 1)} %` : '—';
     const unlistedInstances = (d.instances || []).filter((i) => !i.listed);
     body.innerHTML = `
-      <div class="char-collector-kicker"><span>Carte collection</span><span>Édition ${c.edition || 1}</span></div>
-      <div class="char-hero r-${c.rarity}">
+      <div class="char-collector-kicker"><span>Carte collection</span><span>${(c.edition || 1) >= 2 ? 'Version 2.0' : `Édition ${c.edition || 1}`}</span></div>
+      <div class="char-hero r-${c.rarity} edition-${c.edition || 1}">
+        ${(c.edition || 1) >= 2 ? '<div class="char-v2-ribbon">VERSION 2.0</div>' : ''}
         <div class="char-img" ${img}></div>
         ${d.owned ? `<span class="badge copies">×${d.owned}</span>` : '<span class="badge new">Non possédé</span>'}
       </div>
       <h2 class="char-name">${escapeHtml(c.name)}</h2>
       ${c.series && c.series !== '—' ? `<div class="char-series">${escapeHtml(c.series)}</div>` : ''}
-      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''} <span class="char-edition" title="Une future Édition 2 réutilisera les mêmes personnages avec de nouvelles raretés et un nouveau visuel">Édition ${c.edition || 1}</span></div>
+      <div class="char-rarity r-${c.rarity}">${d.rarityLabel}${d.soldOut ? ' <span class="soldout-badge">ÉPUISÉ</span>' : ''} <span class="char-edition">${(c.edition || 1) >= 2 ? 'VERSION 2.0' : `Édition ${c.edition || 1}`}</span></div>
       <button class="btn-secondary char-promote${d.votedByMe ? ' on' : ''}" id="char-promote-btn" data-cid="${c.id}">
-        <i class="fas fa-arrow-trend-up"></i> ${d.votedByMe ? 'Voté pour l’Édition 2 ↑' : 'Voter pour l’Édition 2'} <span class="char-promote-count">(${d.promotionVoteCount})</span>
+        <i class="fas fa-arrow-trend-up"></i> ${d.votedByMe ? 'Soutenu pour une promotion ↑' : 'Soutenir ce personnage'} <span class="char-promote-count">(${d.promotionVoteCount})</span>
       </button>
       ${d.owned ? `<div class="char-stars-line" title="Niveau d'ascension">${'★'.repeat(d.stars)}<span class="muted">${'☆'.repeat(Math.max(0, (d.maxStars || 5) - d.stars))}</span></div>` : ''}
       <div class="char-stats">
@@ -909,7 +922,7 @@ async function openCharacter(id) {
             if (typeof sfx !== 'undefined' && sfx.correct) sfx.correct();
           }
           promoteBtn.classList.toggle('on', voted);
-          promoteBtn.innerHTML = `<i class="fas fa-arrow-trend-up"></i> ${voted ? 'Voté pour l’Édition 2 ↑' : 'Voter pour l’Édition 2'} <span class="char-promote-count">(${voteCount})</span>`;
+          promoteBtn.innerHTML = `<i class="fas fa-arrow-trend-up"></i> ${voted ? 'Soutenu pour une promotion ↑' : 'Soutenir ce personnage'} <span class="char-promote-count">(${voteCount})</span>`;
         } catch (e) { alert(e.message); } finally { promoteBtn.disabled = false; }
       });
     }

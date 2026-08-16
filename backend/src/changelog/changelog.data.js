@@ -4,6 +4,11 @@
 // amq_changelog_seen). tag ∈ 'feature' | 'improvement' | 'fix'.
 const ENTRIES = [
   {
+    id: 41, date: '2026-08-12', tag: 'feature',
+    title: 'Édition 2 — nouvelle saison, nouvelles cartes',
+    description: "L'Édition 2 est disponible avec un nouveau cadre premium et un pool séparé : toutes les cartes Édition 1 déjà possédées, leurs numéros, les albums et les échanges restent intacts. Les nouveaux tirages donnent des cartes Édition 2. Anime Ascension repart aussi pour une nouvelle saison et chaque joueur peut ouvrir un pack exceptionnel de 100 000 Essence, 25 Sceaux et 1 000 Tokens. Pendant la relance, les missions, les quêtes, le bonus de connexion et le Défi musical du jour rapportent ×2.",
+  },
+  {
     id: 40, date: '2026-07-17', tag: 'feature',
     title: "Anime Ascension sort de bêta — ouvert à tout le monde !",
     description: "Notre mode idle/clicker quitte la bêta et s'ouvre à tous les comptes : recrute une équipe de héros, monte-la en puissance (niveaux, Ascension, Éveil, équipement), et laisse-la produire de l'Essence même hors ligne. Et surtout : jouer à Anime Ascension rapporte désormais des tokens pour le Gacha — hauts faits (25 à 65 tokens) et Prestige (120 à 320 tokens) viennent directement enrichir ta cagnotte de tirages. Rendez-vous dans l'onglet Jouer.",

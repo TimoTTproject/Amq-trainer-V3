@@ -1,11 +1,11 @@
 // Service worker : network-first (évite le contenu périmé après déploiement),
 // repli sur le cache hors-ligne, et précache de la coquille applicative pour un
 // démarrage instantané / hors-ligne. N'intercepte ni l'API, ni les flux, ni Socket.io.
-const CACHE = 'amq-v146';
+const CACHE = 'amq-v148';
 
 // Coquille applicative : tout le statique nécessaire au 1er rendu.
 const SHELL = [
-  '/', '/index.html', '/styles.css', '/manifest.webmanifest',
+  '/', '/index.html', '/styles.css', '/idle-launch-v2.css', '/manifest.webmanifest',
   '/assets/brand/favicon-32.png', '/assets/brand/icon-192.png',
   '/assets/brand/icon-512.png', '/assets/brand/logo-horizontal-on-dark.png',
   '/bootstrap.js', '/i18n.js', '/sfx.js', '/main.js',

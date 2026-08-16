@@ -52,6 +52,13 @@ test('reset-idle : vide le roster/inventaire Dojo et remet à zéro les compteur
   prisma.idleRunHistory.deleteMany = async () => { writes.push('idleRunHistory'); return {}; };
   prisma.idleMissionClaim.deleteMany = async () => { writes.push('idleMissionClaim'); return {}; };
   prisma.idleProgressCounter.deleteMany = async () => { writes.push('idleProgressCounter'); return {}; };
+  prisma.appSetting.upsert = async ({ where, update, create }) => {
+    assert.deepEqual(where, { key: 'idleEdition' });
+    assert.deepEqual(update, { value: '2' });
+    assert.deepEqual(create, { key: 'idleEdition', value: '2' });
+    writes.push('appSetting');
+    return {};
+  };
   let userUpdateData = null;
   prisma.user.updateMany = async ({ data }) => { userUpdateData = data; writes.push('user'); return {}; };
 
@@ -60,6 +67,8 @@ test('reset-idle : vide le roster/inventaire Dojo et remet à zéro les compteur
   });
   assert.equal(res.status, 200);
   assert.equal(res.json.users, 5);
+  assert.equal(res.json.season, 2);
+  assert.deepEqual(res.json.launchReward, { essence: 100000, seals: 25, tokens: 1000 });
 
   assert.equal(userUpdateData.essence, 20);
   assert.equal(userUpdateData.idleSlotsUnlocked, 3);
@@ -71,5 +80,5 @@ test('reset-idle : vide le roster/inventaire Dojo et remet à zéro les compteur
   for (const field of ['tokens', 'dust', 'pity', 'towerBestFloor', 'mmr', 'claimedLevel']) {
     assert.equal(field in userUpdateData, false, `${field} ne devrait pas être touché`);
   }
-  assert.ok(['idleSlot', 'idleItem', 'dojoRecruit', 'ancientLevel', 'idleTeamPreset', 'idleRiftRun', 'idleRunHistory', 'idleMissionClaim', 'idleProgressCounter', 'user'].every((w) => writes.includes(w)));
+  assert.ok(['idleSlot', 'idleItem', 'dojoRecruit', 'ancientLevel', 'idleTeamPreset', 'idleRiftRun', 'idleRunHistory', 'idleMissionClaim', 'idleProgressCounter', 'appSetting', 'user'].every((w) => writes.includes(w)));
 });

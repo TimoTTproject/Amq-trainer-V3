@@ -32,6 +32,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="idle-launch-v2.css" />
   <!-- Le serveur injecte le SHA dans data-build-id. bootstrap.js le transmet
        aux scripts lazy-loadés et applique le thème avant le premier rendu. -->
   <script src="bootstrap.js"></script>
@@ -1165,11 +1166,11 @@
       </div>
     </div>
 
-    <div id="promotion-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Vote Édition 2">
+    <div id="promotion-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Votes de promotion">
       <div class="modal-card">
         <button class="modal-close" id="promotion-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
-        <h3><i class="fas fa-arrow-trend-up"></i> Vote « Édition 2 »</h3>
-        <p class="hint">Choisis jusqu'à 10 personnages que tu aimerais voir promus Mythique ou Légendaire à la prochaine édition (1 voix par personnage, pas de cumul). Vote depuis la fiche d'un personnage (bouton « Voter pour l'Édition 2 »).</p>
+        <h3><i class="fas fa-arrow-trend-up"></i> Votes de promotion</h3>
+        <p class="hint">Soutiens jusqu'à 10 personnages que tu aimerais voir promus Mythique ou Légendaire lors des prochaines rotations de l'Édition 2 (1 voix par personnage, pas de cumul). Vote directement depuis leur fiche.</p>
         <div id="promotion-body"></div>
       </div>
     </div>
@@ -1302,6 +1303,7 @@
         <h2><i class="fas fa-calendar-day"></i> Défi du jour</h2>
         <span class="mp-myrank" id="daily-rank"></span>
       </div>
+      <div class="return-boost-banner hidden" id="daily-return-boost"></div>
 
       <!-- Écran d'accueil -->
       <div id="daily-intro" class="tower-intro">
@@ -1431,7 +1433,7 @@
         <h2><i class="fas fa-book-open"></i> Personnages</h2>
         <span class="catalog-info" id="chars-total"></span>
       </div>
-      <p class="hint chars-edition-note">🗓️ Ces personnages sont l'<b>Édition 1</b>. Une <b>Édition 2</b> arrivera dans quelques semaines : mêmes personnages, nouvelles raretés et nouveaux visuels — <button class="btn-link" id="open-promotion-btn">vote pour qui mérite une promotion <span id="promotion-remaining-badge" class="nav-badge hidden"></span></button>.</p>
+      <p class="hint chars-edition-note">✨ L'<b>Édition 2 est disponible</b> : nouveau cadre premium, nouvelle saison et raretés renouvelées. <button class="btn-link" id="open-promotion-btn">Soutiens les personnages qui méritent une promotion <span id="promotion-remaining-badge" class="nav-badge hidden"></span></button>.</p>
       <div class="coll-filters" id="chars-filters"></div>
       <div class="catalog-search">
         <input type="text" id="chars-search" placeholder="Rechercher un personnage ou une série…" />
@@ -1615,8 +1617,8 @@
         <div id="admin-reset-status" class="admin-tool-status hint"></div>
       </div>
       <div class="admin-tool">
-        <div class="admin-tool-info"><b>Reset GACHA (tous les joueurs)</b><small>Collections et stocks remis à zéro, SANS remboursement des tokens dépensés. Les stats de quiz/MMR sont conservées.</small></div>
-        <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Reset gacha</button>
+        <div class="admin-tool-info"><b>Lancer le Gacha Édition 2</b><small>Crée un nouveau pool séparé. Toutes les cartes Édition 1, les albums et les échanges des joueurs sont conservés.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-gacha-btn"><i class="fas fa-layer-group"></i> Lancer l’Édition 2</button>
         <div id="admin-reset-gacha-status" class="admin-tool-status hint"></div>
       </div>
       <div class="admin-tool">
@@ -1625,8 +1627,8 @@
         <div id="admin-reset-all-status" class="admin-tool-status hint"></div>
       </div>
       <div class="admin-tool">
-        <div class="admin-tool-info"><b>Reset DOJO (tous les bêta-testeurs)</b><small>Anime Ascension uniquement : essence, roster recruté, objets, améliorations, Ancients/Sagesse et Prestige remis à zéro. Le reste du jeu (quiz, gacha, tokens…) n'est pas touché.</small></div>
-        <button class="btn-secondary admin-danger" id="admin-reset-idle-btn"><i class="fas fa-dungeon"></i> Reset Dojo</button>
+        <div class="admin-tool-info"><b>Lancer Anime Ascension — Version 2.0</b><small>Reset de la progression clicker uniquement, puis pack Retour individuel à réclamer : 100 000 Essence, 25 Sceaux et 1 000 Tokens. Le reste du jeu n'est pas remis à zéro.</small></div>
+        <button class="btn-secondary admin-danger" id="admin-reset-idle-btn"><i class="fas fa-dungeon"></i> Reset + Saison 2</button>
         <div id="admin-reset-idle-status" class="admin-tool-status hint"></div>
       </div>
       </div><!-- /admin-panel-danger -->
@@ -1832,7 +1834,7 @@
         <section id="idle-panel-activities" class="idle-panel idle-objectives-page hidden" role="tabpanel" aria-labelledby="idle-tab-activities" tabindex="0">
           <div class="idle-page-head idle-objectives-head"><i class="fas fa-bullseye"></i><div><small>OBJECTIFS</small><h2>À accomplir</h2><p>Commence par les missions, puis vise les défis et le parcours mensuel.</p></div><button class="btn-primary" id="idle-claim-all" title="Réclame en un clic toutes les missions, défis, succès et paliers déjà complétés"><i class="fas fa-check-double"></i> Tout réclamer</button></div>
           <section class="idle-objective-block idle-objective-priority" aria-labelledby="idle-missions-title"><header class="idle-objective-title"><span><small>PRIORITÉ</small><h3 id="idle-missions-title"><i class="fas fa-list-check"></i> Missions en cours</h3></span><div class="idle-mission-resets" aria-live="polite"><span><i class="fas fa-sun"></i><small>QUOTIDIENNES</small><b id="idle-daily-reset">—</b></span><span><i class="fas fa-calendar-week"></i><small>HEBDOMADAIRES</small><b id="idle-weekly-reset">—</b></span></div></header><div class="idle-missions" id="idle-missions"></div></section>
-          <section class="idle-objective-block" aria-labelledby="idle-events-title"><header class="idle-objective-title"><span><small>EN CE MOMENT</small><h3 id="idle-events-title"><i class="fas fa-bolt"></i> Événements</h3></span><p>Bonus du jour et objectif collectif de la semaine.</p></header><div class="idle-event-banner" id="idle-event-banner"></div><div class="idle-community-boss" id="idle-community-boss"><p class="hint">Chargement du Gardien communautaire…</p></div></section>
+          <section class="idle-objective-block" aria-labelledby="idle-events-title"><header class="idle-objective-title"><span><small>EN CE MOMENT</small><h3 id="idle-events-title"><i class="fas fa-bolt"></i> Événements</h3></span><p>Bonus du jour et objectif collectif de la semaine.</p></header><div class="idle-launch-reward" id="idle-launch-reward"></div><div class="idle-event-banner" id="idle-event-banner"></div><div class="idle-community-boss" id="idle-community-boss"><p class="hint">Chargement du Gardien communautaire…</p></div></section>
           <section class="idle-objective-block" aria-labelledby="idle-longterm-title"><header class="idle-objective-title"><span><small>LONG TERME</small><h3 id="idle-longterm-title"><i class="fas fa-crown"></i> Saison</h3></span><p>Ta progression durable sur le mois en cours.</p></header><div class="idle-season-card" id="idle-season-card"></div></section>
           <section class="idle-objective-block idle-challenges-panel" aria-labelledby="idle-challenges-title"><header class="idle-objective-title idle-challenges-head"><div><small>OBJECTIFS AVANCÉS</small><h3 id="idle-challenges-title"><i class="fas fa-tower-observation"></i> Défis</h3><p>Combine plusieurs actions pour obtenir davantage de Sceaux.</p></div><span><i class="fas fa-clock"></i> Quotidien ou hebdomadaire</span></header><div class="idle-challenges" id="idle-challenges"></div></section>
           <section class="idle-session-report" aria-labelledby="idle-session-title"><header><span><small>DEPUIS L’OUVERTURE</small><h3 id="idle-session-title"><i class="fas fa-chart-column"></i> Bilan de session</h3></span><button type="button" class="btn-secondary" id="idle-session-reset"><i class="fas fa-arrow-rotate-left"></i> Remettre à zéro</button></header><div id="idle-session-summary"></div></section>
@@ -2633,7 +2635,7 @@
           <li>Chaque carte est un exemplaire numéroté à stock limité.</li>
           <li>À l'Atelier, fusionne 3 exemplaires possédés (même perso ou mélangés, même rareté) contre 1 carte aléatoire de cette rareté.</li>
           <li>Un Légendaire+ est garanti après 60 tirages sans en obtenir.</li>
-          <li>Les personnages actuels sont l'<b>Édition 1</b>. Une <b>Édition 2</b> arrivera dans quelques semaines : mêmes personnages, nouvelles raretés et nouveaux visuels — vote dès maintenant (fiche personnage) pour ceux que tu veux voir promus Mythique/Légendaire (10 voix par joueur).</li>
+          <li>L'<b>Édition 2</b> propose un nouveau cadre premium et des raretés renouvelées. Tu peux soutenir jusqu'à 10 personnages depuis leur fiche pour les prochaines promotions Mythique/Légendaire.</li>
         </ul>
         <p>Échange tes cartes, ajoute des amis, grimpe aux classements et personnalise ton profil à la Boutique.</p>
       </details>

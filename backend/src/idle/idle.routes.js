@@ -6,6 +6,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { requireAdmin, requireIdleBeta } = require('../admin/admin');
 const { rateLimit } = require('../util/ratelimit');
+const { boostReturnReward, returnRewardEvent } = require('../rewards/return-event');
 const store = require('../util/store');
 const { publishGlobalChatSystem } = require('../mp/mp');
 const {
@@ -259,14 +260,14 @@ function idleMissionList(user, recruitCount, activeCount, stage, counters=new Ma
   ];
   const dayIndex = Math.floor(Date.parse(`${p.day}T00:00:00Z`) / 86400000);
   const daily = [0,1,2].map((offset)=>dailyPool[(dayIndex+offset)%dailyPool.length]).map((m)=>({
-    ...m,period:p.day,cadence:'Quotidienne',progress:Math.min(value(m.counter,p.day),m.target),rewardCurrency:'seals',
+    ...m,baseReward:m.reward,reward:boostReturnReward(m.reward),rewardBoost:returnRewardEvent(),period:p.day,cadence:'Quotidienne',progress:Math.min(value(m.counter,p.day),m.target),rewardCurrency:'seals',
   }));
   const weekly = [
     { key:'weekly_kills',counter:'kill',title:'Campagne d’extermination',description:'Vaincre 1 000 ennemis cette semaine',target:1000,reward:4 },
     { key:'weekly_clicks',counter:'click',title:'Entraînement intensif',description:'Porter 750 frappes manuelles',target:750,reward:3 },
     { key:'weekly_skills',counter:'skill',title:'Arsenal complet',description:'Utiliser 30 compétences actives',target:30,reward:3 },
     { key:'weekly_upgrades',counter:'upgrade',title:'Expansion du Dojo',description:'Acheter 75 améliorations',target:75,reward:4 },
-  ].map((m)=>({...m,period:p.week,cadence:'Hebdomadaire',progress:Math.min(value(m.counter,p.week),m.target),rewardCurrency:'seals'}));
+  ].map((m)=>({...m,baseReward:m.reward,reward:boostReturnReward(m.reward),rewardBoost:returnRewardEvent(),period:p.week,cadence:'Hebdomadaire',progress:Math.min(value(m.counter,p.week),m.target),rewardCurrency:'seals'}));
   return [...daily,...weekly];
 }
 
@@ -284,6 +285,15 @@ const SEASON_TIERS = [
   {tier:5,level:120000,reward:3,essence:0,tokens:105},{tier:6,level:160000,reward:4,essence:75000,tokens:125},
   {tier:7,level:200000,reward:5,essence:0,tokens:145},{tier:8,level:240000,reward:7,essence:200000,tokens:170},
 ];
+
+// Relance Anime Ascension — Édition 2. Le cadeau est réclamé volontairement
+// par le joueur (au lieu de créditer tous les comptes dormants) et la table
+// IdleMissionClaim fournit l'idempotence sans ajouter de colonne dédiée.
+const IDLE_EDITION = 2;
+const IDLE_EDITION_SETTING = 'idleEdition';
+const IDLE_LAUNCH_REWARD = Object.freeze({ essence: 100000, seals: 25, tokens: 1000 });
+const IDLE_LAUNCH_REWARD_KEY = `edition_${IDLE_EDITION}_launch`;
+const IDLE_LAUNCH_REWARD_PERIOD = `edition-${IDLE_EDITION}`;
 
 function seasonActivityScore(counters, period) {
   const value=(key)=>counters.get(`${key}:${period}`)||0;
@@ -1665,9 +1675,10 @@ async function buildState(userId) {
       if (synced.count) completedSeries = completedNow;
     } catch { /* fenêtre de migration : le bonus s'appliquera à la prochaine lecture */ }
   }
+  let idleEditionLive=false;try{const setting=await prisma.appSetting.findUnique({where:{key:IDLE_EDITION_SETTING},select:{value:true}});idleEditionLive=Number(setting?.value)>=IDLE_EDITION;}catch(e){if(e?.code)throw e;}
   const now=new Date();const seasonPeriod=periods.month;const seasonName=['Hiver Éternel','Floraison des héros','Brasier des mondes','Crépuscule dimensionnel'][Math.floor(now.getUTCMonth()/3)];
   const seasonActivity=seasonActivityScore(missionCounters,seasonPeriod);
-  let seasonClaims=[];try{seasonClaims=await prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}});}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
+  let seasonClaims=[],launchRewardClaim=null;try{[seasonClaims,launchRewardClaim]=await Promise.all([prisma.idleMissionClaim.findMany({where:{userId,period:`season-${seasonPeriod}`,missionKey:{startsWith:'season_tier_'}},select:{missionKey:true}}),prisma.idleMissionClaim.findUnique({where:{userId_missionKey_period:{userId,missionKey:IDLE_LAUNCH_REWARD_KEY,period:IDLE_LAUNCH_REWARD_PERIOD}}})]);}catch(e){if(e?.code)throw e;}const seasonClaimed=new Set(seasonClaims.map((x)=>x.missionKey));
   const activeSlots=slots.filter((s)=>s.character);
   const challengeDefs=idleChallengeList(missionCounters,slots,periods);
   let challengeClaims=[];try{challengeClaims=await prisma.idleMissionClaim.findMany({where:{userId,OR:challengeDefs.map((c)=>({missionKey:`challenge_${c.key}`,period:c.period}))},select:{missionKey:true,period:true}});}catch(e){if(e?.code)throw e;}const claimedChallenges=new Set(challengeClaims.map((c)=>`${c.missionKey}:${c.period}`));
@@ -1906,7 +1917,8 @@ async function buildState(userId) {
     guide:{items:guide,completed:guide.filter((x)=>x.done).length,total:guide.length,next:guide.find((x)=>!x.done)||null},
     // La première vraie saison utilisera une progression dédiée. L'ancien
     // pass mensuel fondé sur le niveau à vie est volontairement masqué.
-    season:{enabled:true,period:seasonPeriod,name:seasonName,level:seasonActivity.score,breakdown:seasonActivity.breakdown,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:SEASON_TIERS.map((x)=>({...x,completed:seasonActivity.score>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
+    launchReward:idleEditionLive?{edition:IDLE_EDITION,claimed:!!launchRewardClaim,reward:IDLE_LAUNCH_REWARD}:null,
+    season:{enabled:idleEditionLive,edition:IDLE_EDITION,period:seasonPeriod,name:seasonName,level:seasonActivity.score,breakdown:seasonActivity.breakdown,endsAt:new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString(),tiers:SEASON_TIERS.map((x)=>({...x,completed:seasonActivity.score>=x.level,claimed:seasonClaimed.has(`season_tier_${x.tier}`)}))},
     challenges,
     prod: {
       level: user.idleProdLevel,
@@ -3386,6 +3398,22 @@ router.post('/season/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'
   const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const activity=seasonActivityScore(counters,periods.month);if(activity.score<def.level)return res.status(400).json({error:'Palier de saison incomplet'});
   try{await prisma.$transaction(async(tx)=>{await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`season_tier_${tier}`,period:`season-${periods.month}`}});await tx.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward},tokens:{increment:def.tokens||0},...(def.essence?{essence:{increment:def.essence},essenceEarnedTotal:{increment:def.essence}}:{})}});if(def.tokens)await tx.tokenTransaction.create({data:{userId:req.user.id,amount:def.tokens,reason:'idle_season'}});});res.json({ok:true,reward:def.reward,essence:def.essence,tokens:def.tokens||0,currency:'seals'});}catch(e){if(e?.code==='P2002')return res.status(409).json({error:'Palier déjà réclamé'});throw e;}
 });
+router.post('/launch-reward/claim',requireAuth,requireIdleBeta,rateLimit({max:5,name:'idle-launch-reward'}),async(req,res)=>{
+  try{
+    const setting=await prisma.appSetting.findUnique({where:{key:IDLE_EDITION_SETTING},select:{value:true}});
+    if(Number(setting?.value)!==IDLE_EDITION)return res.status(409).json({error:'Le pack Retour 2.0 sera disponible au lancement officiel de la saison'});
+    await prisma.$transaction(async(tx)=>{
+      await tx.idleMissionClaim.create({data:{userId:req.user.id,missionKey:IDLE_LAUNCH_REWARD_KEY,period:IDLE_LAUNCH_REWARD_PERIOD}});
+      await tx.user.update({where:{id:req.user.id},data:{essence:{increment:IDLE_LAUNCH_REWARD.essence},essenceEarnedTotal:{increment:IDLE_LAUNCH_REWARD.essence},idleSeals:{increment:IDLE_LAUNCH_REWARD.seals},tokens:{increment:IDLE_LAUNCH_REWARD.tokens}}});
+      await tx.tokenTransaction.create({data:{userId:req.user.id,amount:IDLE_LAUNCH_REWARD.tokens,reason:'idle_edition_2_launch'}});
+    });
+    void recordIdleEvent(req.user.id,'launch_reward',{value:IDLE_LAUNCH_REWARD.essence});
+    res.json({ok:true,edition:IDLE_EDITION,reward:IDLE_LAUNCH_REWARD});
+  }catch(e){
+    if(e?.code==='P2002')return res.status(409).json({error:'Pack de lancement déjà réclamé'});
+    throw e;
+  }
+});
 router.post('/challenge/claim',requireAuth,requireIdleBeta,rateLimit({max:20,name:'idle-challenge'}),async(req,res)=>{const key=String(req.body?.key||'');const periods=idlePeriods();const counters=await loadIdleCounters(req.user.id);const slots=await loadSlots(prisma,req.user.id);const def=idleChallengeList(counters,slots,periods).find((x)=>x.key===key);if(!def)return res.status(400).json({error:'Défi inconnu'});if(!def.completed)return res.status(400).json({error:'Défi incomplet'});try{await prisma.$transaction([prisma.idleMissionClaim.create({data:{userId:req.user.id,missionKey:`challenge_${key}`,period:def.period}}),prisma.user.update({where:{id:req.user.id},data:{idleSeals:{increment:def.reward}}})]);}catch(e){if(e?.code==='P2002')return res.status(400).json({error:'Déjà réclamé'});throw e;}void recordIdleEvent(req.user.id,'challenge_claim',{value:def.reward});res.json({reward:def.reward,state:await buildState(req.user.id)});});
 
 // Réclame en un seul appel tout ce qui est complété et pas encore réclamé :
@@ -3874,6 +3902,8 @@ module.exports = {
   ULTIMATE_CLICK_MULTIPLIER,
   ULTIMATE_TEAM_SECONDS,
   SEASON_TIERS,
+  IDLE_EDITION,
+  IDLE_LAUNCH_REWARD,
   currentIdleEvent,
   idleBalanceDiagnostic,
   // Exportés pour la route admin de génération de portraits IA

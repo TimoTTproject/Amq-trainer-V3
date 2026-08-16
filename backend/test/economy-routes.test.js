@@ -30,19 +30,21 @@ test.beforeEach(() => {
   };
 });
 
-test('daily : crédite 100 🪙 une fois, puis 400 le même jour', async () => {
+test('daily : le boost Retour 2.0 crédite 200 🪙 une fois, puis refuse le même jour', async () => {
   const writes = [];
   prisma.user.update = async ({ data }) => {
     writes.push(data);
-    return dbUser({ tokens: 150, lastDailyAt: data.lastDailyAt });
+    return dbUser({ tokens: 250, lastDailyAt: data.lastDailyAt });
   };
   prisma.tokenTransaction.create = async ({ data }) => { writes.push(data); return data; };
 
   const first = await app.request('/api/economy/daily', { method: 'POST', cookie: app.authCookie('u1') });
   assert.equal(first.status, 200);
-  assert.equal(first.json.granted, 100);
-  assert.equal(first.json.tokens, 150);
-  assert.equal(writes[0].tokens.increment, 100);
+  assert.equal(first.json.granted, 200);
+  assert.equal(first.json.baseReward, 100);
+  assert.equal(first.json.rewardBoost.multiplier, 2);
+  assert.equal(first.json.tokens, 250);
+  assert.equal(writes[0].tokens.increment, 200);
   assert.equal(writes[1].reason, 'daily_bonus');
 
   user = dbUser({ lastDailyAt: new Date() }); // déjà réclamé aujourd'hui

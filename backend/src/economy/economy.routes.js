@@ -4,6 +4,7 @@ const { prisma } = require('../db');
 const { requireAuth } = require('../auth/auth.middleware');
 const { quizCapState, QUIZ_CAP } = require('../quiz/quiz.routes');
 const { mpCapState, MP_REWARD_CAP } = require('../mp/mp');
+const { boostReturnReward, returnRewardEvent } = require('../rewards/return-event');
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ const REASON_LABELS = {
   admin_grant: 'Bonus admin',
   daily_bonus: 'Bonus quotidien',
   quest_reward: 'Récompense de quête',
+  quest_reward_v2: 'Quête · Boost Retour 2.0',
   cosmetic_purchase: 'Achat boutique',
   mp_reward: 'Récompense multijoueur',
   coop_reward: 'Tour en équipe (coop)',
@@ -46,15 +48,16 @@ router.post('/daily', requireAuth, async (req, res) => {
   if (!dailyAvailable(req.user.lastDailyAt)) {
     return res.status(400).json({ error: 'Bonus déjà réclamé aujourd\'hui' });
   }
+  const reward = boostReturnReward(DAILY_BONUS);
   const user = await prisma.$transaction(async (tx) => {
     const u = await tx.user.update({
       where: { id: req.user.id },
-      data: { tokens: { increment: DAILY_BONUS }, lastDailyAt: new Date() },
+      data: { tokens: { increment: reward }, lastDailyAt: new Date() },
     });
-    await tx.tokenTransaction.create({ data: { userId: req.user.id, amount: DAILY_BONUS, reason: 'daily_bonus' } });
+    await tx.tokenTransaction.create({ data: { userId: req.user.id, amount: reward, reason: 'daily_bonus' } });
     return u;
   });
-  res.json({ granted: DAILY_BONUS, tokens: user.tokens });
+  res.json({ granted: reward, baseReward: DAILY_BONUS, rewardBoost: returnRewardEvent(), tokens: user.tokens });
 });
 
 // Solde autoritaire. Utilisé après les gains asynchrones (notamment le

@@ -681,7 +681,7 @@ model TokenTransaction {
 
 model Character {
   id         Int     @id @default(autoincrement())
-  anilistId  Int     @unique
+  anilistId  Int
   name       String
   imageUrl   String?
   favourites Int     @default(0) // popularité AniList → détermine la rareté
@@ -697,13 +697,9 @@ model Character {
   nextSerial Int     @default(0) // dernier n° de série attribué (croissant, jamais réutilisé)
   soldOut    Boolean @default(false) // minted >= maxSupply → plus tirable (échange seulement)
 
-  // Édition de la carte (voir PromotionVote) : les personnages actuels sont
-  // tous l'Édition 1. Une future Édition 2 réutilisera les mêmes personnages
-  // avec une rareté et un visuel différents — le mécanisme exact (nouvelle
-  // ligne Character vs révision de la même ligne) n'est PAS encore décidé,
-  // ce champ sert pour l'instant juste à AFFICHER "Édition 1" aux joueurs.
-  // ⚠️ `anilistId` est `@unique` : si l'Édition 2 devient une ligne à part
-  // entière, il faudra remplacer par `@@unique([anilistId, edition])`.
+  // Chaque édition est une ligne distincte. Les possessions pointent donc
+  // toujours vers l'édition obtenue : lancer une nouvelle saison ne modifie
+  // ni ne supprime les cartes historiques des joueurs.
   edition Int @default(1)
 
   cards          UserCard[]
@@ -718,9 +714,11 @@ model Character {
   dojoRecruits   DojoRecruit[]
   dojoBossArts   DojoBossArt[]
 
+  @@unique([anilistId, edition])
   @@index([rarity])
   @@index([series])
   @@index([rarity, soldOut])
+  @@index([edition, rarity, soldOut])
 }
 
 // Vote « quel personnage mérite une promotion en Mythique/Légendaire à la

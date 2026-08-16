@@ -7,7 +7,7 @@ const { fakePrisma, createApp } = require('./helpers/api');
 
 const prisma = fakePrisma();
 const idleRoutes = require('../src/idle/idle.routes');
-const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossTacticalProfile,weeklyRoguelikeEvent,expeditionPayload,expeditionReward,EXPEDITION_MISSIONS,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,itemQualityScore,planBulkEnhancement,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
+const { idleMissionList,idleChallengeList,seasonActivityScore,weeklyConvergence,weeklyCommunityBoss,communityContribution,weeklyRift,RIFT_RELICS,riftRelicModifiers,rollRiftRelics,bossMechanicForStage,bossTacticalProfile,weeklyRoguelikeEvent,expeditionPayload,expeditionReward,EXPEDITION_MISSIONS,bossChestRewards,progressionBossesCrossed,SEASON_TIERS,IDLE_EDITION,IDLE_LAUNCH_REWARD,idleItemDrop,rollItemAffixes,itemProductionBonus,itemActionBonus,equipmentSetEffectMultiplier,equipmentSetFlatMultiplier,equipmentSetMultiplier,RUNE_SETS,itemSalvageValue,itemQualityScore,planBulkEnhancement,upgradedItemRarity,synergyForSlots,teamMetaBreakdown,computeRateBreakdown,characterLeaderSkill,ultimateBaseDamage,ULTIMATE_CLICK_MULTIPLIER,ULTIMATE_TEAM_SECONDS,currentIdleEvent,squadPresetSlots,idleBalanceDiagnostic }=idleRoutes;
 const {
   slotUpgradeCost, prodUpgradeCost, clickUpgradeCost, critUpgradeCost, cooldownUpgradeCost, multiStrikeUpgradeCost, runBlessingRerollCost, charLevelUpCost,
   milestoneTierForLevel, milestoneReward, PRESTIGE_MIN_STAGE, prestigeRequiredStage, wisdomForRunStage, enemyMaxHp,
@@ -39,6 +39,35 @@ test('Ultime : reste significatif face au Combo à tous les niveaux de progressi
   assert.equal(ULTIMATE_TEAM_SECONDS,15);
   assert.equal(ultimateBaseDamage(10,0),750);
   assert.equal(ultimateBaseDamage(10,100),1500);
+});
+
+test('Édition 2 : le pack de lancement est généreux et couvre les deux économies',()=>{
+  assert.equal(IDLE_EDITION,2);
+  assert.deepEqual(IDLE_LAUNCH_REWARD,{essence:100000,seals:25,tokens:1000});
+  assert.ok(IDLE_LAUNCH_REWARD.seals>=10);
+  assert.ok(IDLE_LAUNCH_REWARD.tokens>=250);
+});
+
+test('Édition 2 : le pack reste verrouillé tant que le reset officiel n’a pas activé la saison',async()=>{
+  prisma.user.findUnique=async()=>dbUser();
+  prisma.appSetting.findUnique=async()=>null;
+  let credited=false;prisma.user.update=async()=>{credited=true;return dbUser();};
+  const res=await app.request('/api/idle/launch-reward/claim',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(res.status,409);assert.equal(credited,false);
+});
+
+test('Édition 2 : le pack de lancement crédite une seule fois les trois récompenses',async()=>{
+  prisma.user.findUnique=async()=>dbUser();let claim=null,userData=null,transaction=null;
+  prisma.appSetting.findUnique=async()=>({key:'idleEdition',value:'2'});
+  prisma.idleMissionClaim.create=async({data})=>{claim=data;return{id:1,...data};};
+  prisma.user.update=async({data})=>{userData=data;return dbUser();};
+  prisma.tokenTransaction.create=async({data})=>{transaction=data;return{id:1,...data};};
+  const res=await app.request('/api/idle/launch-reward/claim',{method:'POST',cookie:app.authCookie('u1'),body:{}});
+  assert.equal(res.status,200);assert.equal(res.json.edition,2);assert.deepEqual(res.json.reward,IDLE_LAUNCH_REWARD);
+  assert.equal(claim.missionKey,'edition_2_launch');assert.equal(claim.period,'edition-2');
+  assert.equal(userData.essence.increment,100000);assert.equal(userData.essenceEarnedTotal.increment,100000);
+  assert.equal(userData.idleSeals.increment,25);assert.equal(userData.tokens.increment,1000);
+  assert.equal(transaction.amount,1000);assert.equal(transaction.reason,'idle_edition_2_launch');
 });
 
 test('synergie : expose le bonus actif, sa condition et le prochain palier',()=>{
@@ -339,6 +368,7 @@ test('difficulté longue durée : missions tournantes et hebdomadaires renforcé
   assert.equal(missions.filter((m)=>m.cadence==='Quotidienne').length,3);
   assert.equal(missions.filter((m)=>m.cadence==='Hebdomadaire').length,4);
   assert.ok(missions.filter((m)=>m.cadence==='Hebdomadaire').every((m)=>m.target>=30));
+  assert.ok(missions.every((m)=>m.reward===m.baseReward*2&&m.rewardBoost.multiplier===2));
 });
 
 test('méta transparente : Producteur, Leader, Lead Skill et Logistique reprennent les multiplicateurs réels', () => {

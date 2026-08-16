@@ -240,6 +240,7 @@ function renderDailyIntro(d) {
   document.getElementById('daily-tier').innerHTML = d.tier ? tierBadge(d.tier) : 'Non classé';
   document.getElementById('daily-best').textContent = d.soloBestScore || 0;
   document.getElementById('daily-streak').textContent = d.streak || 0;
+  const boost=document.getElementById('daily-return-boost');if(boost){boost.classList.toggle('hidden',!d.rewardBoost?.active);if(d.rewardBoost?.active)boost.innerHTML=`<i class="fas fa-bolt"></i><span><small>ÉVÉNEMENT RETOUR 2.0</small><b>Récompenses du Défi du jour ×${d.rewardBoost.multiplier}</b><em>Ta série quotidienne rapporte deux fois plus de Tokens pendant la relance.</em></span><strong>BOOST ACTIF</strong>`;}
   const rank = document.getElementById('daily-rank');
   rank.innerHTML = d.tier ? `${tierBadge(d.tier)} <span class="mmr-value">${d.soloMmr}</span> <span class="mmr-unit">MMR</span>` : 'Pas encore classé';
 

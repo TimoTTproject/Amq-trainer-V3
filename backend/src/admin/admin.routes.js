@@ -15,12 +15,18 @@ const {
   stopContinuousMigration,
   uploadBuffer,
 } = require('../storage/r2');
-const { pickBossForTheme, decorArtCache } = require('../idle/idle.routes');
+const { pickBossForTheme, decorArtCache, IDLE_EDITION, IDLE_LAUNCH_REWARD } = require('../idle/idle.routes');
 const { DOJO_DECOR } = require('../idle/idle');
 const { generateImageBuffer } = require('../ai/openai.service');
 
 const router = express.Router();
 const VALID_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+
+async function currentGachaEdition() {
+  const setting = await prisma.appSetting.findUnique({ where: { key: 'gachaEdition' } });
+  const edition = Number(setting?.value);
+  return Number.isInteger(edition) && edition > 0 ? edition : 1;
+}
 
 router.get('/r2-status', requireAuth, requireAdmin, async (req, res) => {
   res.json(await r2Status());
@@ -462,7 +468,8 @@ router.post('/reset-anime', requireAuth, requireAdmin, async (req, res) => {
 // N'ajoute que les nouveaux (en « common », l'admin ajuste ensuite) via createMany
 // — insertion groupée rapide. Appeler en boucle pour avancer dans les pages.
 router.post('/import-characters', requireAuth, requireAdmin, async (req, res) => {
-  const count = await prisma.character.count();
+  const edition = await currentGachaEdition();
+  const count = await prisma.character.count({ where: { edition } });
   // Curseur de page explicite (le client incrémente) ; sinon estimation initiale.
   const pageNum = parseInt(req.body?.page) || Math.floor(count / 50) + 1;
 
@@ -477,18 +484,18 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
   if (!chars.length) return res.json({ added: 0, total: count, hasMore: false, page: pageNum });
 
   const ids = chars.map((c) => c.id);
-  const existing = await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } });
+  const existing = await prisma.character.findMany({ where: { anilistId: { in: ids }, edition }, select: { anilistId: true } });
   const existingSet = new Set(existing.map((e) => e.anilistId));
 
   const toCreate = chars
     .filter((c) => !existingSet.has(c.id))
     .map((c) => {
       const { series, seriesId } = seriesOfCharacter(c);
-      return { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity: 'common', series, seriesId, maxSupply: MAX_SUPPLY.common };
+      return { anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0, rarity: 'common', series, seriesId, maxSupply: MAX_SUPPLY.common, edition };
     });
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 
-  const total = await prisma.character.count();
+  const total = await prisma.character.count({ where: { edition } });
   res.json({ added: toCreate.length, total, hasMore: !!page.hasNextPage, page: pageNum });
 });
 
@@ -504,6 +511,7 @@ router.post('/import-characters', requireAuth, requireAdmin, async (req, res) =>
 // recalcule ensuite les raretés).
 const ANIME_YEAR_FLOOR = 1960;
 router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, res) => {
+  const edition = await currentGachaEdition();
   let year = parseInt(req.body?.year) || new Date().getFullYear() + 1;
   let pageNum = parseInt(req.body?.page) || 1;
 
@@ -531,14 +539,14 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
   }
 
   if (!page) {
-    const total = await prisma.character.count();
+    const total = await prisma.character.count({ where: { edition } });
     return res.json({ added: 0, total, hasMore: false, done: true, year: ANIME_YEAR_FLOOR, page: 1 });
   }
 
   const chars = page.characters || [];
   const ids = chars.map((c) => c.id);
   const existing = ids.length
-    ? await prisma.character.findMany({ where: { anilistId: { in: ids } }, select: { anilistId: true } })
+    ? await prisma.character.findMany({ where: { anilistId: { in: ids }, edition }, select: { anilistId: true } })
     : [];
   const existingSet = new Set(existing.map((e) => e.anilistId));
 
@@ -547,11 +555,11 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
     .map((c) => ({
       anilistId: c.id, name: c.name.full, imageUrl: c.image?.large, favourites: c.favourites || 0,
       rarity: 'common', series: c.seriesTitle || null, seriesId: c.seriesId || null,
-      maxSupply: MAX_SUPPLY.common,
+      maxSupply: MAX_SUPPLY.common, edition,
     }));
   if (toCreate.length) await prisma.character.createMany({ data: toCreate, skipDuplicates: true });
 
-  const total = await prisma.character.count();
+  const total = await prisma.character.count({ where: { edition } });
   const nextYear = page.hasNextPage ? processedYear : processedYear - 1;
   const nextPage = page.hasNextPage ? pageNum + 1 : 1;
   res.json({
@@ -567,7 +575,8 @@ router.post('/import-characters-anime', requireAuth, requireAdmin, async (req, r
 // de resserrer MAX_SUPPLY dans rarity.js (ex. faire baisser un plafond mythique
 // existant) et de l'appliquer rétroactivement à tout le pool via ce bouton.
 router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) => {
-  const all = await prisma.character.findMany({ select: { id: true, favourites: true, rarity: true, minted: true } });
+  const edition = await currentGachaEdition();
+  const all = await prisma.character.findMany({ where: { edition }, select: { id: true, favourites: true, rarity: true, minted: true } });
   // Départage les égalités de favoris par id (stable et déterministe) : sans
   // ça, ce tri en mémoire peut classer des personnages à égalité dans un ordre
   // différent de celui des requêtes `ORDER BY favourites DESC` faites ailleurs
@@ -636,7 +645,9 @@ router.post('/recompute-rarities', requireAuth, requireAdmin, async (req, res) =
 // STOCKÉE et la rareté QU'AURAIT le perso selon son rang — ce sont tes
 // overrides manuels (ou d'anciens décalages).
 router.get('/rarity-check', requireAuth, requireAdmin, async (req, res) => {
+  const edition = await currentGachaEdition();
   const all = await prisma.character.findMany({
+    where: { edition },
     select: { id: true, name: true, favourites: true, rarity: true, maxSupply: true, minted: true, soldOut: true },
   });
   const total = all.length;
@@ -697,8 +708,9 @@ router.get('/rarity-check', requireAuth, requireAdmin, async (req, res) => {
 // l'admin (utile après des modifs manuelles de rareté antérieures au correctif
 // du PATCH). Ne descend jamais maxSupply sous le nombre déjà en circulation.
 router.post('/fix-supply-mismatch', requireAuth, requireAdmin, async (req, res) => {
+  const edition = await currentGachaEdition();
   const all = await prisma.character.findMany({
-    where: { maxSupply: { gt: 0 } },
+    where: { maxSupply: { gt: 0 }, edition },
     select: { id: true, rarity: true, maxSupply: true, minted: true },
   });
   const ops = [];
@@ -812,44 +824,55 @@ router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true, users });
 });
 
-// Reset GACHA UNIQUEMENT, SANS remboursement : remet à zéro les collections
-// et le stock mondial (avant une refonte du pool, une remise à plat, etc.)
-// SANS toucher aux autres systèmes de jeu (quiz, Château, multijoueur, défi
-// du jour, XP/niveaux) NI aux tokens. Les compteurs propres au gacha (dust,
-// pitié, stats de tirage) sont remis à zéro. Aucun token n'est rendu — c'est
-// une remise à zéro sèche, assumée. Protégé : body.confirm === 'RESET_GACHA'.
+// Lance une nouvelle édition du Gacha SANS toucher aux collections historiques.
+// Chaque personnage reçoit une ligne Edition 2 distincte : UserCard,
+// CardInstance, échanges et albums continuent ainsi de pointer vers l'Edition 1
+// réellement obtenue. Seuls la pitié et les compteurs de la nouvelle saison
+// repartent à zéro ; tokens et autres modes restent inchangés.
 router.post('/reset-gacha', requireAuth, requireAdmin, async (req, res) => {
   if (req.body?.confirm !== 'RESET_GACHA') return res.status(400).json({ error: 'Confirmation requise (RESET_GACHA)' });
 
   const users = await prisma.user.count();
-  await prisma.$transaction([
-    // Cartes possédées + exemplaires numérotés + échanges (référencent des
-    // exemplaires qui n'existeront plus) + albums (organisent des cartes possédées).
-    prisma.userCard.deleteMany({}),
-    prisma.cardInstance.deleteMany({}),
-    prisma.trade.deleteMany({}),
-    prisma.cardAlbumItem.deleteMany({}),
-    prisma.cardAlbum.deleteMany({}),
-    // Stock mondial en circulation : remis à zéro pour TOUS les personnages
-    // (sinon ils resteraient artificiellement épuisés après la suppression
-    // des CardInstance qui comptaient dans `minted`).
-    prisma.character.updateMany({ data: { minted: 0, nextSerial: 0, soldOut: false } }),
-    // Compteurs gacha remis à zéro (jamais les tokens ni les stats hors gacha).
-    prisma.user.updateMany({
+  const editionOne = await prisma.character.findMany({
+    where: { edition: 1 },
+    select: {
+      anilistId: true, name: true, imageUrl: true, favourites: true,
+      rarity: true, fromManga: true, series: true, seriesId: true,
+      featured: true, maxSupply: true,
+    },
+  });
+  const launch = await prisma.$transaction(async (tx) => {
+    const created = await tx.character.createMany({
+      data: editionOne.map((character) => ({
+        ...character, edition: 2, minted: 0, nextSerial: 0, soldOut: false,
+      })),
+      skipDuplicates: true,
+    });
+    await tx.user.updateMany({
       data: { dust: 0, pity: 0, pullCommon: 0, pullRare: 0, pullEpic: 0, pullLegendary: 0, pullMythic: 0 },
-    }),
-    prisma.appSetting.upsert({
+    });
+    await tx.appSetting.upsert({
+      where: { key: 'gachaEdition' },
+      update: { value: '2' },
+      create: { key: 'gachaEdition', value: '2' },
+    });
+    await tx.appSetting.upsert({
       where: { key: 'lastGachaReset' },
       update: { value: String(Date.now()) },
       create: { key: 'lastGachaReset', value: String(Date.now()) },
-    }),
-  ]);
+    });
+    return { created: created.count };
+  });
+
+  // Les vedettes sont mémorisées avec leur numéro d'édition. Sans purge,
+  // une bannière chargée avant le reset resterait visuellement en Edition 1.
+  invalidateWeeklyCaches();
 
   // Prévient tous les joueurs déjà connectés (socket ouvert) sans attendre
   // une reconnexion/reload : ils relisent l'horodatage via GET /reset-notice.
   try { broadcastAll('gacha:reset-notice', {}); } catch (e) { console.error('broadcast gacha reset:', e.message); }
 
-  res.json({ ok: true, users });
+  res.json({ ok: true, users, edition: 2, charactersCreated: launch.created, collectionsPreserved: true });
 });
 
 // Reset DOJO (idle/clicker) UNIQUEMENT : remet à zéro toute la progression
@@ -877,6 +900,14 @@ router.post('/reset-idle', requireAuth, requireAdmin, async (req, res) => {
     prisma.idleRunHistory.deleteMany({}),
     prisma.idleMissionClaim.deleteMany({}),
     prisma.idleProgressCounter.deleteMany({}),
+    // Active le pack Retour et la nouvelle saison uniquement dans la même
+    // transaction que le reset, afin qu'aucun joueur ne puisse réclamer le
+    // cadeau avant la remise à zéro officielle.
+    prisma.appSetting.upsert({
+      where: { key: 'idleEdition' },
+      update: { value: String(IDLE_EDITION) },
+      create: { key: 'idleEdition', value: String(IDLE_EDITION) },
+    }),
     // Tous les champs idle*/prestige/sagesse de User, remis à leurs valeurs
     // par défaut du schéma (cf. schema.prisma). idleTelemetry et
     // idleFeedback ne sont PAS touchés : ce sont des journaux d'analyse et
@@ -904,7 +935,7 @@ router.post('/reset-idle', requireAuth, requireAdmin, async (req, res) => {
     }),
   ]);
 
-  res.json({ ok: true, users });
+  res.json({ ok: true, users, season: IDLE_EDITION, launchReward: IDLE_LAUNCH_REWARD });
 });
 
 module.exports = { router };
